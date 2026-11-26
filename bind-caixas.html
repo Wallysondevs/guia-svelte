@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checkbox, Radio e Select — caixas que guardam escolhas | Guia Svelte</title>
+<meta name="description" content="bind:checked, bind:value em select e bind:group em rádio no Svelte 5: como cada caixa devolve o valor, o que o servidor manda e os erros reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Checkbox, Radio e Select</span></h1>
+
+<p class="intro">Nem todo pedido da Ana se escreve com letras. "Aceito os termos" é um sim ou não; "pão ou leite" é uma escolha entre poucas opções; "forma de pagamento" é uma escolha entre várias, mas só uma vale. Cada uma dessas ideias tem um elemento de formulário próprio no HTML, e cada um devolve um tipo diferente de valor. Esta aula mostra qual binding usar em cada caixa, o que chega na variável e o que o servidor manda antes de qualquer clique.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como ligar uma caixa de seleção com <code>bind:checked</code>.</li>
+  <li>Por que o valor de uma caixa marcada é <code>true</code> e não texto.</li>
+  <li>Como mostrar ou esconder um bloco usando a caixa como condição.</li>
+  <li>Como ligar uma lista suspensa com <code>bind:value</code>.</li>
+  <li>A diferença entre <code>&lt;option value="pao"&gt;</code> e <code>&lt;option&gt;pão&lt;/option&gt;</code>.</li>
+  <li>Por que rádio não usa <code>bind:checked</code> e usa <code>bind:group</code>.</li>
+  <li>O que o servidor manda no HTML de cada tipo de caixa.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como inspecionar os arquivos do projeto no terminal.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: cada caixa guarda um tipo de resposta</h2>
+
+<p>No balcão, a Ana faz três perguntas diferentes. A primeira é "você aceita o pedido assim?" — a resposta é sim ou não. A segunda é "pão ou leite?" — uma escolha entre poucas opções. A terceira é "como vai pagar?" — uma escolha entre várias, mas só uma pode valer. Três perguntas, três formatos de resposta, três elementos no HTML.</p>
+
+<p>A caixa de seleção (<em>checkbox</em>) guarda um sim ou não. Ela é um interruptor: marcada vale <code>true</code>, desmarcada vale <code>false</code>. O botão de rádio (<em>radio</em>) guarda uma escolha entre opções do mesmo grupo: marcar uma desmarca as outras, e o valor guardado é o da opção escolhida. A lista suspensa (<em>select</em>) também guarda uma escolha, só que escondida atrás de um clique.</p>
+
+<p>O Svelte tem um binding para cada um. <code>bind:checked</code> para caixas de marcar; <code>bind:value</code> para listas; <code>bind:group</code> para grupos de rádio e para grupos de caixas que somam vários valores. Usar o binding errado não é questão de gosto: o compilador recusa alguns pares e os outros simplesmente não fazem o que você espera.</p>
+
+<p>Uma dica de usabilidade que vale desde já: envolva a caixa e o texto num <code>&lt;label&gt;</code>. Assim, clicar na palavra "aceito" também marca a caixa, e quem usa celular ganha uma área de toque maior. O compilador do Svelte chega a avisar quando um rótulo não está associado a nenhum controle. É um aviso de acessibilidade, não de sintaxe, mas o efeito prático é imediato: menos cliques errados no balcão.</p>
+
+<p>Outra dica: uma caixa de marcar sozinha não é uma escolha "sim ou não" na tela. Quem lê vê um quadradinho vazio e precisa saber o que ele significa. O texto ao lado é parte do controle, não enfeite. Se o texto desaparecer, a caixa deixa de comunicar qualquer coisa.</p>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta da Ana</th><th>Elemento</th><th>Binding</th><th>A variável recebe</th></tr>
+<tr><td>Aceita os termos?</td><td><code>&lt;input type="checkbox"&gt;</code></td><td><code>bind:checked</code></td><td><code>true</code> / <code>false</code></td></tr>
+<tr><td>Quais frutas?</td><td>vários <code>checkbox</code></td><td><code>bind:group</code></td><td>lista de valores marcados</td></tr>
+<tr><td>Pão ou leite?</td><td><code>&lt;select&gt;</code></td><td><code>bind:value</code></td><td>o valor da opção</td></tr>
+<tr><td>Como vai pagar?</td><td>vários <code>radio</code></td><td><code>bind:group</code></td><td>o valor do escolhido</td></tr>
+<tr><td>Observação livre</td><td><code>&lt;textarea&gt;</code></td><td><code>bind:value</code></td><td>texto com quebras</td></tr>
+</table>
+</div>
+
+<p>Repare que <code>bind:group</code> aparece duas vezes, com resultados diferentes. Em rádio, ele guarda um valor só, porque só um pode estar marcado. Em caixas de marcar, guarda uma lista, porque várias podem estar marcadas. O elemento decide o formato; o binding só transporta. A aula seguinte é toda sobre <code>bind:group</code>; aqui ele aparece para fechar o trio.</p>
+
+<h2>3. <code>bind:checked</code> na caixa de seleção</h2>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aceito = $state(true);
+&lt;/script&gt;
+
+&lt;input type="checkbox" bind:checked={aceito}&gt;
+&lt;p&gt;Aceito: {aceito ? 'sim' : 'não'}&lt;/p&gt;</pre>
+
+<p>O estado começa marcado, então o servidor manda a caixa já marcada. O parágrafo usa uma expressão condicional para transformar o booleano em palavra: se <code>aceito</code> for verdadeiro, mostra "sim"; senão, "não". Essa tradução é só de exibição; o valor guardado continua sendo <code>true</code>.</p>
+
+<pre class="out">&lt;input type="checkbox" checked=""/&gt; &lt;p&gt;Aceito: sim&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>type="checkbox"</dt><dd>o tipo da caixa. Sem esse atributo, o <code>bind:checked</code> nem compila — o compilador exige que o elemento seja uma caixa de marcar.</dd>
+  <dt>bind:checked</dt><dd>liga o estado de marcação, não o texto. O valor é sempre booleano: <code>true</code> ou <code>false</code>.</dd>
+  <dt>{aceito}</dt><dd>mostra o booleano como texto (<code>true</code> ou <code>false</code>). Para mostrar palavra, use a condicional.</dd>
+  <dt>checked=""</dt><dd>o atributo que o servidor manda quando o estado começa verdadeiro. A presença do atributo marca a caixa; o valor dele é irrelevante.</dd>
+</dl>
+
+<p>Existe uma confusão clássica aqui. O atributo HTML se chama <code>checked</code>, mas o valor que o JavaScript lê é <code>input.checked</code>, um booleano. Quem escreve <code>checked="false"</code> no HTML pensando em desmarcar se engana: a presença do atributo já marca a caixa. No Svelte você não escreve esse atributo à mão; o binding cuida disso a partir do estado.</p>
+
+<div class="trysvelte" data-goal="clique:input;;outre:^Aceito: sim">
+<p class="try-task"><strong>Missão:</strong> a caixa não está ligada ao estado, então marcar não muda o parágrafo. Ligue a caixa com <code>bind:checked</code> para que um clique mostre <code>Aceito: sim</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aceito = $state(false);
+&lt;/script&gt;
+
+&lt;p&gt;Aceito: {aceito ? 'sim' : 'não'}&lt;/p&gt;
+&lt;input type="checkbox"&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aceito = $state(false);
+&lt;/script&gt;
+
+&lt;p&gt;Aceito: {aceito ? 'sim' : 'não'}&lt;/p&gt;
+&lt;input type="checkbox" bind:checked={aceito}&gt;</pre>
+</div>
+
+<p>A missão mostra uma coisa importante: sem o binding, a caixa continua marcando e desmarcando na tela, porque isso é comportamento do navegador. O que não acontece é a variável mudar. A tela mentiria: a caixa parece marcada e o estado diz que não.</p>
+
+<h2>4. A caixa que decide o que aparece</h2>
+
+<p>Como o valor é booleano, ele serve direto como condição de um bloco. O componente abaixo mostra uma mensagem diferente conforme a caixa esteja marcada ou não.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aceito = $state(false);
+&lt;/script&gt;
+
+&lt;input type="checkbox" bind:checked={aceito}&gt;
+{#if aceito}
+  &lt;p&gt;Pode enviar o pedido&lt;/p&gt;
+{:else}
+  &lt;p&gt;Marque o aceite primeiro&lt;/p&gt;
+{/if}</pre>
+
+<pre class="out">&lt;input type="checkbox"/&gt; &lt;p&gt;Marque o aceite primeiro&lt;/p&gt;</pre>
+
+<p>Com o estado inicial falso, o servidor manda o ramo <code>{:else}</code>. Marcar a caixa troca o parágrafo sem recarregar nada. Esse padrão é comum em aceite de termos, em "mostrar senha" e em qualquer interruptor que muda o que está na tela. A condição não precisa ser uma comparação: um booleano já é verdadeiro ou falso por definição.</p>
+
+<p>Se você quiser o contrário — mostrar algo enquanto a caixa está desmarcada —, inverta com o ponto de exclamação: <code>{#if !aceito}</code>. O <code>!</code> lê-se "não". É o mesmo operador que aparece em <code>if (!pronto)</code> no JavaScript comum.</p>
+
+<p>Esse booleano também serve para desabilitar um botão. Em vez de esconder o botão de enviar, você pode deixá-lo visível e desligado com <code>disabled={!aceito}</code>. O atributo <code>disabled</code> aceita uma expressão, como qualquer atributo dinâmico do Svelte. O leitor vê o botão e entende que falta marcar a caixa; se o botão sumisse, ele ficaria procurando o que fazer. Mostrar e desabilitar costuma comunicar melhor do que esconder.</p>
+
+<p>Cuidado com um detalhe: um botão desabilitado não dispara evento de clique. Se você testar o fluxo com o botão desligado e um <code>onclick</code> que grava o pedido, o teste nunca vai acontecer. Ligue a caixa primeiro, depois clique. Parece bobo, mas é a razão de muitos "não funciona" em formulários de aceite.</p>
+
+<h2>5. <code>&lt;select&gt;</code> com <code>bind:value</code></h2>
+
+<p>A lista suspensa guarda uma escolha entre opções. O binding é <code>bind:value</code>, o mesmo dos campos de texto, porque o que interessa é o valor da opção escolhida.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let escolha = $state('pao');
+&lt;/script&gt;
+
+&lt;select bind:value={escolha}&gt;
+  &lt;option value="pao"&gt;pão&lt;/option&gt;
+  &lt;option value="leite"&gt;leite&lt;/option&gt;
+&lt;/select&gt;
+&lt;p&gt;Escolha: {escolha}&lt;/p&gt;</pre>
+
+<p>O HTML gerado marca a opção que corresponde ao estado inicial. Repare no atributo <code>selected=""</code>, que é o jeito de o HTML dizer "esta é a escolhida".</p>
+
+<pre class="out">&lt;select&gt;&lt;option value="pao" selected=""&gt;pão&lt;/option&gt;&lt;option value="leite"&gt;leite&lt;/option&gt;&lt;/select&gt; &lt;p&gt;Escolha: pao&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;select&gt;</dt><dd>o elemento da lista. Ele contém <code>&lt;option&gt;</code> e nada mais; texto solto dentro dele é ignorado.</dd>
+  <dt>bind:value</dt><dd>liga o valor escolhido à variável. A lista dispara <code>change</code>, não <code>input</code> — o binding já sabe disso.</dd>
+  <dt>value="pao"</dt><dd>o valor que vai para a variável quando esta opção é escolhida. É diferente do texto visível.</dd>
+  <dt>{escolha}</dt><dd>mostra o valor guardado, não o rótulo. Se os dois forem diferentes, a tela mostra o valor.</dd>
+</dl>
+
+<p>Essa distinção entre valor e rótulo é o ponto mais útil da lista. A Ana vê "pão" e "leite"; o programa guarda <code>pao</code> e <code>leite</code>, sem acento e em minúsculas, prontos para virar chave de banco de dados ou comparação. O rótulo é para o olho, o valor é para o código.</p>
+
+<div class="trysvelte" data-goal="digitar:select=leite;;outre:^Escolha: leite">
+<p class="try-task"><strong>Missão:</strong> a lista mostra as opções, mas escolher não muda o parágrafo. Ligue a lista ao estado com <code>bind:value</code> para que escolher <code>leite</code> mostre <code>Escolha: leite</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let escolha = $state('pao');
+&lt;/script&gt;
+
+&lt;p&gt;Escolha: {escolha}&lt;/p&gt;
+&lt;select&gt;
+  &lt;option value="pao"&gt;pão&lt;/option&gt;
+  &lt;option value="leite"&gt;leite&lt;/option&gt;
+&lt;/select&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let escolha = $state('pao');
+&lt;/script&gt;
+
+&lt;p&gt;Escolha: {escolha}&lt;/p&gt;
+&lt;select bind:value={escolha}&gt;
+  &lt;option value="pao"&gt;pão&lt;/option&gt;
+  &lt;option value="leite"&gt;leite&lt;/option&gt;
+&lt;/select&gt;</pre>
+</div>
+
+<h2>6. <code>option</code> com valor e sem valor</h2>
+
+<p>O atributo <code>value</code> da opção é opcional. Quando ele falta, o navegador usa o texto da opção como valor. O componente abaixo guarda <code>leite</code> e marca a segunda opção sem escrever valor nenhum.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let escolha = $state('leite');
+&lt;/script&gt;
+
+&lt;select bind:value={escolha}&gt;
+  &lt;option&gt;pão&lt;/option&gt;
+  &lt;option&gt;leite&lt;/option&gt;
+&lt;/select&gt;
+&lt;p&gt;Escolha: {escolha}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;select&gt;&lt;option&gt;pão&lt;/option&gt;&lt;option selected=""&gt;leite&lt;/option&gt;&lt;/select&gt; &lt;p&gt;Escolha: leite&lt;/p&gt;</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>HTML</th><th>Valor guardado ao escolher</th><th>Quando usar</th></tr>
+<tr><td><code>&lt;option value="pao"&gt;pão&lt;/option&gt;</code></td><td><code>"pao"</code></td><td>o valor precisa ser estável e sem acento</td></tr>
+<tr><td><code>&lt;option&gt;pão&lt;/option&gt;</code></td><td><code>"pão"</code></td><td>o valor é o próprio rótulo</td></tr>
+<tr><td><code>&lt;option value=""&gt;escolha…&lt;/option&gt;</code></td><td><code>""</code></td><td>a opção vazia de "nada escolhido"</td></tr>
+<tr><td><code>&lt;option value={codigo}&gt;{nome}&lt;/option&gt;</code></td><td>o valor da variável</td><td>lista que vem de dados</td></tr>
+</table>
+</div>
+
+<p>A terceira linha é um truque útil: uma opção vazia no topo serve de "escolha uma opção" e deixa o estado como string vazia até a pessoa decidir. A quarta mostra que o valor pode vir de uma variável, o que permite montar a lista com <code>{#each}</code>. Nos dois casos, quem decide o que vai para o estado é o atributo <code>value</code>.</p>
+
+<p>Uma armadilha frequente é misturar os dois estilos na mesma lista. Se a primeira opção tem <code>value="pao"</code> e a segunda não tem valor, a variável pode receber <code>"pao"</code> ou <code>"leite"</code>, dependendo do rótulo. Funciona, mas obriga quem lê a conferir caso por caso. Escolha um estilo e siga com ele.</p>
+
+<p>Existe uma variação da lista que merece menção: <code>&lt;select multiple&gt;</code>. Com o atributo <code>multiple</code>, a pessoa escolhe várias opções com Ctrl ou Shift, e o <code>bind:value</code> passa a devolver uma lista em vez de um valor só. É o mesmo elemento, o mesmo binding e um tipo de resultado diferente. Se a lista é de formas de pagamento e só uma vale, não use <code>multiple</code>; se é de ingredientes e várias valem, use.</p>
+
+<p>Para o dia a dia da padaria, a lista simples resolve quase tudo. Ela ocupa pouco espaço, mostra a escolha atual sem abrir nada e funciona bem no celular, onde o navegador troca a lista por um seletor nativo. A desvantagem é que as opções ficam escondidas até o clique; quando são poucas e importantes, os rádios comunicam melhor.</p>
+
+<h2>7. Rádio: conhecendo o <code>bind:group</code></h2>
+
+<p>Botões de rádio andam em grupo: marcar um desmarca os outros. O binding é <code>bind:group</code>, e o valor guardado é o <code>value</code> do escolhido.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pagamento = $state('');
+&lt;/script&gt;
+
+&lt;input type="radio" value="pix" bind:group={pagamento}&gt;
+&lt;input type="radio" value="cartao" bind:group={pagamento}&gt;
+&lt;p&gt;Pagamento: {pagamento}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input type="radio" value="pix"/&gt; &lt;input type="radio" value="cartao"/&gt; &lt;p&gt;Pagamento: &lt;/p&gt;</pre>
+
+<p>Com o estado vazio, nenhum dos dois aparece marcado no HTML do servidor, e o parágrafo fica sem valor. Quando a Ana escolhe cartão, a variável recebe <code>"cartao"</code> e o outro rádio é desmarcado pelo próprio grupo. Não existe <code>bind:checked</code> em rádio: o compilador recusa e ainda sugere o binding certo.</p>
+
+<div class="trysvelte" data-goal="clique:#cartao;;outre:^Pagamento: cartao">
+<p class="try-task"><strong>Missão:</strong> os dois rádios não estão ligados ao estado. Use <code>bind:group</code> para que escolher <code>cartão</code> mostre <code>Pagamento: cartao</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pagamento = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Pagamento: {pagamento}&lt;/p&gt;
+&lt;input type="radio" id="pix" value="pix"&gt;
+&lt;input type="radio" id="cartao" value="cartao"&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pagamento = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Pagamento: {pagamento}&lt;/p&gt;
+&lt;input type="radio" id="pix" value="pix" bind:group={pagamento}&gt;
+&lt;input type="radio" id="cartao" value="cartao" bind:group={pagamento}&gt;</pre>
+</div>
+
+<p>Repare que os dois rádios apontam para a mesma variável. É isso que os torna um grupo: não o <code>name</code> do HTML, mas o binding compartilhado. O navegador também agrupa rádios pelo atributo <code>name</code>; o Svelte usa a variável. Quando você usa <code>bind:group</code>, o compilador cuida do <code>name</code> sozinho — por isso os exemplos acima funcionam sem ele.</p>
+
+<h2>8. O que o servidor manda em cada caso</h2>
+
+<p>Vale comparar as três saídas lado a lado, porque elas mostram como o estado inicial viaja até o HTML. A tabela resume o que você já viu nas seções anteriores.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Binding</th><th>Estado inicial</th><th>O que sai no HTML</th></tr>
+<tr><td><code>bind:checked</code></td><td><code>true</code></td><td><code>checked=""</code> no <code>input</code></td></tr>
+<tr><td><code>bind:checked</code></td><td><code>false</code></td><td>nenhum atributo</td></tr>
+<tr><td><code>bind:value</code> em <code>select</code></td><td><code>'pao'</code></td><td><code>selected=""</code> na opção de valor <code>pao</code></td></tr>
+<tr><td><code>bind:value</code> em <code>select</code></td><td><code>''</code></td><td>nenhuma opção marcada</td></tr>
+<tr><td><code>bind:group</code> em rádio</td><td><code>'cartao'</code></td><td><code>checked=""</code> no rádio de valor <code>cartao</code></td></tr>
+</table>
+</div>
+
+<p>Essa é a vantagem de renderizar no servidor: a pessoa vê a escolha salva antes de qualquer JavaScript baixar. Num formulário de edição, é a diferença entre abrir com os dados certos e abrir vazio por meio segundo. O Svelte faz isso porque o binding também informa o valor inicial ao compilador de servidor.</p>
+
+<p>Para ver os arquivos do projeto, o terminal resolve com um comando curto. A pasta <code>src</code> guarda o componente principal e o ponto de entrada:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls src
+App.svelte
+main.js</pre>
+
+<p>O <code>App.svelte</code> é o arquivo que você edita nesta aula. O <code>main.js</code> é quem monta esse componente na página; ele quase nunca muda. Quando o projeto crescer, vão aparecer outras pastas e outros componentes, e o comando <code>ls</code> continua sendo o jeito mais rápido de lembrar onde está cada coisa.</p>
+
+<p>O build da aula, com as três caixas no arquivo, mostra o peso do conjunto:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BFQ0bbwA.js  38.60 kB │ gzip: 14.92 kB
+✓ built in 1.64s</pre>
+
+<p>Trinta e oito kilobytes e meio para um formulário com caixa, lista e rádio. Cada binding custa um pouco de código, e o total continua pequeno para o que entrega.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — <code>bind:checked</code> em campo de texto</strong>
+<p>O binding de marcação só vale em caixa de marcar. Um campo de texto não tem estado de marcado.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let ok = $state(false);
+&lt;/script&gt;
+
+&lt;input type="text" bind:checked={ok}&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 19): `bind:checked` can only be used with `&lt;input type="checkbox"&gt;`</pre>
+<p>A mensagem diz exatamente o que fazer: use <code>type="checkbox"</code>. Se o campo é de texto e você quer o conteúdo, o binding é <code>bind:value</code>. O nome do binding precisa combinar com a natureza do elemento.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>bind:checked</code> em rádio</strong>
+<p>Rádio não guarda um booleano próprio: guarda o valor escolhido dentro de um grupo. O compilador recusa e indica o binding certo na própria mensagem.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let ok = $state(false);
+&lt;/script&gt;
+
+&lt;input type="radio" bind:checked={ok}&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 20): `bind:checked` can only be used with `&lt;input type="checkbox"&gt;` — for `&lt;input type="radio"&gt;`, use `bind:group`</pre>
+<p>É uma das mensagens mais gentis do compilador: além de recusar, ensina. Troque por <code>bind:group={variavel}</code>, com uma variável que guarde o valor do escolhido, e dê um <code>value</code> a cada rádio.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — binding sem nome</strong>
+<p>Depois dos dois-pontos vem o nome do binding. Um <code>bind:</code> solto não diz o que ligar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let x = $state(0);
+&lt;/script&gt;
+
+&lt;input bind:={x}&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 7): `bind:` name cannot be empty</pre>
+<p>"O nome do bind: não pode ser vazio". Escreva <code>bind:value</code>, <code>bind:checked</code> ou <code>bind:group</code>, conforme o elemento. Se você chegou aqui por um erro de digitação, o número da coluna mostra onde o nome deveria começar.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Elemento</th><th>Binding</th><th>Tipo do valor</th></tr>
+<tr><td><code>&lt;input type="checkbox"&gt;</code></td><td><code>bind:checked</code></td><td>booleano</td></tr>
+<tr><td>vários <code>checkbox</code></td><td><code>bind:group</code></td><td>lista</td></tr>
+<tr><td><code>&lt;select&gt;</code></td><td><code>bind:value</code></td><td>string (ou o valor da opção)</td></tr>
+<tr><td><code>&lt;select multiple&gt;</code></td><td><code>bind:value</code></td><td>lista de valores</td></tr>
+<tr><td><code>&lt;input type="radio"&gt;</code></td><td><code>bind:group</code></td><td>valor do escolhido</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>A caixa marca e o parágrafo não muda</td><td>falta <code>bind:checked</code></td></tr>
+<tr><td>O valor vem <code>true</code> onde você esperava texto</td><td>usou <code>bind:checked</code>; o texto é do <code>bind:value</code></td></tr>
+<tr><td>A lista mostra o rótulo em vez do código</td><td>falta <code>value</code> na <code>option</code></td></tr>
+<tr><td>Os rádios não se desmarcam</td><td>cada um está ligado a uma variável diferente</td></tr>
+<tr><td>Nada aparece marcado ao abrir</td><td>o estado inicial não corresponde a nenhum <code>value</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Terminal</th><th>O que mostra</th></tr>
+<tr><td><code>ls src</code></td><td>os arquivos do componente e do ponto de entrada</td></tr>
+<tr><td><code>npm run build</code></td><td>o peso do projeto com os três bindings</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual binding guarda o estado de uma caixa de marcar?</p>
+<label><input type="radio" name="q1"> <code>bind:value</code></label>
+<label><input type="radio" name="q1"> <code>bind:checked</code></label>
+<label><input type="radio" name="q1"> <code>bind:group</code></label>
+<label><input type="radio" name="q1"> <code>bind:this</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Numa <code>&lt;option value="leite"&gt;leite&lt;/option&gt;</code>, o que a variável recebe ao escolher essa opção?</p>
+<label><input type="radio" name="q1"> o texto "leite" em maiúsculas</label>
+<label><input type="radio" name="q1"> o índice da opção na lista</label>
+<label><input type="radio" name="q1"> a string <code>"leite"</code>, que é o valor do atributo</label>
+<label><input type="radio" name="q1"> um objeto com rótulo e valor</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que rádio usa <code>bind:group</code> e não <code>bind:checked</code>?</p>
+<label><input type="radio" name="q1"> porque o valor guardado é o do rádio escolhido dentro do grupo</label>
+<label><input type="radio" name="q1"> porque rádio não aceita <code>value</code></label>
+<label><input type="radio" name="q1"> porque <code>bind:checked</code> só funciona no servidor</label>
+<label><input type="radio" name="q1"> porque rádio não pode ser desmarcado</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let escolha = $state('pao');<br><br>&lt;select <input data-answer="bind:value={escolha}">&gt;<br>&nbsp;&nbsp;&lt;option value="pao"&gt;pão&lt;/option&gt;<br>&nbsp;&nbsp;&lt;option value="leite"&gt;leite&lt;/option&gt;<br>&lt;/select&gt;<br><br>// escolher leite guarda a string "leite"</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>bind:checked</code> liga a marcação de uma caixa e guarda <code>true</code> ou <code>false</code>.</li>
+  <li>Um booleano serve direto como condição de <code>{#if}</code>, sem comparação.</li>
+  <li><code>bind:value</code> em <code>&lt;select&gt;</code> guarda o valor da opção escolhida.</li>
+  <li><code>option</code> com <code>value</code> guarda o atributo; sem ele, guarda o texto.</li>
+  <li>Rádio usa <code>bind:group</code> e guarda o valor do escolhido.</li>
+  <li>Vários rádios ligados à mesma variável formam um grupo de verdade.</li>
+  <li>O servidor manda <code>checked=""</code> e <code>selected=""</code> conforme o estado inicial.</li>
+  <li>Erros desta aula: <code>bind:checked</code> em texto, <code>bind:checked</code> em rádio e <code>bind:</code> sem nome.</li>
+  <li>O compilador sugere <code>bind:group</code> na mensagem de erro do rádio; ler a mensagem economiza tempo.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

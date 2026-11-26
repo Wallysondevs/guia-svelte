@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bind:value — texto, número, área de texto e lista | Guia Svelte</title>
+<meta name="description" content="bind:value no Svelte 5 campo por campo: texto, type=number, campo vazio que vira null, textarea, range e bind dentro de cada bloco, com saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">bind:value</span></h1>
+
+<p class="intro">O balcão da Ana tem dois campos que ela usa o dia inteiro: um para a quantidade de pães e outro para a observação do pedido ("sem sal", "bem assado"). Ela quer que os dois estejam ligados ao caderno de pedidos, mas existe uma diferença entre eles: quantidade é número, observação é texto. O <code>bind:value</code> funciona nos dois, mas o que ele entrega muda conforme o tipo do campo. Esta aula passa campo por campo, com a saída de verdade do compilador.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como o <code>bind:value</code> se comporta em campo de texto comum.</li>
+  <li>Por que <code>type="number"</code> entrega número e o campo sem tipo entrega texto.</li>
+  <li>O que acontece quando a pessoa apaga tudo de um campo numérico.</li>
+  <li>Como ligar uma área de texto sem usar o conteúdo das tags.</li>
+  <li>Como funciona o controle deslizante (<code>range</code>) com binding.</li>
+  <li>Como ligar um campo por item de uma lista, usando o índice.</li>
+  <li>Por que ligar em <code>item</code> não compila e o que fazer no lugar.</li>
+  <li>O aviso que o compilador dá quando o estado não é reativo.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: cada campo guarda um tipo de coisa</h2>
+
+<p>Um campo de texto e um campo de número parecem iguais na tela: uma caixinha branca onde se digita. Por dentro, são coisas diferentes. O campo de texto devolve uma sequência de caracteres; o campo de número devolve um valor numérico, ou nada, quando está vazio. Quem decide é o atributo <code>type</code>, não o binding. O <code>bind</code> só transporta o que o campo produz.</p>
+
+<p>Essa diferença importa porque o JavaScript trata texto e número de formas diferentes. Somar dois números dá uma soma; somar texto com número dá colagem. Se a Ana digita <code>7</code> no campo de quantidade e o valor chega como texto, o dobro aparece como <code>77</code> em vez de <code>14</code>. O erro não está no <code>bind</code>: está no tipo do campo.</p>
+
+<p>Existe também a questão do vazio. Num campo de texto, vazio é uma string vazia — um valor válido. Num campo de número, vazio não é zero: é ausência de valor, representada por <code>null</code>. Confundir os dois faz a conta virar <code>NaN</code> e a tela mostrar "NaN" para o cliente, o que nunca é boa notícia.</p>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo</th><th>O que o <code>bind:value</code> entrega</th><th>Exemplo</th></tr>
+<tr><td><code>&lt;input&gt;</code> sem tipo</td><td>texto</td><td><code>'7'</code></td></tr>
+<tr><td><code>&lt;input type="text"&gt;</code></td><td>texto</td><td><code>'ana'</code></td></tr>
+<tr><td><code>&lt;input type="number"&gt;</code></td><td>número ou <code>null</code></td><td><code>7</code></td></tr>
+<tr><td><code>&lt;input type="range"&gt;</code></td><td>número</td><td><code>3</code></td></tr>
+<tr><td><code>&lt;textarea&gt;</code></td><td>texto com quebras de linha</td><td><code>'sem sal'</code></td></tr>
+<tr><td><code>&lt;input type="email"&gt;</code></td><td>texto (o navegador só valida o formato)</td><td><code>'ana@padaria'</code></td></tr>
+</table>
+</div>
+
+<p>A tabela inteira cabe numa frase: o binding entrega o que o campo vale, e o campo vale conforme o tipo. Se você lembrar disso, metade dos problemas de formulário desaparece. A outra metade é o binding em listas, que tem seção própria aqui.</p>
+
+<h2>3. <code>bind:value</code> no campo de texto</h2>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let apelido = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value={apelido}&gt;
+&lt;p&gt;Apelido: {apelido}&lt;/p&gt;</pre>
+
+<p>O valor inicial aparece no campo e no parágrafo. Cada tecla muda os dois ao mesmo tempo, porque existe uma variável só. O HTML que o servidor manda já vem com o valor no atributo:</p>
+
+<pre class="out">&lt;input value="Ana"/&gt; &lt;p&gt;Apelido: Ana&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;input&gt;</dt><dd>sem atributo <code>type</code>, o navegador assume texto. É o campo mais simples e o mais usado.</dd>
+  <dt>bind:value</dt><dd>liga o conteúdo do campo à variável. O compilador gera o evento que lê o campo e o efeito que reescreve o campo quando o estado muda.</dd>
+  <dt>{apelido}</dt><dd>o lugar onde o valor aparece. Tudo o que está em <code>$state</code> pode ser mostrado nas chaves.</dd>
+  <dt>value="Ana"</dt><dd>o que o servidor manda. Se o JavaScript falhar, a pessoa ainda vê o valor inicial — uma vantagem discreta do Svelte sobre montar tudo no navegador.</dd>
+</dl>
+
+<p>Repare que o atributo do HTML se chama <code>value</code>, sem <code>bind:</code>. O prefixo é uma instrução para o compilador, não um atributo que vai para o navegador. O navegador só entende <code>value</code>; o Svelte entende <code>bind:value</code> e traduz.</p>
+
+<p>Esse detalhe explica uma confusão frequente ao inspecionar a página: você procura <code>bind:value</code> no HTML do navegador e não acha. Não é erro de digitação nem de compilação. O atributo que chega ao navegador é sempre <code>value</code>, e a ligação em duas vias vive no JavaScript do componente.</p>
+
+<h2>4. Número não é texto</h2>
+
+<p>Para receber número, o campo precisa declarar que é numérico. O binding é o mesmo; o tipo muda o que chega na variável.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let quantidade = $state(1);
+&lt;/script&gt;
+
+&lt;input type="number" bind:value={quantidade}&gt;
+&lt;p&gt;Pães: {quantidade}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input type="number" value="1"/&gt; &lt;p&gt;Pães: 1&lt;/p&gt;</pre>
+
+<p>O HTML mostra o tipo e o valor. Se a Ana digitar <code>12</code>, a variável recebe o número <code>12</code>, e não a string <code>"12"</code>. Isso permite somar, comparar com zero e formatar com <code>toFixed</code> sem conversão. O build deste componente pesa pouco mais do que o anterior:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DRTTH_Ya.js  37.24 kB │ gzip: 14.37 kB
+✓ built in 3.69s</pre>
+
+<p>Trinta e sete kilobytes, um pouco acima do componente de texto porque o campo numérico carrega a conversão embutida. No terminal, a diferença entre os dois tipos fica clara:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log('7' + 7, 7 + 7)"
+77 14</pre>
+
+<p>A primeira conta usou texto e colou os caracteres; a segunda usou números e somou. É exatamente a diferença entre um campo sem tipo e um campo <code>type="number"</code>. Note que o navegador também muda o teclado no celular: com <code>type="number"</code>, abre o teclado numérico, o que já é um ganho de usabilidade.</p>
+
+<p>Existe um detalhe do HTML que confunde: o campo numérico aceita a letra <code>e</code> (para notação científica) e os sinais <code>+</code> e <code>-</code>, porque fazem parte de números válidos. Se você precisa de inteiros positivos, combine o tipo com <code>min="0"</code> e <code>step="1"</code> e valide no handler. O tipo ajuda, mas não substitui a validação.</p>
+
+<h2>5. O campo vazio vira <code>null</code></h2>
+
+<p>Apagar tudo de um campo numérico não produz zero. Produz ausência de valor, que o Svelte entrega como <code>null</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let gramas = $state(null);
+&lt;/script&gt;
+
+&lt;input type="number" bind:value={gramas}&gt;
+&lt;p&gt;Gramas: {gramas}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input type="number"/&gt; &lt;p&gt;Gramas: &lt;/p&gt;</pre>
+
+<p>No HTML, um valor <code>null</code> simplesmente não vira atributo: o campo sai vazio, sem <code>value</code>. No parágrafo, <code>{gramas}</code> com <code>null</code> não imprime nada. Isso é conveniente para "ainda não preencheu", mas é uma armadilha para contas: <code>null + 1</code> dá <code>1</code> em JavaScript, e <code>null * 2</code> dá <code>0</code>. O resultado não é o que a Ana espera.</p>
+
+<p>Duas saídas comuns. A primeira é começar com zero e tratar o campo como obrigatório: <code>let gramas = $state(0)</code>. A segunda é checar antes de calcular: <code>{gramas === null ? '—' : gramas * 2}</code>. O importante é escolher uma e ser consistente; metade dos bugs de formulário nasce de um campo que às vezes é número e às vezes é <code>null</code>.</p>
+
+<div class="trysvelte" data-goal="digitar:input=7;;outre:^Dobro: 14">
+<p class="try-task"><strong>Missão:</strong> o campo é numérico, mas o valor chega como texto e o dobro sai colado (<code>77</code>). Troque o evento por <code>bind:value</code> para o dobro virar <code>14</code> quando a pessoa digitar <code>7</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let n = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Dobro: {n + n}&lt;/p&gt;
+&lt;input type="number" oninput={(e) =&gt; (n = e.target.value)}&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let n = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Dobro: {n + n}&lt;/p&gt;
+&lt;input type="number" bind:value={n}&gt;</pre>
+</div>
+
+<p>A missão parece pequena, mas ela mostra o motivo de o binding existir: o campo sabe qual é o tipo do valor, e o <code>bind</code> pergunta ao campo. O <code>oninput</code> só sabe que houve uma alteração e devolve o texto cru. Quem escreve <code>evento.target.value</code> está pegando o texto, não o número — mesmo num campo numérico.</p>
+
+<h2>6. Área de texto e controle deslizante</h2>
+
+<p>A área de texto tem uma peculiaridade de HTML: o valor dela fica entre as tags, não num atributo. Por isso <code>value={texto}</code> não funciona nela; o certo é o binding.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let observacao = $state('');
+&lt;/script&gt;
+
+&lt;textarea bind:value={observacao}&gt;&lt;/textarea&gt;
+&lt;p&gt;Observação: {observacao}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;textarea&gt;&lt;/textarea&gt; &lt;p&gt;Observação: &lt;/p&gt;</pre>
+
+<p>O compilador gera uma área de texto vazia e liga o conteúdo ao estado. Se você escrever texto entre as tags, ele serve de valor inicial apenas enquanto o estado não manda nada; com o binding, quem manda é a variável. Para a observação da Ana, é o campo certo: aceita várias linhas e preserva as quebras.</p>
+
+<p>O controle deslizante é o inverso: o valor é sempre numérico e sempre dentro de uma faixa. Ele combina com <code>min</code>, <code>max</code> e <code>step</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let intensidade = $state(3);
+&lt;/script&gt;
+
+&lt;input type="range" min="0" max="10" bind:value={intensidade}&gt;
+&lt;p&gt;Força: {intensidade}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input type="range" min="0" max="10" value="3"/&gt; &lt;p&gt;Força: 3&lt;/p&gt;</pre>
+
+<p>O valor inicial 3 aparece como <code>value="3"</code> e posiciona o botão no meio da faixa. Arrastar atualiza a variável com um número; não existe texto no meio do caminho. Bom para escolher a força do forno, a quantidade de açúcar ou o nível de dificuldade de um jogo.</p>
+
+<div class="trysvelte" data-goal="digitar:#obs=oi;;outre:^Observação: oi">
+<p class="try-task"><strong>Missão:</strong> a área de texto não está ligada ao estado. Faça o parágrafo mostrar o que for escrito nela: digitando <code>oi</code>, deve aparecer <code>Observação: oi</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let observacao = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Observação: {observacao}&lt;/p&gt;
+&lt;textarea id="obs"&gt;&lt;/textarea&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let observacao = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Observação: {observacao}&lt;/p&gt;
+&lt;textarea id="obs" bind:value={observacao}&gt;&lt;/textarea&gt;</pre>
+</div>
+
+<p>A tag <code>textarea</code> no HTML não tem atributo <code>value</code>; quem tenta usar um recebe uma área vazia e um estado parado. O binding resolve porque o compilador sabe que, nesse elemento, o valor é o conteúdo e gera o código certo. Esse é um exemplo de decisão que o Svelte toma por você e que seria fácil errar à mão.</p>
+
+<h2>7. Um campo por item da lista</h2>
+
+<p>A lista de compras da Ana tem itens que ela quer editar na tela. O caminho é um campo para cada item, ligado à posição, não à variável do laço.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+{#each itens as item, i}
+  &lt;input bind:value={itens[i]}&gt;
+{/each}
+&lt;p&gt;{itens.join(', ')}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value="pão"/&gt;&lt;input value="leite"/&gt; &lt;p&gt;pão, leite&lt;/p&gt;</pre>
+
+<p>O bloco <code>{#each}</code> repete o campo duas vezes, e o índice <code>i</code> diz qual posição cada campo deve editar. O binding aponta para <code>itens[i]</code>, um endereço dentro da lista. Quando a Ana digita no primeiro campo, o primeiro item muda e o parágrafo se atualiza.</p>
+
+<p>O caminho que parece mais natural — <code>bind:value={item}</code> — não compila em modo de runas. O compilador explica que a variável do laço é uma cópia do valor, não um lugar onde se pode gravar. A mensagem é longa e aparece na íntegra na seção 9, porque vale ler uma vez na vida.</p>
+
+<div class="trysvelte" data-goal="digitar:input=uva;;outre:^Lista: uva, leite">
+<p class="try-task"><strong>Missão:</strong> só existe um campo, ligado a uma variável solta, e a lista nunca muda. Crie um campo por item, ligado à posição, para que digitar <code>uva</code> no primeiro campo deixe <code>Lista: uva, leite</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'leite']);
+  let avulso = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Lista: {itens.join(', ')}&lt;/p&gt;
+&lt;input bind:value={avulso}&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;p&gt;Lista: {itens.join(', ')}&lt;/p&gt;
+{#each itens as item, i}
+  &lt;input bind:value={itens[i]}&gt;
+{/each}</pre>
+</div>
+
+<p>Existe uma alternativa que você vai encontrar em código de terceiros: ligar em uma propriedade do item, como <code>bind:value={item.nome}</code>. Funciona quando o item é um objeto, porque aí a variável do laço aponta para o mesmo objeto da lista. Com texto puro, não funciona: texto é imutável, e trocar o texto de uma variável não troca o texto da lista. O índice resolve os dois casos.</p>
+
+<h2>8. Quando o estado não é reativo</h2>
+
+<p>O binding escreve na variável. Se ela não foi criada com <code>$state</code>, o valor muda e a tela não acompanha. O compilador percebe isso em muitos casos e avisa:</p>
+
+<p><code>non_reactive_update</code> — "`nome` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates". A tradução: a variável é atualizada, mas não foi declarada com <code>$state</code>; mudar o valor não dispara atualização.</p>
+
+<p>O aviso não impede o componente de rodar. No primeiro momento parece tudo certo: o campo mostra o valor inicial, a pessoa digita, o valor da variável muda. O que não acontece é o redesenho do resto da tela. Você vê o campo mudando (o navegador cuida dele) e o parágrafo parado, e conclui que o binding está quebrado quando o problema é a declaração.</p>
+
+<p>Vale a pena entender por que o campo continua mudando. O texto que aparece dentro do campo é responsabilidade do navegador: ele recebe a tecla, escreve o caractere e não pede licença para ninguém. O Svelte só é avisado do evento e copia o valor para a variável. Se a variável não é reativa, a cópia acontece e ninguém é notificado. O campo, que não depende do Svelte para se desenhar, continua certo; o resto da tela, que depende, fica para trás.</p>
+
+<p>Essa diferença entre aviso e erro também merece atenção. Um erro impede a compilação: nada é gerado e a página não abre. Um aviso deixa o projeto compilar e aponta um risco. <code>non_reactive_update</code> é aviso, e o risco é exatamente o parágrafo parado que descrevi. Trate aviso como pergunta: "eu quis isso mesmo?". Quando a resposta é não, corrija antes de seguir.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Declaração</th><th>O que o binding faz</th><th>A tela acompanha?</th></tr>
+<tr><td><code>let nome = $state('')</code></td><td>grava e avisa</td><td>sim</td></tr>
+<tr><td><code>let nome = ''</code></td><td>grava, sem avisar</td><td>não</td></tr>
+<tr><td><code>const nome = 'Ana'</code></td><td>não compila</td><td>—</td></tr>
+<tr><td><code>let nome = $derived(x)</code></td><td>grava em valor calculado, sem sentido</td><td>não deveria nem tentar</td></tr>
+</table>
+</div>
+
+<p>A última linha merece um comentário. <code>$derived</code> é para valores que vêm de outros valores; um campo ligado a ele é uma contradição: a pessoa digita e o valor é recalculado a partir da fonte. O compilador não impede em todos os casos, mas o comportamento não vai ser o que você quer. Aula própria, mais adiante, trata de <code>$derived</code>.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — binding sem variável declarada</strong>
+<p>A forma curta <code>bind:value</code> procura uma variável chamada <code>value</code>. Se ela não existe, o compilador não tem onde gravar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 12): Can only bind to state or props</pre>
+<p>"Can only bind to state or props" quer dizer "só posso ligar a estado ou a propriedades". Escreva a forma longa com o nome da variável: <code>bind:value={nome}</code>. Se você realmente quer a curta, a variável precisa se chamar <code>value</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — esqueceu as chaves</strong>
+<p>O valor do binding é uma expressão entre chaves, como no <code>onclick</code>. Escrever o nome da variável entre aspas não vale.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let grupo = $state([]);
+&lt;/script&gt;
+
+&lt;input type="checkbox" bind:group="grupo"&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 35): Directive value must be a JavaScript expression enclosed in curly braces</pre>
+<p>A mensagem é comprida porque vale para qualquer diretiva, não só para <code>bind</code>: "o valor da diretiva precisa ser uma expressão JavaScript entre chaves". Troque <code>"grupo"</code> por <code>{grupo}</code>. Aspas são para texto no HTML; chaves são para valores do script.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — binding na variável do laço</strong>
+<p>Em <code>{#each}</code>, a variável depois do <code>as</code> é uma cópia. O compilador recusa gravar nela e indica o caminho com índice.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let lista = ['pão', 'leite'];
+  let item = $state('');
+&lt;/script&gt;
+
+{#each lista as nome}
+  &lt;input bind:value={nome}&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 9): Cannot reassign or bind to each block argument in runes mode. Use the array and index variables instead (e.g. `array[i] = value` instead of `entry = value`, or `bind:value={array[i]}` instead of `bind:value={entry}`)</pre>
+<p>É uma das mensagens mais úteis do compilador: ela não só proíbe como mostra o código certo. Troque o laço por <code>{#each lista as nome, i}</code> e o campo por <code>bind:value={lista[i]}</code>. Só lembre de declarar a lista com <code>$state</code>, senão a tela não acompanha.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Elemento</th><th>Declaração do estado</th><th>Valor que chega</th></tr>
+<tr><td>texto</td><td><code>let nome = $state('')</code></td><td>string</td></tr>
+<tr><td>número</td><td><code>let n = $state(0)</code></td><td>number ou <code>null</code></td></tr>
+<tr><td>área de texto</td><td><code>let obs = $state('')</code></td><td>string com quebras</td></tr>
+<tr><td>faixa</td><td><code>let nivel = $state(1)</code></td><td>number</td></tr>
+<tr><td>item de lista</td><td><code>let itens = $state([])</code></td><td>o item é gravado por índice</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>77</code> em vez de <code>14</code></td><td>campo sem <code>type="number"</code> entrega string</td></tr>
+<tr><td>Tela mostra <code>NaN</code></td><td>conta com <code>null</code> de campo vazio</td></tr>
+<tr><td>Área de texto vazia sempre</td><td>usou <code>value</code> em vez de <code>bind:value</code></td></tr>
+<tr><td>Lista não muda</td><td>binding em <code>item</code> em vez de <code>itens[i]</code></td></tr>
+<tr><td>Campo muda e parágrafo não</td><td>estado declarado sem <code>$state</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Terminal</th><th>O que mostra</th></tr>
+<tr><td><code>node -e "console.log('7' + 7, 7 + 7)"</code></td><td><code>77 14</code> — texto cola, número soma</td></tr>
+<tr><td><code>npm run build</code></td><td>o peso do projeto com os bindings</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que a variável recebe quando o campo tem <code>type="number"</code> e está vazio?</p>
+<label><input type="radio" name="q1"> o número zero</label>
+<label><input type="radio" name="q1"> uma string vazia</label>
+<label><input type="radio" name="q1"> <code>null</code>, ausência de valor</label>
+<label><input type="radio" name="q1"> o último número digitado</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Qual é a forma certa de ligar a área de texto ao estado?</p>
+<label><input type="radio" name="q1"> <code>&lt;textarea value={obs}&gt;</code></label>
+<label><input type="radio" name="q1"> <code>&lt;textarea bind:value={obs}&gt;</code></label>
+<label><input type="radio" name="q1"> <code>&lt;textarea&gt;{obs}&lt;/textarea&gt;</code></label>
+<label><input type="radio" name="q1"> <code>&lt;textarea bind:this={obs}&gt;</code></label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. Dentro de <code>{#each itens as item, i}</code>, como ligar o campo ao item?</p>
+<label><input type="radio" name="q1"> <code>bind:value={item}</code></label>
+<label><input type="radio" name="q1"> <code>bind:value={i}</code></label>
+<label><input type="radio" name="q1"> <code>bind:value={itens.length}</code></label>
+<label><input type="radio" name="q1"> <code>bind:value={itens[i]}</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let quantidade = $state(1);<br><br>&lt;input type="number" <input data-answer="bind:value={quantidade}">&gt;<br>&lt;p&gt;Pães: {quantidade}&lt;/p&gt;<br><br>// digitar 12 guarda o número 12, não o texto "12"</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>bind:value</code> entrega o valor do campo conforme o tipo dele.</li>
+  <li>Campo de texto devolve string; <code>type="number"</code> devolve número ou <code>null</code>.</li>
+  <li>Vazio num campo numérico é <code>null</code>, não zero: cuide da conta antes de multiplicar.</li>
+  <li>Em <code>&lt;textarea&gt;</code> o valor é o conteúdo, não o atributo; use <code>bind:value</code>.</li>
+  <li><code>range</code> devolve número dentro de <code>min</code> e <code>max</code>, e também usa <code>bind:value</code>.</li>
+  <li>Em lista, ligue por índice: <code>bind:value={itens[i]}</code>, nunca em <code>item</code>.</li>
+  <li>O estado precisa de <code>$state</code>; sem isso o compilador avisa <code>non_reactive_update</code>.</li>
+  <li>Erros desta aula: binding sem variável, valor entre aspas e binding na variável do laço.</li>
+  <li>O tipo do campo abre teclado numérico no celular e ajuda na usabilidade, mas não substitui validação.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

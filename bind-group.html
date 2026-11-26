@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bind:group — várias caixas, uma variável | Guia Svelte</title>
+<meta name="description" content="bind:group no Svelte 5: grupos de checkbox viram lista, rádios viram um valor só, o value de cada caixa importa e o compilador mostra os erros reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">bind:group</span></h1>
+
+<p class="intro">A lista de compras da Ana tem quadradinhos: pera, uva, leite, pão. Ela marca o que precisa e a lista cresce sem que ninguém escreva o nome de cada item duas vezes. Do outro lado do balcão, a pergunta "como vai pagar?" tem quadradinhos parecidos, mas só um pode ficar marcado. O <code>bind:group</code> é o binding que entende essa diferença: nas caixas de marcar ele guarda uma lista, nos rádios guarda um valor só. Esta aula mostra os dois casos, o papel do atributo <code>value</code> e os erros que o compilador devolve quando a conta não fecha.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como um grupo de caixas de marcar vira uma lista de valores.</li>
+  <li>Por que cada <code>&lt;input&gt;</code> precisa do seu <code>value</code>.</li>
+  <li>Como marcar e desmarcar atualiza a lista na hora.</li>
+  <li>Como grupos de rádio guardam um valor único.</li>
+  <li>Como começar o componente com itens já marcados.</li>
+  <li>Como montar as caixas a partir de uma lista de opções.</li>
+  <li>O que a variável recebe quando o <code>value</code> falta.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como conferir o tamanho de uma lista no terminal.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: vários marcadores, uma variável</h2>
+
+<p>Na aula passada, cada caixa tinha a sua variável: uma para o aceite, uma para a forma de pagamento. Quando as caixas pertencem a uma mesma pergunta — "quais frutas?" —, criar uma variável por caixa vira trabalho sem fim. A lista de compras pode ter três itens hoje e trinta amanhã. O <code>bind:group</code> resolve isso guardando todas as respostas em um lugar só.</p>
+
+<p>O nome diz o que faz: liga um <em>grupo</em> de elementos a uma variável. O tipo da variável decide o formato do resultado. Se for uma lista, o grupo aceita várias marcações — é o caso das caixas de marcar. Se for um valor simples, o grupo aceita uma só — é o caso dos rádios, em que marcar um desmarca o anterior.</p>
+
+<p>Existe uma terceira peça, que passa despercebida: o atributo <code>value</code> de cada caixa. É ele que diz <em>o que</em> entra na lista quando aquela caixa é marcada. Sem ele, a caixa não tem identidade e o grupo não sabe o que guardar. Boa parte dos problemas com <code>bind:group</code> é, no fundo, um <code>value</code> esquecido.</p>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A pergunta "quais frutas?"</td><td>Um grupo de <code>checkbox</code> com <code>bind:group</code></td></tr>
+<tr><td>O nome de cada fruta no marcador</td><td>O atributo <code>value</code> de cada caixa</td></tr>
+<tr><td>A lista do que foi marcado</td><td>Uma variável <code>$state([])</code></td></tr>
+<tr><td>A pergunta "como pagar?"</td><td>Um grupo de <code>radio</code> com <code>bind:group</code></td></tr>
+<tr><td>A resposta única</td><td>Uma variável <code>$state('')</code></td></tr>
+<tr><td>Marcar um rádio e desmarcar o outro</td><td>O grupo troca o valor da variável</td></tr>
+</table>
+</div>
+
+<p>Repare que a diferença entre a terceira e a quinta linha é o formato inicial da variável: lista vazia para várias respostas, texto vazio para uma resposta. O binding não escolhe por você; ele segue o que a variável já é. Errar o formato inicial é o segundo motivo mais comum de confusão com grupos.</p>
+
+<h2>3. <code>bind:group</code> nas caixas de marcar</h2>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let frutas = $state([]);
+&lt;/script&gt;
+
+&lt;label&gt;&lt;input type="checkbox" value="pera" bind:group={frutas}&gt; pera&lt;/label&gt;
+&lt;label&gt;&lt;input type="checkbox" value="uva" bind:group={frutas}&gt; uva&lt;/label&gt;
+&lt;p&gt;{frutas.length} fruta(s)&lt;/p&gt;</pre>
+
+<p>O estado começa como lista vazia. Cada caixa aponta para a mesma variável e declara o seu valor. O HTML gerado mostra as caixas sem marcação e o contador em zero:</p>
+
+<pre class="out">&lt;label&gt;&lt;input type="checkbox" value="pera"/&gt; pera&lt;/label&gt; &lt;label&gt;&lt;input type="checkbox" value="uva"/&gt; uva&lt;/label&gt; &lt;p&gt;0 fruta(s)&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>type="checkbox"</dt><dd>o elemento do grupo. <code>bind:group</code> só vale em <code>&lt;input&gt;</code>: caixas de marcar ou rádios.</dd>
+  <dt>value="pera"</dt><dd>o valor que entra na lista quando a caixa é marcada. É a identidade da caixa dentro do grupo.</dd>
+  <dt>bind:group={frutas}</dt><dd>liga todas as caixas de mesmo grupo à lista. Marcar acrescenta o valor; desmarcar tira.</dd>
+  <dt>{frutas.length}</dt><dd>quantos itens estão marcados. A lista é reativa: muda a marcação, muda o número.</dd>
+  <dt>&lt;label&gt;</dt><dd>torna o texto clicável. Clicar em "pera" marca a caixa ao lado, o que ajuda no celular.</dd>
+</dl>
+
+<p>O que acontece por dentro é simples de descrever: quando uma caixa é marcada, o grupo procura o valor dela na lista e acrescenta se não estiver lá. Quando é desmarcada, procura e remove. O resultado é uma lista na ordem em que os itens foram marcados, não na ordem em que aparecem na tela — um detalhe que só importa quando você exibe a lista em vez de contar.</p>
+
+<div class="trysvelte" data-goal="clique:#pera;;clique:#uva;;outre:^2 fruta">
+<p class="try-task"><strong>Missão:</strong> as caixas estão soltas: marcar não muda o contador. Ligue as duas ao mesmo grupo para que marcar pera e uva mostre <code>2 fruta(s)</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let frutas = $state([]);
+&lt;/script&gt;
+
+&lt;p&gt;{frutas.length} fruta(s)&lt;/p&gt;
+&lt;label&gt;&lt;input type="checkbox" id="pera" value="pera"&gt; pera&lt;/label&gt;
+&lt;label&gt;&lt;input type="checkbox" id="uva" value="uva"&gt; uva&lt;/label&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let frutas = $state([]);
+&lt;/script&gt;
+
+&lt;p&gt;{frutas.length} fruta(s)&lt;/p&gt;
+&lt;label&gt;&lt;input type="checkbox" id="pera" value="pera" bind:group={frutas}&gt; pera&lt;/label&gt;
+&lt;label&gt;&lt;input type="checkbox" id="uva" value="uva" bind:group={frutas}&gt; uva&lt;/label&gt;</pre>
+</div>
+
+<p>Sem <code>bind:group</code>, as caixas ainda marcam e desmarcam na tela, porque isso é comportamento do navegador. O contador, que depende do estado, fica parado. É o mesmo sintoma da aula passada, com uma diferença: aqui a lista inteira decide o resultado, e não uma caixa só.</p>
+
+<h2>4. O <code>value</code> de cada caixa e a ordem da lista</h2>
+
+<p>O valor guardado é o que está no atributo <code>value</code>, não o texto ao lado. Isso permite separar o que a Ana lê do que o programa guarda.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>HTML da caixa</th><th>O que entra na lista</th><th>Quando usar</th></tr>
+<tr><td><code>value="pera"</code> + texto "pera"</td><td><code>"pera"</code></td><td>o mais comum</td></tr>
+<tr><td><code>value="1"</code> + texto "pera"</td><td><code>"1"</code></td><td>o valor é um código</td></tr>
+<tr><td><code>value={fruta.id}</code> + texto <code>{fruta.nome}</code></td><td>o id do item</td><td>lista que vem de dados</td></tr>
+<tr><td>sem <code>value</code></td><td>nada previsível</td><td>nunca</td></tr>
+</table>
+</div>
+
+<p>A ordem da lista segue a ordem das marcações. Se a Ana marcar uva e depois pera, a lista fica <code>['uva', 'pera']</code>, mesmo que na tela pera apareça primeiro. Para exibir na ordem da tela, você ordena a lista na hora de mostrar; para guardar, a ordem das marcações costuma ser suficiente.</p>
+
+<p>Existe também a possibilidade de o item ser um objeto inteiro, e não um texto. Nesse caso o <code>value</code> aponta para o objeto e o grupo compara por identidade: o mesmo objeto que está na lista de opções é o que entra na lista de escolhidos. É o que a seção 7 mostra.</p>
+
+<h2>5. <code>bind:group</code> nos rádios</h2>
+
+<p>O rádio é um grupo por natureza: marcar um desmarca os outros. Com <code>bind:group</code>, a variável guarda o valor do escolhido, e não uma lista.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pagamento = $state('pix');
+&lt;/script&gt;
+
+&lt;input type="radio" value="pix" bind:group={pagamento}&gt;
+&lt;input type="radio" value="cartao" bind:group={pagamento}&gt;
+&lt;p&gt;Pago com {pagamento}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input type="radio" value="pix" checked=""/&gt; &lt;input type="radio" value="cartao"/&gt; &lt;p&gt;Pago com pix&lt;/p&gt;</pre>
+
+<p>O estado inicial escolhe o primeiro rádio, e o servidor manda o atributo <code>checked=""</code> nele. Trocar para cartão muda a variável para <code>"cartao"</code> e desmarca o primeiro. Não existe lista aqui: existe um valor, que é sempre o do rádio marcado.</p>
+
+<p>Uma consequência prática: se o estado começar vazio (<code>$state('')</code>), nenhum rádio aparece marcado, e o parágrafo mostra o rótulo sem valor. Isso é útil para forçar uma escolha consciente, mas exige validação antes de enviar o formulário. Formulários de pagamento costumam começar vazios justamente para não induzir o cliente a escolher o primeiro item por preguiça.</p>
+
+<div class="trysvelte" data-goal="clique:#cartao;;outre:^Pago com cartao">
+<p class="try-task"><strong>Missão:</strong> os rádios estão no grupo, mas não têm <code>value</code>: escolher cartão deixa o parágrafo sem valor. Dê um valor a cada rádio para que a escolha mostre <code>Pago com cartao</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pagamento = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Pago com {pagamento}&lt;/p&gt;
+&lt;input type="radio" id="pix" bind:group={pagamento}&gt;
+&lt;input type="radio" id="cartao" bind:group={pagamento}&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pagamento = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Pago com {pagamento}&lt;/p&gt;
+&lt;input type="radio" id="pix" value="pix" bind:group={pagamento}&gt;
+&lt;input type="radio" id="cartao" value="cartao" bind:group={pagamento}&gt;</pre>
+</div>
+
+<p>Sem <code>value</code>, o rádio não tem o que entregar ao grupo e a variável recebe <code>undefined</code>. O parágrafo então mostra o rótulo e nada depois. O sintoma é silencioso — nenhum erro, nenhum aviso —, e por isso vale conferir o <code>value</code> antes de culpar o binding.</p>
+
+<h2>6. Começando com itens já marcados</h2>
+
+<p>Quando o estado já tem itens, as caixas correspondentes aparecem marcadas no HTML do servidor. Basta que o valor da lista seja igual ao valor da caixa.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let frutas = $state(['pera']);
+&lt;/script&gt;
+
+&lt;label&gt;&lt;input type="checkbox" value="pera" bind:group={frutas}&gt; pera&lt;/label&gt;
+&lt;label&gt;&lt;input type="checkbox" value="uva" bind:group={frutas}&gt; uva&lt;/label&gt;
+&lt;p&gt;{frutas.length} fruta(s)&lt;/p&gt;</pre>
+
+<pre class="out">&lt;label&gt;&lt;input type="checkbox" value="pera" checked=""/&gt; pera&lt;/label&gt; &lt;label&gt;&lt;input type="checkbox" value="uva"/&gt; uva&lt;/label&gt; &lt;p&gt;1 fruta(s)&lt;/p&gt;</pre>
+
+<p>É assim que um formulário de edição abre com os dados salvos: a lista vem do armazenamento, cada caixa confere se o seu valor está nela e se marca. Nada de percorrer o DOM procurando caixas; o binding faz a conferência a cada render.</p>
+
+<p>O mesmo vale para desmarcar: se a lista muda por fora — um botão "limpar tudo", por exemplo —, as caixas se desmarcam sozinhas na próxima atualização. Você não precisa avisar cada caixa. Basta escrever <code>frutas = []</code> e a tela obedece.</p>
+
+<div class="trysvelte" data-goal="clique:#pera;;outre:^nenhuma">
+<p class="try-task"><strong>Missão:</strong> a lista começa com <code>pera</code>, mas a caixa não está de fato ligada ao valor dela: desmarcar não limpa a lista. Faça o grupo funcionar para que desmarcar pera mostre <code>nenhuma</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let frutas = $state(['pera']);
+&lt;/script&gt;
+
+&lt;p&gt;{frutas.length === 0 ? 'nenhuma' : frutas.join(', ')}&lt;/p&gt;
+&lt;label&gt;&lt;input type="checkbox" id="pera" bind:group={frutas}&gt; pera&lt;/label&gt;
+&lt;label&gt;&lt;input type="checkbox" id="uva" bind:group={frutas}&gt; uva&lt;/label&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let frutas = $state(['pera']);
+&lt;/script&gt;
+
+&lt;p&gt;{frutas.length === 0 ? 'nenhuma' : frutas.join(', ')}&lt;/p&gt;
+&lt;label&gt;&lt;input type="checkbox" id="pera" value="pera" bind:group={frutas}&gt; pera&lt;/label&gt;
+&lt;label&gt;&lt;input type="checkbox" id="uva" value="uva" bind:group={frutas}&gt; uva&lt;/label&gt;</pre>
+</div>
+
+<p>O detalhe que faz a solução funcionar é o <code>value</code>: sem ele, a caixa não corresponde ao item <code>'pera'</code> que já estava na lista, e desmarcar não remove nada. Com ele, a caixa reconhece o próprio valor e o grupo consegue tirar da lista. É o mesmo <code>value</code> da seção 4, agora fazendo diferença visível.</p>
+
+<h2>7. As opções vêm de uma lista</h2>
+
+<p>Quando as frutas estão num array, o componente monta as caixas com <code>{#each}</code>. O <code>value</code> de cada caixa aponta para o item, e o grupo guarda o item escolhido.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let escolhidos = $state([]);
+  const opcoes = [
+    { id: 1, nome: 'pão' },
+    { id: 2, nome: 'leite' }
+  ];
+&lt;/script&gt;
+
+{#each opcoes as opcao}
+  &lt;label&gt;&lt;input type="checkbox" value={opcao} bind:group={escolhidos}&gt; {opcao.nome}&lt;/label&gt;
+{/each}
+&lt;p&gt;{escolhidos.length} escolhido(s)&lt;/p&gt;</pre>
+
+<pre class="out">&lt;label&gt;&lt;input type="checkbox" value="[object Object]"/&gt; pão&lt;/label&gt;&lt;label&gt;&lt;input type="checkbox" value="[object Object]"/&gt; leite&lt;/label&gt; &lt;p&gt;0 escolhido(s)&lt;/p&gt;</pre>
+
+<p>O <code>[object Object]</code> no HTML é o que o navegador escreve quando o atributo recebe um objeto: ele converte para texto. Não é erro, e não impede o binding de funcionar, porque o Svelte guarda a referência do objeto em outro lugar. No navegador, marcar "leite" acrescenta o objeto inteiro à lista, e o contador mostra 1.</p>
+
+<p>Essa é a forma mais prática quando os itens têm identificador, preço ou qualquer outro dado além do nome. Você guarda o objeto e tem tudo à mão; o texto do rótulo é só o que aparece. O custo é que a lista de escolhidos não é uma lista de strings: para comparar com o que veio do servidor, você precisa comparar os ids, não os objetos.</p>
+
+<p>Para ver o efeito de uma lista no terminal, sem navegador, o comando abaixo mostra tamanho e pertinência:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "const f = ['pera', 'uva']; console.log(f.length, f.includes('uva'))"
+2 true</pre>
+
+<p>É esse tipo de operação que o <code>bind:group</code> faz por baixo: verificar se o valor está na lista e agir de acordo. Saber o nome das operações ajuda a depurar quando o grupo não se comporta como esperado.</p>
+
+<p>O build do projeto com os grupos no arquivo mostra o peso do conjunto. Cada caixa a mais custa alguns bytes, e o motor do Svelte já está no pacote desde o primeiro componente:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-C1j0-HdF.js  37.31 kB │ gzip: 14.39 kB
+✓ built in 1.05s</pre>
+
+<p>Trinta e sete kilobytes para um componente com dois grupos. Se a padaria tivesse cinquenta frutas, o tamanho mal mudaria: o que cresce é a lista de dados, não o código do binding. Essa é a vantagem de escrever o grupo uma vez e repetir com <code>{#each}</code>, em vez de copiar o atributo cinquenta vezes com nomes diferentes.</p>
+
+<p>Uma última observação sobre desempenho, que vale para qualquer formulário: cada marcação percorre a lista para achar o valor. Com três ou trinta itens isso é instantâneo. Com milhares, o custo aparece — e aí a solução não é trocar o binding, é repensar a tela, porque ninguém marca mil caixas de uma vez.</p>
+
+<h2>8. O que a variável recebe em cada caso</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Elemento</th><th>Estado inicial</th><th>Depois de marcar</th></tr>
+<tr><td><code>checkbox</code> com <code>value="pera"</code></td><td><code>[]</code></td><td><code>['pera']</code></td></tr>
+<tr><td><code>checkbox</code> com <code>value="pera"</code> já marcado</td><td><code>['pera']</code></td><td><code>[]</code> ao desmarcar</td></tr>
+<tr><td><code>radio</code> com <code>value="cartao"</code></td><td><code>''</code></td><td><code>'cartao'</code></td></tr>
+<tr><td><code>radio</code> sem <code>value</code></td><td><code>''</code></td><td><code>undefined</code></td></tr>
+<tr><td><code>checkbox</code> com estado de texto</td><td><code>'pera'</code></td><td>o valor deixa de ser texto e a tela esvazia</td></tr>
+</table>
+</div>
+
+<p>A última linha é a que mais surpreende. O grupo de caixas espera uma lista; se você começar com texto, o binding trata o valor como se fosse uma lista e o resultado não é o que você imaginava. O sintoma é a tela esvaziar depois do primeiro clique. A correção é sempre começar com <code>$state([])</code> quando o grupo é de caixas, e com <code>$state('')</code> quando é de rádios.</p>
+
+<p>Vale destacar também o caso do rádio sem <code>value</code>: a variável recebe <code>undefined</code>, e o Svelte mostra vazio onde você esperava texto. Nenhum erro aparece, porque tecnicamente nada deu errado. Esse é o tipo de problema que só se encontra lendo o código com atenção — ou testando com um valor visível na tela.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — <code>bind:group</code> em <code>select</code></strong>
+<p>Grupo é coisa de <code>&lt;input&gt;</code>. A lista suspensa tem binding próprio: <code>bind:value</code>.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let x = $state([]);
+&lt;/script&gt;
+
+&lt;select bind:group={x}&gt;
+  &lt;option value="a"&gt;a&lt;/option&gt;
+&lt;/select&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 8): `bind:group` can only be used with `&lt;input&gt;`</pre>
+<p>A mensagem diz "só pode ser usado com <code>&lt;input&gt;</code>". Troque por <code>bind:value={x}</code> e ajuste o tipo da variável para o que a lista devolve. Se você quer várias escolhas numa lista suspensa, use <code>&lt;select multiple&gt;</code> com <code>bind:value</code> e uma variável de lista.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — grupo ligado a uma constante</strong>
+<p>O grupo escreve na variável a cada marcação. Uma constante não aceita escrita.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const frutas = ['pera'];
+&lt;/script&gt;
+
+&lt;label&gt;&lt;input type="checkbox" value="pera" bind:group={frutas}&gt; pera&lt;/label&gt;
+&lt;p&gt;{frutas.length}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 43): Cannot bind to constant</pre>
+<p>A coluna aponta para o nome dentro das chaves. Troque <code>const</code> por <code>let</code> e acrescente a runa: <code>let frutas = $state(['pera'])</code>. Sem <code>$state</code>, o binding compila mas a tela não acompanha.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — dois grupos no mesmo elemento</strong>
+<p>Um <code>input</code> pertence a um grupo só. Dois atributos iguais deixam o compilador sem saber qual variável recebe o valor.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let a = $state([]);
+  let b = $state([]);
+&lt;/script&gt;
+
+&lt;input type="checkbox" bind:group={a} bind:group={b}&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 38): Attributes need to be unique</pre>
+<p>A saída é escolher um grupo. Se a intenção era uma caixa que alimenta duas listas, escreva um handler que atualize as duas, em vez de dois bindings. O compilador está protegendo você de uma ambiguidade que não teria resposta certa.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Estado</th><th>Binding</th></tr>
+<tr><td>várias frutas marcadas</td><td><code>$state([])</code></td><td><code>bind:group</code> em cada <code>checkbox</code></td></tr>
+<tr><td>uma forma de pagamento</td><td><code>$state('')</code></td><td><code>bind:group</code> em cada <code>radio</code></td></tr>
+<tr><td>uma fruta só, numa lista suspensa</td><td><code>$state('')</code></td><td><code>bind:value</code> no <code>select</code></td></tr>
+<tr><td>várias frutas numa lista suspensa</td><td><code>$state([])</code></td><td><code>bind:value</code> no <code>select multiple</code></td></tr>
+<tr><td>um sim ou não</td><td><code>$state(false)</code></td><td><code>bind:checked</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>Contador de marcados não muda</td><td>falta <code>bind:group</code> nas caixas</td></tr>
+<tr><td>Desmarcar não remove o item</td><td>caixa sem <code>value</code>, ou valor diferente do que está na lista</td></tr>
+<tr><td>Rádio escolhido some do texto</td><td>rádio sem <code>value</code>: a variável vira <code>undefined</code></td></tr>
+<tr><td>Tela esvazia ao marcar</td><td>estado de caixas começou como texto, não como lista</td></tr>
+<tr><td>A lista vem em ordem estranha</td><td>a ordem é a das marcações, não a da tela</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Terminal</th><th>O que mostra</th></tr>
+<tr><td><code>node -e "console.log([1,2].length)"</code></td><td>o tamanho de uma lista</td></tr>
+<tr><td><code>node -e "console.log(['a'].includes('a'))"</code></td><td><code>true</code> se o item está na lista</td></tr>
+<tr><td><code>npm run build</code></td><td>o peso do projeto com os grupos</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Qual estado combina com um grupo de caixas de marcar?</p>
+<label><input type="radio" name="q1"> <code>$state(false)</code></label>
+<label><input type="radio" name="q1"> <code>$state('')</code></label>
+<label><input type="radio" name="q1"> <code>$state([])</code></label>
+<label><input type="radio" name="q1"> <code>$state(0)</code></label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que o grupo guarda quando um rádio é marcado?</p>
+<label><input type="radio" name="q1"> uma lista com todos os rádios</label>
+<label><input type="radio" name="q1"> o valor do rádio marcado</label>
+<label><input type="radio" name="q1"> <code>true</code> ou <code>false</code></label>
+<label><input type="radio" name="q1"> o índice do rádio na página</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. O que costuma acontecer quando a caixa não tem <code>value</code>?</p>
+<label><input type="radio" name="q1"> o binding não compila</label>
+<label><input type="radio" name="q1"> a caixa fica desabilitada</label>
+<label><input type="radio" name="q1"> a lista recebe o texto ao lado</label>
+<label><input type="radio" name="q1"> o grupo não tem o que guardar e o valor fica imprevisível</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let frutas = $state([]);<br><br>&lt;label&gt;&lt;input type="checkbox" value="pera" <input data-answer="bind:group={frutas}">&gt; pera&lt;/label&gt;<br>&lt;p&gt;{frutas.length} fruta(s)&lt;/p&gt;<br><br>// marcar a caixa acrescenta "pera" à lista</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>bind:group</code> liga várias caixas de uma mesma pergunta a uma variável.</li>
+  <li>Grupo de <code>checkbox</code> com lista: cada marcação acrescenta o <code>value</code>; cada desmarcação tira.</li>
+  <li>Grupo de <code>radio</code> com valor simples: a variável guarda o <code>value</code> do escolhido.</li>
+  <li>O <code>value</code> de cada caixa é a identidade dela dentro do grupo; sem ele, o resultado é imprevisível.</li>
+  <li>A ordem da lista é a ordem das marcações, não a ordem da tela.</li>
+  <li>Estado inicial com itens já marcados faz o servidor mandar <code>checked=""</code> nas caixas certas.</li>
+  <li>Com <code>{#each}</code>, o <code>value</code> aponta para o item e o grupo guarda o item inteiro.</li>
+  <li>Erros desta aula: <code>bind:group</code> fora de <code>input</code>, grupo em constante e dois grupos no mesmo elemento.</li>
+  <li>Rádio sem <code>value</code> deixa a variável <code>undefined</code>, sem erro nenhum na tela.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
