@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>+layout.svelte — a moldura que envolve as páginas | Guia Svelte</title>
+<meta name="description" content="O +layout.svelte do SvelteKit: children, {@render}, layouts aninhados por pasta, e os avisos reais do compilador quando falta o buraco da moldura.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">+layout.svelte</span></h1>
+
+<p class="intro">A Ana mandou fazer um quadro de avisos novo para a padaria: uma moldura de madeira, o vidro e a fechadura. O vidraceiro entregou a moldura e disse uma frase que ela não esqueceu: "aqui dentro vai o que você quiser mostrar, e eu não preciso saber o que é". O <code>+layout.svelte</code> do SvelteKit é essa moldura. Ele aparece no topo de todas as páginas e tem um buraco no meio; cada página entra nesse buraco sem que a moldura saiba qual página é. Nesta aula você vai ver o buraco, o que acontece quando ele falta e como fazer uma moldura só para uma parte do site.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um <strong>layout</strong> e por que ele existe.</li>
+  <li>Como o <code>sv create</code> já entrega um layout pronto e o que tem dentro dele.</li>
+  <li>De onde vem <code>children</code> e o que <code>$props()</code> faz com ele.</li>
+  <li>Por que <code>{@render children()}</code> é obrigatório e o que acontece sem ele.</li>
+  <li>Como montar o menu e o rodapé num lugar só e servir todas as páginas.</li>
+  <li>Que a página entra <em>dentro</em> do <code>&lt;main&gt;</code> do layout, não no lugar dele.</li>
+  <li>Como criar um layout que vale só para uma pasta e suas subpastas.</li>
+  <li>Como o layout descobre em qual página a pessoa está.</li>
+  <li>Os três avisos reais do compilador desta aula: sem buraco, com <code>&lt;slot /&gt;</code> e com <code>export let</code>.</li>
+  <li>A diferença entre <code>+layout.svelte</code> e <code>+layout.js</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a moldura e o que entra nela</h2>
+
+<p>Toda padaria tem coisas que se repetem em qualquer canto do balcão: o preço do pão na parede, a placa de "aceitamos cartão", o cartaz do fiado. Se você pendurasse esses avisos separadamente em cada parede, uma mudança de preço viraria uma peregrinação. O que a Ana fez foi criar <em>uma</em> moldura com os avisos fixos e trocar só o papel de dentro conforme o dia. A moldura não sabe o que está no papel; o papel não sabe onde está a moldura.</p>
+
+<p>Um layout no SvelteKit funciona exatamente assim. Ele é um componente como outro, com uma diferença: o SvelteKit chama o layout <em>por fora</em> e a página <em>por dentro</em>. O layout recebe a página pronta num pedaço chamado <code>children</code> e decide onde colocá-la. Se o layout põe <code>children</code> dentro de um <code>&lt;main&gt;</code>, todas as páginas do site aparecem dentro desse <code>&lt;main&gt;</code>. Se o layout põe um menu em cima, o menu aparece em todas.</p>
+
+<p>O ganho é de manutenção. O menu do site da Ana tem quatro links; se ele estivesse copiado em cada <code>+page.svelte</code>, acrescentar o link "Contato" seria quatro edições e a certeza de esquecer uma. Com o layout, é uma edição. O custo é uma camada a mais para entender: quando você abre um <code>+page.svelte</code>, o que está nele não é a página inteira — é só o miolo. A página inteira é a moldura mais o miolo.</p>
+
+<h2>2. No dia a dia × no SvelteKit</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>A moldura de madeira</td><td><code>src/routes/+layout.svelte</code></td></tr>
+<tr><td>O aviso fixo: "aceitamos cartão"</td><td>O menu e o rodapé escritos no layout</td></tr>
+<tr><td>O papel do dia, dentro do vidro</td><td>O <code>+page.svelte</code> de cada rota</td></tr>
+<tr><td>O espaço onde o papel entra</td><td><code>{@render children()}</code></td></tr>
+<tr><td>Uma moldura menor para a parede dos fundos</td><td>Um <code>+layout.svelte</code> dentro de uma pasta</td></tr>
+<tr><td>Saber em que parede a moldura está</td><td><code>page.url.pathname</code></td></tr>
+</table>
+</div>
+
+<p>Uma diferença importante em relação à parede: no SvelteKit, o layout não escolhe <em>se</em> vai aparecer. Se existe um <code>+layout.svelte</code> numa pasta, tudo o que está naquela pasta e abaixo dela passa por ele. Não há como uma página "escapar" do layout do pai — e é isso que garante que o menu nunca suma numa página nova.</p>
+
+<h2>3. O layout que já vem no projeto</h2>
+
+<p>Quando o projeto da Ana nasceu, ele já tinha um layout. Todo projeto SvelteKit precisa de pelo menos um, na raiz de <code>src/routes</code>, porque é nele que o SvelteKit encaixa o HTML de qualquer página. Este é o arquivo entregue pelo <code>sv create</code>, copiado do projeto dela:</p>
+
+<pre class="file" data-file="src/routes/+layout.svelte">&lt;script&gt;
+	import favicon from '#lib/assets/favicon.svg';
+
+	/** @type {{children: import('svelte').Snippet}} */
+	let { children } = $props();
+&lt;/script&gt;
+
+&lt;svelte:head&gt;
+	&lt;link rel="icon" href={favicon} /&gt;
+&lt;/svelte:head&gt;
+
+{@render children()}</pre>
+
+<p>Três coisas acontecem nesse arquivo pequeno. O <code>import</code> traz o ícone da aba do navegador da pasta <code>src/lib</code>, usando o apelido <code>#lib</code> que o projeto define no <code>package.json</code>. O <code>&lt;svelte:head&gt;</code> injeta a tag <code>&lt;link&gt;</code> dentro do <code>&lt;head&gt;</code> do documento — repare que o layout não tem <code>&lt;html&gt;</code> nem <code>&lt;body&gt;</code>. E a última linha, sozinha, é o buraco: é ali que a página entra.</p>
+
+<dl class="anatomy">
+  <dt>let { children } = $props()</dt><dd>o layout <strong>recebe</strong> a página como propriedade. <code>$props()</code> é a runa que lê o que vem de fora; <code>{ children }</code> é a desestruturação que pega só o pedaço chamado <code>children</code>.</dd>
+  <dt>children</dt><dd>um <strong>snippet</strong> (trecho de marcação guardado numa função), não texto. Por isso não se usa <code>{children}</code>: o Svelte mostraria o código da função em vez do conteúdo.</dd>
+  <dt>{@render children()}</dt><dd>manda desenhar o snippet naquele ponto. Os parênteses são obrigatórios: <code>children</code> é uma função, e <code>{@render}</code> chama a função.</dd>
+  <dt>&lt;svelte:head&gt;</dt><dd>uma tag especial do Svelte: o que está dentro dela vai para o <code>&lt;head&gt;</code> do HTML final, não para o corpo.</dd>
+  <dt>/** @type … */</dt><dd>um comentário de tipo do JSDoc, porque o projeto foi criado com <code>--types jsdoc</code>. Ele não roda; só avisa ao editor o que é <code>children</code>.</dd>
+</dl>
+
+<h2>4. O buraco da moldura: <code>$props</code> e <code>{@render}</code></h2>
+
+<p>Vale desmontar a ideia de <code>children</code> com calma, porque é ela que confunde. No Svelte 5, um componente recebe o que vem de fora através de <code>$props()</code>. Uma página de pão, por exemplo, recebe <code>data</code> com os dados que o <code>load</code> buscou. Um layout recebe duas coisas do SvelteKit: os dados (<code>data</code>, quando existem) e a página (<code>children</code>).</p>
+
+<p>A diferença é o <em>tipo</em> do que chega. <code>data</code> é um objeto comum: você lê <code>data.titulo</code> e pronto. <code>children</code> é um trecho de marcação embrulhado numa função — por isso o <code>{@render children()}</code> e não <code>{children}</code>. O <code>{@render}</code> é a instrução "execute este trecho aqui, neste ponto do HTML". Só isso.</p>
+
+<p>Uma consequência que assusta no começo: se o layout não chamar <code>{@render children()}</code> em nenhum lugar, a página não aparece. O SvelteKit avisa, mas não impede o build. É como entregar a moldura sem o vidro: a moldura está lá, bonita, e o papel do dia não tem onde entrar. Você vai ver o aviso exato na seção de erros.</p>
+
+<h2>5. A moldura da Ana: menu, conteúdo e rodapé</h2>
+
+<p>Com a ideia entendida, o layout da padaria ficou assim. O menu vive em cima, o rodapé embaixo, e o conteúdo de cada página entra no meio, dentro de um <code>&lt;main&gt;</code>:</p>
+
+<pre class="file" data-file="src/routes/+layout.svelte">&lt;script&gt;
+	import favicon from '#lib/assets/favicon.svg';
+	/** @type {{children: import('svelte').Snippet}} */
+	let { children } = $props();
+&lt;/script&gt;
+
+&lt;svelte:head&gt;
+	&lt;link rel="icon" href={favicon} /&gt;
+&lt;/svelte:head&gt;
+
+&lt;nav&gt;
+	&lt;a href="/"&gt;Início&lt;/a&gt;
+	&lt;a href="/paes"&gt;Pães&lt;/a&gt;
+	&lt;a href="/sobre"&gt;Sobre&lt;/a&gt;
+	&lt;a href="/contato"&gt;Contato&lt;/a&gt;
+&lt;/nav&gt;
+
+&lt;main&gt;
+	{@render children()}
+&lt;/main&gt;
+
+&lt;footer&gt;Padaria da Ana&lt;/footer&gt;
+
+&lt;style&gt;
+	nav { display: flex; gap: 12px; padding: 8px 0; }
+	nav a { color: #2e7d32; }
+	footer { margin-top: 24px; color: #666; font-size: 14px; }
+&lt;/style&gt;</pre>
+
+<p>Note onde o <code>{@render children()}</code> está: dentro do <code>&lt;main&gt;</code>. Isso é uma decisão de projeto, não uma obrigação do SvelteKit. A Ana poderia ter posto o conteúdo antes do menu, ou envolto em dois <code>&lt;div&gt;</code>, ou dentro de um <code>&lt;article&gt;</code>. O layout decide a estrutura; a página só preenche o espaço.</p>
+
+<p>Note também que o <code>&lt;style&gt;</code> está no layout. Ele vale para os elementos do layout — o <code>nav</code>, os links, o <code>footer</code> — e não vaza para as páginas, porque o Svelte põe um selo no seletor (aquele <code>svelte-12qhfyh</code> da aula <a href="primeiro-componente.html">Seu Primeiro Componente</a>). O <code>main</code> não recebeu o selo porque nenhum seletor o menciona.</p>
+
+<h2>6. O que o servidor manda: a página dentro da moldura</h2>
+
+<p>A prova de que a moldura é única e as páginas entram nela está no HTML que o servidor envia. A Ana pediu a página <code>/sobre</code> e recortou do HTML a parte que interessa, tirando os comentários internos do Svelte com um <code>sed</code> para a leitura ficar limpa:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/sobre | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;nav.*&lt;/footer&gt;'
+&lt;nav class="svelte-12qhfyh"&gt;&lt;a href="/" class="svelte-12qhfyh"&gt;Início&lt;/a&gt; &lt;a href="/paes" class="svelte-12qhfyh"&gt;Pães&lt;/a&gt; &lt;a href="/sobre" class="svelte-12qhfyh"&gt;Sobre&lt;/a&gt; &lt;a href="/contato" class="svelte-12qhfyh"&gt;Contato&lt;/a&gt;&lt;/nav&gt; &lt;main&gt;&lt;h1&gt;Sobre&lt;/h1&gt; &lt;p&gt;A padaria abriu em 1998, na esquina da rua das Flores.&lt;/p&gt;&lt;/main&gt; &lt;footer class="svelte-12qhfyh"&gt;Padaria da Ana&lt;/footer&gt;</pre>
+
+<p>Leia a linha inteira como uma fita: abre o <code>nav</code>, fecha o <code>nav</code>, abre o <code>main</code>, e <em>dentro do main</em> estão o <code>&lt;h1&gt;Sobre&lt;/h1&gt;</code> e o parágrafo do arquivo <code>sobre/+page.svelte</code>. Depois fecha o <code>main</code> e vem o <code>footer</code>. O HTML do layout vem antes e depois do HTML da página — a intercalação é feita pelo SvelteKit, não por você.</p>
+
+<p>O mesmo comando em <code>/</code> e em <code>/paes</code> mostra o mesmo <code>nav</code> e o mesmo <code>footer</code>, com miolos diferentes:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/ | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;main.*&lt;/main&gt;'
+&lt;main&gt;&lt;h1&gt;Padaria da Ana&lt;/h1&gt; &lt;p&gt;Pão francês saindo do forno às 6h.&lt;/p&gt; &lt;a href="/paes"&gt;ver os pães&lt;/a&gt;&lt;/main&gt;
+ana@notebook:~/loja/kit$ curl -s localhost:4173/paes | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;main.*&lt;/main&gt;'
+&lt;main&gt;&lt;h1&gt;Pães&lt;/h1&gt; &lt;ul&gt;&lt;li&gt;&lt;a href="/paes/frances"&gt;Pão francês&lt;/a&gt;&lt;/li&gt; &lt;li&gt;&lt;a href="/paes/forma"&gt;Pão de forma&lt;/a&gt;&lt;/li&gt; &lt;li&gt;&lt;a href="/paes/queijo"&gt;Pão de queijo&lt;/a&gt;&lt;/li&gt;&lt;/ul&gt;&lt;/main&gt;</pre>
+
+<p>Duas páginas, um layout, zero repetição. E repare que o <code>&lt;a href="/paes"&gt;</code> da página inicial continua sendo um link comum no HTML — é no navegador que o SvelteKit intercepta o clique para trocar de página sem recarregar.</p>
+
+<div class="trysvelte" data-goal="outre:Sobre Pães Padaria">
+<p class="try-task"><strong>Missão:</strong> a moldura está montada e o papel do dia ficou de fora: o <code>&lt;main&gt;</code> está vazio. Ponha o conteúdo dentro do <code>&lt;main&gt;</code> com <code>{@render conteudo()}</code>. No SvelteKit esse trecho vem de <code>children</code>; aqui ele foi declarado no próprio arquivo para você ver o buraco funcionando.</p>
+<pre class="script" data-file="Moldura.svelte">&lt;script&gt;
+  let paginas = { '/': 'Padaria da Ana', '/paes': 'Pães' };
+  let caminho = $state('/paes');
+&lt;/script&gt;
+
+{#snippet conteudo()}
+  &lt;h1&gt;{paginas[caminho]}&lt;/h1&gt;
+{/snippet}
+
+&lt;nav&gt;Início · Pães · Sobre&lt;/nav&gt;
+&lt;main&gt;&lt;/main&gt;
+&lt;footer&gt;Padaria da Ana&lt;/footer&gt;</pre>
+<pre class="solucao" data-file="Moldura.svelte">&lt;script&gt;
+  let paginas = { '/': 'Padaria da Ana', '/paes': 'Pães' };
+  let caminho = $state('/paes');
+&lt;/script&gt;
+
+{#snippet conteudo()}
+  &lt;h1&gt;{paginas[caminho]}&lt;/h1&gt;
+{/snippet}
+
+&lt;nav&gt;Início · Pães · Sobre&lt;/nav&gt;
+&lt;main&gt;{@render conteudo()}&lt;/main&gt;
+&lt;footer&gt;Padaria da Ana&lt;/footer&gt;</pre>
+</div>
+
+<p>Uma coisa que a caixa mostra e o SvelteKit esconde: o snippet <code>conteudo</code> é declarado <em>antes</em> de ser usado, mas aparece na tela <em>depois</em> do <code>nav</code>, porque o <code>{@render}</code> está no meio do HTML. A posição do <code>{@render}</code> é a posição do conteúdo — nada mais.</p>
+
+<h2>7. Um layout só para uma pasta</h2>
+
+<p>A padaria tem uma parte pública e uma parte restrita, onde só a Ana entra para ver as encomendas. Um aviso "Área restrita" no topo do site inteiro seria feio; repetir o aviso em cada página restrita seria pior. A solução é um layout <em>dentro da pasta</em>: ele vale para a pasta e para tudo o que estiver abaixo dela.</p>
+
+<pre class="file" data-file="src/routes/(painel)/+layout.svelte">&lt;script&gt;
+	/** @type {{children: import('svelte').Snippet}} */
+	let { children } = $props();
+&lt;/script&gt;
+
+&lt;aside&gt;Área restrita&lt;/aside&gt;
+{@render children()}</pre>
+
+<p>O resultado é um layout dentro do outro. O layout raiz desenha o <code>nav</code>, o <code>main</code> e o <code>footer</code>; dentro do <code>main</code> entra o layout da pasta, que desenha o <code>aside</code>; e dentro do <code>aside</code> entra a página. O HTML confirma a ordem:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/admin | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;main.*&lt;/main&gt;'
+&lt;main&gt;&lt;aside&gt;Área restrita&lt;/aside&gt; &lt;h1&gt;Painel&lt;/h1&gt; &lt;p&gt;Só a Ana entra aqui.&lt;/p&gt;&lt;/main&gt;</pre>
+
+<p>O <code>aside</code> está dentro do <code>main</code> porque foi ali que o layout raiz pôs o buraco dele. Se o layout raiz tivesse posto o buraco fora do <code>main</code>, o mesmo <code>aside</code> apareceria fora. Essa é a regra: cada layout decide onde fica o próprio buraco, e o layout de dentro sempre entra no buraco do de fora.</p>
+
+<h2>8. O layout sabe onde a pessoa está</h2>
+
+<p>O layout não recebe a página como texto, mas recebe o endereço. É o suficiente para o menu marcar o item atual: basta comparar o caminho de cada link com <code>page.url.pathname</code>, de <code>$app/state</code>. A versão da Ana usa uma variável no lugar do módulo, para você ver a lógica sem o servidor:</p>
+
+<div class="trysvelte" data-goal="outre:/paes•">
+<p class="try-task"><strong>Missão:</strong> o menu mostra os três links, mas nada indica onde a pessoa está. Quando o link for o caminho atual, acrescente um <code>•</code> depois do texto. O caminho é <code>/paes</code>.</p>
+<pre class="script" data-file="Menu.svelte">&lt;script&gt;
+  let caminho = $state('/paes');
+  let itens = ['/', '/paes', '/sobre'];
+&lt;/script&gt;
+
+&lt;nav&gt;
+  {#each itens as item}
+    &lt;a href={item}&gt;{item}&lt;/a&gt;
+  {/each}
+&lt;/nav&gt;</pre>
+<pre class="solucao" data-file="Menu.svelte">&lt;script&gt;
+  let caminho = $state('/paes');
+  let itens = ['/', '/paes', '/sobre'];
+&lt;/script&gt;
+
+&lt;nav&gt;
+  {#each itens as item}
+    &lt;a href={item}&gt;{item}{#if item === caminho} •{/if}&lt;/a&gt;
+  {/each}
+&lt;/nav&gt;</pre>
+</div>
+
+<p>No projeto de verdade, a linha do <code>caminho</code> desaparece e entra o import: <code>import { page } from '$app/state'</code>, e a comparação vira <code>item === page.url.pathname</code>. Como <code>page</code> é reativo, ao navegar o menu se atualiza sozinho — sem ninguém avisar.</p>
+
+<h2>9. Layout que decide o que mostrar</h2>
+
+<p>Como o layout recebe <code>data</code>, ele também pode decidir o que aparece. Imagine que a Ana queira mostrar o painel só para quem entrou. O layout do grupo verifica o dado e escolhe entre o conteúdo e um convite para entrar. É a mesma ideia de <code>{#if}</code> da aula <a href="if.html">{#if}</a>, só que aplicada à moldura em vez da página.</p>
+
+<div class="trysvelte" data-goal="outre:entre para ver">
+<p class="try-task"><strong>Missão:</strong> a pessoa não está logada (<code>entrou</code> é <code>false</code>) e a área restrita sumiu sem explicação. Faça o layout mostrar <code>entre para ver</code> quando ninguém tiver entrado.</p>
+<pre class="script" data-file="Restrito.svelte">&lt;script&gt;
+  let entrou = $state(false);
+&lt;/script&gt;
+
+{#snippet pagina()}
+  &lt;h1&gt;Painel&lt;/h1&gt;
+{/snippet}
+
+&lt;nav&gt;Início · Pães&lt;/nav&gt;
+{#if entrou}
+  &lt;aside&gt;Área restrita&lt;/aside&gt;
+  &lt;main&gt;{@render pagina()}&lt;/main&gt;
+{/if}</pre>
+<pre class="solucao" data-file="Restrito.svelte">&lt;script&gt;
+  let entrou = $state(false);
+&lt;/script&gt;
+
+{#snippet pagina()}
+  &lt;h1&gt;Painel&lt;/h1&gt;
+{/snippet}
+
+&lt;nav&gt;Início · Pães&lt;/nav&gt;
+{#if entrou}
+  &lt;aside&gt;Área restrita&lt;/aside&gt;
+  &lt;main&gt;{@render pagina()}&lt;/main&gt;
+{:else}
+  &lt;p&gt;entre para ver&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>O <code>{:else}</code> é o par do <code>{#if}</code>: o que fazer quando a condição é falsa. Sem ele, o layout simplesmente não desenha nada e a tela fica com um vazio sem explicação — o pior tipo de erro de interface, porque não há mensagem para procurar.</p>
+
+<h2>10. <code>+layout.js</code> não é <code>+layout.svelte</code></h2>
+
+<p>Os dois moram na mesma pasta e têm nomes parecidos, mas fazem coisas opostas. O <code>.svelte</code> desenha; o <code>.js</code> busca dados para o layout e para as páginas abaixo dele. A tabela resume; a aula <a href="parametros.html">Parâmetros de Rota</a> já mostra o <code>load</code> em ação.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>O que faz</th><th>Roda onde</th></tr>
+<tr><td><code>+layout.svelte</code></td><td>desenha a moldura e o buraco <code>children</code></td><td>servidor e navegador</td></tr>
+<tr><td><code>+layout.js</code></td><td><code>load</code> que devolve dados para o layout e as páginas filhas</td><td>servidor e navegador</td></tr>
+<tr><td><code>+layout.server.js</code></td><td>o mesmo, mas só no servidor (segredos, banco)</td><td>só servidor</td></tr>
+<tr><td><code>+page.svelte</code></td><td>o miolo que entra no buraco</td><td>servidor e navegador</td></tr>
+</table>
+</div>
+
+<p>O <code>data</code> que chega ao layout é a soma do que os <code>+layout.js</code> acima devolveram com o que o próprio layout devolveu. Um layout pode passar dado para baixo; uma página não passa dado para o layout. Isso parece uma limitação e é, na verdade, a garantia de que a moldura funciona mesmo quando a página não existe — no 404, por exemplo, o layout continua lá.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Os dois primeiros avisos abaixo saíram do <code>npm run build</code> do projeto da Ana e não impedem o build: o site sobe, mas o conteúdo não aparece. O terceiro é erro e para tudo. Onde a saída original traz o caminho completo, o recorte ficou com o nome do arquivo.</p>
+
+<div class="cenario">
+<strong>Aviso 1 — falta o buraco da moldura</strong>
+<p>A Ana reescreveu o layout para experimentar um menu novo e esqueceu de recolocar o <code>{@render children()}</code>. O build terminou, o site respondeu <code>200</code>, e todas as páginas ficaram sem conteúdo.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+vite v8.4.0 building ssr environment for production...
+transforming...
+layout_children_missing
+`src/routes/+layout.svelte`: `&lt;slot /&gt;` or `{@render ...}` tag missing — inner content will not be rendered
+https://svelte.dev/e/kit/layout_children_missing
+✓ 143 modules transformed.</pre>
+<p>A frase "inner content will not be rendered" é literal: o conteúdo de dentro não será desenhado. O aviso vem antes do <code>✓</code> e o build continua — por isso é fácil passar batido. Se uma página aparecer em branco, procure o <code>{@render children()}</code> antes de qualquer outra coisa.</p>
+</div>
+
+<div class="cenario">
+<strong>Aviso 2 — <code>&lt;slot /&gt;</code> é do Svelte antigo</strong>
+<p>Quem aprendeu Svelte antes da versão 5 escrevia <code>&lt;slot /&gt;</code> no lugar do buraco. Ainda funciona em componentes no modo antigo, mas o projeto da Ana força as runas, e o compilador avisa:</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+vite v8.4.0 building ssr environment for production...
+transforming...
+5:01:15 PM [vite-plugin-svelte] src/routes/+layout.svelte:2:0 Using `&lt;slot&gt;` to render parent content is deprecated. Use `{@render ...}` tags instead
+https://svelte.dev/e/slot_element_deprecated
+1: &lt;nav&gt;&lt;a href="/"&gt;Início&lt;/a&gt;&lt;/nav&gt;
+2: &lt;slot /&gt;
+           ^
+3:</pre>
+<p>O circunflexo aponta para o fechamento da tag. A troca é direta: no lugar de <code>&lt;slot /&gt;</code>, use <code>{@render children()}</code>, e não esqueça de pedir <code>children</code> com <code>let { children } = $props()</code>. As duas peças andam juntas: uma recebe, a outra desenha.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>export let</code> no modo moderno</strong>
+<p>Outro hábito do Svelte antigo: declarar a propriedade com <code>export let children</code>. No modo das runas, isso é recusado antes de qualquer coisa rodar:</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 141 modules transformed.
+✗ Build failed in 356ms
+error during build:
+Build failed with 1 error:
+
+RolldownError: src/routes/+layout.svelte:2:1 Cannot use `export let` in runes mode — use `$props()` instead
+https://svelte.dev/e/legacy_export_invalid</pre>
+<p>A mensagem diz o remédio: use <code>$props()</code>. A posição <code>2:1</code> é a linha do <code>export let</code>. "runes mode" é o modo moderno, em que as runas (<code>$state</code>, <code>$props</code>, <code>$derived</code>) são a forma de declarar as coisas; o projeto da Ana foi criado já nesse modo.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde o <code>+layout.svelte</code> está</th><th>Envolve</th><th>Exemplo do site da Ana</th></tr>
+<tr><td><code>src/routes/</code></td><td>o site inteiro, inclusive a página de erro</td><td>menu, rodapé e favicon</td></tr>
+<tr><td><code>src/routes/admin/</code></td><td><code>/admin</code> e o que estiver abaixo</td><td>aviso "área restrita"</td></tr>
+<tr><td><code>src/routes/(painel)/</code></td><td>só as rotas que estão dentro do grupo</td><td>o mesmo aviso, sem o grupo aparecer na URL</td></tr>
+<tr><td><code>src/routes/paes/</code></td><td><code>/paes</code> e <code>/paes/…</code></td><td>uma faixa "pães quentinhos"</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Para que serve</th></tr>
+<tr><td><code>let { children } = $props()</code></td><td>receber a página (e o que estiver abaixo)</td></tr>
+<tr><td><code>{@render children()}</code></td><td>desenhar a página no ponto escolhido</td></tr>
+<tr><td><code>&lt;svelte:head&gt;</code></td><td>injetar tags no <code>&lt;head&gt;</code> de todas as páginas</td></tr>
+<tr><td><code>page.url.pathname</code></td><td>saber o caminho atual</td></tr>
+<tr><td><code>+layout.js</code></td><td>buscar dados para o layout e as páginas filhas</td></tr>
+</table>
+</div>
+
+<p>Um resumo de decisões para consultar depois: layout para o que se repete; página para o que muda; se o que se repete vale só para uma parte do site, o layout vai na pasta daquela parte. E se a página precisa saber o caminho, ela lê <code>page.url.pathname</code> — o layout não precisa repassar nada.</p>
+
+<h2>13. O caminho até aqui</h2>
+
+<p>O site da Ana agora tem uma moldura só, um menu só e um rodapé só, servindo todas as páginas — inclusive a de erro, o que dá um ar de site cuidado quando alguém digita um endereço errado. A parte restrita ganhou uma moldura menor, dentro da maior, sem tocar no menu público.</p>
+
+<p>A pergunta que sobra é o que colocar nesse buraco quando o caminho não corresponde a nenhuma página, ou quando o <code>load</code> chama <code>error(404, …)</code>. É o assunto de <a href="pagina-de-erro.html">+error.svelte</a>. E se você quiser agrupar rotas sem que a pasta apareça na URL — como o <code>(painel)</code> desta aula —, o caminho é <a href="grupos.html">Grupos de Rotas</a>.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que é <code>children</code> num <code>+layout.svelte</code>?</p>
+<label><input type="radio" name="l1"> a lista de páginas filhas do site</label>
+<label><input type="radio" name="l1"> um texto com o título da página</label>
+<label><input type="radio" name="l1"> o trecho de marcação que entra no buraco do layout</label>
+<label><input type="radio" name="l1"> uma função que busca dados no servidor</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que acontece se o layout não chamar <code>{@render children()}</code>?</p>
+<label><input type="radio" name="l1"> o build falha e nada sobe</label>
+<label><input type="radio" name="l1"> o build termina com o aviso <code>layout_children_missing</code> e o miolo das páginas não aparece</label>
+<label><input type="radio" name="l1"> o SvelteKit põe o conteúdo no fim automaticamente</label>
+<label><input type="radio" name="l1"> a página de erro substitui a página</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Para valer só para <code>/admin</code>, onde fica o layout?</p>
+<label><input type="radio" name="l1"> em <code>src/routes/admin/+layout.svelte</code> (ou na pasta de grupo que contém <code>admin</code>)</label>
+<label><input type="radio" name="l1"> em <code>src/lib/+layout.svelte</code></label>
+<label><input type="radio" name="l1"> em <code>src/routes/+layout.svelte</code>, com um <code>{#if}</code> no nome do arquivo</label>
+<label><input type="radio" name="l1"> em <code>src/app.html</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;let { <input data-answer="children"> } = $props();<br>&lt;/script&gt;<br><br>&lt;main&gt;<br>&nbsp;&nbsp;{@render <input data-answer="children()|children">}<br>&lt;/main&gt;<br><br>// a moldura recebe a página e a desenha no meio</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>+layout.svelte</code> é a <strong>moldura</strong>: envolve as páginas da pasta e das subpastas.</li>
+  <li>O layout recebe a página em <code>children</code> e a desenha com <code>{@render children()}</code>.</li>
+  <li><code>children</code> é snippet, não texto: use <code>{@render}</code>, nunca <code>{children}</code>.</li>
+  <li>Sem o <code>{@render children()}</code>, o build passa com o aviso <code>layout_children_missing</code> e as páginas ficam em branco.</li>
+  <li><code>&lt;slot /&gt;</code> é do Svelte antigo; no modo das runas, o aviso é <code>slot_element_deprecated</code>.</li>
+  <li><code>export let children</code> é recusado no modo das runas: use <code>$props()</code>.</li>
+  <li>O layout raiz envolve tudo, inclusive a página de erro; layouts em pastas envolvem só aquela parte.</li>
+  <li>O conteúdo da página entra <em>dentro</em> do HTML do layout, no ponto do <code>{@render}</code>.</li>
+  <li><code>page.url.pathname</code> diz ao layout (ou ao menu) em que página a pessoa está.</li>
+  <li><code>+layout.js</code> busca dados; <code>+layout.svelte</code> desenha. Dado desce, nunca sobe.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

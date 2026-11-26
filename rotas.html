@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rotas por Arquivo — a pasta que vira endereço | Guia Svelte</title>
+<meta name="description" content="No SvelteKit a pasta é a URL: crie src/routes/paes/+page.svelte e a página responde em /paes. Rotas, 404, +page.js e erros reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Rotas por Arquivo</span></h1>
+
+<p class="intro">A Ana vende pão, mas o site dela tinha uma página só. Quando alguém perguntava o preço do pão de queijo, ela mandava o link da página inicial e a pessoa tinha que rolar a tela inteira. O sobrinho dela apareceu com uma ideia estranha: no SvelteKit, para criar a página <em>/paes</em>, você não configura nada — você cria uma <strong>pasta</strong> chamada <code>paes</code> e põe um arquivo dentro. A pasta vira endereço. Nesta aula você vai ver esse mecanismo funcionando de verdade, com o servidor respondendo 200 para o que existe e 404 para o que não existe.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma <strong>rota</strong> e por que a pasta funciona como endereço.</li>
+  <li>O papel de <code>src/routes</code>: o mapa do site inteiro mora ali.</li>
+  <li>Como <code>src/routes/+page.svelte</code> atende a URL <code>/</code>.</li>
+  <li>Como criar <code>/paes</code> criando a pasta <code>paes</code> com um <code>+page.svelte</code>.</li>
+  <li>O que o <code>+</code> do começo do nome significa e por que ele existe.</li>
+  <li>Como conferir uma rota de verdade com <code>curl</code>, sem abrir o navegador.</li>
+  <li>Por que um endereço inexistente recebe <code>404</code> e não um erro feio.</li>
+  <li>O que acontece com pastas dentro de pastas: <code>/paes/frances</code>.</li>
+  <li>Os três erros reais desta aula: rota em conflito, bloco aberto e arquivo fora do lugar.</li>
+  <li>Quando usar <code>+page.js</code> ao lado de <code>+page.svelte</code> (e quando não precisa).</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: cada página é uma gaveta com etiqueta</h2>
+
+<p>Na padaria da Ana existe um balcão com gavetas. Cada gaveta tem uma etiqueta colada na frente: "pães", "doces", "fiado". Quem chega pedindo doces não precisa explicar onde os doces ficam — a etiqueta resolve. Um endereço de site funciona igual: <code>/paes</code> é uma etiqueta, e o servidor precisa saber qual gaveta abrir quando alguém pede essa etiqueta.</p>
+
+<p>Em muitos sistemas, essa ligação entre etiqueta e gaveta é escrita à mão numa lista de configuração. Você abre um arquivo, escreve <code>"/paes": PaginaDePaes</code>, salva, e reza para não esquecer de atualizar a lista quando criar a próxima página. O SvelteKit faz diferente: a lista <em>é</em> o seu disco. Se existe a pasta <code>paes</code> com um arquivo de página dentro, então a rota <code>/paes</code> existe. Se você apagar a pasta, a rota desaparece. Não há lista separada para manter em sincronia com a realidade — o que existe no disco e o que existe no site são a mesma coisa.</p>
+
+<p>Isso tem um custo e um ganho. O ganho: nunca mais uma página esquecida, nunca mais uma configuração desatualizada; a estrutura de pastas do projeto é uma fotografia do site. O custo: os nomes das pastas deixam de ser livres. Uma pasta chamada <code>coisas-velhas</code> dentro de <code>src/routes</code> não é "só uma pasta" — ela cria o endereço <code>/coisas-velhas</code>, mesmo que ninguém vá lá. Você vai aprender a conviver com isso, e o <code>+</code> do começo dos nomes é justamente uma das regras que tornam essa convivência possível.</p>
+
+<p>Uma palavra de vocabulário antes de continuar: <strong>rota</strong> é o par "endereço + arquivo que responde por ele". Quando este guia diz "a rota <code>/paes</code>", está falando de um endereço que existe no site e do arquivo que o servidor usa para montar a resposta. <strong>URL</strong> é o texto completo que aparece na barra do navegador; <strong>caminho</strong> (<em>pathname</em>) é só a parte depois do domínio: em <code>http://localhost:4173/paes</code>, o caminho é <code>/paes</code>.</p>
+
+<h2>2. No dia a dia × no SvelteKit</h2>
+
+<p>A tabela abaixo é o resumo que você vai reler quando esquecer onde cada arquivo mora. Repare que todas as linhas falam da mesma coisa: um arquivo num lugar do disco corresponde a um comportamento no site.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>A etiqueta na gaveta: "pães"</td><td>O endereço <code>/paes</code></td></tr>
+<tr><td>A gaveta com as coisas dentro</td><td>A pasta <code>src/routes/paes/</code></td></tr>
+<tr><td>O que está escrito na etiqueta de dentro</td><td>O arquivo <code>+page.svelte</code> daquela pasta</td></tr>
+<tr><td>O balcão por onde todos passam</td><td><code>src/routes/+layout.svelte</code></td></tr>
+<tr><td>A placa de "não temos isso hoje"</td><td><code>src/routes/+error.svelte</code> (o 404)</td></tr>
+<tr><td>Uma gaveta que não existe</td><td>Um endereço sem pasta: resposta <code>404</code></td></tr>
+</table>
+</div>
+
+<p>Se você guardar só uma frase desta aula, guarde esta: <em>o caminho do arquivo, tirando o <code>+page.svelte</code> do fim, é a URL</em>. O arquivo <code>src/routes/paes/+page.svelte</code> vira <code>/paes</code>. O arquivo <code>src/routes/+page.svelte</code> vira <code>/</code>, porque não sobrou nenhuma pasta no caminho. O arquivo <code>src/routes/paes/frances/+page.svelte</code> vira <code>/paes/frances</code>, porque sobraram duas pastas.</p>
+
+<h2>3. A pasta <code>src/routes</code> é o mapa do site</h2>
+
+<p>Quando o projeto da Ana nasceu (a aula anterior mostra o comando que criou), o SvelteKit entregou uma pasta chamada <code>src</code> com um subdiretório <code>routes</code> dentro. É o único lugar do projeto em que o SvelteKit procura páginas. Tudo o que você criar fora dele — componentes reutilizáveis, funções, imagens importadas — não é rota, mesmo que tenha um nome bonito.</p>
+
+<p>Esta é a árvore real do projeto da Ana, tirada do terminal dela. A pasta <code>(painel)</code> e a <code>contato</code> existem, mas ainda não interessam aqui; o que importa é o formato:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ ls -R src/routes
+src/routes:
+(painel)
++error.svelte
++layout.svelte
++page.svelte
+contato
+paes
+sobre
+
+src/routes/paes:
++page.svelte
+[slug]
+
+src/routes/paes/[slug]:
++page.svelte
+
+src/routes/sobre:
++page.svelte</pre>
+
+<p>Leia a saída como um mapa. Na raiz de <code>src/routes</code> há três arquivos que começam com <code>+</code> e três pastas. Cada pasta que tem um <code>+page.svelte</code> dentro é um endereço a mais no site. A pasta <code>paes</code> tem o arquivo dela e ainda uma subpasta <code>[slug]</code> — os colchetes são assunto de outra aula, mas já dá para ver que o mapa continua descendo.</p>
+
+<p>Repare também no que <strong>não</strong> existe: nenhum arquivo de configuração listando rotas. Nenhum <code>routes.json</code>. A informação está toda ali, nas pastas. Se você copiar a pasta <code>sobre</code> para uma máquina e colar dentro de <code>src/routes</code>, a rota <code>/sobre</code> passa a existir. Se renomear a pasta para <code>quem-somos</code>, o endereço vira <code>/quem-somos</code> e o antigo passa a responder 404.</p>
+
+<h2>4. A raiz: <code>src/routes/+page.svelte</code> é a página de <code>/</code></h2>
+
+<p>A primeira página de qualquer site é a que responde ao endereço mais curto: a barra sozinha, <code>/</code>. No SvelteKit, ela é o arquivo <code>+page.svelte</code> que fica direto em <code>src/routes</code>, sem pasta nenhuma no meio. Este é o arquivo da Ana:</p>
+
+<pre class="file" data-file="src/routes/+page.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;p&gt;Pão francês saindo do forno às 6h.&lt;/p&gt;
+&lt;a href="/paes"&gt;ver os pães&lt;/a&gt;</pre>
+
+<p>É um componente Svelte comum: HTML com um pedaço de texto. Não tem <code>&lt;script&gt;</code>, não tem <code>&lt;style&gt;</code>, não tem exportação, não tem função de inicialização. Você não escreve "esta é a página inicial" em lugar nenhum — o nome e a posição do arquivo já dizem isso. Essa é a graça: a informação que antes ficava numa configuração agora está no nome.</p>
+
+<dl class="anatomy">
+  <dt>src/routes</dt><dd>a pasta onde o SvelteKit procura rotas. Fora dela, nada é página.</dd>
+  <dt>+page.svelte</dt><dd>o arquivo que diz "aqui existe uma página". O nome é fixo: o <code>+</code>, a palavra <code>page</code> e a extensão <code>.svelte</code>.</dd>
+  <dt>sem pasta no meio</dt><dd>porque a URL é o caminho do arquivo sem o <code>+page.svelte</code>. Sem pasta, sobra a barra: <code>/</code>.</dd>
+  <dt>&lt;h1&gt;…&lt;/h1&gt;</dt><dd>o conteúdo da página, em HTML normal. O que está aqui é o que aparece dentro da área de conteúdo do site.</dd>
+  <dt>&lt;a href="/paes"&gt;</dt><dd>um link comum. O SvelteKit intercepta o clique e troca a página sem recarregar o navegador (é o assunto de <a href="navegar.html">Navegando com goto</a>).</dd>
+</dl>
+
+<p>O detalhe que costuma travar quem vem de outros mundos: <strong>não existe <code>index.html</code> em <code>src/routes</code></strong>. O arquivo <code>index.html</code> do projeto (o da raiz, ao lado de <code>package.json</code>) é outra coisa — ele é o molde que envolve todas as páginas, e no SvelteKit ele se chama <code>src/app.html</code>. A página inicial de verdade é um componente como qualquer outro.</p>
+
+<h2>5. Uma pasta a mais, uma página a mais: <code>/paes</code></h2>
+
+<p>Para criar a página que lista os pães, a Ana fez três coisas: criou a pasta <code>paes</code> dentro de <code>src/routes</code>, criou o arquivo <code>+page.svelte</code> dentro dela e escreveu o conteúdo. Nenhum registro, nenhuma linha em nenhum arquivo de configuração.</p>
+
+<pre class="file" data-file="src/routes/paes/+page.svelte">&lt;h1&gt;Pães&lt;/h1&gt;
+&lt;ul&gt;
+	&lt;li&gt;&lt;a href="/paes/frances"&gt;Pão francês&lt;/a&gt;&lt;/li&gt;
+	&lt;li&gt;&lt;a href="/paes/forma"&gt;Pão de forma&lt;/a&gt;&lt;/li&gt;
+	&lt;li&gt;&lt;a href="/paes/queijo"&gt;Pão de queijo&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</pre>
+
+<p>Com o servidor de desenvolvimento rodando, o endereço <code>http://localhost:5173/paes</code> passa a responder. Para provar isso sem depender do navegador, o jeito é pedir a página com <code>curl</code>, um programa de terminal que faz exatamente o que o navegador faz na primeira requisição: pede o endereço e imprime a resposta. Aqui a Ana usou a versão de produção (<code>npm run preview</code>) servindo na porta 4173, e pediu só o pedaço que interessa com <code>grep</code>:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run preview
+
+> kit@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose
+
+ana@notebook:~/loja/kit$ curl -s localhost:4173/paes | grep -o '&lt;h1&gt;.*&lt;/h1&gt;'
+&lt;h1&gt;Pães&lt;/h1&gt;</pre>
+
+<p>O <code>-s</code> quer dizer "silencioso": sem barras de progresso, só o conteúdo. O <code>grep -o '&lt;h1&gt;.*&lt;/h1&gt;'</code> recorta do HTML só o trecho do título, porque a página inteira tem mais de 3.900 caracteres de marcação interna. O que importa é a segunda linha: o servidor devolveu <code>&lt;h1&gt;Pães&lt;/h1&gt;</code> já escrito, pronto, antes de qualquer JavaScript rodar no navegador. Isso se chama <strong>renderização no servidor</strong>: o HTML nasce pronto e o navegador só continua a partir dele.</p>
+
+<p>Se você trocar o endereço por um que não existe, o resultado é outro. Este é o mesmo comando aplicado a <code>/nao-existe</code>:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/nao-existe | grep -o '&lt;h1&gt;.*&lt;/a&gt;'
+&lt;h1&gt;404&lt;/h1&gt; &lt;p&gt;Not Found&lt;/p&gt; &lt;a href="/"&gt;voltar para o início&lt;/a&gt;</pre>
+
+<p>Duas informações em uma: o texto <code>404</code> e o <code>&lt;p&gt;Not Found&lt;/p&gt;</code> vêm do arquivo <code>src/routes/+error.svelte</code>, que é a página de erro do projeto (assunto de <a href="pagina-de-erro.html">+error.svelte</a>). E a resposta HTTP também carrega o número. Veja os cabeçalhos, que são as "etiquetas" que o servidor manda junto com o conteúdo:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s -i localhost:4173/nao-existe | head -4
+HTTP/1.1 404 Not Found
+content-type: text/html
+x-sveltekit-page: true</pre>
+
+<p>(Cortei três cabeçalhos de controle de cache da saída para caber na aula.) O <code>-i</code> faz o <code>curl</code> mostrar os cabeçalhos junto com o corpo. A primeira linha é o veredito: <code>404 Not Found</code>. Para uma rota que existe, a mesma linha vem com <code>200 OK</code>. Guarde essa distinção, porque é ela que faz o Google e os navegadores tratarem a página certa como página e a errada como erro.</p>
+
+<h2>6. O <code>+</code> do começo do nome</h2>
+
+<p>Por que <code>+page.svelte</code> e não <code>page.svelte</code>? Porque dentro de <code>src/routes</code> você vai querer guardar outras coisas junto das páginas: um componente que só aquela pasta usa, uma imagem, uma função auxiliar. Sem uma marca, o SvelteKit não teria como saber o que é página e o que é bagunça. O <code>+</code> é essa marca: <strong>tudo o que começa com <code>+</code> tem significado especial para o roteador; o resto é só arquivo</strong>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Para que serve</th></tr>
+<tr><td><code>+page.svelte</code></td><td>a página daquele endereço. É o que aparece na tela.</td></tr>
+<tr><td><code>+page.js</code></td><td>o código que busca dados antes da página desenhar (roda no navegador e no servidor).</td></tr>
+<tr><td><code>+page.server.js</code></td><td>o mesmo, mas só no servidor — pode falar com banco de dados e segredos.</td></tr>
+<tr><td><code>+layout.svelte</code></td><td>o que envolve as páginas daquela pasta e das subpastas (menu, rodapé).</td></tr>
+<tr><td><code>+error.svelte</code></td><td>o que aparece quando algo dá errado naquela parte do site.</td></tr>
+<tr><td><code>+server.js</code></td><td>uma resposta crua, sem página: para APIs e formulários.</td></tr>
+</table>
+</div>
+
+<p>Uma consequência prática que economiza tempo: você pode ter <code>+page.svelte</code> e <code>+page.js</code> na mesma pasta. Os dois formam <em>uma</em> rota: o <code>.js</code> busca os dados, o <code>.svelte</code> desenha. E pode ter só o <code>.svelte</code> — como nos exemplos acima — quando a página não precisa buscar nada. O SvelteKit não exige o par.</p>
+
+<dl class="anatomy">
+  <dt>+</dt><dd>a marca de "arquivo especial". Sem ela, o arquivo é ignorado pelo roteador.</dd>
+  <dt>page</dt><dd>o tipo do arquivo. <code>page</code> é página; <code>layout</code> é moldura; <code>error</code> é erro.</dd>
+  <dt>.svelte</dt><dd>o formato. Um <code>+page.svelte</code> é um componente Svelte, com <code>&lt;script&gt;</code>, HTML e <code>&lt;style&gt;</code> se você quiser.</dd>
+  <dt>.js / .server.js</dt><dd>o formato de código puro. Não desenha nada: devolve dados para a página.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="out:404">
+<p class="try-task"><strong>Missão:</strong> o caminho guardado é <code>/nao-existe</code>, que não está no mapa, e a tela fica vazia. Faça o componente mostrar <code>404</code> quando o caminho não existir. A caixa roda só o componente, sem o servidor do SvelteKit — é o mesmo papel do <code>+error.svelte</code>, com o caminho morando numa variável para você ver a ideia.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let caminho = $state('/nao-existe');
+  let paginas = {
+    '/': 'Padaria da Ana',
+    '/paes': 'Pães'
+  };
+&lt;/script&gt;
+
+&lt;h1&gt;{paginas[caminho]}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let caminho = $state('/nao-existe');
+  let paginas = {
+    '/': 'Padaria da Ana',
+    '/paes': 'Pães'
+  };
+&lt;/script&gt;
+
+&lt;h1&gt;{paginas[caminho] ?? '404'}&lt;/h1&gt;</pre>
+</div>
+
+<p>O <code>??</code> lê-se "se o da esquerda for nulo ou indefinido, use o da direita". <code>paginas['/nao-existe']</code> não existe no objeto, então o valor é <code>undefined</code> e o <code>??</code> entra com <code>'404'</code>. É a versão de uma linha do que o SvelteKit faz quando não acha uma rota: em vez de mostrar um buraco, mostra a página de erro.</p>
+
+<h2>7. O que o servidor responde: 200, 404 e o resto</h2>
+
+<p>Programa que conversa com programa usa números para resumir o resultado. Esses números são os <strong>códigos de status</strong>, e você vai vê-los o tempo todo. Os três que importam agora:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Nome</th><th>Quando aparece</th></tr>
+<tr><td><code>200</code></td><td>OK</td><td>a rota existe e a página foi montada.</td></tr>
+<tr><td><code>404</code></td><td>Not Found</td><td>não existe rota para aquele caminho.</td></tr>
+<tr><td><code>500</code></td><td>Internal Error</td><td>a rota existe, mas o código quebrou no meio.</td></tr>
+</table>
+</div>
+
+<p>Um mesmo servidor, quatro endereços, quatro respostas. Este laço percorre a lista e imprime só o número, sem baixar o HTML:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ for u in / /paes /paes/queijo /nao-existe; do printf '%-14s %s\n' "$u" "$(curl -s -o /dev/null -w '%{http_code}' localhost:4173$u)"; done
+/              200
+/paes          200
+/paes/queijo   200
+/nao-existe    404</pre>
+
+<p>O <code>-o /dev/null</code> joga o corpo da resposta no lixo, e <code>-w '%{http_code}'</code> manda o <code>curl</code> imprimir só o número. O <code>printf</code> formata a linha com o caminho à esquerda e o código à direita, para a leitura ficar alinhada. Três <code>200</code> e um <code>404</code>: as três primeiras rotas existem no disco, a última não.</p>
+
+<p>Note que <code>/paes/queijo</code> respondeu <code>200</code> mesmo sem existir uma pasta <code>queijo</code>. Quem atende esse endereço é a pasta <code>paes/[slug]</code>, com colchetes no nome — é o assunto de <a href="parametros.html">Parâmetros de Rota</a>. Por enquanto aceite o fato: o número de pastas no disco não é igual ao número de endereços possíveis quando há colchetes no caminho.</p>
+
+<h2>8. Experimente: um menu que troca de página</h2>
+
+<p>O site da Ana tem um menu no topo, com um link para cada rota. O componente que desenha esse menu é uma lista, e listas em Svelte se escrevem com <code>{#each}</code>. A caixa abaixo simula o menu com botões, porque um link de verdade dentro da caixa tentaria sair da página do guia — e a ideia é a mesma: cada item do menu aponta para um caminho, o caminho vira o conteúdo da tela.</p>
+
+<div class="trysvelte" data-goal="clique:button[data-rota='/paes'];;outre:página: /paes">
+<p class="try-task"><strong>Missão:</strong> os botões não fazem nada. Faça o clique trocar a página: ao clicar no botão <code>/paes</code>, o parágrafo deve mostrar <code>página: /paes</code>.</p>
+<pre class="script" data-file="Menu.svelte">&lt;script&gt;
+  let rotas = ['/', '/paes', '/sobre'];
+  let caminho = $state('/');
+&lt;/script&gt;
+
+{#each rotas as rota}
+  &lt;button data-rota={rota}&gt;{rota}&lt;/button&gt;
+{/each}
+
+&lt;p&gt;página: {caminho}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Menu.svelte">&lt;script&gt;
+  let rotas = ['/', '/paes', '/sobre'];
+  let caminho = $state('/');
+&lt;/script&gt;
+
+{#each rotas as rota}
+  &lt;button data-rota={rota} onclick={() =&gt; (caminho = rota)}&gt;{rota}&lt;/button&gt;
+{/each}
+
+&lt;p&gt;página: {caminho}&lt;/p&gt;</pre>
+</div>
+
+<p>O seletor da missão, <code>button[data-rota='/paes']</code>, é CSS puro: "o botão cujo atributo <code>data-rota</code> vale <code>/paes</code>". Atributos que começam com <code>data-</code> existem justamente para isso: guardar um dado no elemento sem inventar uma classe nova para cada caso. É um truque barato que você vai reaproveitar em testes e em menus.</p>
+
+<p>Na versão de verdade, o menu não guarda o caminho numa variável: ele lê <code>page.url.pathname</code> do SvelteKit, que já sabe onde a pessoa está. A diferença importa: no site, o caminho é do navegador e ninguém pode "esquecer" de atualizar a variável. O componente só desenha o que o endereço diz.</p>
+
+<h2>9. Pastas dentro de pastas: <code>/paes/frances</code></h2>
+
+<p>O mapa desce. Para criar <code>/paes/frances</code>, a Ana criou a pasta <code>frances</code> dentro de <code>paes</code> e pôs um <code>+page.svelte</code> lá dentro. O caminho do arquivo, lido de cima para baixo, forma o endereço: <code>paes</code> + <code>frances</code> → <code>/paes/frances</code>.</p>
+
+<pre class="file" data-file="src/routes/paes/frances/+page.svelte">&lt;h1&gt;Pão francês&lt;/h1&gt;
+&lt;p&gt;Casca fina, miolo macio. Sai do forno às 6h e às 16h.&lt;/p&gt;
+&lt;a href="/paes"&gt;voltar para a lista&lt;/a&gt;</pre>
+
+<p>Não há limite de profundidade: <code>src/routes/paes/frances/integral/+page.svelte</code> atenderia <code>/paes/frances/integral</code>. Há, sim, um limite de paciência: endereços com quatro ou cinco níveis são difíceis de digitar e de lembrar. Quando a Ana percebeu que teria uma pasta por pão, ela parou e aprendeu os colchetes — porque um único arquivo <code>[slug]</code> atende todos os pães de uma vez.</p>
+
+<dl class="anatomy">
+  <dt>src/routes</dt><dd>o começo de todo caminho. Não entra na URL.</dd>
+  <dt>paes</dt><dd>o primeiro pedaço do endereço. Vira <code>/paes</code>.</dd>
+  <dt>frances</dt><dd>o segundo pedaço. Vira <code>/paes/frances</code>.</dd>
+  <dt>+page.svelte</dt><dd>o arquivo que responde. Não entra na URL — é o "índice" daquela pasta.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="outre:^Pão francês">
+<p class="try-task"><strong>Missão:</strong> o mapa tem a chave certa, mas o componente pega só o primeiro pedaço do caminho e mostra <code>Pães</code>. Faça o título mostrar <code>Pão francês</code> para o caminho <code>/paes/frances</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let caminho = $state('/paes/frances');
+  let paginas = {
+    '/': 'Padaria da Ana',
+    '/paes': 'Pães',
+    '/paes/frances': 'Pão francês'
+  };
+  let pedaco = caminho.split('/')[1];
+&lt;/script&gt;
+
+&lt;h1&gt;{paginas[pedaco]}&lt;/h1&gt;
+&lt;p&gt;caminho: {caminho}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let caminho = $state('/paes/frances');
+  let paginas = {
+    '/': 'Padaria da Ana',
+    '/paes': 'Pães',
+    '/paes/frances': 'Pão francês'
+  };
+&lt;/script&gt;
+
+&lt;h1&gt;{paginas[caminho]}&lt;/h1&gt;
+&lt;p&gt;caminho: {caminho}&lt;/p&gt;</pre>
+</div>
+
+<p><code>caminho.split('/')</code> corta o texto em pedaços e devolve uma lista: <code>['', 'paes', 'frances']</code>. O <code>[1]</code> pega o segundo item, <code>'paes'</code> — por isso a versão errada mostra a página de pães. Quando você usa o caminho inteiro como chave, a rota aninhada aparece. Guardar o endereço completo, sem pedaços, é o que o SvelteKit faz por dentro.</p>
+
+<p>Repare que quem decide o endereço é a <em>pasta</em>, não o título dentro da página. Trocar o <code>&lt;h1&gt;</code> para "Pão de trigo" não muda a URL: continua <code>/paes/frances</code>. Isso confunde no começo, porque o título é o que a pessoa vê. A regra é: endereço vem do disco, texto vem do componente.</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do terminal do projeto da Ana, copiadas como estão. Duas vêm do <code>npm run build</code> (a versão de produção) e uma do compilador do Svelte. Onde a mensagem original traz o caminho completo da pasta do projeto, o recorte ficou só com o nome do arquivo, para não poluir a leitura.</p>
+
+<div class="cenario">
+<strong>Erro 1 — duas pastas querendo o mesmo endereço</strong>
+<p>A Ana criou <code>src/routes/paes/[slug]</code> e, por engano, também <code>src/routes/paes/[nome]</code>. Os dois casam com <code>/paes/qualquer-coisa</code>: o roteador não tem como escolher, e o build para.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+
+> kit@0.0.1 build
+> vite build
+
+error during build:
+SvelteKit error: route_conflict
+The `/paes/[nome]` and `/paes/[slug]` routes conflict with each other
+https://svelte.dev/e/kit/route_conflict</pre>
+<p>A mensagem tem três partes úteis: o <strong>nome do erro</strong> (<code>route_conflict</code>), a frase que diz <em>quais</em> rotas brigaram e um endereço de documentação. Abaixo disso vem a pilha de chamadas internas do SvelteKit, que só interessa a quem mexe no SvelteKit. O conserto é escolher um nome e apagar o outro: um arquivo, uma rota.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — chave aberta e não fechada</strong>
+<p>Este é do compilador do Svelte, não do roteador. Um <code>{#if}</code> sem <code>{/if}</code> deixa o componente pela metade, e o build mostra o pedaço do arquivo com um acento circunflexo embaixo do ponto exato.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 143 modules transformed.
+✗ Build failed in 166ms
+error during build:
+Build failed with 1 error:
+
+RolldownError: src/routes/sobre/+page.svelte:5:0 Block was left open
+https://svelte.dev/e/block_unclosed
+ 3 |  &lt;/script&gt;
+ 4 |
+ 5 |  {#if temPao}
+       ^
+ 6 |    &lt;p&gt;Tem pão na prateleira.&lt;/p&gt;
+ 7 |</pre>
+<p>"Block was left open" quer dizer "o bloco ficou aberto". A posição <code>5:0</code> é linha 5, coluna 0 — a linha do <code>{#if}</code>, não a do fim do arquivo. A dica prática é contar os pares de olho: cada <code>{#if}</code> pede um <code>{/if}</code>, cada <code>{#each}</code> pede um <code>{/each}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — a página existe, mas o endereço não</strong>
+<p>Aqui não há mensagem de erro, e é justamente por isso que confunde. A Ana criou o arquivo <code>+page.svelte</code> com a página de contato, mas salvou em <code>src/lib/</code> em vez de <code>src/routes/</code>. O componente compila, o build passa, e o site responde 404.</p>
+<pre class="term">ana@notebook:~/loja/kit$ curl -s -o /dev/null -w '%{http_code}\n' localhost:4173/contato
+404</pre>
+<p>A explicação está no mapa: <code>src/lib</code> é a pasta de código reaproveitável, não de rotas. O SvelteKit só procura páginas dentro de <code>src/routes</code>. O arquivo pode estar perfeito; se estiver fora da pasta certa, ele não é rota. Antes de mexer no código, confira o lugar do arquivo.</p>
+</div>
+
+<h2>11. Rotas especiais que você vai encontrar</h2>
+
+<p>Além de <code>+page.svelte</code>, três arquivos aparecem em quase todo projeto e vale reconhecer de longe. Você não precisa dominar os três agora; precisa saber que existem e o que cada um faz, para não estranhar quando abrir um projeto alheio.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Endereço</th><th>Quem responde</th><th>Detalhe</th></tr>
+<tr><td><code>/</code></td><td><code>src/routes/+page.svelte</code></td><td>a raiz: nenhuma pasta no caminho</td></tr>
+<tr><td><code>/paes</code></td><td><code>src/routes/paes/+page.svelte</code></td><td>uma pasta, uma página</td></tr>
+<tr><td><code>/paes/frances</code></td><td><code>src/routes/paes/frances/+page.svelte</code></td><td>duas pastas, duas barras</td></tr>
+<tr><td><code>/paes/queijo</code></td><td><code>src/routes/paes/[slug]/+page.svelte</code></td><td>colchetes capturam um pedaço do endereço</td></tr>
+<tr><td>qualquer coisa</td><td><code>src/routes/+error.svelte</code></td><td>quando nenhuma rota casa</td></tr>
+</table>
+</div>
+
+<p>A segunda tabela é a das perguntas que sempre aparecem na primeira semana. Leia como um resumo de decisões, não como regra decorada.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Resposta curta</th></tr>
+<tr><td>Onde crio a página <code>/sobre</code>?</td><td><code>src/routes/sobre/+page.svelte</code></td></tr>
+<tr><td>Preciso registrar a rota em algum arquivo?</td><td>Não. A pasta é o registro.</td></tr>
+<tr><td>Posso ter um componente junto da página?</td><td>Pode. Sem o <code>+</code> no nome, ele não vira rota.</td></tr>
+<tr><td>Onde ficam as imagens públicas?</td><td><code>static/</code>, servida na raiz do site.</td></tr>
+<tr><td>Renomeei a pasta. E o link antigo?</td><td>Vira 404. Link antigo é dívida: redirecione ou avise.</td></tr>
+<tr><td>Duas pastas com o mesmo endereço?</td><td>O build falha com <code>route_conflict</code>.</td></tr>
+</table>
+</div>
+
+<h2>12. O caminho até aqui, em uma página</h2>
+
+<p>O site da Ana agora tem quatro endereços de verdade: <code>/</code>, <code>/paes</code>, <code>/sobre</code> e <code>/contato</code> — este último com a página dentro de <code>contato/</code>, no lugar certo depois do susto do erro 3. Todos compartilham o mesmo menu, porque o menu mora no <code>+layout.svelte</code>, que é o próximo assunto. Todos respondem <code>200</code>. O endereço que ninguém criou responde <code>404</code> com uma página decente, não com a tela branca do navegador.</p>
+
+<p>O que mudou na cabeça da Ana foi o modelo mental. Antes, ela pensava "preciso criar uma página e depois dizer ao sistema que ela existe". Agora ela pensa "preciso de uma gaveta nova; a etiqueta vem junto". O trabalho de manter duas listas — a do disco e a do sistema — desapareceu. Sobrou o trabalho de verdade: decidir quais endereços o site deve ter e o que cada um mostra.</p>
+
+<p>E ficou uma pergunta sem resposta: como fazer uma página para <em>cada</em> pão, sem criar uma pasta por pão? A resposta está nos colchetes, e o endereço é <a href="parametros.html">Parâmetros de Rota</a>. Antes disso, vale entender quem envolve todas essas páginas: o <a href="layout.html">+layout.svelte</a>.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Para criar a página que responde em <code>/sobre</code>, o que você faz?</p>
+<label><input type="radio" name="r1"> registra a rota num arquivo de configuração</label>
+<label><input type="radio" name="r1"> cria <code>src/routes/sobre.svelte</code></label>
+<label><input type="radio" name="r1"> cria a pasta <code>src/routes/sobre/</code> com um <code>+page.svelte</code> dentro</label>
+<label><input type="radio" name="r1"> cria um <code>index.html</code> dentro de <code>src/routes</code></label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O arquivo <code>src/routes/paes/frances/+page.svelte</code> atende qual endereço?</p>
+<label><input type="radio" name="r1"> <code>/frances</code></label>
+<label><input type="radio" name="r1"> <code>/paes/frances</code></label>
+<label><input type="radio" name="r1"> <code>/paes</code></label>
+<label><input type="radio" name="r1"> <code>/src/routes/paes/frances</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que o <code>+</code> no começo de <code>+page.svelte</code> indica?</p>
+<label><input type="radio" name="r1"> que o arquivo tem significado especial para o roteador</label>
+<label><input type="radio" name="r1"> que o arquivo é somente leitura</label>
+<label><input type="radio" name="r1"> que a página precisa de JavaScript para funcionar</label>
+<label><input type="radio" name="r1"> que o arquivo foi criado pelo <code>sv create</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">Crie a rota que responde em <code>/paes</code>:<br><br>o arquivo tem de ficar em <code>src/routes/<input data-answer="paes|paes/">/+page.svelte</code><br><br>// a pasta é o endereço; o arquivo é o conteúdo</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><strong>Rota</strong> é o par endereço + arquivo. No SvelteKit, o arquivo é a fonte da verdade.</li>
+  <li>O <strong>caminho do arquivo</strong> dentro de <code>src/routes</code>, sem o <code>+page.svelte</code> do fim, é a URL.</li>
+  <li><code>src/routes/+page.svelte</code> atende <code>/</code>; <code>src/routes/paes/+page.svelte</code> atende <code>/paes</code>.</li>
+  <li>Não existe lista de rotas para manter: criar a pasta cria o endereço, apagar a pasta apaga o endereço.</li>
+  <li>Só arquivos que começam com <code>+</code> têm papel no roteamento; o resto é arquivo comum.</li>
+  <li><code>+page.js</code> ao lado de <code>+page.svelte</code> forma <em>uma</em> rota: dados de um lado, desenho do outro.</li>
+  <li>Endereço inexistente responde <code>404</code> e mostra o <code>+error.svelte</code>; código quebrado responde <code>500</code>.</li>
+  <li>Duas pastas que casam com o mesmo endereço derrubam o build com <code>route_conflict</code>.</li>
+  <li>Bloco aberto sem fechar é <code>block_unclosed</code>, com a linha exata marcada por um circunflexo.</li>
+  <li>Página salva fora de <code>src/routes</code> não é rota: compila, mas responde <code>404</code>.</li>
+  <li><code>curl -s -i</code> mostra cabeçalhos e código; <code>-w '%{http_code}'</code> mostra só o número.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

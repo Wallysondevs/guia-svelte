@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parâmetros de Rota — um arquivo para muitos endereços | Guia Svelte</title>
+<meta name="description" content="Como a pasta [slug] do SvelteKit captura um pedaço da URL: page.params, dois parâmetros, [...resto], a busca do item e os erros reais do roteador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Parâmetros de Rota</span></h1>
+
+<p class="intro">A Ana tem doze pães no balcão e quer uma página para cada um: <em>/paes/frances</em>, <em>/paes/queijo</em>, <em>/paes/forma</em>. Copiar a pasta doze vezes funcionaria, e ela quase fez isso. O sobrinho dela mostrou uma pasta com um nome estranho, <code>[slug]</code>, entre colchetes: um arquivo só, que responde por todos os pães, e uma variável que chega pronta com o pedaço do endereço que a pessoa escolheu. Nesta aula você vê esse arquivo funcionando, com o servidor devolvendo <code>queijo</code> quando alguém pede <em>/paes/queijo</em>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que os colchetes no nome da pasta fazem.</li>
+  <li>Como ler o valor capturado com <code>page.params</code> de <code>$app/state</code>.</li>
+  <li>Por que um único arquivo atende muitos endereços (e o que isso economiza).</li>
+  <li>Como montar o endereço de destino a partir do valor digitado.</li>
+  <li>Dois parâmetros no mesmo caminho, e a ordem em que eles aparecem.</li>
+  <li>O parâmetro que engole o resto do caminho: <code>[...resto]</code>.</li>
+  <li>Por que todo parâmetro chega como texto, nunca como número.</li>
+  <li>Achar o item da lista a partir do <code>slug</code> com <code>find</code>.</li>
+  <li>Buscar antes de desenhar com <code>+page.js</code> e <code>load({ params })</code>.</li>
+  <li>Os três erros reais desta aula: parâmetro vazio, rota em conflito e 404 por caminho comprido.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a ficha em branco</h2>
+
+<p>No balcão da Ana existe um caderno de encomendas com uma página em branco por cliente. Se ela fizer uma página por cliente, o caderno vira uma pilha. Se fizer <em>uma</em> página com um espaço em branco no topo — "Pedido de ______" — e preencher o nome na hora, o mesmo papel serve para qualquer pessoa. O espaço em branco é o que o SvelteKit chama de <strong>parâmetro</strong>: uma parte do endereço que não é fixa, e cujo valor o servidor entrega ao componente.</p>
+
+<p>A diferença entre uma rota fixa e uma rota com parâmetro não está no conteúdo do arquivo, está no <em>nome da pasta</em>. A pasta <code>sobre</code> só atende <code>/sobre</code>. A pasta <code>[slug]</code> atende qualquer coisa naquela posição: <code>/paes/frances</code>, <code>/paes/queijo</code>, <code>/paes/bolo-de-fubá</code>. Os colchetes são a instrução "aqui entra um valor, e eu quero saber qual foi".</p>
+
+<p>O nome entre colchetes é seu, não do SvelteKit. Você poderia escrever <code>[nome]</code>, <code>[pao]</code>, <code>[id]</code> — o que estiver entre colchetes vira uma chave no objeto de parâmetros. A convenção do mundo SvelteKit é <code>[slug]</code> para pedaços de texto amigáveis na URL, e <code>[id]</code> para números de identificação. Escolher um nome claro é meio caminho para o código ficar legível.</p>
+
+<h2>2. No dia a dia × no SvelteKit</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>O papel "Pedido de ______"</td><td>A pasta <code>[slug]</code></td></tr>
+<tr><td>O nome escrito no espaço em branco</td><td>O valor de <code>page.params.slug</code></td></tr>
+<tr><td>Doze páginas uma por cliente</td><td>Doze pastas uma por pão (funciona, mas envelhece mal)</td></tr>
+<tr><td>Uma página para todos</td><td>Um <code>+page.svelte</code> dentro de <code>[slug]</code></td></tr>
+<tr><td>"Esse cliente não existe"</td><td><code>error(404, 'mensagem')</code> dentro do <code>load</code></td></tr>
+<tr><td>O pedido inteiro anotado de uma vez</td><td><code>[...resto]</code>: captura vários pedaços de uma vez</td></tr>
+</table>
+</div>
+
+<p>A analogia tem um limite que vale dizer: no papel, o espaço em branco está no texto; no SvelteKit, ele está no <strong>nome da pasta</strong>. Isso significa que a captura acontece antes de qualquer código seu rodar. Quando o componente é montado, o valor já está pronto — você não precisa procurar na URL nem separar texto por barra.</p>
+
+<h2>3. A pasta com colchetes</h2>
+
+<p>Este é o arquivo da Ana. Ele mora em <code>src/routes/paes/[slug]/+page.svelte</code>, e um único arquivo atende todos os pães do balcão:</p>
+
+<pre class="file" data-file="src/routes/paes/[slug]/+page.svelte">&lt;script&gt;
+	import { page } from '$app/state';
+&lt;/script&gt;
+
+&lt;h1&gt;{page.params.slug}&lt;/h1&gt;
+&lt;p&gt;Você pediu o pão {page.params.slug}.&lt;/p&gt;
+&lt;a href="/paes"&gt;voltar&lt;/a&gt;</pre>
+
+<dl class="anatomy">
+  <dt>[slug]</dt><dd>o nome da pasta com colchetes. É a marca de "aqui entra um valor". O nome <code>slug</code> é a chave que você vai usar para ler.</dd>
+  <dt>$app/state</dt><dd>um módulo que o SvelteKit fornece pronto. Não é um arquivo do projeto: o import é resolvido pela ferramenta.</dd>
+  <dt>import { page }</dt><dd>o objeto reativo que descreve a página atual: endereço, parâmetros, status, erro.</dd>
+  <dt>page.params</dt><dd>o objeto com os valores capturados. Para <code>/paes/queijo</code>, é <code>{ slug: 'queijo' }</code>.</dd>
+  <dt>page.params.slug</dt><dd>o valor daquela chave. Se a rota não tiver <code>[slug]</code>, é <code>undefined</code> — e a tela mostra vazio.</dd>
+</dl>
+
+<p>Repare no que <em>não</em> aparece: nenhuma função para separar a URL, nenhum <code>window.location</code>, nenhuma promessa. O SvelteKit já fez esse trabalho antes de chamar o componente, e o mesmo valor serve no servidor (para montar o HTML) e no navegador (para continuar a partir dele). É por isso que a página funciona com JavaScript desligado: o valor não depende do navegador.</p>
+
+<h2>4. Um arquivo, muitos endereços</h2>
+
+<p>Para conferir, o jeito é pedir dois endereços diferentes ao servidor e ver o mesmo arquivo responder com valores distintos. A Ana usou o <code>curl</code> na versão de produção, na porta 4173:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/paes/queijo | grep -o '&lt;h1&gt;.*&lt;/h1&gt;'
+&lt;h1&gt;queijo&lt;/h1&gt;
+ana@notebook:~/loja/kit$ curl -s localhost:4173/paes/forma | grep -o '&lt;h1&gt;.*&lt;/h1&gt;'
+&lt;h1&gt;forma&lt;/h1&gt;</pre>
+
+<p>Um arquivo, dois resultados. O <code>grep</code> recorta só o título porque o HTML completo passa de 3.900 caracteres. Se você olhasse o código do componente, veria <code>{page.params.slug}</code> nos dois casos — o que muda é o valor que o roteador colocou ali. Essa é a economia: doze pães, um arquivo, zero cópias para manter.</p>
+
+<p>O ganho cresce quando o conteúdo muda. Se amanhã a Ana quiser mostrar o preço embaixo do nome, ela edita <em>um</em> arquivo e os doze endereços mudam juntos. Com doze pastas, seriam doze edições e a certeza de esquecer uma.</p>
+
+<div class="trysvelte" data-goal="digitar:input=queijo;;outre:/paes/queijo">
+<p class="try-task"><strong>Missão:</strong> o campo existe, mas digitar não muda nada. Faça o parágrafo montar o endereço com o que foi digitado: ao escrever <code>queijo</code>, a tela deve mostrar <code>link: /paes/queijo</code>.</p>
+<pre class="script" data-file="Campo.svelte">&lt;script&gt;
+  let slug = $state('');
+&lt;/script&gt;
+
+&lt;input placeholder="qual pão?" /&gt;
+&lt;p&gt;link: /paes/{slug}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Campo.svelte">&lt;script&gt;
+  let slug = $state('');
+&lt;/script&gt;
+
+&lt;input placeholder="qual pão?" oninput={(e) =&gt; (slug = e.currentTarget.value)} /&gt;
+&lt;p&gt;link: /paes/{slug}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>oninput</code> dispara a cada tecla. O <code>e.currentTarget</code> é o elemento que recebeu o evento — o próprio campo —, e <code>.value</code> é o texto dentro dele. Sem o <code>oninput</code>, o Svelte desenha o campo uma vez e nunca mais olha para ele: o estado <code>slug</code> continua vazio e a tela mostra <code>link: /paes/</code>. No SvelteKit, esse endereço seria o <code>href</code> de um link: <code>href="/paes/{slug}"</code>.</p>
+
+<h2>5. Dois parâmetros no mesmo caminho</h2>
+
+<p>Nada impede duas pastas com colchetes, uma dentro da outra. A Ana criou <code>src/routes/paes/[slug]/[tamanho]/+page.svelte</code> para vender pão grande e pequeno. O endereço passa a ter dois pedaços variáveis, e o objeto de parâmetros ganha duas chaves.</p>
+
+<pre class="file" data-file="src/routes/paes/[slug]/[tamanho]/+page.svelte">&lt;script&gt;
+	import { page } from '$app/state';
+&lt;/script&gt;
+
+&lt;h1&gt;{page.params.slug} — {page.params.tamanho}&lt;/h1&gt;
+&lt;p&gt;params: {JSON.stringify(page.params)}&lt;/p&gt;</pre>
+
+<p>O <code>JSON.stringify</code> aparece aqui só para você ver o objeto inteiro, do jeito que ele chega. No site da Ana ele não ficaria; em página de verdade, você lê as chaves que precisa. O servidor respondeu assim:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/paes/queijo/grande | grep -o '&lt;h1&gt;.*&lt;/p&gt;'
+&lt;h1&gt;queijo — grande&lt;/h1&gt; &lt;p&gt;params: {"slug":"queijo","tamanho":"grande"}&lt;/p&gt;</pre>
+
+<p>Leia o objeto com atenção: as chaves são os nomes que estavam entre colchetes, e os valores vieram na ordem em que os pedaços apareceram na URL. O SvelteKit casa pedaço por pedaço, da esquerda para a direita. Se a URL tivesse um pedaço a mais, não haveria rota para ela:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s -o /dev/null -w '%{http_code}\n' localhost:4173/paes/queijo/grande/mais
+404</pre>
+
+<p>Isso é o comportamento certo: a rota declara exatamente dois pedaços variáveis depois de <code>paes</code>. Um terceiro pedaço não é "quase igual", é outro endereço. O roteador não tenta adivinhar.</p>
+
+<h2>6. O parâmetro que engole o resto: <code>[...resto]</code></h2>
+
+<p>Existe uma variação com três pontos dentro dos colchetes. Em vez de capturar <em>um</em> pedaço do caminho, ela captura <em>todos os que sobrarem</em>, inclusive as barras. A Ana usou isso para uma página de busca interna, onde o caminho depois de <code>/loja</code> pode ter qualquer tamanho:</p>
+
+<pre class="file" data-file="src/routes/loja/[...resto]/+page.svelte">&lt;script&gt;
+	import { page } from '$app/state';
+&lt;/script&gt;
+
+&lt;h1&gt;resto: {page.params.resto}&lt;/h1&gt;</pre>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/loja/paes/do-dia/3 | grep -o '&lt;h1&gt;.*&lt;/h1&gt;'
+&lt;h1&gt;resto: paes/do-dia/3&lt;/h1&gt;
+ana@notebook:~/loja/kit$ curl -s -o /dev/null -w '%{http_code}\n' localhost:4173/loja
+200</pre>
+
+<p>Duas coisas para guardar. Primeiro: o valor vem com as barras dentro, <code>paes/do-dia/3</code>, porque a rota engoliu três pedaços de uma vez. Segundo: <code>/loja</code> sozinho também responde <code>200</code>, com valor vazio — o spread aceita zero pedaços. É a diferença entre "opcional" e "obrigatório": <code>[slug]</code> exige um pedaço, <code>[...resto]</code> aceita nenhum.</p>
+
+<h2>7. Todo parâmetro chega como texto</h2>
+
+<p>Esta é a armadilha número um de quem começa. Mesmo que a URL pareça um número, o valor chega como texto. Em <code>/loja/3</code>, o parâmetro é a string <code>"3"</code>, não o número <code>3</code>. Some <code>"3" + 1</code> e você ganha <code>"31"</code>, não <code>4</code>. A regra é converter na entrada do dado, com <code>Number(...)</code>, e conferir se o resultado é um número de verdade.</p>
+
+<p>Há um motivo bom para o SvelteKit entregar texto: a URL não é digitada só por humanos. Robôs de busca, links antigos e planilhas colam qualquer coisa ali. Se o roteador convertesse automaticamente, <code>/loja/abc</code> viraria erro em vez de página; entregando texto, o seu código decide o que fazer com o valor estranho — buscar, converter ou responder 404 com uma mensagem clara.</p>
+
+<div class="trysvelte" data-goal="outre:^Pão de queijo">
+<p class="try-task"><strong>Missão:</strong> o parâmetro <code>slug</code> vale <code>queijo</code>, mas o componente mostra sempre o primeiro pão da lista. Faça o item ser escolhido pelo <code>slug</code>.</p>
+<pre class="script" data-file="Busca.svelte">&lt;script&gt;
+  let paes = [
+    { slug: 'frances', nome: 'Pão francês' },
+    { slug: 'queijo', nome: 'Pão de queijo' }
+  ];
+  let slug = $state('queijo');
+  let escolhido = paes[0];
+&lt;/script&gt;
+
+&lt;h1&gt;{escolhido.nome}&lt;/h1&gt;
+&lt;p&gt;pedido: {slug}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Busca.svelte">&lt;script&gt;
+  let paes = [
+    { slug: 'frances', nome: 'Pão francês' },
+    { slug: 'queijo', nome: 'Pão de queijo' }
+  ];
+  let slug = $state('queijo');
+  let escolhido = paes.find((p) =&gt; p.slug === slug);
+&lt;/script&gt;
+
+&lt;h1&gt;{escolhido.nome}&lt;/h1&gt;
+&lt;p&gt;pedido: {slug}&lt;/p&gt;</pre>
+</div>
+
+<p><code>find</code> percorre a lista e devolve o primeiro item em que a função devolve <code>true</code>. Aqui, o item cujo <code>slug</code> é igual ao <code>slug</code> pedido. Se nenhum casar, o resultado é <code>undefined</code> — e aí <code>escolhido.nome</code> derruba o componente. Guarde essa frase: no site de verdade, o caso "não achei" não pode ser esquecido; ele vira <code>error(404, …)</code>, como você vê na seção 9.</p>
+
+<h2>8. Buscar antes de desenhar: <code>+page.js</code> com <code>load</code></h2>
+
+<p>Ler <code>page.params</code> dentro do componente funciona, mas tem um limite: o componente já está sendo desenhado quando você descobre que o pão não existe. Aí é tarde para responder <code>404</code> — o navegador já recebeu <code>200</code>. O lugar certo para essa decisão é o <code>load</code>, uma função que roda <em>antes</em> do componente:</p>
+
+<pre class="file" data-file="src/routes/paes/[slug]/+page.js">import { error } from '@sveltejs/kit';
+
+export function load({ params }) {
+	if (params.slug === 'queijo') {
+		error(404, 'O pão de queijo acabou');
+	}
+	return { slug: params.slug };
+}</pre>
+
+<p>A função recebe um objeto com <code>params</code> (o mesmo que você leu no componente, só que antes do desenho) e devolve um objeto. Esse objeto chega ao componente como prop <code>data</code>. O <code>error(...)</code> interrompe tudo: o SvelteKit para de montar a página, responde com o status pedido e mostra a página de erro — que no projeto da Ana é o <code>src/routes/+error.svelte</code>. O terminal prova as duas metades:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/paes/queijo | grep -o '&lt;h1&gt;.*&lt;/a&gt;'
+&lt;h1&gt;404&lt;/h1&gt; &lt;p&gt;O pão de queijo acabou&lt;/p&gt; &lt;a href="/"&gt;voltar para o início&lt;/a&gt;
+ana@notebook:~/loja/kit$ curl -s localhost:4173/paes/forma | grep -o '&lt;h1&gt;.*&lt;/a&gt;'
+&lt;h1&gt;forma&lt;/h1&gt; &lt;p&gt;Você pediu o pão forma.&lt;/p&gt; &lt;a href="/paes"&gt;voltar&lt;/a&gt;</pre>
+
+<p>O primeiro endereço caiu na página de erro, com o status <code>404</code> e a mensagem que a Ana escreveu. O segundo seguiu o caminho normal e desenhou a página do pão. A mensagem do <code>error</code> é para humanos: ela aparece na tela e não deve conter detalhe interno, senha ou nome de tabela.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens a seguir saíram do projeto da Ana. Duas são mensagens de verdade do roteador e do compilador; a terceira é a ausência de mensagem, que é o caso mais traiçoeiro.</p>
+
+<div class="cenario">
+<strong>Erro 1 — ler um parâmetro que a rota não tem</strong>
+<p>A Ana copiou o componente do pão para a página <code>/sobre</code> e esqueceu de tirar o <code>page.params.slug</code>. A rota <code>sobre</code> não tem colchetes, então não existe chave nenhuma. O componente compila, a página responde <code>200</code> e a tela mostra um buraco:</p>
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/sobre | grep -o '&lt;h1&gt;.*&lt;/h1&gt;'
+&lt;h1&gt;slug: &lt;/h1&gt;</pre>
+<p>Não há erro no terminal, porque tecnicamente não houve erro: <code>page.params.slug</code> é <code>undefined</code>, e o Svelte desenha <code>undefined</code> como nada. Quando um valor aparece vazio na tela, a primeira pergunta é "esta rota tem essa chave?". Confira o nome da pasta antes de procurar o problema no JavaScript.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — maiúscula e minúscula criam rotas diferentes</strong>
+<p>Para deixar o nome bonito, a Ana criou <code>[Slug]</code> com S maiúsculo. O SvelteKit respeita a diferença: <code>[Slug]</code> e <code>[slug]</code> são nomes distintos, e as duas pastas casam com o mesmo endereço. O build para com conflito de rota:</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+
+> kit@0.0.1 build
+> vite build
+
+error during build:
+SvelteKit error: route_conflict
+The `/paes/[Slug]` and `/paes/[slug]` routes conflict with each other
+https://svelte.dev/e/kit/route_conflict</pre>
+<p>O conserto é apagar uma das duas pastas e manter o nome em minúsculas, que é a convenção: endereços são minúsculos, e o parâmetro também. O erro só aparece no build porque é ali que o SvelteKit monta o mapa completo de rotas — no servidor de desenvolvimento, o aviso vem no terminal e a página passa a responder <code>500</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — um pedaço a mais no caminho</strong>
+<p>O link de um cliente tinha uma barra sobrando no fim: <code>/paes/queijo/grande/</code>. A rota declara dois parâmetros; o caminho trazia um terceiro pedaço vazio. O servidor respondeu <code>404</code>, e o motivo não estava em nenhum arquivo do projeto:</p>
+<pre class="term">ana@notebook:~/loja/kit$ curl -s -o /dev/null -w '%{http_code}\n' localhost:4173/paes/queijo/grande/mais
+404</pre>
+<p>Antes de mexer no componente, conte os pedaços do endereço e compare com a profundidade das pastas. Rota com dois colchetes atende exatamente dois pedaços extras; nem um a mais, nem um a menos. Se você precisa de "qualquer coisa depois daqui", o caminho é o <code>[...resto]</code>.</p>
+</div>
+
+<h2>10. O que o <code>load</code> recebe, além de <code>params</code></h2>
+
+<p>Vale conhecer o formato do objeto que chega ao <code>load</code>, porque você vai usá-lo muito nas próximas aulas. A tabela abaixo lista o que interessa agora; o resto é assunto do grupo de aulas sobre dados.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo</th><th>O que é</th><th>Exemplo</th></tr>
+<tr><td><code>params</code></td><td>os valores capturados pelos colchetes</td><td><code>{ slug: 'queijo' }</code></td></tr>
+<tr><td><code>url</code></td><td>o endereço completo, com a query string</td><td><code>url.searchParams.get('tam')</code></td></tr>
+<tr><td><code>fetch</code></td><td>uma versão do <code>fetch</code> que o SvelteKit controla</td><td><code>await fetch('/api/paes')</code></td></tr>
+<tr><td><code>route</code></td><td>o identificador da rota, com os colchetes</td><td><code>{ id: '/paes/[slug]' }</code></td></tr>
+</table>
+</div>
+
+<p>O <code>return</code> do <code>load</code> vira prop <code>data</code> no componente. É por isso que você vai ver, em projetos alheios, um <code>+page.svelte</code> começando com <code>let { data } = $props()</code>. O componente não sabe de onde o dado veio: ele recebe pronto, do mesmo jeito que recebia <code>page.params</code>.</p>
+
+<div class="trysvelte" data-goal="out:nenhum pão escolhido">
+<p class="try-task"><strong>Missão:</strong> o objeto de parâmetros chegou vazio e o título ficou em branco. Faça o componente mostrar <code>nenhum pão escolhido</code> quando não houver <code>slug</code>.</p>
+<pre class="script" data-file="Pedido.svelte">&lt;script&gt;
+  // no SvelteKit este objeto vem pronto: page.params
+  let { params = { slug: '' } } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{params.slug}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="Pedido.svelte">&lt;script&gt;
+  // no SvelteKit este objeto vem pronto: page.params
+  let { params = { slug: '' } } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{params.slug || 'nenhum pão escolhido'}&lt;/h1&gt;</pre>
+</div>
+
+<p>O <code>||</code> funciona porque texto vazio conta como falso em JavaScript. Se <code>params.slug</code> for <code>''</code>, o lado direito entra. Se fosse <code>undefined</code>, também. A diferença em relação ao <code>??</code> da aula anterior: <code>??</code> só cai no lado direito quando o valor é nulo ou indefinido; <code>||</code> cai também para <code>0</code> e <code>''</code>. Para texto, <code>||</code> é o que você quer; para número, cuidado, porque <code>0</code> é um preço válido.</p>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pasta</th><th>Endereços que atende</th><th><code>page.params</code></th></tr>
+<tr><td><code>paes/</code></td><td>só <code>/paes</code></td><td><code>{}</code></td></tr>
+<tr><td><code>paes/[slug]/</code></td><td><code>/paes/queijo</code>, <code>/paes/forma</code></td><td><code>{ slug: 'queijo' }</code></td></tr>
+<tr><td><code>paes/[slug]/[tamanho]/</code></td><td><code>/paes/queijo/grande</code></td><td><code>{ slug, tamanho }</code></td></tr>
+<tr><td><code>loja/[...resto]/</code></td><td><code>/loja</code>, <code>/loja/paes/do-dia</code></td><td><code>{ resto: 'paes/do-dia' }</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Se você precisa…</th><th>Use</th></tr>
+<tr><td>um valor na URL, no componente</td><td><code>page.params.slug</code> de <code>$app/state</code></td></tr>
+<tr><td>um valor na URL, antes do desenho</td><td><code>load({ params })</code> em <code>+page.js</code></td></tr>
+<tr><td>responder 404 porque o item não existe</td><td><code>error(404, 'mensagem')</code></td></tr>
+<tr><td>transformar o texto da URL em número</td><td><code>Number(params.id)</code> e conferir <code>Number.isNaN</code></td></tr>
+<tr><td>pegar tudo o que vem depois</td><td><code>[...resto]</code></td></tr>
+</table>
+</div>
+
+<p>Duas armadilhas de nomenclatura para fechar a referência. A primeira: o nome do parâmetro não pode ter barra nem colchete dentro; <code>[slug-do-pao]</code> vale, <code>[slug/pao]</code> não. A segunda: uma pasta com colchetes não pode conviver com outra que case com o mesmo endereço — foi o erro 2. Se você tem <code>[slug]</code> e quer um caso especial como <code>/paes/promocao</code>, crie a pasta <code>promocao</code> com o <code>+page.svelte</code> dela: rota fixa ganha da variável.</p>
+
+<h2>12. O caminho até aqui</h2>
+
+<p>O site da Ana agora tem um arquivo que responde por doze endereços. O caderno de encomendas deixou de ser uma pilha de folhas iguais e virou uma ficha com espaço em branco. Ela aprendeu três coisas que valem para o resto do guia: o valor mora no nome da pasta, o valor chega pronto no componente e o valor é texto até você dizer o contrário.</p>
+
+<p>Também aprendeu onde fica a decisão de "esse item não existe": no <code>load</code>, antes do desenho, com <code>error(404, …)</code>. Colocar essa decisão dentro do componente é possível, mas a resposta HTTP já foi enviada como <code>200</code> — e aí o robô de busca indexa uma página vazia como se fosse conteúdo.</p>
+
+<p>O próximo passo é dar uma moldura comum a todas essas páginas, para o menu não precisar ser copiado em cada uma: <a href="layout.html">+layout.svelte</a>. Se você quiser ver antes como o roteador escolhe entre rotas fixas e variáveis, a aula <a href="rotas.html">Rotas por Arquivo</a> tem o mapa completo. E quando o assunto for URL com query string (<code>?tamanho=grande</code>), a diferença em relação ao parâmetro de rota vai aparecer em <a href="navegar.html">Navegando com goto</a>.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual arquivo atende o endereço <code>/paes/queijo</code> se a pasta se chama <code>[slug]</code>?</p>
+<label><input type="radio" name="p1"> <code>src/routes/paes/queijo.svelte</code></label>
+<label><input type="radio" name="p1"> <code>src/routes/paes/[slug]/+page.svelte</code></label>
+<label><input type="radio" name="p1"> <code>src/routes/paes/+page.svelte</code></label>
+<label><input type="radio" name="p1"> <code>src/routes/[slug]/paes/+page.svelte</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>page.params.slug</code> devolve numa rota sem colchetes?</p>
+<label><input type="radio" name="p1"> uma string vazia <code>''</code></label>
+<label><input type="radio" name="p1"> um erro de compilação</label>
+<label><input type="radio" name="p1"> <code>undefined</code>, e a tela mostra um buraco</label>
+<label><input type="radio" name="p1"> o último pedaço da URL</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. Para responder <code>404</code> quando o pão não existe, onde a decisão deve ficar?</p>
+<label><input type="radio" name="p1"> num <code>&lt;style&gt;</code> do componente</label>
+<label><input type="radio" name="p1"> no <code>onclick</code> de um botão</label>
+<label><input type="radio" name="p1"> no <code>load</code>, antes do componente desenhar</label>
+<label><input type="radio" name="p1"> na quarta linha do <code>+page.svelte</code>, depois do <code>&lt;h1&gt;</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">Leia o valor capturado pela pasta <code>[id]</code>:<br><br>&lt;script&gt;<br>&nbsp;&nbsp;import { page } from '<input data-answer="$app/state">';<br>&nbsp;&nbsp;let id = page.params.id;<br>&lt;/script&gt;<br><br>// o módulo de estado do SvelteKit entrega a página atual</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Colchetes no nome da pasta viram <strong>parâmetro</strong>: um pedaço variável da URL.</li>
+  <li>O valor chega pronto em <code>page.params.NOME</code>, importado de <code>$app/state</code>.</li>
+  <li>Um arquivo dentro de <code>[slug]</code> atende todos os endereços daquela posição.</li>
+  <li>Dois colchetes no caminho capturam dois pedaços, com duas chaves no objeto.</li>
+  <li><code>[...resto]</code> captura todos os pedaços restantes, inclusive as barras, e aceita zero.</li>
+  <li>O parâmetro é sempre <strong>texto</strong>; converta com <code>Number</code> antes de calcular.</li>
+  <li>Rota sem colchetes não tem chave: <code>page.params.slug</code> é <code>undefined</code> e a tela fica vazia.</li>
+  <li>Nomes com maiúsculas são outros nomes: <code>[Slug]</code> e <code>[slug]</code> conflitam.</li>
+  <li>Um pedaço a mais no caminho não é "quase igual": responde <code>404</code>.</li>
+  <li><code>+page.js</code> com <code>load({ params })</code> decide antes do desenho; <code>error(404, …)</code> responde o status certo.</li>
+  <li>O que o <code>load</code> devolve chega ao componente como prop <code>data</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
