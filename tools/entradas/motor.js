@@ -21,6 +21,13 @@ import {
 export * from 'svelte/internal/client';
 export * from 'svelte/legacy';
 
+// módulos públicos que as aulas usam dentro da caixa: o avaliador troca qualquer
+// import de "svelte/..." por este único módulo, então tudo precisa sair daqui
+export * from 'svelte/transition';
+export * from 'svelte/easing';
+export * from 'svelte/motion';
+export * from 'svelte/animate';
+
 export {
   mount, unmount, hydrate, tick, flushSync, untrack,
   onMount, onDestroy, createEventDispatcher,

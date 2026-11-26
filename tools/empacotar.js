@@ -21,7 +21,7 @@ const cp = require("child_process");
 const RAIZ = path.join(__dirname, "..");
 const ASSETS = path.join(RAIZ, "assets");
 const MANIFESTO = path.join(ASSETS, "vendor.json");
-const PACOTES = ["svelte-compiler.js", "svelte-motor.js"];
+const PACOTES = ["svelte-compiler.js", "svelte-motor.js", "svelte-store.js"];
 
 function hash(arq) {
   return crypto.createHash("sha256").update(fs.readFileSync(arq)).digest("hex").slice(0, 16);
@@ -48,7 +48,8 @@ function gerar() {
   }
   const entradas = {
     "svelte-compiler.js": ["tools/entradas/compilador.js", true],
-    "svelte-motor.js": ["tools/entradas/motor.js", true]
+    "svelte-motor.js": ["tools/entradas/motor.js", true],
+    "svelte-store.js": ["tools/entradas/store.js", true]
   };
   const esbuild = path.join(RAIZ, "node_modules/.bin/esbuild");
   if (!fs.existsSync(esbuild)) {

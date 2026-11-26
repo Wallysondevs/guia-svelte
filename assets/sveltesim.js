@@ -29,6 +29,9 @@
 
   var COMPILADOR = "assets/svelte-compiler.js";
   var MOTOR = "assets/svelte-motor.js";
+  /* svelte/store fica em arquivo próprio: `derived` e `get` existem nos dois módulos e, num
+     arquivo só, o export * deixa os nomes ambíguos ("$.get is not a function") */
+  var STORE = "assets/svelte-store.js";
   var base = (function () {
     // assets/sveltesim.js -> raiz do site
     var s = document.currentScript && document.currentScript.src;
@@ -52,7 +55,10 @@
 
   function reescreverImports(codigo) {
     var motor = new URL(base + MOTOR, location.href).href;
-    return codigo.replace(/(['"])svelte(\/[^'"]*)?\1/g, "'" + motor + "'");
+    var store = new URL(base + STORE, location.href).href;
+    return codigo
+      .replace(/(['"])svelte\/store\1/g, "'" + store + "'")
+      .replace(/(['"])svelte(\/[^'"]*)?\1/g, "'" + motor + "'");
   }
 
   /* Compila e monta num iframe novo. Devolve {pronto, html, texto, erro, doc, janela}. */

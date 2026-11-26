@@ -7,8 +7,12 @@
       "bytes": 851419
     },
     "svelte-motor.js": {
-      "sha256": "04f3a37fe9595a0f",
-      "bytes": 128769
+      "sha256": "5ee96d937b612ec7",
+      "bytes": 142402
+    },
+    "svelte-store.js": {
+      "sha256": "e7f4501665c26a9b",
+      "bytes": 34016
     }
   }
 }
