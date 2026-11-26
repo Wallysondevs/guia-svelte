@@ -216,12 +216,17 @@ ana@notebook:~/loja$ npm run dev
 |---|---|---|
 | Svelte | **5.59.2** | `assets/vendor.json` e o motor das caixas |
 | Vite | **7.3.8** | projeto `~/loja` (Svelte puro) |
-| SvelteKit | **3.4.1** | projeto `tmp/kit` do Nível 3 |
+| SvelteKit | **3.4.1** (com Vite **8.4.0**) | projeto do Nível 3 |
 | `@sveltejs/vite-plugin-svelte` | 6.2.4 | Svelte puro |
 
 No SvelteKit 3 **não existe `svelte.config.js`**: o plugin e o adaptador ficam no `vite.config.js`
 (`sveltekit({ compilerOptions, adapter })`). Se uma aula falar do arquivo antigo, diga que ele não
 é mais lido — é o que `kit-projeto.html` e `adapters.html` fazem.
+
+**A pasta do projeto é `~/loja` nos dois casos**: nos Níveis 1 e 2 é um projeto Svelte puro (Vite
+7); no Nível 3 a Ana recria a mesma pasta como projeto SvelteKit (`npx sv create`), e a aula que faz
+isso (`kit-projeto.html`) diz que é um projeto novo. O Vite do Kit é o 8.4.0 — cada aula cita a
+versão que apareceu no terminal dela.
 
 **Portas**: `npm run dev` usa **5173** e `npm run preview` usa **4173**. Se na sua máquina a porta
 estiver ocupada, o Vite escreve `Port 5173 is in use, trying another one…` — não esconda a linha, e
