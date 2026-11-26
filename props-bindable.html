@@ -217,7 +217,9 @@
 
 <p>Se o pai passa o valor sem a marca de ligação, o filho recebe o número e desenha. Ao escrever — no clique do botão, por exemplo — a mudança acontece no filho, mas o pai não é avisado. O valor do pai continua o de antes, e as duas telas passam a discordar.</p>
 
-<p>É por isso que o contrato tem duas partes: o filho declara <code>$bindable</code>, o pai escreve <code>bind:</code>. Faltando uma delas, cada lado fica com o seu número e o defeito aparece como "a tela do pai não atualiza" — um dos sintomas mais comuns em quem está começando com componentes.</p>
+<p>É por isso que o contrato tem duas partes: o filho declara <code>$bindable</code>, o pai escreve <code>bind:</code>. Faltando uma delas, o defeito aparece como "a tela do pai não atualiza" — um dos sintomas mais comuns em quem está começando com componentes.</p>
+
+<p>Vale conhecer a sequência exata, porque dá para conferir no navegador em três cliques. Com o par desta aula e o pai sem a marca de ligação, dois cliques no botão do filho levam a <code>No pai: 0</code> e <code>No filho: 2</code>: o filho somou, o pai não soube. Aí você clica no botão do pai e a tela fica <code>No pai: 1</code> e <code>No filho: 1</code> — o número novo desce pela prop e apaga o que o filho tinha somado. Duas lições em três cliques: a escrita do filho não volta, e a escrita do pai manda, sempre. Sem a ligação, o filho não guarda nada; ele desenha o que o pai mandou da última vez.</p>
 
 <div class="table-wrap">
 <table class="ref">
@@ -264,7 +266,7 @@
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose</pre>
 
-<p>Para ver a ligação funcionando, crie o <code>Filho.svelte</code> ao lado do <code>App.svelte</code> e use <code>bind:valor</code> no pai. Com a página aberta, clique no botão do filho e depois no botão do pai: os dois números andam juntos, porque são o mesmo valor. Depois, tire o <code>bind:</code> do pai e repita: cada botão muda só a sua tela, e a diferença entre as duas aparece na hora.</p>
+<p>Para ver a ligação funcionando, crie o <code>Filho.svelte</code> ao lado do <code>App.svelte</code> e use <code>bind:valor</code> no pai. Com a página aberta, clique no botão do filho e depois no botão do pai: os dois números andam juntos, porque são o mesmo valor. Depois, tire o <code>bind:</code> do pai e repita: o clique no filho muda só a tela dele e o pai continua em zero; o clique no pai manda o número dele para baixo e apaga o que o filho tinha somado. Cinco letras a menos no pai, e a tela conta uma história bem diferente.</p>
 
 <p>No build, a prop gravável custa pouco:</p>
 
