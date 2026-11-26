@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquivos do SvelteKit — +page, +layout, +server e hooks | Guia Svelte</title>
+<meta name="description" content="Referência dos arquivos do SvelteKit: +page.svelte, +layout.svelte, +page.js, +page.server.js, +server.js, +error.svelte e hooks.server.js, com rotas por arquivo e saídas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Arquivos do SvelteKit</span></h1>
+
+<p class="intro">A Ana organiza a padaria por endereço: a rua é o bairro, o número é a casa, o complemento é o apartamento. Se ela muda um móvel de lugar, o endereço não muda — a casa é a mesma. O SvelteKit funciona assim: o <strong>caminho do arquivo</strong> é o endereço da página, e o <strong>nome do arquivo</strong> diz o que ele faz naquela casa. Esta página é a lista de nomes: o que cada um significa, onde mora e o que acontece quando você troca um pelo outro.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como uma pasta em <code>src/routes</code> vira um endereço no navegador.</li>
+  <li>O que faz <code>+page.svelte</code>, <code>+layout.svelte</code> e <code>+error.svelte</code>.</li>
+  <li>A diferença entre <code>+page.js</code> e <code>+page.server.js</code>.</li>
+  <li>Como o <code>load</code> entrega <code>data</code> para a página.</li>
+  <li>Como criar uma API com <code>+server.js</code>.</li>
+  <li>Como <code>hooks.server.js</code> roda antes de cada requisição.</li>
+  <li>Os módulos especiais: <code>$app/navigation</code>, <code>$app/state</code>, <code>$app/environment</code> e <code>$env</code>.</li>
+  <li>Parâmetros, grupos e rotas opcionais no nome da pasta.</li>
+  <li>O que o <code>npm run dev</code> de um projeto Kit mostra no terminal.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o caminho do arquivo é o endereço</h2>
+
+<p>Num projeto Svelte comum, você tem um <code>App.svelte</code> e pronto: uma página só. Num projeto SvelteKit, a pasta <code>src/routes</code> é uma árvore de endereços. Um arquivo em <code>src/routes/pedidos/+page.svelte</code> atende o endereço <code>/pedidos</code>. Um arquivo em <code>src/routes/pedidos/2026/+page.svelte</code> atende <code>/pedidos/2026</code>.</p>
+
+<p>O nome do arquivo não é enfeite: é o papel dele. <code>+page.svelte</code> é o que aparece na tela; <code>+layout.svelte</code> é a moldura que envolve as páginas daquela pasta e das subpastas; <code>+page.js</code> busca dados antes de desenhar; <code>+server.js</code> responde a uma chamada de API sem desenhar nada. Trocar o nome de um arquivo muda o comportamento, mesmo que o conteúdo seja idêntico.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Roda onde</th><th>Serve para</th></tr>
+<tr><td><code>+page.svelte</code></td><td>servidor e navegador</td><td>o conteúdo da página</td></tr>
+<tr><td><code>+layout.svelte</code></td><td>servidor e navegador</td><td>moldura em volta das páginas filhas</td></tr>
+<tr><td><code>+page.js</code></td><td>servidor e navegador</td><td>buscar dados que podem rodar nos dois lados</td></tr>
+<tr><td><code>+page.server.js</code></td><td>só no servidor</td><td>buscar dados com segredo, banco, cookie</td></tr>
+<tr><td><code>+layout.js</code> / <code>+layout.server.js</code></td><td>servidor (e navegador no universal)</td><td>dados que valem para várias páginas</td></tr>
+<tr><td><code>+server.js</code></td><td>só no servidor</td><td>endpoint de API (JSON, texto, arquivo)</td></tr>
+<tr><td><code>+error.svelte</code></td><td>servidor e navegador</td><td>a tela quando algo dá errado</td></tr>
+<tr><td><code>hooks.server.js</code></td><td>só no servidor</td><td>rodar antes de cada requisição</td></tr>
+</table>
+</div>
+
+<p>Essa convenção tem um custo e um ganho. O custo é que você precisa aprender nomes antes de escrever a primeira rota — a curva é mais íngreme do que abrir um arquivo e desenhar. O ganho é que o projeto se explica pelo sistema de arquivos: quem abre a pasta <code>routes</code> vê os endereços do site, sem precisar de configuração de rotas em lugar nenhum.</p>
+
+<hr>
+
+<h2>2. O projeto Kit por dentro</h2>
+
+<p>Um projeto criado com o CLI oficial tem uma estrutura pequena. Esta é a listagem real de um projeto mínimo, com o servidor desligado:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls -R src
+src:
+app.html
+lib
+routes
+
+src/lib:
+assets
+index.js
+
+src/lib/assets:
+favicon.svg
+
+src/routes:
++layout.svelte
++page.svelte</pre>
+
+<p>Três pastas e dois arquivos de rota. <code>app.html</code> é o casco HTML que envolve tudo: nele ficam o <code>%sveltekit.head%</code> e o <code>%sveltekit.body%</code>, os dois buracos que o Kit preenche. <code>lib</code> é onde ficam componentes e utilidades reaproveitáveis, importados pelo atalho <code>$lib</code>. E <code>routes</code> é o mapa do site.</p>
+
+<dl class="anatomy">
+  <dt>src/routes/</dt><dd>a <strong>raiz dos endereços</strong>. Cada pasta aqui dentro é um pedaço do caminho na URL.</dd>
+  <dt>+page.svelte</dt><dd>a <strong>página</strong> daquele endereço. É o único arquivo que precisa existir para a rota responder.</dd>
+  <dt>+layout.svelte</dt><dd>a <strong>moldura</strong> herdada pelas páginas da pasta e das subpastas. Recebe <code>children</code>.</dd>
+  <dt>+page.js</dt><dd>o <strong>carregador</strong> de dados daquela página. Devolve um objeto que chega na página como <code>data</code>.</dd>
+  <dt>app.html</dt><dd>o <strong>casco</strong> HTML. Fora de <code>routes</code>, mas é o primeiro arquivo que o navegador recebe.</dd>
+</dl>
+
+<p>Repare no sinal de mais antes de cada nome. Ele existe para separar os arquivos especiais do Kit dos arquivos comuns da pasta: um <code>Cartao.svelte</code> ao lado do <code>+page.svelte</code> é só um componente, não uma rota. Sem o <code>+</code>, o Kit ignoraria o arquivo como rota — e é por isso que renomear um arquivo de rota "só tirando o mais" faz a página sumir.</p>
+
+<p>Fora de <code>src</code> há um arquivo que decide tudo: o <code>vite.config.js</code>. No SvelteKit 3 <strong>não existe mais <code>svelte.config.js</code></strong> — o plugin do Kit e o adaptador moram aqui. Este é o arquivo real que o CLI cria, num projeto com SvelteKit 3.4.1 e Vite 8.4.0:</p>
+
+<pre class="file" data-file="vite.config.js">import adapter from '@sveltejs/adapter-auto';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [
+    sveltekit({
+      compilerOptions: {
+        // Force runes mode for the project, except for libraries. Can be removed in svelte 6.
+        runes: ({ filename }) =&gt;
+          filename.split(/[/\\]/).includes('node_modules') ? undefined : true
+      },
+
+      // adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
+      // If your environment is not supported, or you settled on a specific environment, switch out the adapter.
+      // See https://svelte.dev/docs/kit/adapters for more information about adapters.
+      adapter: adapter()
+    })
+  ]
+});</pre>
+
+<p>Três partes importam. <code>plugins: [sveltekit({ … })]</code> é o que faz o Vite entender a pasta <code>routes</code> — sem ele, o Kit não existe. <code>adapter: adapter()</code> é o empacotador de publicação; o <code>adapter-auto</code> tenta adivinhar a plataforma e, num computador comum, avisa que não conseguiu. E <code>runes</code> liga o modo moderno em todos os arquivos do projeto, menos nos de <code>node_modules</code>: é por isso que, num projeto criado pelo CLI, um <code>export let</code> dá erro na hora, enquanto o mesmo código num componente isolado até compila.</p>
+
+<hr>
+
+<h2>3. <code>+page.svelte</code>: a página</h2>
+
+<p>A página é um componente Svelte comum, com um acréscimo: ela recebe uma prop chamada <code>data</code>, com o que o <code>load</code> devolveu. Se não há <code>load</code>, a página simplesmente não usa a prop.</p>
+
+<pre class="file" data-file="src/routes/+page.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;p&gt;Pão quentinho a partir das 6h.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Padaria da Ana&lt;/h1&gt; &lt;p&gt;Pão quentinho a partir das 6h.&lt;/p&gt;</pre>
+
+<p>O endereço dessa página é <code>/</code>, porque ela está na raiz de <code>routes</code>. Uma pasta <code>pedidos</code> com um <code>+page.svelte</code> dentro atende <code>/pedidos</code>, e assim por diante. Não há registro de rota em arquivo de configuração: a pasta é o registro.</p>
+
+<div class="trysvelte" data-goal="out:Pedidos">
+<p class="try-task"><strong>Missão:</strong> a página espera <code>data.titulo</code>, mas ninguém passou <code>data</code> e ela quebra. Dê um valor padrão para a prop, como o Kit faria com um <code>load</code> vazio.</p>
+<pre class="script" data-file="+page.svelte">&lt;script&gt;
+  let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{data.titulo}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="+page.svelte">&lt;script&gt;
+  let { data = { titulo: 'Pedidos' } } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{data.titulo}&lt;/h1&gt;</pre>
+</div>
+
+<p>A caixa mostra o padrão que o Kit usa: a página é um componente que recebe dados por prop. No projeto de verdade, quem preenche <code>data</code> é o <code>load</code> — e é isso que as próximas seções explicam.</p>
+
+<hr>
+
+<h2>4. <code>+layout.svelte</code>: a moldura e o <code>children</code></h2>
+
+<p>O layout é o que se repete em várias páginas: cabeçalho, menu, rodapé. Ele envolve as páginas filhas e recebe o conteúdo delas na prop <code>children</code>, renderizada com <code>{@render children()}</code>.</p>
+
+<pre class="file" data-file="src/routes/+layout.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;header&gt;
+  &lt;strong&gt;Padaria da Ana&lt;/strong&gt;
+&lt;/header&gt;
+
+&lt;main&gt;
+  {@render children()}
+&lt;/main&gt;
+
+&lt;footer&gt;Rua das Flores, 12&lt;/footer&gt;</pre>
+
+<p>Com esse layout na raiz, toda página do site ganha cabeçalho e rodapé sem repetir uma linha. Um layout dentro de <code>src/routes/pedidos</code> vale só para as rotas daquela pasta e das subpastas — é o jeito de dar uma moldura diferente a uma seção do site.</p>
+
+<p>O layout também pode carregar dados, com <code>+layout.js</code> ou <code>+layout.server.js</code>. O que ele devolve desce para as páginas filhas, junto com o que cada página carregou. Duas armadilhas: o layout precisa renderizar <code>children</code> (se esquecer, a página não aparece) e a herança é por pasta, não por arquivo — um <code>+layout.svelte</code> ao lado de um <code>+page.svelte</code> envolve só as rotas daquela pasta para baixo.</p>
+
+<hr>
+
+<h2>5. <code>+page.js</code> e <code>+page.server.js</code>: o <code>load</code></h2>
+
+<p>Buscar dados é papel do <code>load</code>. Ele roda antes de a página desenhar e devolve um objeto; o objeto chega na página como <code>data</code>. Existem duas versões, e a diferença é onde o código roda.</p>
+
+<pre class="file" data-file="src/routes/pedidos/+page.js">export function load() {
+  return {
+    pedidos: ['pão', 'leite', 'café']
+  };
+}</pre>
+
+<p>O <code>+page.js</code> é o carregador <strong>universal</strong>: roda no servidor na primeira visita e no navegador nas navegações seguintes. Serve para dado público, que pode ser buscado dos dois lados.</p>
+
+<pre class="file" data-file="src/routes/pedidos/+page.server.js">import { readFile } from 'node:fs/promises';
+
+export async function load() {
+  const bruto = await readFile('dados/pedidos.json', 'utf8');
+  return { pedidos: JSON.parse(bruto) };
+}</pre>
+
+<p>O <code>+page.server.js</code> roda <strong>só no servidor</strong>. É o lugar de senha, token, banco de dados e acesso a arquivo — nada disso pode ir para o navegador. Se o seu <code>load</code> importa um módulo de servidor, ele precisa ser <code>.server.js</code>; o contrário (usar <code>fs</code> num <code>+page.js</code>) quebra no navegador.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Roda no servidor</th><th>Roda no navegador</th><th>Pode ter segredo</th></tr>
+<tr><td><code>+page.js</code></td><td>sim</td><td>sim</td><td>não</td></tr>
+<tr><td><code>+page.server.js</code></td><td>sim</td><td>não</td><td>sim</td></tr>
+<tr><td><code>+layout.js</code></td><td>sim</td><td>sim</td><td>não</td></tr>
+<tr><td><code>+layout.server.js</code></td><td>sim</td><td>não</td><td>sim</td></tr>
+<tr><td><code>+server.js</code></td><td>sim</td><td>não</td><td>sim</td></tr>
+</table>
+</div>
+
+<p>Um detalhe de nomenclatura que confunde: o Kit chama de "universal" o código que roda nos dois lados e de "server" o que roda só no servidor. O sufixo <code>.server.js</code> é a marca — qualquer arquivo com esse sufixo nunca vai para o pacote do navegador.</p>
+
+<hr>
+
+<h2>6. O <code>data</code> que desce e o <code>fetch</code> que o Kit trata</h2>
+
+<p>Quando o <code>load</code> devolve <code>{ pedidos }</code>, a página recebe <code>data.pedidos</code>. A página não chama o banco nem a API: ela recebe o resultado pronto e desenha.</p>
+
+<pre class="file" data-file="src/routes/pedidos/+page.svelte">&lt;script&gt;
+  let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Pedidos&lt;/h1&gt;
+&lt;ul&gt;
+  {#each data.pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Dentro do <code>load</code>, use o <code>fetch</code> que vem nos argumentos, não o global. O do Kit sabe que está no servidor e reaproveita a resposta se a mesma chamada aparecer em outro <code>load</code>; além disso, ele carrega os cookies da requisição quando é chamado no servidor. O <code>fetch</code> global também funciona, mas perde essas vantagens.</p>
+
+<p>O objeto que o <code>load</code> devolve precisa ser serializável: texto, número, booleano, lista, objeto simples, <code>Date</code>, <code>Map</code>, <code>Set</code>. Função não atravessa a fronteira servidor/navegador — se você devolver uma função, ela some ou dá erro. Quando os dados são grandes, existe a opção de transmitir promessas, mas isso é assunto de outra aula.</p>
+
+<p>Um caso que aparece em todo projeto: o <code>load</code> pode não achar o registro. O padrão é devolver <code>null</code> e deixar a página decidir o que mostrar. A página, então, precisa aguentar <code>data</code> vazio — e é aí que quem testa o componente isolado tropeça, porque sem <code>load</code> não existe <code>data</code> nenhum.</p>
+
+<div class="trysvelte" data-goal="out:Não encontrado">
+<p class="try-task"><strong>Missão:</strong> este é o trecho da página que trata "pedido não achado". Sem <code>load</code> por perto, a prop chega indefinida e o componente quebra antes de desenhar. Dê um <code>data</code> inicial e mostre <strong>Não encontrado</strong>.</p>
+<pre class="script" data-file="+page.svelte">&lt;script&gt;
+  let { data } = $props();
+&lt;/script&gt;
+
+{#if data.pedido}
+  &lt;p&gt;Pedido: {data.pedido}&lt;/p&gt;
+{:else}
+  &lt;p&gt;Não encontrado&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="+page.svelte">&lt;script&gt;
+  let { data = { pedido: null } } = $props();
+&lt;/script&gt;
+
+{#if data.pedido}
+  &lt;p&gt;Pedido: {data.pedido}&lt;/p&gt;
+{:else}
+  &lt;p&gt;Não encontrado&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Em produção, o <code>load</code> preenche <code>data</code> e o valor padrão quase nunca é usado. Ele existe para o caso de erro e para deixar o componente testável sozinho. É a mesma ideia de Ana deixando um pedido em branco no caderno: se a linha não vier preenchida, o caixa sabe o que escrever.</p>
+
+<hr>
+
+<h2>7. <code>+server.js</code>: o endpoint de API</h2>
+
+<p>Nem tudo é página. Um endereço pode responder JSON, texto ou arquivo, sem desenhar HTML. Para isso existe o <code>+server.js</code>, que exporta funções com o nome do método HTTP:</p>
+
+<pre class="file" data-file="src/routes/api/pedidos/+server.js">import { json } from '@sveltejs/kit';
+
+export async function GET() {
+  const pedidos = ['pão', 'leite'];
+  return json({ pedidos, total: pedidos.length });
+}
+
+export async function POST({ request }) {
+  const corpo = await request.json();
+  return json({ recebido: corpo }, { status: 201 });
+}</pre>
+
+<p>O endereço é o caminho da pasta: <code>/api/pedidos</code>. Um <code>GET</code> devolve a lista; um <code>POST</code> recebe o corpo e responde com 201. O <code>json()</code> do <code>@sveltejs/kit</code> monta a resposta com o cabeçalho certo — usar <code>new Response(JSON.stringify(…))</code> também funciona, só dá mais trabalho.</p>
+
+<p>Se você exportar <code>GET</code> e <code>POST</code>, o mesmo endereço atende os dois métodos. Se exportar só <code>GET</code>, um <code>POST</code> recebe 405. E há um detalhe que economiza uma pasta: dentro de <code>src/routes/api/pedidos</code>, você não pode ter <code>+page.svelte</code> e <code>+server.js</code> juntos no mesmo nível — o Kit recusa, porque o endereço não pode ser página e API ao mesmo tempo.</p>
+
+<hr>
+
+<h2>8. <code>+error.svelte</code> e as funções <code>error()</code> e <code>redirect()</code></h2>
+
+<p>Quando um <code>load</code> falha, o Kit procura o <code>+error.svelte</code> mais próximo na árvore e mostra aquela tela. O arquivo recebe uma prop <code>data</code> com <code>status</code> e <code>message</code>:</p>
+
+<pre class="file" data-file="src/routes/+error.svelte">&lt;script&gt;
+  import { page } from '$app/state';
+&lt;/script&gt;
+
+&lt;h1&gt;{page.status}&lt;/h1&gt;
+&lt;p&gt;{page.error?.message ?? 'Algo deu errado.'}&lt;/p&gt;
+&lt;a href="/"&gt;Voltar para a padaria&lt;/a&gt;</pre>
+
+<p>O <code>page</code> de <code>$app/state</code> é a fonte dos dados da requisição: endereço, parâmetros, status e erro. No <code>+error.svelte</code> ele é o jeito mais direto de ler o que aconteceu.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Vem de</th><th>O que faz</th></tr>
+<tr><td><code>error(404, 'Não encontrado')</code></td><td><code>@sveltejs/kit</code></td><td>interrompe o <code>load</code> e mostra a tela de erro</td></tr>
+<tr><td><code>redirect(303, '/login')</code></td><td><code>@sveltejs/kit</code></td><td>manda o navegador para outro endereço</td></tr>
+<tr><td><code>json(dados)</code></td><td><code>@sveltejs/kit</code></td><td>responde JSON num endpoint</td></tr>
+<tr><td><code>fail(400, { erro })</code></td><td><code>@sveltejs/kit</code></td><td>devolve erro de formulário para a página</td></tr>
+<tr><td><code>goto('/pedidos')</code></td><td><code>$app/navigation</code></td><td>navega pelo código, no navegador</td></tr>
+</table>
+</div>
+
+<p>A diferença entre <code>error()</code> e <code>fail()</code> não é de gravidade, é de destino: <code>error()</code> mostra a tela de erro; <code>fail()</code> volta para a página do formulário com os dados que você mandou, para preencher as mensagens de validação.</p>
+
+<hr>
+
+<h2>9. <code>hooks.server.js</code>: o gancho antes de tudo</h2>
+
+<p>Alguns trabalhos precisam acontecer em toda requisição: ler o cookie de sessão, medir tempo, bloquear IP, colocar o usuário em <code>locals</code>. Para isso existe o <code>hooks.server.js</code>, na raiz do projeto (ao lado de <code>src</code>):</p>
+
+<pre class="file" data-file="src/hooks.server.js">export async function handle({ event, resolve }) {
+  const inicio = Date.now();
+  const resposta = await resolve(event);
+  console.log(event.url.pathname, Date.now() - inicio + 'ms');
+  return resposta;
+}</pre>
+
+<p>O <code>handle</code> recebe o evento e a função que resolve a requisição. Você pode fazer algo antes, chamar <code>resolve(event)</code> e fazer algo depois com a resposta. Se não chamar <code>resolve</code>, a requisição não termina — e o navegador fica esperando.</p>
+
+<p>O uso mais comum no projeto da Ana é preencher <code>event.locals</code>: um objeto que vive durante aquela requisição e que os <code>load</code> podem ler. É assim que a sessão do usuário chega às páginas sem passar por parâmetro de um lado para o outro.</p>
+
+<hr>
+
+<h2>10. <code>$app</code>, <code>$env</code> e os nomes que o Kit reserva</h2>
+
+<p>O Kit expõe módulos com prefixo de cifrão. Eles não têm caminho de arquivo: são atalhos que o compilador resolve. Os que você vai usar primeiro:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Módulo</th><th>O que tem</th><th>Onde pode rodar</th></tr>
+<tr><td><code>$app/state</code></td><td><code>page</code> com url, params, status, data</td><td>navegador e servidor</td></tr>
+<tr><td><code>$app/navigation</code></td><td><code>goto</code>, <code>beforeNavigate</code>, <code>invalidate</code></td><td>só navegador</td></tr>
+<tr><td><code>$app/environment</code></td><td><code>browser</code>, <code>dev</code>, <code>building</code></td><td>os dois</td></tr>
+<tr><td><code>$app/forms</code></td><td><code>enhance</code>, <code>applyAction</code></td><td>só navegador</td></tr>
+<tr><td><code>$app/paths</code></td><td><code>base</code>, <code>resolve</code></td><td>os dois</td></tr>
+<tr><td><code>$env/static/public</code></td><td>variáveis públicas, embutidas no build</td><td>os dois</td></tr>
+<tr><td><code>$env/static/private</code></td><td>variáveis privadas</td><td>só servidor</td></tr>
+<tr><td><code>$env/dynamic/public</code></td><td>públicas lidas em execução</td><td>os dois</td></tr>
+<tr><td><code>$env/dynamic/private</code></td><td>privadas lidas em execução</td><td>só servidor</td></tr>
+</table>
+</div>
+
+<p>A confusão mais comum é entre <code>$env/static</code> e <code>$env/dynamic</code>. O <code>static</code> é lido no momento do build e substituído no código: mudar a variável depois exige build novo. O <code>dynamic</code> é lido em execução: útil quando o valor muda no servidor sem rebuild. Em troca, o <code>dynamic</code> só funciona onde há servidor — não serve para site totalmente estático.</p>
+
+<div class="tip">
+<strong><code>$app/stores</code> ainda existe</strong>
+<p>A forma antiga, com <code>page</code> vindo de <code>$app/stores</code> e lido com <code>$page</code>, continua funcionando em muitos projetos. A forma nova, <code>$app/state</code>, expõe <code>page</code> como valor reativo direto. Em código novo, prefira <code>$app/state</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Parâmetros, grupos e rotas opcionais</h2>
+
+<p>O nome da pasta também é sintaxe. Colchetes marcam pedaços variáveis do endereço; parênteses marcam grupos que não aparecem na URL.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pasta</th><th>Endereço</th><th>Para que serve</th></tr>
+<tr><td><code>pedidos/</code></td><td><code>/pedidos</code></td><td>rota fixa</td></tr>
+<tr><td><code>pedidos/[id]/</code></td><td><code>/pedidos/42</code></td><td>parâmetro: <code>params.id</code> vale <code>'42'</code></td></tr>
+<tr><td><code>pedidos/[[id]]/</code></td><td><code>/pedidos</code> e <code>/pedidos/42</code></td><td>parâmetro opcional</td></tr>
+<tr><td><code>[[linguagem]]/</code></td><td><code>/</code> e <code>/pt</code></td><td>idioma opcional</td></tr>
+<tr><td><code>(admin)/painel/</code></td><td><code>/painel</code></td><td>grupo: layout e organização sem entrar na URL</td></tr>
+<tr><td><code>[...caminho]/</code></td><td><code>/a/b/c</code></td><td>resto do caminho, em <code>params.caminho</code></td></tr>
+</table>
+</div>
+
+<p>Os parâmetros chegam pelo segundo argumento do <code>load</code> (<code>{ params }</code>) e, na página, por <code>page.params</code> de <code>$app/state</code>. Um grupo entre parênteses não muda a URL: ele permite dar um layout diferente a um conjunto de rotas sem criar um endereço novo.</p>
+
+<p>Quando um arquivo de rota usa uma prop de forma errada, o erro é o mesmo de qualquer componente Svelte — porque o arquivo é um componente Svelte. Um exemplo real, com uma runa usada dentro de função:</p>
+
+<div class="cenario">
+<strong>Erro de compilação numa página de rota</strong>
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+  function somar() {
+    let { a } = $props();
+    return a;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{somar()}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 16): `$props()` can only be used at the top level of components as a variable declaration initializer</pre>
+<p>Ser <code>+page.svelte</code> não muda as regras de Svelte: <code>$props()</code> continua sendo do topo do componente. A mensagem aponta a linha, e o conserto é mover a chamada para fora da função.</p>
+</div>
+
+<hr>
+
+<h2>12. Rodando o projeto Kit</h2>
+
+<p>Os comandos são os mesmos do projeto Svelte comum, com uma diferença interna: o Kit precisa analisar as rotas antes de servir. O servidor de desenvolvimento mostra isso na saída.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite dev
+
+  VITE v8.4.0  ready in 640 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Duas coisas mudam em relação a um projeto Svelte puro. O comando por baixo é <code>vite dev</code> (e não <code>vite</code>), porque o Kit se instala como plugin do Vite. E o tempo de prontidão é maior: o servidor precisa ler a pasta <code>routes</code> antes de aceitar conexões. O endereço é o mesmo de sempre, <code>http://localhost:5173/</code>; se a porta estiver ocupada, o Vite escreve <code>Port 5173 is in use, trying another one…</code> e sobe na seguinte — a linha <code>Local</code> é a que vale.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+&gt; loja@0.0.1 preview
+&gt; vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O <code>preview</code> serve a build de produção, na porta 4173. É o último teste antes de publicar: se a navegação entre rotas funciona ali, funciona no ar — com uma ressalva, o adaptador. O projeto criado pelo CLI vem com <code>@sveltejs/adapter-auto</code>, que tenta descobrir a plataforma de publicação; num computador comum ele avisa que não detectou ambiente de produção.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 137 modules transformed.
+rendering chunks...
+computing gzip size...
+.svelte-kit/output/server/.vite/manifest.json                  2.06 kB │ gzip:  0.40 kB
+.svelte-kit/output/server/env.js                               0.29 kB │ gzip:  0.18 kB │ map:   0.57 kB
+.svelte-kit/output/server/entries/pages/_page.svelte.js        0.31 kB │ gzip:  0.24 kB │ map:   0.07 kB
+.svelte-kit/output/server/entries/fallbacks/error.svelte.js    0.98 kB │ gzip:  0.40 kB │ map:   2.58 kB
+.svelte-kit/output/server/index.js                             2.24 kB │ gzip:  0.89 kB │ map:   3.32 kB
+.svelte-kit/output/server/entries/pages/_layout.svelte.js      2.58 kB │ gzip:  1.06 kB │ map:   2.67 kB
+.svelte-kit/output/server/chunks/server.js                    40.95 kB │ gzip: 11.39 kB │ map: 124.05 kB
+.svelte-kit/output/server/remote-entry.js                     54.80 kB │ gzip: 11.99 kB │ map:  91.52 kB
+.svelte-kit/output/server/chunks/internal.js                 108.57 kB │ gzip: 27.84 kB │ map: 234.91 kB
+.svelte-kit/output/server/chunks/instance.js                 119.08 kB │ gzip: 32.28 kB │ map: 242.42 kB
+
+✓ built in 790ms
+Analysing routes
+Building app
+vite v8.4.0 building client environment for production...
+transforming...
+✓ 176 modules transformed.
+rendering chunks...
+computing gzip size...
+.svelte-kit/output/client/_app/version.json                          0.02 kB │ gzip:  0.04 kB
+.svelte-kit/output/client/.vite/manifest.json                        3.14 kB │ gzip:  0.55 kB
+.svelte-kit/output/client/_app/immutable/entry/payload.DSmR2FwN.js   0.06 kB │ gzip:  0.07 kB
+.svelte-kit/output/client/_app/immutable/nodes/2.D12qApDY.js         0.25 kB │ gzip:  0.21 kB
+.svelte-kit/output/client/_app/immutable/nodes/1.D_5R8bTh.js         0.32 kB │ gzip:  0.24 kB
+.svelte-kit/output/client/_app/immutable/entry/start.C6e1yStS.js     0.52 kB │ gzip:  0.30 kB
+.svelte-kit/output/client/_app/immutable/entry/app.BgliJGtl.js       1.06 kB │ gzip:  0.53 kB
+.svelte-kit/output/client/_app/immutable/chunks/Beqi9dRN.js          1.32 kB │ gzip:  0.65 kB
+.svelte-kit/output/client/_app/immutable/chunks/DUTjbZNf.js          1.73 kB │ gzip:  0.88 kB
+.svelte-kit/output/client/_app/immutable/nodes/0.tYJWaiYM.js         2.38 kB │ gzip:  0.98 kB
+.svelte-kit/output/client/_app/immutable/chunks/Cs3aoLG-.js          4.43 kB │ gzip:  1.98 kB
+.svelte-kit/output/client/_app/immutable/chunks/MOz-gQIu.js         37.38 kB │ gzip: 13.82 kB
+.svelte-kit/output/client/_app/immutable/chunks/DIWTmQqg.js         43.78 kB │ gzip: 16.95 kB
+
+✓ built in 500ms
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app to run on the platform of your choosing
+✔ done</pre>
+
+<p>Duas construções no mesmo comando: a de <strong>ssr</strong> (o HTML que sai do servidor) e a de <strong>cliente</strong> (o JavaScript que hidrata). "Analysing routes" é o Kit lendo a pasta <code>routes</code> e montando o mapa de endereços — se uma rota não aparece no site, a primeira coisa a conferir é se o arquivo tem o <code>+</code> no nome.</p>
+
+<p>O aviso do adaptador não é erro: a build terminou ("done"). Ele só diz que, para publicar, você precisa escolher um adaptador — estático, Node, ou o da plataforma que for usar. Essa escolha é a última etapa antes do ar, e tem aula própria.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Em <code>src/routes</code>, o caminho da pasta é o endereço da URL.</li>
+  <li>O <code>+</code> no nome marca arquivo especial do Kit; sem ele, o arquivo não é rota.</li>
+  <li><code>+page.svelte</code> é a página; <code>+layout.svelte</code> é a moldura que recebe <code>children</code>.</li>
+  <li><code>+page.js</code> roda nos dois lados; <code>+page.server.js</code> roda só no servidor e pode ter segredo.</li>
+  <li>O <code>load</code> devolve um objeto que chega na página como <code>data</code> e precisa ser serializável.</li>
+  <li><code>+server.js</code> responde API com funções <code>GET</code>, <code>POST</code> e companhia, no endereço da pasta.</li>
+  <li><code>+error.svelte</code> é a tela de erro; <code>error()</code> interrompe o load, <code>redirect()</code> manda para outro endereço.</li>
+  <li><code>hooks.server.js</code> roda em toda requisição, antes de resolver.</li>
+  <li><code>$app/state</code>, <code>$app/navigation</code> e <code>$env</code> são módulos reservados do Kit.</li>
+  <li><code>[id]</code>, <code>[[id]]</code>, <code>[...resto]</code> e <code>(grupo)</code> são sintaxe no nome da pasta.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Folha de bolso do Svelte — runas, blocos e erros em uma página | Guia Svelte</title>
+<meta name="description" content="Folha de bolso do Svelte: tabelas de runas, blocos de marcação, diretivas, erros reais do compilador e comandos do terminal, para consulta rápida.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Referência · <span class="hl">Folha de bolso</span></h1>
+
+<p class="intro">A Ana colou um cartão na parede da padaria: os telefones dos fornecedores, o horário da entrega, quanto pesa cada saco de farinha. Ela não aprendeu a assar lendo o cartão — mas quando está no meio do forno, com a massa na mão, é o cartão que resolve. Esta página é o cartão do Svelte: tabelas curtas, exemplos de uma linha, e as mensagens de erro que aparecem no meio do trabalho. Não é para ler do começo ao fim; é para abrir, achar a linha e voltar ao forno.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O esqueleto mínimo de um componente, para copiar e colar.</li>
+  <li>A lista completa de runas e o que cada uma devolve.</li>
+  <li>Os blocos de marcação e o que fecha cada um.</li>
+  <li>As diretivas de evento, ligação, classe, estilo e transição.</li>
+  <li>As mensagens de erro mais comuns, o que significam e o conserto.</li>
+  <li>Os comandos de terminal que aparecem em todo projeto.</li>
+  <li>As checagens de dez segundos quando algo não atualiza.</li>
+  <li>A tabela de tradução do Svelte antigo para o atual.</li>
+  <li>Onde achar a aula longa de cada assunto.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. Como usar esta folha</h2>
+
+<p>As tabelas foram escritas em ordem de frequência: a linha de cima é a que você mais vai usar. Cada célula tem o mínimo para reconhecer e copiar — a explicação de <em>por que</em> funciona está nas outras aulas, e o fim de cada seção aponta o caminho.</p>
+
+<p>Três convenções valem para a página inteira. Primeira: o que aparece em <code>fonte de código</code> é para digitar como está, trocando só os nomes. Segunda: os exemplos usam a Ana, a padaria e o caderno de pedidos, para você reconhecer o contexto. Terceira: toda saída mostrada aqui saiu de uma execução de verdade, com o compilador e o servidor reais — nenhuma linha de terminal foi inventada.</p>
+
+<p>Se você é iniciante absoluto, esta folha não substitui a primeira aula. O caminho natural é: montar o primeiro componente, entender o que é estado, aprender os blocos, e só então usar a folha como consulta. Quem chega aqui cedo demais encontra uma parede de tabelas; quem chega na hora certa encontra atalhos.</p>
+
+<hr>
+
+<h2>2. O esqueleto de um componente</h2>
+
+<p>Um componente é um arquivo <code>.svelte</code> com até três partes, sempre nesta ordem. Só a do meio é obrigatória.</p>
+
+<pre class="file" data-file="Ola.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Olá, Ana&lt;/h1&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;script&gt;</dt><dd>a <strong>lógica</strong>: variáveis, funções, importações. Roda uma vez, quando o componente é criado.</dd>
+  <dt>a marcação</dt><dd>o <strong>HTML</strong> com chaves. É a única parte obrigatória; sem ela, o componente não mostra nada.</dd>
+  <dt>&lt;style&gt;</dt><dd>o <strong>CSS</strong>, que fica restrito ao componente: as regras não vazam para os vizinhos.</dd>
+  <dt>{expressão}</dt><dd>um <strong>buraco</strong> no HTML onde entra um valor de JavaScript.</dd>
+  <dt>$state(…)</dt><dd>a <strong>runa</strong> que marca o valor como reativo: mudou, a tela redesenha.</dd>
+</dl>
+
+<p>O arquivo precisa começar com o bloco <code>&lt;script&gt;</code> se houver script — o compilador não aceita script depois da marcação. O <code>&lt;style&gt;</code> também fica no fim, e o compilador carimba cada regra com um selo <code>svelte-xxxxxx</code> para que ela atinja só este componente. Se você abrir o CSS gerado, vê o selo no seletor.</p>
+
+<p>Para criar um componente novo, crie um arquivo com a primeira letra maiúscula: <code>Cartao.svelte</code>, <code>ListaPedidos.svelte</code>. Minúscula funciona em alguns casos, mas o Svelte trata maiúscula como componente e minúscula como tag HTML — a confusão custa uma tarde.</p>
+
+<hr>
+
+<h2>3. Runas: a cola completa</h2>
+
+<p>Runas são funções especiais que só podem ser escritas em posições específicas — quase sempre como valor inicial de um <code>let</code>, no topo do <code>&lt;script&gt;</code>. Elas começam com <code>$</code> e não precisam de <code>import</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Runa</th><th>Como se escreve</th><th>O que devolve</th></tr>
+<tr><td><code>$state</code></td><td><code>let n = $state(0)</code></td><td>valor reativo; mudou, a tela atualiza</td></tr>
+<tr><td><code>$state.raw</code></td><td><code>let lista = $state.raw([1, 2])</code></td><td>reativo só quando você troca a lista inteira</td></tr>
+<tr><td><code>$state.snapshot</code></td><td><code>$state.snapshot(estado)</code></td><td>cópia comum, sem reatividade</td></tr>
+<tr><td><code>$derived</code></td><td><code>let dobro = $derived(n * 2)</code></td><td>valor calculado a partir de outros</td></tr>
+<tr><td><code>$derived.by</code></td><td><code>let total = $derived.by(() =&gt; { … })</code></td><td>cálculo de várias linhas</td></tr>
+<tr><td><code>$effect</code></td><td><code>$effect(() =&gt; { … })</code></td><td>nada; roda depois de desenhar</td></tr>
+<tr><td><code>$effect.pre</code></td><td><code>$effect.pre(() =&gt; { … })</code></td><td>nada; roda antes de desenhar</td></tr>
+<tr><td><code>$props</code></td><td><code>let { nome } = $props()</code></td><td>as entradas que o pai passou</td></tr>
+<tr><td><code>$bindable</code></td><td><code>let { valor = $bindable(0) } = $props()</code></td><td>prop que o pai pode ligar com <code>bind:</code></td></tr>
+<tr><td><code>$inspect</code></td><td><code>$inspect(nome)</code></td><td>nada; registra no console em desenvolvimento</td></tr>
+<tr><td><code>$host</code></td><td><code>const eu = $host()</code></td><td>o elemento hospedeiro, em custom element</td></tr>
+<tr><td><code>$props.id</code></td><td><code>const id = $props.id()</code></td><td>um identificador único para o componente</td></tr>
+</table>
+</div>
+
+<p>Duas regras resolvem a maioria dos tropeços. A primeira: runa não vai dentro de função, laço ou condição — só no topo do componente. A segunda: sem <code>$state</code>, a variável muda no JavaScript mas a tela não fica sabendo; é o erro número um de quem vem de outra linguagem.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:1">
+<p class="try-task"><strong>Missão:</strong> o botão conta cliques, mas o número não sai do lugar. Faça o contador chegar a <strong>1</strong> depois de um clique.</p>
+<pre class="script" data-file="Contador.svelte">&lt;script&gt;
+  let tema = $state('claro');
+  let n = 0;
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; n++}&gt;{n}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="Contador.svelte">&lt;script&gt;
+  let tema = $state('claro');
+  let n = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; n++}&gt;{n}&lt;/button&gt;</pre>
+</div>
+
+<p>Esta caixa guarda a pegadinha mais desconcertante do Svelte 5. Sozinha, a linha <code>let n = 0</code> seria reativa: num arquivo sem nenhuma runa, o componente entra em <strong>modo legado</strong> e o <code>let</code> comum atualiza a tela quando você atribui. Mas a primeira linha (<code>let tema = $state('claro')</code>, que nem aparece na tela) coloca o componente no <strong>modo moderno</strong>, e ali o <code>let</code> comum perde essa reatividade: <code>n++</code> muda a memória e a tela fica parada. Ou seja, um componente antigo funciona bem — e no dia em que você acrescenta a primeira runa, os outros <code>let</code> param de atualizar. É por isso que se converte um arquivo inteiro de uma vez, nunca uma linha solta.</p>
+
+<hr>
+
+<h2>4. Blocos de marcação</h2>
+
+<p>Blocos abrem com <code>{#</code> e fecham com <code>{/</code>. Todo bloco aberto precisa ser fechado, na ordem certa — é a causa de metade dos erros de compilação de quem está começando.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Bloco</th><th>Escreva</th><th>Fecha com</th></tr>
+<tr><td>condição</td><td><code>{#if ativo} … {:else if pausado} … {:else} … {/if}</code></td><td><code>{/if}</code></td></tr>
+<tr><td>lista</td><td><code>{#each pedidos as pedido} … {/each}</code></td><td><code>{/each}</code></td></tr>
+<tr><td>lista com índice</td><td><code>{#each pedidos as pedido, i} … {/each}</code></td><td><code>{/each}</code></td></tr>
+<tr><td>lista com chave</td><td><code>{#each pedidos as pedido (pedido.id)} … {/each}</code></td><td><code>{/each}</code></td></tr>
+<tr><td>lista vazia</td><td><code>{#each pedidos as p} … {:else} Nenhum pedido {/each}</code></td><td><code>{/each}</code></td></tr>
+<tr><td>promessa</td><td><code>{#await p} … {:then v} … {:catch e} … {/await}</code></td><td><code>{/await}</code></td></tr>
+<tr><td>recomeço</td><td><code>{#key filtro} … {/key}</code></td><td><code>{/key}</code></td></tr>
+<tr><td>trecho</td><td><code>{#snippet linha(pedido)} … {/snippet}</code></td><td><code>{/snippet}</code></td></tr>
+<tr><td>desenhar trecho</td><td><code>{@render linha(pedido)}</code></td><td>—</td></tr>
+<tr><td>HTML cru</td><td><code>{@html textoComTags}</code></td><td>—</td></tr>
+<tr><td>constante no bloco</td><td><code>{@const total = itens.length}</code></td><td>—</td></tr>
+<tr><td>depurador</td><td><code>{@debug pedido}</code></td><td>—</td></tr>
+</table>
+</div>
+
+<p>O bloco <code>{#each}</code> aceita as três formas juntas: <code>{#each pedidos as pedido, i (pedido.id)}</code> — item, índice e chave. A chave só é necessária quando a lista é reordenada e você quer que o Svelte reaproveite os elementos certos; com <code>animate:</code> ela é obrigatória.</p>
+
+<pre class="file" data-file="Lista.svelte">&lt;ul&gt;
+  {#each ['pão', 'leite'] as item, i (item)}
+    &lt;li&gt;{i + 1}. {item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;1. pão&lt;/li&gt;&lt;li&gt;2. leite&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Repare que o HTML gerado fica numa linha só: os espaços e quebras do arquivo servem para você, não para o navegador. O texto na tela seria <code>1. pão 2. leite</code>, e é por isso que quem usa <code>out:</code> nas metas de caixa precisa tomar cuidado com espaço extra.</p>
+
+<hr>
+
+<h2>5. Diretivas e atributos</h2>
+
+<p>O Svelte estende o HTML com prefixos. Cada prefixo tem um papel fixo, e trocar dois de lugar costuma dar erro de compilação com mensagem clara.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Diretiva</th><th>Exemplo</th><th>Para que serve</th></tr>
+<tr><td><code>onclick</code></td><td><code>onclick={() =&gt; n++}</code></td><td>evento, na forma atual</td></tr>
+<tr><td><code>on:click</code></td><td><code>on:click={somar}</code></td><td>evento, forma antiga (ainda compila, com aviso)</td></tr>
+<tr><td><code>bind:value</code></td><td><code>bind:value={nome}</code></td><td>liga um campo a uma variável, nos dois sentidos</td></tr>
+<tr><td><code>bind:checked</code></td><td><code>bind:checked={pago}</code></td><td>liga uma caixa de seleção a um booleano</td></tr>
+<tr><td><code>bind:group</code></td><td><code>bind:group={escolha}</code></td><td>liga vários rádios a uma variável só</td></tr>
+<tr><td><code>bind:this</code></td><td><code>bind:this={caixa}</code></td><td>guarda o elemento numa variável</td></tr>
+<tr><td><code>class:ativo</code></td><td><code>class:ativo={pago}</code></td><td>põe a classe quando a condição é verdadeira</td></tr>
+<tr><td><code>style:color</code></td><td><code>style:color={cor}</code></td><td>define uma propriedade de estilo</td></tr>
+<tr><td><code>use:acao</code></td><td><code>use:clicarFora</code></td><td>roda uma função quando o elemento entra</td></tr>
+<tr><td><code>transition:fade</code></td><td><code>transition:fade</code></td><td>animação de entrada e saída</td></tr>
+<tr><td><code>in:</code> / <code>out:</code></td><td><code>in:fly={{ y: 20 }}</code></td><td>animação só ao entrar ou só ao sair</td></tr>
+<tr><td><code>animate:flip</code></td><td><code>animate:flip</code></td><td>anima a troca de posição numa lista com chave</td></tr>
+</table>
+</div>
+
+<p>As diretivas de evento merecem um parágrafo: a forma antiga <code>on:click</code> continua funcionando, mas o compilador avisa que ela está obsoleta. A forma atual é <code>onclick</code>, sem dois-pontos, e o valor precisa ser uma função — não uma chamada. <code>onclick={somar}</code> passa a função; <code>onclick={somar()}</code> chama na hora de desenhar, o que quase nunca é o que você quer.</p>
+
+<p>A ligação de duas vias é o que faz formulário funcionar sem código extra. O valor do campo vai para a variável e a variável volta para o campo.</p>
+
+<pre class="file" data-file="Item.svelte">&lt;script&gt;
+  let pedido = $state({ item: 'pão', preco: 8 });
+&lt;/script&gt;
+
+&lt;input bind:value={pedido.item} aria-label="item"&gt;
+&lt;p&gt;{pedido.item}: R$ {pedido.preco}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value="pão" aria-label="item"/&gt; &lt;p&gt;pão: R$ 8&lt;/p&gt;</pre>
+
+<p>No HTML gerado aparece <code>value="pão"</code>: o valor inicial foi escrito no próprio elemento, para o navegador mostrar antes de o JavaScript rodar. Isso é o que permite o formulário chegar preenchido mesmo antes da hidratação.</p>
+
+<hr>
+
+<h2>6. Valores calculados sem <code>$effect</code></h2>
+
+<p>Para um valor que depende de outros, <code>$derived</code> é a resposta. Ele se recalcula quando a base muda e nunca é atribuído à mão. <code>$effect</code> serve para outra coisa: efeitos colaterais, como registrar no console ou falar com uma API — e não para calcular o que aparece na tela.</p>
+
+<div class="trysvelte" data-goal="digitar:input=20;;out:Total 18">
+<p class="try-task"><strong>Missão:</strong> o campo aceita um preço, mas o total fica congelado no valor inicial. Digite <strong>20</strong> e faça o total mostrar <strong>18</strong> (desconto de 10%).</p>
+<pre class="script" data-file="Total.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let total = preco - preco / 10;
+&lt;/script&gt;
+
+&lt;input type="number" bind:value={preco} aria-label="preço"&gt;
+&lt;p&gt;Total {total}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Total.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let total = $derived(preco - preco / 10);
+&lt;/script&gt;
+
+&lt;input type="number" bind:value={preco} aria-label="preço"&gt;
+&lt;p&gt;Total {total}&lt;/p&gt;</pre>
+</div>
+
+<p>A diferença entre os dois códigos é uma palavra. Sem <code>$derived</code>, a conta foi feita uma vez, quando o componente nasceu, e nunca mais. Com <code>$derived</code>, a conta é refeita toda vez que <code>preco</code> muda. Se a conta tiver várias linhas, use <code>$derived.by(() =&gt; { … return resultado; })</code>.</p>
+
+<p>Um detalhe que confunde: atribuir a um <code>$derived</code> não dá erro — o valor simplesmente volta ao calculado no próximo desenho. Por isso, se você vê um valor que "não obedece", confira se ele não nasceu de uma runa derivada.</p>
+
+<hr>
+
+<h2>7. Erros mais comuns, com a mensagem real</h2>
+
+<p>Esta é a parte mais útil da folha. As mensagens abaixo foram copiadas de execuções reais do compilador, e a coluna do meio explica o que a frase quer dizer em português.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que aconteceu</th><th>Conserto</th></tr>
+<tr><td><code>Cannot use `export let` in runes mode — use `$props()` instead</code></td><td>misturou componente antigo com runa</td><td>troque por <code>let { nome } = $props()</code></td></tr>
+<tr><td><code>`$state(...)` can only be used as a variable declaration initializer</code></td><td><code>$state</code> dentro de função ou condição</td><td>declare no topo: <code>let n = $state(0)</code></td></tr>
+<tr><td><code>`$props()` can only be used at the top level of components as a variable declaration initializer</code></td><td><code>$props()</code> fora do topo</td><td>mova a linha para o topo do script</td></tr>
+<tr><td><code>`&lt;/ul&gt;` attempted to close an element that was not open</code></td><td>faltou fechar um bloco antes da tag</td><td>feche o <code>{#each}</code> com <code>{/each}</code></td></tr>
+<tr><td><code>Block was left open</code></td><td>abriu <code>{#if}</code> e não fechou</td><td>acrescente <code>{/if}</code></td></tr>
+<tr><td><code>Expected token each</code></td><td>escreveu <code>{#each}</code> sem a lista</td><td>use <code>{#each lista as item}</code></td></tr>
+<tr><td><code>Event attribute must be a JavaScript expression, not a string</code></td><td><code>onclick="somar()"</code> com aspas</td><td>use chaves: <code>onclick={somar}</code></td></tr>
+<tr><td><code>`bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</code></td><td>ligação em elemento que não guarda valor</td><td>troque o elemento ou use <code>bind:this</code></td></tr>
+<tr><td><code>This type of directive is not valid on components</code></td><td>diretiva usada num componente</td><td>passe a prop e use <code>$bindable</code></td></tr>
+<tr><td><code>naoExiste is not defined</code></td><td>nome escrito errado, na execução</td><td>confira a grafia e o <code>import</code></td></tr>
+<tr><td><code>Cannot read properties of undefined (reading 'nome')</code></td><td>leu campo de objeto vazio</td><td>use <code>?.</code> ou valor padrão</td></tr>
+</table>
+</div>
+
+<p>Uma das mais comuns é a de bloco não fechado, porque a mensagem aponta a tag, não o bloco. O exemplo abaixo tem uma lista sem <code>{/each}</code>, e o compilador reclama da <code>&lt;/ul&gt;</code>:</p>
+
+<div class="cenario">
+<strong>Bloco aberto, tag acusada</strong>
+<pre class="file" data-file="Pedidos.svelte">&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 0): `&lt;/ul&gt;` attempted to close an element that was not open</pre>
+<p>O conserto é fechar o laço antes de fechar a lista. Leia a mensagem como "esta tag não devia estar aqui": quando uma tag parece certa, o problema está num bloco aberto acima dela.</p>
+</div>
+
+<p>Já os avisos não impedem a página de rodar. Os mais úteis: <code>non_reactive_update</code> (você atualiza uma variável que não é <code>$state</code>), <code>state_referenced_locally</code> (leu o valor de uma runa uma vez só, e ele não vai acompanhar mudanças) e <code>event_directive_deprecated</code> (usou <code>on:click</code>). Aviso é dica; erro é parede.</p>
+
+<hr>
+
+<h2>8. Comandos do terminal</h2>
+
+<p>Antes de tudo, confira o ambiente. Esta sessão é de uma máquina de desenvolvimento comum, com o projeto na pasta <code>~/loja</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -p "process.version"
+v22.23.5
+ana@notebook:~/loja$ node -p "require('svelte/package.json').version"
+5.59.2
+ana@notebook:~/loja$ npx sv --version
+
+1.7.1</pre>
+
+<p>Duas versões importam: a do Node e a do Svelte. A do Node precisa ser 18 ou mais nova para os projetos atuais; a do Svelte diz qual documentação ler. O <code>npx sv --version</code> mostra a versão do CLI oficial, que é o programa que cria e amplia projetos — a linha em branco antes do número faz parte da saída.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th></tr>
+<tr><td><code>npm run dev</code></td><td>abre o servidor de desenvolvimento em <code>localhost:5173</code></td></tr>
+<tr><td><code>npm run dev -- --port 5188</code></td><td>mesmo servidor, em outra porta</td></tr>
+<tr><td><code>npm run build</code></td><td>gera a versão de produção na pasta <code>dist</code></td></tr>
+<tr><td><code>npm run preview</code></td><td>serve a versão de produção em <code>localhost:4173</code></td></tr>
+<tr><td><code>npm install</code></td><td>instala o que está no <code>package.json</code></td></tr>
+<tr><td><code>npm install nome-do-pacote</code></td><td>acrescenta uma dependência ao projeto</td></tr>
+<tr><td><code>npx sv create nome</code></td><td>cria um projeto SvelteKit novo</td></tr>
+<tr><td><code>npm create vite@latest nome -- --template svelte</code></td><td>cria um projeto Svelte puro</td></tr>
+</table>
+</div>
+
+<p>O servidor de desenvolvimento é o que você deixa ligado o dia inteiro. Quando ele sobe, imprime o endereço e fica esperando; qualquer arquivo salvo faz a página atualizar sozinha.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+
+  VITE v7.3.8  ready in 1318 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Três leituras rápidas dessa saída. <code>ready in 1318 ms</code> é o tempo até o servidor aceitar conexões — este número muda a cada execução, porque é medido na hora; o que vale é a ordem de grandeza. <code>Local</code> é o endereço para o seu navegador. <code>Network</code> só aparece quando você libera acesso pela rede, com <code>--host</code>. E se a porta 5173 já estiver ocupada, o Vite avisa com <code>Port 5173 is in use, trying another one…</code> e sobe em outra — o endereço que importa é sempre o da linha <code>Local</code>.</p>
+
+<hr>
+
+<h2>9. Checagens de dez segundos</h2>
+
+<p>Quando a tela não mostra o que você espera, siga esta ordem. Cada passo custa segundos e elimina uma classe de problema.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Primeira checagem</th><th>Se não for isso</th></tr>
+<tr><td>texto não muda ao clicar</td><td>a variável é <code>$state</code>?</td><td>o evento está ligado com <code>onclick={fn}</code>?</td></tr>
+<tr><td>total congelado</td><td>a conta está num <code>$derived</code>?</td><td>a base mudou de verdade?</td></tr>
+<tr><td>página em branco</td><td>o terminal mostra erro de compilação?</td><td>o console do navegador mostra erro de execução?</td></tr>
+<tr><td>estilo não aplica</td><td>a classe existe no <code>&lt;style&gt;</code>?</td><td>o seletor começa com o elemento errado?</td></tr>
+<tr><td>componente não recebe prop</td><td>o nome da prop bate com o do pai?</td><td>faltou <code>$props()</code> no filho?</td></tr>
+<tr><td>lista sem animação</td><td>o <code>{#each}</code> tem chave?</td><td>o <code>animate:</code> está no elemento certo?</td></tr>
+<tr><td>valor undefined</td><td>o objeto foi inicializado?</td><td>use <code>?.</code> ou valor padrão no <code>$props</code></td></tr>
+</table>
+</div>
+
+<p>Para ver valores sem poluir a tela, use <code>$inspect</code>: ele registra no console em desenvolvimento e some na build de produção. <code>console.log</code> dentro de um <code>$effect</code> também funciona, mas roda a cada mudança — útil para acompanhar, perigoso para esquecer ligado.</p>
+
+<p>E lembre do <code>{@debug}</code>: colocado antes de uma expressão, ele pausa o depurador do navegador quando aquele valor muda. É a pausa cirúrgica, no lugar do monte de <code>console.log</code>.</p>
+
+<hr>
+
+<h2>10. Os cinco suspeitos de "não atualiza"</h2>
+
+<p>Quase todo relato de "o Svelte não atualiza" cai em uma destas cinco causas. Vale decorar a lista.</p>
+
+<p><strong>1. Falta <code>$state</code>.</strong> A variável muda, a tela não fica sabendo. É a causa da caixa da seção 3.</p>
+
+<p><strong>2. Componente em modo legado.</strong> Se o arquivo não tem nenhuma runa, o <code>let</code> comum é reativo; no momento em que você acrescenta <code>$state</code> em outro lugar, essa reatividade implícita desaparece. Misturar os dois mundos é o tropeço mais comum de quem copia exemplo antigo.</p>
+
+<p><strong>3. Objeto mutado sem trocar a referência.</strong> Com <code>$state.raw</code>, mutar um campo não redesenha; só substituir o objeto inteiro redesenha. Com <code>$state</code> comum, mutar campo funciona — mas mutar dentro de uma função assíncrona antiga pode escapar.</p>
+
+<p><strong>4. Conta feita uma vez.</strong> <code>let total = preco * 2</code> é uma foto, não uma fórmula. Para fórmula, <code>$derived</code>.</p>
+
+<p><strong>5. Atributo em vez de diretiva.</strong> <code>class="ativo"</code> é texto fixo; <code>class:ativo={pago}</code> é condição. E <code>style="color: red"</code> não muda com variável — quem muda é <code>style:color={cor}</code>.</p>
+
+<div class="tip">
+<strong>Regra de bolso</strong>
+<p>Se o valor depende de outro, é <code>$derived</code>. Se o valor é a fonte da verdade, é <code>$state</code>. Se serve para falar com o mundo de fora, é <code>$effect</code>. Não há quarta categoria.</p>
+</div>
+
+<hr>
+
+<h2>11. Tabela de tradução: antigo para atual</h2>
+
+<p>Muito código na internet foi escrito antes das runas. Esta tabela converte o que você encontra no que você deve escrever hoje.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Antigo</th><th>Atual</th><th>Observação</th></tr>
+<tr><td><code>export let nome</code></td><td><code>let { nome } = $props()</code></td><td>o antigo dá erro em modo runas</td></tr>
+<tr><td><code>on:click={fn}</code></td><td><code>onclick={fn}</code></td><td>o antigo compila, com aviso de obsoleto</td></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td><td>com <code>let { children } = $props()</code></td></tr>
+<tr><td><code>$: dobro = n * 2</code></td><td><code>let dobro = $derived(n * 2)</code></td><td>a marca <code>$:</code> não existe em modo runas</td></tr>
+<tr><td><code>$: { … }</code></td><td><code>$effect(() =&gt; { … })</code></td><td>para efeito colateral, não para cálculo</td></tr>
+<tr><td><code>createEventDispatcher</code></td><td>prop de função</td><td>o pai passa <code>aoSalvar</code> e o filho chama</td></tr>
+<tr><td><code>&lt;svelte:component this={X} /&gt;</code></td><td><code>&lt;X /&gt;</code></td><td>o componente dinâmico virou tag direta</td></tr>
+<tr><td><code>store</code> com <code>$loja</code></td><td><code>$state</code> em arquivo <code>.svelte.js</code></td><td>stores continuam funcionando</td></tr>
+</table>
+</div>
+
+<p>A conversão não é obrigatória de uma vez. Um componente antigo continua rodando; o problema aparece quando os dois estilos se misturam no mesmo arquivo, e aí a mensagem <code>Cannot use `export let` in runes mode</code> aponta exatamente a linha. Se você encontrar um projeto assim, converta um componente por vez e teste entre uma conversão e outra.</p>
+
+<p>Para o passo a passo completo, a aula de <a href="ref-migracao.html">migração</a> mostra a ordem segura. Para entender a runa por dentro, a referência de <a href="ref-runas.html">runas</a>; para os blocos, <a href="ref-blocos.html">blocos</a>; para as diretivas, <a href="ref-diretivas.html">diretivas</a>; e para as mensagens deste capítulo, <a href="ref-erros.html">erros</a>.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Componente: <code>&lt;script&gt;</code> com a lógica, marcação com chaves, <code>&lt;style&gt;</code> restrito.</li>
+  <li><code>$state</code> é a fonte da verdade; <code>$derived</code> é o valor calculado; <code>$effect</code> é o efeito colateral.</li>
+  <li>Runa só no topo do <code>&lt;script&gt;</code>, como valor inicial de um <code>let</code>.</li>
+  <li>Todo bloco fechado com <code>{/…}</code>; lista com chave quando houver reordenação.</li>
+  <li>Evento com <code>onclick={fn}</code>: função, não chamada.</li>
+  <li>Formulário com <code>bind:value</code>, <code>bind:checked</code>, <code>bind:group</code>.</li>
+  <li>Mensagem que fala em tag costuma apontar bloco aberto acima.</li>
+  <li><code>npm run dev</code> desenvolve, <code>build</code> empacota, <code>preview</code> confere.</li>
+  <li>"Não atualiza" quase sempre é falta de <code>$state</code> ou conta feita uma vez.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

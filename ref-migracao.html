@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migrando do Svelte 4 — export let, $: e slots no Svelte 5 | Guia Svelte</title>
+<meta name="description" content="Guia de migração do Svelte 4 para o Svelte 5: export let vira $props, $: vira $derived ou $effect, on:click vira onclick, slot vira snippet e dispatcher vira callback.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Migrando do Svelte 4</span></h1>
+
+<p class="intro">A Ana trocou o forno a lenha por um forno elétrico. As receitas continuam as mesmas, mas três coisas mudaram: a temperatura agora é em graus exatos, o tempo tem timer e a porta não abre no meio. Ela não jogou o caderno fora: foi ajustando receita por receita, provando o pão de cada uma antes de passar para a seguinte. Migrar do Svelte 4 para o Svelte 5 é isso — não é reescrever o projeto, é ajustar arquivo por arquivo, conferindo cada um.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que o Svelte 5 mudou a forma de declarar estado e props.</li>
+  <li><code>export let</code> → <code>$props()</code>, com o padrão no lugar certo.</li>
+  <li><code>$:</code> → <code>$derived</code> para conta e <code>$effect</code> para efeito.</li>
+  <li><code>on:click</code> → <code>onclick</code>, e o aviso que o compilador dá.</li>
+  <li><code>&lt;slot&gt;</code> → <code>children</code> e snippets.</li>
+  <li><code>createEventDispatcher</code> → callback como prop.</li>
+  <li>O que continua igual: stores, <code>onMount</code>, <code>onDestroy</code>, <code>bind:</code>.</li>
+  <li><code>&lt;svelte:component&gt;</code> e <code>&lt;svelte:self&gt;</code> no mundo novo.</li>
+  <li>Como o migrador automático entra, e o que ele não resolve.</li>
+  <li>Uma ordem de migração que não para o projeto.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o mesmo componente, com runas explícitas</h2>
+
+<p>No Svelte 4, a reatividade era implícita: uma variável comum era reativa, e o compilador descobria as dependências pelas atribuições. No Svelte 5, você marca o que é estado com <code>$state</code>, o que é conta com <code>$derived</code> e o que é prop com <code>$props()</code>. O ganho é previsibilidade: olhando o arquivo, você sabe o que muda a tela e o que não muda.</p>
+
+<p>O custo é que o código antigo não é automaticamente código novo. O compilador do Svelte 5 aceita o modo antigo quando o arquivo não usa nenhuma runa — é o que permite migrar devagar, arquivo por arquivo. Assim que uma runa aparece no arquivo, o modo antigo é desligado naquele arquivo, e as construções legadas passam a dar erro.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Svelte 4</th><th>Svelte 5</th><th>Mesma coisa?</th></tr>
+<tr><td><code>export let x</code></td><td><code>let { x } = $props()</code></td><td>sim, com outra sintaxe</td></tr>
+<tr><td><code>$: y = x * 2</code></td><td><code>let y = $derived(x * 2)</code></td><td>sim, para conta</td></tr>
+<tr><td><code>$: { efeito() }</code></td><td><code>$effect(() =&gt; { efeito() })</code></td><td>sim, para efeito</td></tr>
+<tr><td><code>on:click</code></td><td><code>onclick</code></td><td>sim, sem os dois-pontos</td></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td><td>sim, com snippet</td></tr>
+<tr><td><code>createEventDispatcher</code></td><td>prop de função</td><td>sim, com callback</td></tr>
+<tr><td><code>store</code> com <code>$</code></td><td><code>store</code> com <code>$</code></td><td>igual</td></tr>
+<tr><td><code>onMount</code> / <code>onDestroy</code></td><td><code>onMount</code> / <code>onDestroy</code></td><td>igual</td></tr>
+</table>
+</div>
+
+<p>Uma observação que evita pânico: o Svelte 5 não removeu o modo antigo. Um projeto inteiro em Svelte 4 continua compilando e rodando. A migração é uma escolha de qualidade, não uma emergência — e pode ser feita componente por componente, na velocidade da equipe.</p>
+
+<hr>
+
+<h2>2. Passo 1 — props: <code>export let</code> vira <code>$props()</code></h2>
+
+<p>No modo antigo, a prop era uma variável exportada. Compila, roda e continua funcionando enquanto o arquivo não tiver runas:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let titulo = 'Pedidos';
+&lt;/script&gt;
+
+&lt;h1&gt;{titulo}&lt;/h1&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Pedidos&lt;/h1&gt;</pre>
+
+<p>A versão nova faz a mesma coisa com uma linha diferente. O valor padrão vai à direita do sinal de igual, dentro da desestruturação:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { titulo = 'Pedidos' } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{titulo}&lt;/h1&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Pedidos&lt;/h1&gt;</pre>
+
+<p>A saída é idêntica — e é isso que você quer numa migração: mudar a forma sem mudar o comportamento. A diferença aparece no dia em que o arquivo ganha uma runa: a partir daí, <code>export let</code> não é mais aceito.</p>
+
+<dl class="anatomy">
+  <dt>let</dt><dd>a <strong>declaração</strong> que continua existindo. A prop agora é uma variável comum, criada a partir do objeto de props.</dd>
+  <dt>{ titulo = 'Pedidos' }</dt><dd>a <strong>desestruturação com padrão</strong>: o nome da prop e o valor usado quando ela não vem.</dd>
+  <dt>$props()</dt><dd>a <strong>runa</strong> que devolve todas as props recebidas. Só pode ser chamada no topo do componente.</dd>
+  <dt>...resto</dt><dd>o <strong>resto</strong>, quando existe: as props não nomeadas ficam nesse objeto, no lugar de <code>$$restProps</code>.</dd>
+</dl>
+
+<div class="cenario">
+<strong>O erro que marca a virada</strong>
+<p>Este arquivo mistura prop antiga com estado novo. A presença de <code>$state</code> desliga o modo antigo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let nome = 'Ana';
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+<p>"Não pode usar <code>export let</code> no modo de runas — use <code>$props()</code>". A mensagem entrega o substituto, e a correção é uma linha.</p>
+</div>
+
+<div class="trysvelte" data-goal="out:Pedidos: 0">
+<p class="try-task"><strong>Missão:</strong> o componente mistura prop antiga com <code>$state</code> e não compila. Migre a prop para <code>$props()</code> mantendo o padrão <code>Pedidos</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  export let titulo = 'Pedidos';
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{titulo}: {total}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { titulo = 'Pedidos' } = $props();
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{titulo}: {total}&lt;/p&gt;</pre>
+</div>
+
+<p>Duas armadilhas comuns nesse passo. A primeira: <code>export let x</code> sem valor padrão equivale a <code>let { x } = $props()</code>, sem <code>=</code> nenhum. A segunda: se o componente usava <code>$$props</code> ou <code>$$restProps</code>, o equivalente é <code>let { ...resto } = $props()</code>, e os nomes não vêm mais com prefixo de cifrão duplo.</p>
+
+<hr>
+
+<h2>3. Passo 2 — <code>$:</code> vira <code>$derived</code> ou <code>$effect</code></h2>
+
+<p>A declaração reativa com <code>$:</code> fazia dois trabalhos: conta e efeito. No modo novo, os dois se separaram. Conta vira <code>$derived</code>; efeito vira <code>$effect</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = 0.9;
+  let qtd = 2;
+  $: total = preco * qtd;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 1.80&lt;/p&gt;</pre>
+
+<p>No modo antigo, isso funciona e atualiza quando <code>preco</code> ou <code>qtd</code> mudam. A versão migrada troca a declaração por estado explícito e derivado:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let qtd = $state(2);
+  let total = $derived(preco * qtd);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 1.80&lt;/p&gt;</pre>
+
+<p>Quando a conta tem laço ou <code>if</code>, a tradução é <code>$derived.by(() =&gt; { … })</code>. Quando o <code>$:</code> tinha efeito colateral — escrever no <code>localStorage</code>, chamar uma API, mexer no título —, a tradução é <code>$effect</code>, e não <code>$derived</code>: derivado é para valor, efeito é para ação.</p>
+
+<div class="cenario">
+<strong>O erro de quem mistura os dois mundos</strong>
+<p>Com runa no arquivo, <code>$:</code> não é aceito. A mensagem lista as duas alternativas.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let qtd = $state(2);
+  $: total = preco * qtd;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 2): `$:` is not allowed in runes mode, use `$derived` or `$effect` instead</pre>
+<p>"<code>$:</code> não é permitido no modo de runas; use <code>$derived</code> ou <code>$effect</code>". A escolha entre os dois é a pergunta "isto é um valor ou uma ação?".</p>
+</div>
+
+<div class="trysvelte" data-goal="out:Total: R$ 1.80">
+<p class="try-task"><strong>Missão:</strong> a declaração <code>$:</code> não compila mais. Troque por um valor derivado, mantendo o mesmo resultado na tela.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let qtd = $state(2);
+  $: total = preco * qtd;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let qtd = $state(2);
+  let total = $derived(preco * qtd);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Padrão antigo</th><th>Padrão novo</th><th>Por quê</th></tr>
+<tr><td><code>$: y = x * 2</code></td><td><code>let y = $derived(x * 2)</code></td><td>é conta</td></tr>
+<tr><td><code>$: { lista.length; console.log() }</code></td><td><code>$effect(() =&gt; { console.log(lista.length) })</code></td><td>é ação</td></tr>
+<tr><td><code>$: if (x) { … }</code></td><td><code>$effect(() =&gt; { if (x) { … } })</code></td><td>ação condicional</td></tr>
+<tr><td><code>$: { y = x }</code> (atribuindo estado)</td><td>elimine: calcule com <code>$derived</code></td><td>estado não se sincroniza com estado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. Passo 3 — eventos: <code>on:click</code> vira <code>onclick</code></h2>
+
+<p>A mudança mais mecânica da migração. O evento deixa de ser diretiva e vira atributo comum, com o nome em minúsculas depois de <code>on</code>. O código antigo continua compilando, mas com aviso:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button on:click={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;Cliques: 0&lt;/button&gt;</pre>
+
+<div class="cenario">
+<strong>O aviso real do compilador</strong>
+<p>O componente funciona. O aviso aparece no terminal e no painel do Vite, com o código do problema.</p>
+<pre class="out">event_directive_deprecated: Using `on:click` to listen to the click event is deprecated. Use the event attribute `onclick` instead</pre>
+<p>"Usar <code>on:click</code> para escutar o evento de clique está fora de moda; use o atributo <code>onclick</code>". A correção é apagar <code>on:</code> e escrever <code>onclick={…}</code>.</p>
+</div>
+
+<p>Três detalhes que aparecem na migração de projetos grandes. Primeiro: modificadores como <code>on:click|preventDefault</code> não existem no atributo novo — chame <code>evento.preventDefault()</code> dentro da função. Segundo: <code>on:click|once</code> também não existe; use uma variável de controle. Terceiro: eventos encaminhados de componente (<code>on:salvar</code> em um componente) eram eventos; agora são props de função, assunto da seção 6.</p>
+
+<hr>
+
+<h2>5. Passo 4 — slots: <code>&lt;slot /&gt;</code> vira <code>{@render children()}</code></h2>
+
+<p>O slot recebia conteúdo de quem usa o componente. No Svelte 5, o conteúdo entre as tags chega como a prop <code>children</code>, que é um snippet — uma função que devolve marcação. Você a chama onde o slot ficava.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;div class="cartao"&gt;
+  &lt;slot&gt;vazio&lt;/slot&gt;
+&lt;/div&gt;</pre>
+
+<pre class="out">&lt;div class="cartao"&gt;vazio&lt;/div&gt;</pre>
+
+<p>O conteúdo de fallback do slot (o "vazio") aparece quando ninguém passa nada. A versão migrada precisa expressar o mesmo com <code>children?.()</code> e um <code>{:else}</code> de bloco:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;div class="cartao"&gt;
+  {#if children}
+    {@render children()}
+  {:else}
+    vazio
+  {/if}
+&lt;/div&gt;</pre>
+
+<pre class="out">&lt;div class="cartao"&gt;vazio&lt;/div&gt;</pre>
+
+<p>Para slots nomeados (<code>&lt;slot name="topo" /&gt;</code>), a tradução é um snippet por prop: o pai declara <code>{#snippet topo()} … {/snippet}</code> dentro da tag do filho, e o filho renderiza <code>{@render topo?.()}</code>. Slots com <code>let:</code> (slot props) viram snippets com parâmetros.</p>
+
+<hr>
+
+<h2>6. Passo 5 — eventos de componente: dispatcher vira callback</h2>
+
+<p>No Svelte 4, o filho criava um despachante e o pai escutava com <code>on:</code>. O código abaixo ainda compila no Svelte 5:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { createEventDispatcher } from 'svelte';
+  const dispatch = createEventDispatcher();
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; dispatch('salvar', 1)}&gt;salvar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;salvar&lt;/button&gt;</pre>
+
+<p>A versão nova dispensa a importação: o pai passa uma função, o filho chama. Fica mais direto e o fluxo aparece na leitura do pai:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { onSalvar = () =&gt; {} } = $props();
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; onSalvar(1)}&gt;salvar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;salvar&lt;/button&gt;</pre>
+
+<p>O valor padrão <code>() =&gt; {}</code> evita o erro de chamar <code>undefined</code> quando o pai não passa a função. No pai, a chamada fica <code>&lt;Filho onSalvar={(n) =&gt; …} /&gt;</code>, e o nome começa por <code>on</code> por convenção — não por obrigação do compilador.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Antes</th><th>Depois</th><th>Observação</th></tr>
+<tr><td><code>dispatch('salvar', x)</code></td><td><code>onSalvar(x)</code></td><td>a prop é a função</td></tr>
+<tr><td><code>on:salvar={fn}</code> no pai</td><td><code>onSalvar={fn}</code></td><td>sem dois-pontos</td></tr>
+<tr><td><code>on:salvar|once</code></td><td>controle dentro de <code>fn</code></td><td>modificador não existe</td></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td><td>conteúdo vira função</td></tr>
+<tr><td><code>&lt;slot name="topo" /&gt;</code></td><td><code>{@render topo?.()}</code></td><td>snippet nomeado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>7. Passo 6 — o que continua igual</h2>
+
+<p>Nem tudo mudou, e saber o que ficou poupa trabalho. Stores continuam iguais, com o cifrão na leitura. <code>onMount</code> e <code>onDestroy</code> continuam com o mesmo nome e o mesmo papel. <code>bind:</code> continua com a mesma sintaxe. <code>tick</code>, <code>untrack</code> e <code>getContext</code> seguem disponíveis.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable } from 'svelte/store';
+  const contador = writable(0);
+&lt;/script&gt;
+
+&lt;p&gt;{$contador}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;0&lt;/p&gt;</pre>
+
+<p>O que sai de cena são <code>beforeUpdate</code> e <code>afterUpdate</code>, que davam acesso ao momento do ciclo. O substituto é <code>$effect</code> (para depois do desenho) e <code>$effect.pre</code> (para antes). E os acessores de componente — <code>export function foo()</code> lido de fora com <code>bind:this</code> — continuam existindo, mas o caminho recomendado é passar callback por prop.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>API</th><th>Status no Svelte 5</th><th>Alternativa</th></tr>
+<tr><td><code>onMount</code></td><td>continua</td><td>—</td></tr>
+<tr><td><code>onDestroy</code></td><td>continua</td><td>retorno do <code>$effect</code></td></tr>
+<tr><td><code>tick</code></td><td>continua</td><td>—</td></tr>
+<tr><td><code>beforeUpdate</code> / <code>afterUpdate</code></td><td>fora de moda</td><td><code>$effect.pre</code> / <code>$effect</code></td></tr>
+<tr><td><code>createEventDispatcher</code></td><td>compatível, não recomendado</td><td>callback como prop</td></tr>
+<tr><td><code>&lt;slot&gt;</code></td><td>compatível no modo antigo</td><td><code>children</code> e snippets</td></tr>
+<tr><td><code>stores</code></td><td>continuam</td><td>—</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>8. Passo 7 — <code>&lt;svelte:component&gt;</code> e <code>&lt;svelte:self&gt;</code></h2>
+
+<p>No Svelte 5, componente é dinâmico por padrão: se a variável guarda um componente, a tag já resolve. O <code>&lt;svelte:component&gt;</code> deixou de ser necessário e ganhou aviso de fora de moda:</p>
+
+<div class="cenario">
+<strong>O aviso do <code>&lt;svelte:component&gt;</code></strong>
+<pre class="out">svelte_component_deprecated: `&lt;svelte:component&gt;` is deprecated in runes mode — components are dynamic by default</pre>
+<p>"Está fora de moda no modo de runas — componentes são dinâmicos por padrão". A correção é usar a variável direto como tag: <code>&lt;Atual /&gt;</code>.</p>
+</div>
+
+<p>O aviso do <code>&lt;svelte:component&gt;</code> é fácil de resolver e ensina uma coisa: no Svelte 5 a tag já entende componente em variável, então aquele elemento especial só existia para contornar uma limitação que não existe mais. Se o seu projeto monta componentes por um mapa de rotas ou por um seletor de abas, a migração aqui é apagar o invólucro e usar <code>&lt;Atual /&gt;</code> direto.</p>
+
+<p>Já o <code>&lt;svelte:self&gt;</code>, que renderizava o próprio componente para estruturas recursivas, só é aceito dentro de um bloco que possa repetir: <code>{#if}</code>, <code>{#each}</code>, <code>{#snippet}</code> ou slot. Fora disso, o compilador recusa:</p>
+
+<div class="cenario">
+<strong><code>&lt;svelte:self&gt;</code> fora de bloco</strong>
+<pre class="file" data-file="src/App.svelte">&lt;svelte:self /&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 0): `&lt;svelte:self&gt;` components can only exist inside `{#if}` blocks, `{#each}` blocks, `{#snippet}` blocks or slots passed to components</pre>
+<p>A mensagem lista os lugares aceitos. A forma mais comum é um <code>{#if}</code> que decide quando parar a recursão — sem condição de parada, o componente se desenha para sempre.</p>
+</div>
+
+<hr>
+
+<h2>9. O migrador automático</h2>
+
+<p>O CLI oficial do Svelte tem uma tarefa de migração. A versão instalada no projeto da Ana responde assim:</p>
+
+<pre class="term">ana@notebook:~/loja$ npx sv --version
+1.7.1</pre>
+
+<p>O comando da migração é <code>npx sv migrate svelte-5</code>, e <code>npx sv migrate --help</code> lista as opções: <code>--files</code> para limitar a um conjunto de arquivos, <code>--no-git-check</code> para rodar com alterações pendentes e <code>--no-install</code> para não mexer nas dependências. Ele pergunta antes de mexer nos arquivos e trabalha pasta por pasta. Duas recomendações de quem já rodou esse tipo de ferramenta: faça commit antes, para poder comparar o antes e o depois, e rode com <code>--files</code> num punhado de arquivos primeiro.</p>
+
+<p>O migrador resolve o mecânico: troca <code>export let</code> por <code>$props()</code>, converte <code>$:</code> simples, renomeia eventos. O que ele <strong>não</strong> resolve é o que exige decisão: se aquele <code>$:</code> era conta ou efeito, se aquele slot precisava de fallback, se aquele evento deveria virar callback com nome diferente. Essas escolhas continuam sendo suas — e é nelas que mora o valor da migração.</p>
+
+<div class="tip">
+<strong>Uma pasta por vez</strong>
+<p>Comece pelos componentes-folha (os que ninguém importa), depois os do meio, deixe os pais para o fim. Cada arquivo migrado roda de novo no servidor de desenvolvimento, então você vê o erro na hora em que ele aparece, não três dias depois.</p>
+</div>
+
+<hr>
+
+<h2>10. Uma ordem de migração que não para o projeto</h2>
+
+<p>Migrar tudo de uma vez funciona num projeto de dez arquivos e vira crise num de duzentos. A ordem abaixo mantém o site no ar durante o processo:</p>
+
+<p><strong>1. Atualize a dependência e rode os testes.</strong> Sem mudar código, só trocando a versão. O modo antigo continua valendo, e você descobre o que quebrou antes de misturar as duas coisas.</p>
+
+<p><strong>2. Migre os componentes sem estado.</strong> Botões, cartões, ícones. São os de menor risco e servem de treino para o time.</p>
+
+<p><strong>3. Migre os componentes com estado local.</strong> Aqui aparece a decisão <code>$derived</code> × <code>$effect</code>, e é onde o time aprende de verdade.</p>
+
+<p><strong>4. Migre a comunicação entre componentes.</strong> Slots e dispatcher viram children e callbacks. Esta etapa muda a API dos componentes e é a que exige revisar quem os usa.</p>
+
+<p><strong>5. Apague o que sobrar do modo antigo.</strong> Depois que ninguém usa <code>export let</code> nem <code>on:</code>, o projeto é Svelte 5 de verdade.</p>
+
+<p>Em cada etapa, rode o build e abra as telas principais. Migração não é refatoração: o objetivo é o comportamento idêntico com a sintaxe nova. Se a tela mudou, o problema é seu, não do compilador — e é mais fácil achar com poucos arquivos alterados do que com duzentos.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Etapa</th><th>Risco</th><th>Como saber que acabou</th></tr>
+<tr><td>atualizar versão</td><td>baixo</td><td>build passa e testes passam</td></tr>
+<tr><td>componentes sem estado</td><td>baixo</td><td>nenhum aviso no terminal</td></tr>
+<tr><td>estado local</td><td>médio</td><td>nenhum <code>$:</code> no projeto</td></tr>
+<tr><td>props e eventos</td><td>alto</td><td>nenhum <code>export let</code> nem <code>on:</code></td></tr>
+<tr><td>limpeza</td><td>baixo</td><td>busca por <code>slot</code> e <code>dispatch</code> vazia</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Os quatro tropeços mais comuns de quem migra, com a mensagem real do compilador. Todos acontecem no mesmo ponto: o arquivo ganhou uma runa e o resto dele ainda é do Svelte 4.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa</th><th>Conserto</th></tr>
+<tr><td><code>Cannot use `export let` in runes mode — use `$props()` instead</code></td><td>prop antiga em arquivo com runa</td><td><code>let { x } = $props()</code></td></tr>
+<tr><td><code>`$:` is not allowed in runes mode, use `$derived` or `$effect` instead</code></td><td>declaração reativa antiga</td><td><code>$derived</code> ou <code>$effect</code></td></tr>
+<tr><td><code>event_directive_deprecated</code> (aviso)</td><td><code>on:click</code></td><td><code>onclick</code></td></tr>
+<tr><td><code>svelte_component_deprecated</code> (aviso)</td><td><code>&lt;svelte:component&gt;</code></td><td>usar a variável como tag</td></tr>
+<tr><td><code>`&lt;svelte:self&gt;` components can only exist inside…</code></td><td>recursão fora de bloco</td><td>envolver em <code>{#if}</code></td></tr>
+</table>
+</div>
+
+<p>Há um erro que não tem mensagem: o componente migra, compila, e a tela deixa de atualizar. Quase sempre é uma variável que era reativa no modo antigo e virou comum no modo novo — o aviso <code>non_reactive_update</code> aparece no terminal, e o conserto é <code>$state</code>. Se o aviso não aparecer, confira se o arquivo realmente entrou em modo de runas: basta uma runa em qualquer lugar do script.</p>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<p>A tabela final é a que se cola no mural do time durante a migração: cada linha é uma troca mecânica, das que o migrador faz e das que você confere depois.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Encontre</th><th>Troque por</th></tr>
+<tr><td><code>export let x = 1</code></td><td><code>let { x = 1 } = $props()</code></td></tr>
+<tr><td><code>export let x</code></td><td><code>let { x } = $props()</code></td></tr>
+<tr><td><code>$$props</code></td><td><code>let { ...props } = $props()</code></td></tr>
+<tr><td><code>$$restProps</code></td><td><code>let { ...resto } = $props()</code></td></tr>
+<tr><td><code>$: y = conta</code></td><td><code>let y = $derived(conta)</code></td></tr>
+<tr><td><code>$: { ação }</code></td><td><code>$effect(() =&gt; { ação })</code></td></tr>
+<tr><td><code>on:click={fn}</code></td><td><code>onclick={fn}</code></td></tr>
+<tr><td><code>on:click|preventDefault={fn}</code></td><td><code>onclick={(e) =&gt; { e.preventDefault(); fn(); }}</code></td></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td></tr>
+<tr><td><code>&lt;slot name="topo" /&gt;</code></td><td><code>{@render topo?.()}</code></td></tr>
+<tr><td><code>createEventDispatcher()</code></td><td><code>let { onEvento } = $props()</code></td></tr>
+<tr><td><code>beforeUpdate(fn)</code></td><td><code>$effect.pre(fn)</code></td></tr>
+<tr><td><code>afterUpdate(fn)</code></td><td><code>$effect(fn)</code></td></tr>
+<tr><td><code>&lt;svelte:component this={C} /&gt;</code></td><td><code>&lt;C /&gt;</code></td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Durante a migração, o terminal é o seu painel de progresso: cada aviso que desaparece é um arquivo migrado. Quando não houver mais <code>event_directive_deprecated</code> nem <code>Cannot use export let</code>, o projeto está limpo.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 1.67s</pre>
+
+<p>Rode o build ao fim de cada etapa. Um projeto com metade dos arquivos no modo antigo e metade no novo compila — o modo é decidido arquivo por arquivo — e essa é a garantia que permite migrar devagar sem parar a entrega.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O Svelte 5 decide o modo por arquivo: sem runas, vale o modo antigo; com uma runa, vale o novo.</li>
+  <li><code>export let</code> vira <code>let { x = padrão } = $props()</code>; <code>$$props</code> vira <code>...props</code>.</li>
+  <li><code>$:</code> de conta vira <code>$derived</code> (ou <code>$derived.by</code> com bloco); de ação vira <code>$effect</code>.</li>
+  <li><code>on:click</code> vira <code>onclick</code>; modificadores como <code>|preventDefault</code> não existem no atributo.</li>
+  <li><code>&lt;slot&gt;</code> vira <code>children</code> com <code>{@render children()}</code>; slots nomeados viram snippets por prop.</li>
+  <li><code>createEventDispatcher</code> vira callback como prop, com padrão <code>() =&gt; {}</code>.</li>
+  <li>Stores, <code>onMount</code>, <code>onDestroy</code>, <code>tick</code> e <code>bind:</code> continuam iguais.</li>
+  <li><code>beforeUpdate</code>/<code>afterUpdate</code> viram <code>$effect.pre</code>/<code>$effect</code>.</li>
+  <li><code>&lt;svelte:component&gt;</code> está fora de moda; <code>&lt;svelte:self&gt;</code> só dentro de bloco.</li>
+  <li><code>npx sv migrate svelte-5</code> faz o mecânico; as decisões continuam suas. Migre por etapa e rode o build a cada uma.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
