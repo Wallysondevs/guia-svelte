@@ -98,6 +98,26 @@
 <p>Ela não fica guardada em nenhuma variável e não atrasa o seu código: o <code>visivel</code> já vale <code>false</code> no primeiro milissegundo. Quem espera é só o DOM, que segura o elemento antigo enquanto ele desaparece.</p>
 </div>
 
+<div class="trysvelte" data-goal="clique:button;;depois:100;;outre:^oi trocar$;;depois:800;;out:trocar">
+<p class="try-task"><strong>Missão:</strong> o parágrafo some no mesmo instante do clique, sem animação nenhuma. Importe <code>fade</code> de <code>svelte/transition</code> e ponha <code>transition:fade={{ duration: 400 }}</code> no parágrafo, para <code>oi</code> ainda estar na tela um instante depois do clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let visivel = $state(true);
+&lt;/script&gt;
+
+{#if visivel}&lt;p&gt;oi&lt;/p&gt;{/if}
+&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { fade } from 'svelte/transition';
+
+  let visivel = $state(true);
+&lt;/script&gt;
+
+{#if visivel}&lt;p transition:fade={{ duration: 400 }}&gt;oi&lt;/p&gt;{/if}
+&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
+</div>
+
+<p>A verificação espera 100 milissegundos e confere que o texto ainda está lá, depois espera mais e confere que sumiu. Sem a diretiva, o texto já teria desaparecido na primeira conferência.</p>
+
 <hr>
 
 <h2>4. <code>in:</code>, <code>out:</code> e os parâmetros</h2>
@@ -160,31 +180,7 @@
   <dt>(t) =&gt; `opacity: ${t}`</dt><dd><code>t</code> vai de 0 (sumido) a 1 (inteiro) na entrada, e o contrário na saída.</dd>
 </dl>
 
-<p>Essa é a peça que permite entender o resto: as transições de fábrica fazem exatamente isso, com curvas mais elaboradas. E ela é a única forma de usar transições em lugares onde o import não está disponível — como nas caixas deste guia, que compilam um componente só, sem módulos extras.</p>
-
-<div class="trysvelte" data-goal="clique:button;;depois:100;;outre:^oi trocar$;;depois:800;;out:trocar">
-<p class="try-task"><strong>Missão:</strong> o parágrafo some no mesmo instante do clique, sem animação nenhuma. Faça ele sair com <code>transition:minhaFade</code> e a tela mostrar <code>oi</code> por um instante antes de ficar só com o botão.</p>
-<pre class="script" data-file="App.svelte">&lt;script&gt;
-  function minhaFade() {
-    return { duration: 400, css: (t) =&gt; `opacity: ${t}` };
-  }
-  let visivel = $state(true);
-&lt;/script&gt;
-
-{#if visivel}&lt;p&gt;oi&lt;/p&gt;{/if}
-&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
-<pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  function minhaFade() {
-    return { duration: 400, css: (t) =&gt; `opacity: ${t}` };
-  }
-  let visivel = $state(true);
-&lt;/script&gt;
-
-{#if visivel}&lt;p transition:minhaFade&gt;oi&lt;/p&gt;{/if}
-&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
-</div>
-
-<p>A verificação espera 100 milissegundos e confere que o texto ainda está lá, depois espera mais e confere que sumiu. Sem a diretiva, o texto já teria desaparecido na primeira conferência.</p>
+<p>Essa é a peça que permite entender o resto: o <code>fade</code> de fábrica faz exatamente isso, com uma curva de opacidade e os parâmetros que você passa. Escrever a sua continua valendo para o efeito que a biblioteca não tem — e a caixa da seção 3 importa <code>svelte/transition</code> de verdade, o mesmo módulo que o projeto da Ana importa.</p>
 
 <hr>
 
@@ -193,28 +189,26 @@
 <p>A transição mais bonita do mundo não conserta um tempo ruim. Curto demais e ninguém vê; longo demais e a tela parece travada. A faixa que funciona na maioria dos casos fica entre 150 e 400 milissegundos para elementos pequenos e até 600 para blocos grandes.</p>
 
 <div class="trysvelte" data-goal="clique:button;;depois:100;;outre:^oi trocar$;;depois:800;;out:trocar">
-<p class="try-task"><strong>Missão:</strong> a transição existe, mas dura 40 milissegundos e o parágrafo some antes de alguém perceber. Faça a saída durar 400 milissegundos.</p>
+<p class="try-task"><strong>Missão:</strong> a transição existe, mas dura 40 milissegundos e o parágrafo some antes de alguém perceber. Faça a saída durar 400 milissegundos, sem trocar de transição.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  function minhaFade(node, { duracao = 40 } = {}) {
-    return { duration: duracao, css: (t) =&gt; `opacity: ${t}` };
-  }
+  import { fade } from 'svelte/transition';
+
   let visivel = $state(true);
 &lt;/script&gt;
 
-{#if visivel}&lt;p transition:minhaFade={{ duracao: 40 }}&gt;oi&lt;/p&gt;{/if}
+{#if visivel}&lt;p transition:fade={{ duration: 40 }}&gt;oi&lt;/p&gt;{/if}
 &lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  function minhaFade(node, { duracao = 40 } = {}) {
-    return { duration: duracao, css: (t) =&gt; `opacity: ${t}` };
-  }
+  import { fade } from 'svelte/transition';
+
   let visivel = $state(true);
 &lt;/script&gt;
 
-{#if visivel}&lt;p transition:minhaFade={{ duracao: 400 }}&gt;oi&lt;/p&gt;{/if}
+{#if visivel}&lt;p transition:fade={{ duration: 400 }}&gt;oi&lt;/p&gt;{/if}
 &lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
 </div>
 
-<p>Repare que a solução muda <strong>o argumento</strong>, não a função: o valor padrão <code>40</code> continua lá, mas o <code>{{ duracao: 400 }}</code> passa por cima dele. É assim que se reaproveita uma transição em lugares com tempos diferentes — cada uso decide o seu.</p>
+<p>Repare que a solução não troca de transição: muda só o número. O <code>fade</code> continua o mesmo, e o <code>{{ duration: 400 }}</code> decide quanto tempo ele leva. É assim que se reaproveita uma transição em lugares com tempos diferentes — cada uso decide o seu.</p>
 
 <div class="warning">
 <strong>Respeite quem pediu menos animação</strong>
@@ -242,12 +236,9 @@
 
 <p>A chave <code>(item)</code> é o que permite ao Svelte saber qual item é qual. Sem ela, mudar a ordem da lista faz o Svelte reaproveitar os elementos na posição errada, e a transição anima o texto errado. Com chave, cada item é uma identidade — e animações de lista só fazem sentido assim.</p>
 
-<div class="trysvelte" data-goal="clique:button;;depois:60;;outre:pão bolo;;depois:320;;out:pão tirar bolo">
-<p class="try-task"><strong>Missão:</strong> ao tirar o bolo, o parágrafo dele desaparece num piscar. Faça os itens da lista saírem com <code>transition:minhaFade</code>, para o bolo ainda estar na tela um instante depois do clique.</p>
+<div class="trysvelte" data-goal="clique:button;;depois:60;;outre:pão bolo;;depois:420;;out:pão tirar bolo">
+<p class="try-task"><strong>Missão:</strong> ao tirar o bolo, o parágrafo dele desaparece num piscar. Faça os itens da lista saírem com <code>transition:fade={{ duration: 400 }}</code>, para o bolo ainda estar na tela um instante depois do clique.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  function minhaFade() {
-    return { duration: 400, css: (t) =&gt; `opacity: ${t}` };
-  }
   let itens = $state(['pão', 'bolo']);
 &lt;/script&gt;
 
@@ -256,14 +247,13 @@
 {/each}
 &lt;button onclick={() =&gt; itens = itens.filter((i) =&gt; i !== 'bolo')}&gt;tirar bolo&lt;/button&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  function minhaFade() {
-    return { duration: 400, css: (t) =&gt; `opacity: ${t}` };
-  }
+  import { fade } from 'svelte/transition';
+
   let itens = $state(['pão', 'bolo']);
 &lt;/script&gt;
 
 {#each itens as item (item)}
-  &lt;p transition:minhaFade&gt;{item}&lt;/p&gt;
+  &lt;p transition:fade={{ duration: 400 }}&gt;{item}&lt;/p&gt;
 {/each}
 &lt;button onclick={() =&gt; itens = itens.filter((i) =&gt; i !== 'bolo')}&gt;tirar bolo&lt;/button&gt;</pre>
 </div>
