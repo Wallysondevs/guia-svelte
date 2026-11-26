@@ -122,6 +122,20 @@ export function handleError({ error, event, status }) {
 
 <p><code>resolve(event)</code> entrega tudo isso ao restante do app e devolve uma <code>Response</code>. Com a resposta na mão, o hook pode ler <code>resposta.status</code>, acrescentar um cabeçalho — <code>resposta.headers.set('x-tempo', ms + 'ms')</code> — ou simplesmente devolver como veio. O que ele <strong>não</strong> pode é esquecer de devolver: o contrato diz que todo <code>handle</code> termina com uma <code>Response</code>, e o primeiro cenário de erro desta aula mostra o que acontece quando ele termina com nada.</p>
 
+<p>A ponta final desse fio é um componente comum, que não sabe o que é um hook: só recebe um valor e o mostra na tela. O <code>+page.js</code> lê <code>locals</code> no servidor e entrega o resultado como prop. Do lado de dentro, é o mesmo caminho desta aula — só que visto do fim para o começo:</p>
+
+<pre class="file" data-file="src/lib/Saudacao.svelte">&lt;script&gt;
+  let { usuario } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {usuario ?? 'visitante'}&lt;/p&gt;</pre>
+
+<p>Compilado sem receber ninguém, o componente mostra o plano B do <code>??</code>:</p>
+
+<pre class="out">&lt;p&gt;Olá, visitante&lt;/p&gt;</pre>
+
+<p>Com <code>locals.usuario</code> preenchido pelo hook, a mesma linha escreveria <code>Olá, Ana</code>. O hook não escreve HTML: ele só decide o que o <code>load</code> vai encontrar na caixa.</p>
+
 <h2>4. Os logs que o hook produz</h2>
 
 <p>Com o projeto no ar, cada pedido aparece no terminal em duas linhas: a do hook e a do próprio Vite. Este é o terminal da Ana, copiado de uma sessão real:</p>
