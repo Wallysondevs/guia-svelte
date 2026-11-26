@@ -250,6 +250,20 @@ Um `pre.out` **só** existe pareado com um `pre.file`: é o que o conferidor rec
 pai+filho ou que depende de `props` vai como `pre.term` (ou como segundo `pre.out`, com a ressalva
 escrita na página de que aquele bloco é composição de dois arquivos).
 
+### Letras miúdas que já causaram erro
+
+- **`pre.term` é livre**: pode ficar cru (o testador não cobra escape ali) ou escapado. Se a linha
+  do terminal tiver algo que o navegador leria como tag (`<link …>`, `<script>`), **escape** — senão
+  a linha desaparece da tela.
+- **`pre.out` de uma saída que já contém entidade** precisa de escape duplo: se o compilador gera
+  `&lt;p&gt;`, a página escreve `&amp;lt;p&amp;gt;` (o navegador mostra `&lt;p&gt;`, que é a saída).
+- **`data-file` é o caminho completo** (`src/routes/conta/+page.svelte`), sempre igual ao `--nome` do
+  `render.js`: o hash do CSS e o número da linha do erro dependem desse nome.
+- **Toda página com pelo menos um `pre.file` deveria ter um par conferido** (`pre.file` + `pre.out`).
+  Nas aulas de servidor, onde a saída é log, vale mostrar um componente pequeno só para ter o par.
+- **Um `pre.out` de pai + filho** não passa no conferidor (ele compila um arquivo só, com
+  `props: {}`): nesse caso use `pre.term` e diga na página que a saída é de dois arquivos juntos.
+
 ## 7. Privacidade
 
 Proibido: o nome do dono da máquina, o home real, o caminho de root, o IP da VPS, o IP da rede
