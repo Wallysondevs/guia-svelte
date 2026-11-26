@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O que Roda no Servidor — as duas cozinhas do componente | Guia Svelte</title>
+<meta name="description" content="Renderização no servidor no Svelte 5: o que roda na primeira passada, o que só existe no navegador, determinismo, HTML válido e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">O que Roda no Servidor</span></h1>
+
+<p class="intro">A Ana tem duas cozinhas: a de produção, que assa o pão antes de a loja abrir, e a de balcão, que esquenta o pão quando o cliente pede. As duas usam a mesma receita, mas cada uma tem equipamentos que a outra não tem. Um componente Svelte também é preparado duas vezes — uma no servidor, outra no navegador — e saber o que roda em cada cozinha evita os erros mais estranhos do front-end: o texto que muda sozinho ao carregar e o componente que quebra só em produção.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As duas passadas de um componente: servidor e navegador.</li>
+  <li>O que roda no servidor e o que fica de fora.</li>
+  <li>Como ver a saída do servidor sem abrir o navegador.</li>
+  <li>Por que <code>Math.random()</code> e <code>Date.now()</code> estragam a primeira pintura.</li>
+  <li>Por que o HTML precisa ser válido para as duas passadas combinarem.</li>
+  <li>O que é hidratação e o que o Svelte compara nela.</li>
+  <li>Os três erros reais desta aula, com a mensagem copiada do compilador.</li>
+  <li>Como escrever componentes que funcionam nos dois ambientes sem esforço.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a mesma receita em duas cozinhas</h2>
+
+<p>A cozinha de produção assa duzentos pães antes de a loja abrir. Ela tem forno grande, mas não tem balcão, não tem cliente e não tem troco. A cozinha de balcão tem tudo isso, mas não tem o forno grande. Se a receita disser "pegue o troco do cliente" na etapa de produção, ela não funciona — e não é porque a receita está errada, é porque a etapa pede um equipamento que aquela cozinha não tem.</p>
+
+<p>Renderização no servidor é isso: o componente é executado num programa que roda fora do navegador, e o resultado é um texto HTML. Esse texto vai para o visitante antes de qualquer JavaScript. Depois, no navegador, o mesmo componente é executado de novo, agora com acesso a tudo — janela, tela, armazenamento —, e assume o controle da página. Essa segunda execução que "casa" com o HTML já entregue se chama <strong>hidratação</strong>.</p>
+
+<p>Há um detalhe de vocabulário que aparece em toda documentação: <em>SSR</em> é a sigla de <em>server-side rendering</em>, renderização no lado do servidor. O nome descreve só a primeira passada. Quando o navegador assume o HTML e o componente volta a viver, o nome é <em>hidratação</em> — a ideia é dar "água" a um HTML seco, que até então era só marcação parada. Um componente hidratado responde a cliques; um HTML seco, não.</p>
+
+<p>Por que duas passadas? Porque cada uma resolve um problema. O servidor entrega conteúdo rápido, que aparece mesmo antes de o JavaScript chegar e mesmo se ele nunca chegar. O navegador entrega interação: cliques, medidas, animações. Fazer só uma das duas significa escolher entre "rápido e sem vida" e "vivo e em branco por um instante".</p>
+
+<p>O custo é que o seu componente precisa sobreviver aos dois ambientes. A regra que resume esta aula: <strong>no servidor, só o que é determinístico e não toca no navegador</strong>. Tudo o mais fica para a montagem. Você já viu essa regra aplicada em <code>onMount</code>; agora vai ver por que ela existe e o que acontece quando é quebrada.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A cozinha de produção, antes de abrir</td><td>a renderização no servidor</td></tr>
+<tr><td>A cozinha de balcão, com o cliente na frente</td><td>a montagem no navegador</td></tr>
+<tr><td>A receita que serve nas duas</td><td>o componente que não toca no navegador antes da hora</td></tr>
+<tr><td>Conferir a bandeja com a comanda</td><td>a hidratação comparando HTML e componente</td></tr>
+<tr><td>Pedir troco na cozinha de produção</td><td>ler <code>window</code> no topo do script</td></tr>
+</table>
+</div>
+
+<h2>2. As duas passadas, passo a passo</h2>
+
+<p>Vale acompanhar a ordem com precisão, porque quase todo erro desta aula nasce de uma confusão de ordem.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Fase</th><th>Onde</th><th>O que roda</th></tr>
+<tr><td>1. Script do componente</td><td>servidor</td><td>declarações, <code>$state</code>, <code>$derived</code>, funções</td></tr>
+<tr><td>2. HTML do componente</td><td>servidor</td><td>o template, com os valores calculados</td></tr>
+<tr><td>3. Envio</td><td>rede</td><td>o HTML pronto vai para o navegador</td></tr>
+<tr><td>4. Hidratação</td><td>navegador</td><td>o script roda de novo e assume o HTML existente</td></tr>
+<tr><td>5. Montagem</td><td>navegador</td><td><code>onMount</code>, efeitos e ouvintes entram em ação</td></tr>
+</table>
+</div>
+
+<p>Na fase 1 e 2, <code>onMount</code> e <code>$effect</code> <em>não</em> rodam. Não é escolha do seu código: o Svelte pula os efeitos durante a renderização no servidor, porque efeito é, por definição, algo com consequência fora do componente, e o servidor não tem para onde essa consequência ir. <code>$derived</code>, ao contrário, roda: ele é cálculo puro, e cálculo puro serve nas duas cozinhas.</p>
+
+<p>Na fase 4, o navegador faz o caminho inverso: executa o script de novo, compara o que o componente quer desenhar com o HTML que já está na tela e liga os eventos. Se os dois discordarem — porque um número aleatório entrou no meio ou porque o navegador "consertou" uma tag inválida —, o Svelte avisa no console e pode refazer pedaços da página. É o famoso <em>hydration mismatch</em>.</p>
+
+<h2>3. Vendo a saída do servidor</h2>
+
+<p>O componente abaixo é o mais simples possível: um pedido com número e sabor. Nada de navegador, nada de aleatório.</p>
+
+<pre class="file" data-file="src/Nota.svelte">&lt;script&gt;
+  let pedido = $state({ id: 42, sabor: 'pão' });
+&lt;/script&gt;
+
+&lt;p&gt;Nota {pedido.id} — {pedido.sabor}&lt;/p&gt;</pre>
+
+<pre class="out">Nota 42 — pão</pre>
+
+<p>Esse texto é exatamente o que o servidor entrega, e é também o que o navegador desenha na hidratação — porque não há nada de incerto no componente. Toda a lição desta aula cabe numa frase: <strong>quanto mais determinístico o componente, menos diferença entre as duas passadas.</strong></p>
+
+<h3>A anatomia das duas passadas</h3>
+
+<dl class="anatomy">
+  <dt>&lt;script&gt;</dt><dd>roda nos dois ambientes. Aqui entram estado, derivados, funções e importações — nada que dependa de janela.</dd>
+  <dt>let pedido = $state({ … })</dt><dd>o valor inicial existe no servidor e no navegador, igual nos dois. É a base da concordância entre as passadas.</dd>
+  <dt>{pedido.id}</dt><dd>a leitura no template acontece no servidor e vira texto no HTML. Não há suspensão nem espera.</dd>
+  <dt>onMount / $effect</dt><dd>ficam de fora no servidor. Se um valor só existe por causa deles, o HTML sai com o valor inicial.</dd>
+</dl>
+
+<p>Há uma pergunta prática que resolve a maioria dos casos: "este valor é o mesmo se o componente rodar duas vezes em máquinas diferentes?" Se sim, pode ficar no template. Se não — hora atual, número aleatório, largura da tela, idioma do navegador —, ele precisa nascer de um estado que começa igual nos dois lugares e só muda depois da montagem.</p>
+
+<h2>4. Determinismo: o inimigo é o relógio e o sorteio</h2>
+
+<p>Um componente que usa <code>Math.random()</code> no template gera um número no servidor e outro no navegador. O visitante vê o número mudar sozinho no instante em que a página fica interativa, e o console registra uma diferença de hidratação. O mesmo vale para <code>Date.now()</code>, <code>new Date()</code> e <code>performance.now()</code>.</p>
+
+<pre class="file" data-file="src/Sorteio.svelte">&lt;script&gt;
+  let pedido = $state({ sabor: 'pão' });
+&lt;/script&gt;
+
+&lt;p&gt;Senha {Math.random().toString(36).slice(2, 7)} — {pedido.sabor}&lt;/p&gt;</pre>
+
+<pre class="file" data-file="src/SorteioCerto.svelte">&lt;script&gt;
+  let pedido = $state({ id: 42, sabor: 'pão' });
+  let senha = $state('—');
+
+  $effect(() =&gt; {
+    senha = Math.random().toString(36).slice(2, 7);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Senha {senha} — {pedido.sabor}&lt;/p&gt;</pre>
+
+<p>No primeiro arquivo, o sorteio acontece durante o desenho, nas duas passadas, e os resultados não combinam. No segundo, o valor inicial é um traço — igual nos dois ambientes — e o sorteio acontece no efeito, que só roda no navegador. A página nasce com "Senha —" e troca uma vez, sem prometer um número que não vai cumprir.</p>
+
+<p>Uma variação do mesmo problema aparece com dados que chegam depois. Se o componente depende de uma busca na rede para desenhar, o servidor não tem esse dado no instante do desenho e o navegador terá. O padrão é o mesmo: desenhe o estado de espera, e troque quando o dado chegar. O bloco <code>{#await}</code> existe exatamente para isso, e a aula dele mostra a forma completa.</p>
+
+<p>Existe um segundo motivo para evitar sorteio no template, além da hidratação: cache. Um servidor que guarda a página pronta para reaproveitar não pode guardar um número aleatório, porque todos os visitantes receberiam o mesmo. Conteúdo determinístico é conteúdo cacheável.</p>
+
+<div class="tip">
+<strong>Regra de bolso</strong>
+<p>Se a expressão muda entre duas execuções seguidas, ela não pertence ao template. Mova para um <code>$effect</code> ou para o <code>onMount</code>, com valor inicial neutro. O ganho aparece nos testes: o HTML gerado fica comparável, e você pode guardar a saída esperada num arquivo.</p>
+</div>
+
+<h2>5. HTML válido: o navegador conserta, o Svelte não perdoa</h2>
+
+<p>A segunda fonte de divergência é a estrutura do HTML. O navegador é tolerante: se você escrever um <code>&lt;div&gt;</code> dentro de um <code>&lt;p&gt;</code>, ele fecha o parágrafo antes e coloca o bloco fora. O servidor, que gera texto puro, não faz esse conserto — e aí as duas passadas discordam sobre a árvore de elementos.</p>
+
+<p>O compilador do Svelte conhece essas regras e recusa o arquivo antes de qualquer coisa. Ele usa uma lista de aninhamentos válidos do HTML: <code>&lt;button&gt;</code> não pode conter <code>&lt;button&gt;</code>, <code>&lt;p&gt;</code> não pode conter <code>&lt;div&gt;</code>, <code>&lt;a&gt;</code> não pode conter <code>&lt;a&gt;</code>, <code>&lt;li&gt;</code> só faz sentido em lista. A mensagem cita o motivo e o lugar.</p>
+
+<pre class="file" data-file="src/Correto.svelte">&lt;script&gt;
+  let pedido = $state({ id: 42, sabor: 'pão' });
+&lt;/script&gt;
+
+&lt;div&gt;
+  &lt;p&gt;Nota {pedido.id} — {pedido.sabor}&lt;/p&gt;
+&lt;/div&gt;</pre>
+
+<pre class="out">Nota 42 — pão</pre>
+
+<p>A versão válida não muda o texto, e é justamente por isso que ela é a certa: a estrutura passou a ser a mesma nos dois ambientes, e o navegador não precisa consertar nada. Quando o navegador conserta, o Svelte perde a referência dos elementos e a hidratação tropeça.</p>
+
+<h2>6. Experimente: um bloco dentro de um parágrafo</h2>
+
+<p>A caixa abaixo não compila: um <code>&lt;div&gt;</code> dentro de um <code>&lt;p&gt;</code> é HTML inválido, e o compilador mostra a mensagem no lugar do resultado.</p>
+
+<div class="trysvelte" data-goal="out:atenção: bloco">
+<p class="try-task"><strong>Missão:</strong> conserte a estrutura para o componente compilar e mostrar o texto <code>atenção: bloco</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;p&gt;atenção:
+  &lt;div&gt;bloco&lt;/div&gt;
+&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;div&gt;
+  &lt;p&gt;atenção: bloco&lt;/p&gt;
+&lt;/div&gt;</pre>
+</div>
+
+<p>A solução mais comum é inverter a ordem: o <code>&lt;div&gt;</code> por fora e o <code>&lt;p&gt;</code> por dentro. Se a intenção era só separar um trecho, <code>&lt;span&gt;</code> resolve — ele é um elemento de linha e pode ficar dentro do parágrafo sem quebrar a estrutura.</p>
+
+<h2>7. Experimente: um número que não pode ser sorteado</h2>
+
+<p>A caixa mostra uma senha sorteada no template. O texto muda a cada Rodar, e é exatamente isso que estraga a hidratação no servidor.</p>
+
+<div class="trysvelte" data-goal="outre:^Senha 42$">
+<p class="try-task"><strong>Missão:</strong> troque o sorteio por um valor que venha do pedido, para a tela mostrar sempre <code>Senha 42</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedido = $state({ id: 42, sabor: 'pão' });
+&lt;/script&gt;
+
+&lt;p&gt;Senha {Math.random().toString(36).slice(2, 7)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedido = $state({ id: 42, sabor: 'pão' });
+&lt;/script&gt;
+
+&lt;p&gt;Senha {pedido.id}&lt;/p&gt;</pre>
+</div>
+
+<p>Quem quiser manter um identificador sorteado tem a saída da seção 4: estado começando com um traço e sorteio dentro do efeito. As duas respostas são corretas; a escolha depende de a senha poder ou não existir no HTML inicial.</p>
+
+<h2>8. Experimente: botão dentro de botão</h2>
+
+<p>Este é o caso mais frequente em telas de formulário: um botão de "cancelar" dentro do botão de "pedir". O compilador recusa antes de o navegador tentar consertar.</p>
+
+<div class="trysvelte" data-goal="outre:^pedir cancelar$">
+<p class="try-task"><strong>Missão:</strong> separe os dois botões, de modo que a tela mostre <code>pedir</code> e <code>cancelar</code> lado a lado.</p>
+<pre class="script" data-file="App.svelte">&lt;button&gt;pedir
+  &lt;button&gt;cancelar&lt;/button&gt;
+&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;div&gt;
+  &lt;button&gt;pedir&lt;/button&gt;
+  &lt;button&gt;cancelar&lt;/button&gt;
+&lt;/div&gt;</pre>
+</div>
+
+<p>Um botão dentro de outro não é só inválido: é inacessível. Quem navega por teclado chega ao primeiro botão e o segundo fica escondido da sequência de foco; leitores de tela anunciam um controle com dois rótulos. Corrigir a estrutura resolve os três problemas de uma vez.</p>
+
+<h2>9. Conferindo nas duas cozinhas</h2>
+
+<p>O servidor de desenvolvimento faz as duas passadas a cada recarga: gera o HTML, manda, e hidrata no navegador. Avisos de diferença aparecem no console do navegador, não no terminal.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 954 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O build confirma que o componente compila nas duas formas, servidor e cliente, e mostra o peso do que vai para o navegador:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DsssVufR.js  35.73 kB │ gzip: 13.78 kB
+✓ built in 916ms</pre>
+
+<p>Uma última observação sobre o ambiente: o servidor não é necessariamente uma máquina distante. No desenvolvimento, ele é o próprio Node rodando no seu computador, e é por isso que o erro aparece no terminal antes de qualquer navegador abrir. Em produção, pode ser uma função na nuvem ou um processo que serve milhares de páginas. Em todos os casos, o que existe ali é JavaScript sem navegador — e é essa ausência que o componente precisa suportar.</p>
+
+<p>Para ver só a saída do servidor, sem navegador nenhum, existe o renderizador: ele compila o componente e devolve o HTML e o texto. É o mesmo motor que este guia usa para colher as saídas das aulas — e é a forma mais rápida de responder "o que o visitante recebe antes do JavaScript?".</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram da execução real dos componentes quebrados.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>&lt;button&gt;</code> dentro de <code>&lt;button&gt;</code></strong>
+<p>O compilador recusa a estrutura e explica o motivo: o navegador consertaria o HTML e quebraria as suposições do Svelte.</p>
+<pre class="file" data-file="src/App.svelte">&lt;button&gt;pedir
+  &lt;button&gt;cancelar&lt;/button&gt;
+&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): `&lt;button&gt;` cannot be a child of `&lt;button&gt;`. The browser will 'repair' the HTML (by moving, removing, or inserting elements) which breaks Svelte's assumptions about the structure of your components.</pre>
+<p>A mensagem é longa porque descreve o mecanismo, e não só a regra. Repare na posição: linha 2, coluna 2, o começo do botão interno.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>&lt;div&gt;</code> dentro de <code>&lt;p&gt;</code></strong>
+<p>Aqui o compilador aponta o fechamento, e não a abertura: ele só descobre o problema quando o <code>&lt;/p&gt;</code> aparece.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;atenção:
+  &lt;div&gt;bloco&lt;/div&gt;
+&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 0): `&lt;/p&gt;` attempted to close element that was already automatically closed by `&lt;div&gt;` (cannot nest `&lt;div&gt;` inside `&lt;p&gt;`)</pre>
+<p>A tradução: o <code>&lt;p&gt;</code> já tinha sido fechado sozinho quando o <code>&lt;div&gt;</code> começou, então o <code>&lt;/p&gt;</code> não tem o que fechar. A dica prática é procurar o elemento de bloco mais próximo do fechamento reclamado.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>document</code> no topo do script</strong>
+<p>A terceira família de erro é a leitura do navegador durante a renderização. Sempre que isso acontece, a primeira passada morre.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const titulo = document.title;
+&lt;/script&gt;
+
+&lt;p&gt;{titulo}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: document is not defined</pre>
+<p>Vale insistir no diagnóstico: o componente funciona no seu computador porque o navegador tem <code>document</code>. Ele quebra no servidor porque <code>document</code> é uma invenção do navegador. A correção é ler dentro do <code>onMount</code>, com um valor inicial que faça sentido nas duas cozinhas.</p>
+</div>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Coisa</th><th>Roda no servidor?</th><th>Onde usar</th></tr>
+<tr><td>declarações, <code>$state</code>, funções</td><td>sim</td><td>no topo do <code>&lt;script&gt;</code></td></tr>
+<tr><td><code>$derived</code></td><td>sim</td><td>cálculos do template</td></tr>
+<tr><td><code>onMount</code>, <code>$effect</code></td><td>não</td><td>leitura do navegador, rede, armazenamento</td></tr>
+<tr><td><code>window</code>, <code>document</code>, <code>localStorage</code></td><td>não existem</td><td>só depois da montagem</td></tr>
+<tr><td><code>navigator</code></td><td>existe, com valores fixos</td><td>evitar no template; ler no <code>onMount</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td>texto muda sozinho ao carregar</td><td>sorteio ou relógio no template</td><td>estado inicial neutro + efeito</td></tr>
+<tr><td>aviso de hidratação no console</td><td>saída diferente nas duas passadas</td><td>tornar o desenho determinístico</td></tr>
+<tr><td><code>cannot be a child of</code></td><td>aninhamento inválido de HTML</td><td>trocar por elemento válido</td></tr>
+<tr><td><code>document is not defined</code></td><td>leitura do navegador no topo</td><td>mover para <code>onMount</code></td></tr>
+</table>
+</div>
+
+<p>Uma forma de treinar o olho para essas duas cozinhas é imaginar a página com o JavaScript desligado. Tudo o que aparece nesse cenário é o que o servidor entregou: o HTML, os estilos e nada mais. Botões existem e não respondem; leituras do navegador mostram o valor inicial. Se a sua tela fizer sentido assim — com o texto certo e os controles visíveis —, a primeira passada está honesta. A interação vem depois, e o visitante não percebe a troca.</p>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <em>não</em> roda durante a renderização no servidor?</p>
+<label><input type="radio" name="q1"> o bloco <code>&lt;script&gt;</code> do componente</label>
+<label><input type="radio" name="q1"> os cálculos de <code>$derived</code></label>
+<label><input type="radio" name="q1"> <code>onMount</code> e <code>$effect</code></label>
+<label><input type="radio" name="q1"> o template com os valores iniciais</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que <code>Math.random()</code> no template causa problema?</p>
+<label><input type="radio" name="q1"> porque o Svelte proíbe números aleatórios</label>
+<label><input type="radio" name="q1"> porque o navegador bloqueia o sorteio durante a hidratação</label>
+<label><input type="radio" name="q1"> porque servidor e navegador sorteiam valores diferentes e a hidratação não fecha</label>
+<label><input type="radio" name="q1"> porque o número fica grande demais para o HTML</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o compilador recusa um <code>&lt;div&gt;</code> dentro de um <code>&lt;p&gt;</code>?</p>
+<label><input type="radio" name="q1"> porque o navegador consertaria o HTML, e o Svelte perderia a correspondência entre as duas passadas</label>
+<label><input type="radio" name="q1"> porque <code>&lt;div&gt;</code> não aceita texto dentro</label>
+<label><input type="radio" name="q1"> porque <code>&lt;p&gt;</code> é um elemento reservado do Svelte</label>
+<label><input type="radio" name="q1"> porque o CSS escopado não funciona nesse caso</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { onMount } from 'svelte';<br>let largura = $state(0);<br><input data-answer="onMount(() => { largura = window.innerWidth; });|onMount(() => largura = window.innerWidth);">&nbsp;<br>&lt;p&gt;Largura: {largura}&lt;/p&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um componente roda duas vezes: no servidor, para gerar HTML, e no navegador, para hidratar.</li>
+  <li><code>$state</code>, <code>$derived</code> e funções rodam nas duas passadas; <code>onMount</code> e <code>$effect</code> só no navegador.</li>
+  <li><code>window</code>, <code>document</code> e <code>localStorage</code> não existem fora do navegador.</li>
+  <li><code>navigator</code> existe no servidor com valores fixos: erro silencioso.</li>
+  <li>Valor que muda entre execuções (sorteio, relógio) não pertence ao template.</li>
+  <li>HTML inválido é recusado pelo compilador porque o navegador o consertaria.</li>
+  <li>Hidratação compara o HTML entregue com o que o componente quer desenhar.</li>
+  <li>Conteúdo determinístico é mais fácil de testar, de cachear e de depurar.</li>
+  <li>Os erros desta aula: botão dentro de botão, bloco dentro de parágrafo e <code>document</code> no topo.</li>
+  <li>A regra final: se o valor não pode ser calculado no servidor, ele nasce depois da montagem.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

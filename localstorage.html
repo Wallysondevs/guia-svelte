@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardando no localStorage — o caderno que sobrevive ao fechar | Guia Svelte</title>
+<meta name="description" content="localStorage no Svelte 5: guardar e ler pedidos em JSON, o null da primeira visita, salvar com $effect e as mensagens reais do compilador quando dá errado.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">localStorage</span></h1>
+
+<p class="intro">A Ana fecha a padaria às sete, e o caderno de pedidos fica no balcão. No dia seguinte, ela abre o caderno e continua de onde parou. Um componente, sozinho, não tem esse caderno: quando a página recarrega, todo o estado volta ao começo. O navegador oferece um caderno chamado <strong>localStorage</strong>, que sobrevive ao fechamento da aba. Nesta aula você aprende a guardar pedidos nele, a lidar com a primeira visita e a não perder dados quando o armazenamento falha.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que o <code>localStorage</code> guarda e por quanto tempo.</li>
+  <li>Por que ele só aceita texto e como o JSON resolve isso.</li>
+  <li>Como ler na montagem e salvar quando o estado muda.</li>
+  <li>O que o <code>getItem</code> devolve na primeira visita e como tratar o <code>null</code>.</li>
+  <li>Como escolher nomes de chave que não se atropelam.</li>
+  <li>Por que o armazenamento pode falhar e como proteger o componente.</li>
+  <li>O risco de salvar antes de carregar.</li>
+  <li>Os três erros reais desta aula, com a mensagem copiada do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o caderno que não some</h2>
+
+<p>Estado de componente vive na memória do navegador, e memória de navegador é como lousa: some quando a aba fecha. Para guardar algo entre uma visita e outra existe um armazenamento simples, preso ao endereço do site, com dois métodos: <code>getItem</code> para ler e <code>setItem</code> para escrever. Há também <code>removeItem</code> para apagar uma chave e <code>clear</code> para apagar tudo — este último, use com muito cuidado.</p>
+
+<p>O <code>localStorage</code> tem três características que definem o uso. A primeira: ele guarda <strong>texto</strong>, e só texto. Número vira texto, objeto vira <code>[object Object]</code> — e aí está a razão de o JSON aparecer nesta aula. A segunda: os dados ficam no <em>seu</em> navegador, não no servidor. Limpar os dados do site apaga tudo, e outro computador não vê nada. A terceira: ele é síncrono, ou seja, a leitura acontece na hora, no meio do seu código — e por isso não existe no servidor.</p>
+
+<p>Para a Ana, isso é perfeito para as preferências e para a lista de pedidos do dia: dados pequenos, que ela quer ver de novo ao reabrir a página, e que não precisam ir para lugar nenhum. Não serve para dado sensível (senha, cartão), porque qualquer script da mesma origem lê o conteúdo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Abrir o caderno na página certa</td><td><code>localStorage.getItem('pedidos')</code></td></tr>
+<tr><td>Escrever a lista no caderno</td><td><code>localStorage.setItem('pedidos', texto)</code></td></tr>
+<tr><td>Rasgar uma página</td><td><code>localStorage.removeItem('pedidos')</code></td></tr>
+<tr><td>Caderno novo, ainda em branco</td><td><code>getItem</code> devolve <code>null</code></td></tr>
+<tr><td>Escrever a lista num papel e ler depois</td><td><code>JSON.stringify</code> e <code>JSON.parse</code></td></tr>
+</table>
+</div>
+
+<h2>2. Só texto: o JSON resolve</h2>
+
+<p>Se você guardar um número, ele vira texto e a leitura devolve texto. Se guardar um objeto, o navegador chama <code>String</code> nele e grava a palavra <code>[object Object]</code> — inútil. A solução é converter para JSON, um formato de texto que representa listas e objetos.</p>
+
+<pre class="file" data-file="src/Pedidos.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'leite']);
+
+  function guardar() {
+    localStorage.setItem('pedidos', JSON.stringify(itens));
+  }
+&lt;/script&gt;
+
+&lt;button onclick={guardar}&gt;guardar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;guardar&lt;/button&gt;</pre>
+
+<p>A saída mostra só o botão, e está certa: guardar não muda o que aparece na tela. O que muda é o valor que o navegador passa a ter para a chave <code>pedidos</code>, e que a próxima visita vai ler.</p>
+
+<p>A conversão de ida é <code>JSON.stringify</code>: pega a lista <code>['pão', 'leite']</code> e devolve o texto <code>["pão","leite"]</code>. A conversão de volta é <code>JSON.parse</code>: pega o texto e devolve a lista. As duas precisam combinar — quem guarda com <code>stringify</code> lê com <code>parse</code>. Misturar os dois é a origem do erro mais comum da aula, que aparece na seção 10.</p>
+
+<h3>A anatomia do armazenamento</h3>
+
+<dl class="anatomy">
+  <dt>localStorage</dt><dd>o objeto global do navegador. Não vem de <code>import</code> e não existe fora do navegador: no servidor, tocar nele é erro.</dd>
+  <dt>setItem('pedidos', texto)</dt><dd>grava o texto na chave. Se a chave já existir, o valor antigo é substituído sem aviso. A chave é uma string e é única no site inteiro.</dd>
+  <dt>getItem('pedidos')</dt><dd>devolve o texto guardado, ou <code>null</code> quando não existe nada naquela chave. <code>null</code> não é lista vazia: é ausência.</dd>
+  <dt>JSON.stringify(itens)</dt><dd>converte a lista em texto. É a etapa que permite guardar estrutura, e não só palavras.</dd>
+</dl>
+
+<p>Repare que o <code>getItem</code> devolve <code>null</code> e não <code>undefined</code> nem <code>''</code>. Essa diferença parece detalhe de linguagem e não é: <code>JSON.parse(null)</code> devolve <code>null</code>, e tentar ler <code>.length</code> de <code>null</code> quebra o componente. Você vai ver esse erro na seção 10 e vai corrigi-lo na seção 3, com o operador <code>??</code>.</p>
+
+<h2>3. Ler na montagem, com valor padrão</h2>
+
+<p>A leitura acontece no <code>onMount</code>, porque o <code>localStorage</code> não existe no servidor. Junto dela vai o valor padrão, que protege a primeira visita.</p>
+
+<pre class="file" data-file="src/Primeiro.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let itens = $state([]);
+
+  onMount(() =&gt; {
+    const bruto = localStorage.getItem('pedidos');
+    itens = JSON.parse(bruto ?? '[]');
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{itens.length} pedido(s) guardado(s)&lt;/p&gt;</pre>
+
+<pre class="out">0 pedido(s) guardado(s)</pre>
+
+<p>O <code>??</code> é o operador de coalescência nula: ele usa o valor da direita quando o da esquerda é <code>null</code> ou <code>undefined</code>. Sem ele, a primeira visita quebraria o componente, porque não há nada guardado. Com ele, a lista começa vazia e a tela mostra zero — verdadeiro e sem susto.</p>
+
+<p>Existe uma escolha de projeto escondida nessa linha: o valor inicial do estado (<code>[]</code>) e o valor padrão do JSON (<code>'[]'</code>) são o mesmo tipo. Isso mantém o resto do componente simples, porque ele nunca lida com "lista ou null". O guia recomenda essa simetria sempre que possível: normalize o dado logo na entrada e trabalhe com um tipo só.</p>
+
+<div class="tip">
+<strong>Erro comum de sintaxe</strong>
+<p><code>JSON.parse(bruto ?? '[]')</code> parece estranho por causa dos parênteses. A regra de precedência resolve: <code>??</code> tem precedência menor que a chamada de função, então o valor padrão é aplicado antes do <code>parse</code>. Sem os parênteses de fora, o compilador ainda aceita, mas misturar <code>??</code> com <code>||</code> na mesma expressão é erro de sintaxe — outro motivo para preferir parênteses explícitos.</p>
+</div>
+
+<h2>4. Salvar quando o estado muda</h2>
+
+<p>Guardar é um efeito: escreve fora do componente. Por isso o <code>$effect</code> é o lugar natural. O componente abaixo lê na montagem e grava a cada mudança da lista.</p>
+
+<pre class="file" data-file="src/Lista.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let itens = $state([]);
+
+  onMount(() =&gt; {
+    const bruto = localStorage.getItem('pedidos');
+    itens = JSON.parse(bruto ?? '[]');
+  });
+
+  $effect(() =&gt; {
+    localStorage.setItem('pedidos', JSON.stringify(itens));
+  });
+&lt;/script&gt;
+
+{#each itens as item}
+  &lt;p&gt;{item}&lt;/p&gt;
+{:else}
+  &lt;p&gt;nenhum pedido salvo&lt;/p&gt;
+{/each}</pre>
+
+<pre class="out">nenhum pedido salvo</pre>
+
+<p>No servidor, nada é lido nem gravado, e o <code>{:else}</code> do <code>{#each}</code> mostra o aviso. No navegador, o <code>onMount</code> carrega o que houver e o efeito passa a gravar a cada mudança.</p>
+
+<p>Há um detalhe de ordem aqui, e ele já causou perda de dados em muita gente. O efeito roda na montagem também, antes de qualquer mudança. Se a leitura falhar — JSON corrompido, por exemplo — o efeito ainda grava a lista vazia por cima do dado antigo. A versão abaixo se protege com uma bandeira de "carregado":</p>
+
+<pre class="file" data-file="src/Guardado.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let itens = $state([]);
+  let carregado = $state(false);
+
+  onMount(() =&gt; {
+    const bruto = localStorage.getItem('pedidos');
+    itens = JSON.parse(bruto ?? '[]');
+    carregado = true;
+  });
+
+  $effect(() =&gt; {
+    if (!carregado) return;
+    localStorage.setItem('pedidos', JSON.stringify(itens));
+  });
+&lt;/script&gt;
+
+{#each itens as item}
+  &lt;p&gt;{item}&lt;/p&gt;
+{:else}
+  &lt;p&gt;nenhum pedido salvo&lt;/p&gt;
+{/each}</pre>
+
+<pre class="out">nenhum pedido salvo</pre>
+
+<p>A bandeira custa uma variável e três linhas, e compra uma garantia: o armazenamento só é escrito depois que a leitura terminou. Num caderno de verdade, é a diferença entre "só apago a página depois de copiar o conteúdo" e "apago primeiro, copio depois".</p>
+
+<h2>5. Experimente: a primeira visita</h2>
+
+<p>Na caixa abaixo, o armazenamento é um objeto de memória com a mesma API do <code>localStorage</code> — a caixa roda num quadro isolado que começa vazio a cada Rodar, então o comportamento é o da primeira visita. O componente tenta ler uma lista que ainda não existe.</p>
+
+<div class="trysvelte" data-goal="outre:^0 pedido\(s\)$">
+<p class="try-task"><strong>Missão:</strong> o componente quebra com <em>Cannot read properties of null</em> porque não há nada guardado. Faça ele mostrar <code>0 pedido(s)</code> na primeira visita.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const memoria = {};
+  const armazem = {
+    getItem: (k) =&gt; (k in memoria ? memoria[k] : null),
+    setItem: (k, v) =&gt; (memoria[k] = String(v))
+  };
+
+  const pedidos = JSON.parse(armazem.getItem('pedidos'));
+&lt;/script&gt;
+
+&lt;p&gt;{pedidos.length} pedido(s)&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const memoria = {};
+  const armazem = {
+    getItem: (k) =&gt; (k in memoria ? memoria[k] : null),
+    setItem: (k, v) =&gt; (memoria[k] = String(v))
+  };
+
+  const pedidos = JSON.parse(armazem.getItem('pedidos') ?? '[]');
+&lt;/script&gt;
+
+&lt;p&gt;{pedidos.length} pedido(s)&lt;/p&gt;</pre>
+</div>
+
+<p>A correção é o <code>?? '[]'</code>. Sem ele, <code>JSON.parse(null)</code> devolve <code>null</code> e o <code>.length</code> estoura. Com ele, a lista vazia entra no lugar do nada — e o componente passa a ter sempre uma lista.</p>
+
+<h2>6. Experimente: gravar sem perder a tela</h2>
+
+<p>Agora o outro lado: o estado muda, mas ninguém escreve no armazenamento. A tela mostra dois itens e o armazém continua com um.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^adicionar na tela: 2 gravados: 2$">
+<p class="try-task"><strong>Missão:</strong> clique em <strong>adicionar</strong>. A tela mostra 2 itens, mas só 1 foi gravado. Faça o armazém acompanhar o estado.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let memoria = $state({});
+  const armazem = {
+    getItem: (k) =&gt; memoria[k] ?? null,
+    setItem: (k, v) =&gt; { memoria[k] = String(v); }
+  };
+
+  let itens = $state(['pão']);
+
+  function adicionar() {
+    itens = [...itens, 'leite'];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+&lt;p&gt;na tela: {itens.length}&lt;/p&gt;
+&lt;p&gt;gravados: {(JSON.parse(armazem.getItem('pedidos') ?? '[]')).length}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let memoria = $state({});
+  const armazem = {
+    getItem: (k) =&gt; memoria[k] ?? null,
+    setItem: (k, v) =&gt; { memoria[k] = String(v); }
+  };
+
+  let itens = $state(['pão']);
+
+  $effect(() =&gt; {
+    armazem.setItem('pedidos', JSON.stringify(itens));
+  });
+
+  function adicionar() {
+    itens = [...itens, 'leite'];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+&lt;p&gt;na tela: {itens.length}&lt;/p&gt;
+&lt;p&gt;gravados: {(JSON.parse(armazem.getItem('pedidos') ?? '[]')).length}&lt;/p&gt;</pre>
+</div>
+
+<p>Note que o <code>memoria</code> da caixa é <code>$state</code>, e não um objeto comum. É um recurso do exemplo: a tela precisa acompanhar a escrita no armazém para você ver o número mudar. O <code>localStorage</code> de verdade não é reativo — a tela só acompanha porque o <em>estado</em> do componente mudou, e o efeito apenas escreveu.</p>
+
+<h2>7. Nomes de chave e versões</h2>
+
+<p>O <code>localStorage</code> é um espaço único por endereço, compartilhado por todas as páginas do site. Duas telas que usem a chave <code>itens</code> vão brigar pelo mesmo dado. Por isso, nome de chave é decisão de arquitetura, não detalhe.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chave</th><th>Problema</th><th>Alternativa</th></tr>
+<tr><td><code>itens</code></td><td>qualquer tela pode sobrescrever</td><td><code>padaria:pedidos</code></td></tr>
+<tr><td><code>dados</code></td><td>não diz o que é nem de quem é</td><td><code>padaria:preferencias</code></td></tr>
+<tr><td><code>pedidos-v2</code></td><td>versão no nome funciona, mas espalha números</td><td><code>padaria:pedidos</code> com um campo <code>versao</code> no JSON</td></tr>
+<tr><td><code>tema</code></td><td>colide com outro site no mesmo domínio</td><td><code>padaria:tema</code></td></tr>
+</table>
+</div>
+
+<p>Um detalhe prático que economiza muita depuração: antes de sair gravando, decida se o dado é do site inteiro ou de uma tela. Preferências como tema e idioma são do site; a lista de pedidos do dia é da tela. Quando a chave pertence a uma tela, o prefixo deve dizer isso — <code>padaria:pedidos</code> não, mas <code>padaria:caixa:pedidos</code> sim. Assim, quando a tela for reescrita, você sabe exatamente qual chave pode apagar sem medo.</p>
+
+<p>Versão no nome da chave resolve o caso em que o formato muda: se a lista deixar de ser <code>['pão']</code> e passar a ser <code>[{ nome: 'pão', qtd: 1 }]</code>, dados antigos vão quebrar a leitura. Duas saídas: trocar a chave (perde os dados velhos) ou guardar um campo de versão dentro do JSON e migrar na leitura. Para um projeto de estudo, trocar a chave basta; num sistema em produção, migrar é o certo.</p>
+
+<h2>8. Quando o armazenamento falha</h2>
+
+<p>O <code>localStorage</code> não é garantido. Pode falhar por três motivos comuns: o navegador está em modo privado com armazenamento bloqueado, a cota do site encheu (cerca de 5 MB, varia por navegador), ou uma política de privacidade bloqueia o acesso. Nos três casos, o acesso lança uma exceção — e um componente sem <code>try</code> quebra inteiro.</p>
+
+<p>A proteção é simples e vale para escrita e leitura:</p>
+
+<pre class="file" data-file="src/Seguro.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let itens = $state([]);
+  let aviso = $state('');
+
+  onMount(() =&gt; {
+    try {
+      const bruto = localStorage.getItem('pedidos');
+      itens = JSON.parse(bruto ?? '[]');
+    } catch (erro) {
+      aviso = 'não consegui ler o caderno';
+    }
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{itens.length} pedido(s)&lt;/p&gt;
+{#if aviso}&lt;p&gt;{aviso}&lt;/p&gt;{/if}</pre>
+
+<pre class="out">&lt;p&gt;0 pedido(s)&lt;/p&gt;</pre>
+
+<p>O <code>aviso</code> fica vazio no servidor, então o bloco <code>{#if}</code> não desenha nada. No navegador, se a leitura falhar, o componente continua funcionando com a lista vazia e mostra a mensagem — em vez de desaparecer.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^salvar itens: bolo, café$">
+<p class="try-task"><strong>Missão:</strong> este armazém está cheio e lança erro ao gravar. Proteja a gravação para que a tela continue funcionando e o item novo apareça.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const armazemQuebrado = {
+    getItem: () =&gt; null,
+    setItem: () =&gt; { throw new Error('cota cheia'); }
+  };
+
+  let itens = $state(['bolo']);
+
+  function salvar() {
+    armazemQuebrado.setItem('pedidos', JSON.stringify(itens));
+    itens = [...itens, 'café'];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={salvar}&gt;salvar&lt;/button&gt;
+&lt;p&gt;itens: {itens.join(', ')}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const armazemQuebrado = {
+    getItem: () =&gt; null,
+    setItem: () =&gt; { throw new Error('cota cheia'); }
+  };
+
+  let itens = $state(['bolo']);
+
+  function salvar() {
+    try {
+      armazemQuebrado.setItem('pedidos', JSON.stringify(itens));
+    } catch (erro) {
+      console.warn('não deu para salvar:', erro.message);
+    }
+    itens = [...itens, 'café'];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={salvar}&gt;salvar&lt;/button&gt;
+&lt;p&gt;itens: {itens.join(', ')}&lt;/p&gt;</pre>
+</div>
+
+<p>A lição vale além do armazenamento: toda chamada que pode falhar por motivo fora do seu controle pede <code>try</code>. Rede, arquivo, permissão do navegador — o padrão é o mesmo: tente, trate, siga com a tela viva.</p>
+
+<h2>9. Conferindo no projeto da Ana</h2>
+
+<p>Para testar de verdade, abra o projeto, adicione itens, recarregue a página e veja a lista voltar. Depois abra as ferramentas do navegador, na aba <em>Application</em> (ou <em>Aplicação</em>), e encontre o <code>localStorage</code> do endereço: o valor gravado aparece cru, com as aspas do JSON.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1154 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O build mostra o peso do componente com a lista:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-OJBiqAaH.js  41.56 kB │ gzip: 15.88 kB
+✓ built in 4.91s</pre>
+
+<p>Há um limite que surpreende: o conteúdo do <code>localStorage</code> não tem prazo de validade. Dado gravado em 2019 continua lá em 2026, a menos que alguém apague. Se o seu formato mudar nesse meio-tempo, a leitura vai encontrar dados antigos e pode quebrar. Guardar a data da gravação dentro do JSON e descartar o que for muito velho é uma defesa barata e eficaz.</p>
+
+<p>Se você abrir duas abas do mesmo endereço, cada uma tem seu próprio estado na memória e as duas escrevem no mesmo armazenamento — a última que gravar vence. O evento <code>storage</code> da janela avisa quando outra aba muda o valor, e sincronizar as abas é um exercício para depois desta aula.</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram da execução real dos componentes quebrados.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>localStorage</code> no topo do script</strong>
+<p>O armazenamento é do navegador. Fora dele, o nome não existe.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const bruto = localStorage.getItem('pedidos');
+&lt;/script&gt;
+
+&lt;p&gt;{bruto ?? 'vazio'}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: localStorage is not defined</pre>
+<p>A correção é mover a leitura para o <code>onMount</code>, com valor inicial no estado, como nos componentes desta aula.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — o <code>null</code> da primeira visita</strong>
+<p><code>getItem</code> devolve <code>null</code> quando a chave não existe, e <code>JSON.parse(null)</code> devolve <code>null</code>. Ler <code>.length</code> de <code>null</code> quebra o componente.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const bruto = null;
+  const pedidos = JSON.parse(bruto);
+&lt;/script&gt;
+
+&lt;p&gt;{pedidos.length}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of null (reading 'length')</pre>
+<p>A mensagem aponta a propriedade e o tipo: <code>reading 'length'</code> de <code>null</code>. A correção é o valor padrão, <code>JSON.parse(bruto ?? '[]')</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — JSON escrito à mão, sem aspas nas chaves</strong>
+<p>JSON não é JavaScript: as chaves precisam de aspas duplas e as strings também. Um objeto "quase certo" não passa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const pedidos = JSON.parse('{itens: 3}');
+&lt;/script&gt;
+
+&lt;p&gt;{pedidos.itens}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Expected property name or '}' in JSON at position 1 (line 1 column 2)</pre>
+<p>A posição 1 é logo depois da chave de abertura: o parser esperava o nome de uma propriedade, entre aspas. O texto certo seria <code>'{"itens": 3}'</code>. Sempre que você puder, gere o JSON com <code>JSON.stringify</code> em vez de escrever à mão.</p>
+</div>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>Devolve</th><th>Quando usar</th></tr>
+<tr><td><code>localStorage.getItem(chave)</code></td><td>texto ou <code>null</code></td><td>no <code>onMount</code>, com <code>??</code></td></tr>
+<tr><td><code>localStorage.setItem(chave, texto)</code></td><td>nada</td><td>num <code>$effect</code> ou num evento</td></tr>
+<tr><td><code>localStorage.removeItem(chave)</code></td><td>nada</td><td>botão de "limpar"</td></tr>
+<tr><td><code>JSON.stringify(valor)</code></td><td>texto</td><td>antes de gravar</td></tr>
+<tr><td><code>JSON.parse(texto)</code></td><td>valor</td><td>depois de ler</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td><code>localStorage is not defined</code></td><td>leitura fora do <code>onMount</code></td><td>mover para a montagem</td></tr>
+<tr><td><code>Cannot read properties of null</code></td><td>primeira visita sem valor padrão</td><td><code>?? '[]'</code></td></tr>
+<tr><td><code>[object Object]</code> no armazém</td><td>gravou objeto sem <code>JSON.stringify</code></td><td>converter antes</td></tr>
+<tr><td>dados antigos quebram a leitura</td><td>formato mudou sem versão</td><td>trocar a chave ou migrar</td></tr>
+<tr><td>componente some em modo privado</td><td>armazenamento bloqueado</td><td><code>try</code>/<code>catch</code></td></tr>
+</table>
+</div>
+
+<p>Se você chegou até aqui e quer um teste honesto do que aprendeu, faça este: abra a página da padaria numa janela anônima, adicione dois pedidos, feche a janela e abra de novo. Se a lista voltar, o caminho de leitura e escrita está certo. Se voltar vazia, o problema está numa das três peças — a chave, o valor padrão ou a hora em que a gravação acontece. Anotar o valor cru na aba <em>Application</em> mostra qual delas falhou.</p>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o <code>getItem</code> devolve quando a chave ainda não existe?</p>
+<label><input type="radio" name="q1"> uma lista vazia</label>
+<label><input type="radio" name="q1"> <code>null</code></label>
+<label><input type="radio" name="q1"> uma string vazia</label>
+<label><input type="radio" name="q1"> um erro de execução</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que o <code>JSON.stringify</code> é necessário antes de gravar uma lista?</p>
+<label><input type="radio" name="q1"> porque o armazenamento só aceita números</label>
+<label><input type="radio" name="q1"> porque o JSON deixa a gravação mais rápida</label>
+<label><input type="radio" name="q1"> porque o armazenamento só guarda texto e a lista viraria <code>[object Object]</code></label>
+<label><input type="radio" name="q1"> porque o Svelte exige JSON em <code>$state</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Onde a leitura do <code>localStorage</code> deve acontecer?</p>
+<label><input type="radio" name="q1"> no <code>onMount</code>, porque o armazenamento não existe no servidor</label>
+<label><input type="radio" name="q1"> no topo do <code>&lt;script&gt;</code>, antes de tudo</label>
+<label><input type="radio" name="q1"> dentro do <code>{#each}</code>, item por item</label>
+<label><input type="radio" name="q1"> no <code>&lt;style&gt;</code> do componente</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">onMount(() =&gt; {<br>&nbsp; const bruto = localStorage.getItem('pedidos');<br>&nbsp; itens = JSON.parse(bruto <input data-answer="?? '[]'">&nbsp;);<br>});</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>localStorage</code> guarda texto por endereço e sobrevive ao fechamento da aba.</li>
+  <li><code>setItem</code> grava, <code>getItem</code> lê, <code>removeItem</code> apaga uma chave.</li>
+  <li>Objetos e listas precisam de <code>JSON.stringify</code> para gravar e <code>JSON.parse</code> para ler.</li>
+  <li><code>getItem</code> devolve <code>null</code> na primeira visita; use <code>?? '[]'</code>.</li>
+  <li>Leia dentro do <code>onMount</code>: fora do navegador o nome não existe.</li>
+  <li>Salve num <code>$effect</code>, de preferência depois de uma bandeira de "carregado".</li>
+  <li>Escolha chaves com prefixo do projeto e pense na versão do formato.</li>
+  <li>O armazenamento pode falhar: modo privado, cota cheia, política do navegador.</li>
+  <li>Os erros desta aula: <code>is not defined</code>, <code>null.length</code> e JSON com chave sem aspas.</li>
+  <li>Duas abas escrevem no mesmo armazenamento; a última que gravar vence.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
