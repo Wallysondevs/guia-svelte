@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Página de teste do testador | Guia Svelte</title>
+<meta name="description" content="Página interna do testador: uma caixa de exemplo para conferir se o conferidor de páginas do Guia Svelte está funcionando antes de rodar nas 144 aulas.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<script>(function(){try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+<div class="pager"></div>
+<h1>Página de <span class="hl">teste</span></h1>
+<p class="intro">Esta página só existe para o testador provar que funciona: uma caixa, uma meta e nada mais. A Ana não aparece aqui porque não é aula.</p>
+
+<h2>1. Uma caixa com meta de texto</h2>
+
+<div class="trysvelte" data-goal="out:Cliques: 0">
+<p class="try-task"><strong>Missão:</strong> mostre o contador começando em zero (o inicial começa em 7).</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let contador = $state(7);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; contador++}&gt;Cliques: {contador}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let contador = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; contador++}&gt;Cliques: {contador}&lt;/button&gt;</pre>
+</div>
+
+<h2>2. Uma caixa que precisa de clique</h2>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;out:Cliques: 2">
+<p class="try-task"><strong>Missão:</strong> comece em 0 e chegue a 2 cliques.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let contador = $state(1);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; contador++}&gt;Cliques: {contador}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let contador = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; contador++}&gt;Cliques: {contador}&lt;/button&gt;</pre>
+</div>
+
+<h2>Resumo</h2>
+<p>Se esta página passa, o testador está de pé: ele compila, monta, clica e compara.</p>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="../assets/site.js"></script>
+</body>
+</html>

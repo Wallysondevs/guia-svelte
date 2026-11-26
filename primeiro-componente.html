@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seu Primeiro Componente — a tela que muda sozinha | Guia Svelte</title>
+<meta name="description" content="O primeiro componente Svelte da Ana: um arquivo .svelte, três blocos, $state, onclick e a saída real do compilador, do zero para quem nunca programou.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Primeiro Componente</span></h1>
+
+<p class="intro">A Ana tem uma padaria e um problema pequeno: ela escreve o preço do pão num papelão, e toda vez que o preço muda ela precisa escrever outro papelão. O sobrinho dela disse que existe um jeito de escrever <em>uma vez</em> e o número se atualizar sozinho na parede. É disso que trata esta aula: um pedaço de tela que tem nome, guarda um valor e se redesenha quando o valor muda. O nome disso é <strong>componente</strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um componente e por que ele é a unidade do Svelte.</li>
+  <li>Como é um arquivo <code>.svelte</code> por dentro: os três blocos.</li>
+  <li>A escrever o primeiro componente da Ana e ver o HTML que o compilador gerou.</li>
+  <li>O que <code>$state</code> faz e por que sem ele a tela não muda.</li>
+  <li>Como ligar um clique a uma mudança de valor com <code>onclick</code>.</li>
+  <li>Por que as chaves <code>{ }</code> são o buraco por onde o dado entra no HTML.</li>
+  <li>Que o estilo escrito dentro do componente não vaza para o resto da página.</li>
+  <li>Como rodar o projeto da Ana com <code>npm run dev</code> e o que ele imprime.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: um pedaço de tela com nome</h2>
+
+<p>Antes de existir programação, a Ana já fazia componentização sem saber. Na parede da padaria tem uma placa de "PÃO FRANCÊS — R$ 0,90". Aquela placa tem um <strong>nome</strong> (pão francês), um <strong>valor</strong> (R$ 0,90) e um <strong>visual</strong> (a cor, a fonte, o lugar na parede). Quando o preço do trigo sobe, ela não faz outra placa do zero: ela apaga só o número e escreve outro.</p>
+
+<p>Um componente Svelte é essa placa, mas com uma diferença importante: o número não fica escrito à mão. Ele fica guardado numa <strong>variável</strong>, e a placa mostra o que estiver na variável naquele momento. Se a variável muda, a placa muda — sozinha, sem ninguém apagar nada. Essa é a única ideia desta aula, e o resto é consequência dela.</p>
+
+<p>O ganho aparece quando a padaria cresce. Com dez placas escritas à mão, mudar o preço do pão significa lembrar das dez. Com um componente, você muda o valor num lugar e todas as placas que mostram aquele valor se atualizam. O computador faz o trabalho chato; você fica com a parte que exige cabeça.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O nome da placa: "pão francês"</td><td>O nome do arquivo: <code>App.svelte</code></td></tr>
+<tr><td>O preço escrito no papelão</td><td>O valor dentro da variável</td></tr>
+<tr><td>Apagar o número e escrever outro</td><td><code>preco = 1.10</code></td></tr>
+<tr><td>A cor da letra e a moldura</td><td>O bloco <code>&lt;style&gt;</code> do componente</td></tr>
+<tr><td>Uma placa que não muda nunca</td><td>Um componente sem <code>$state</code></td></tr>
+</table>
+</div>
+
+<p>Repare no vocabulário: <em>componente</em> é o arquivo, <em>estado</em> é o que pode mudar dentro dele, e <em>reativo</em> é o adjetivo para o que se atualiza sozinho. Três palavras que você vai ler o guia inteiro. Elas não são sinônimos: o componente é a caixa, o estado é o conteúdo, e a reatividade é o que acontece quando o conteúdo muda.</p>
+
+<hr>
+
+<h2>2. O primeiro componente da Ana</h2>
+
+<p>Um componente Svelte é um arquivo com a extensão <code>.svelte</code>. Dentro dele existe HTML normal — as mesmas tags que você já viu em qualquer página — mais dois blocos opcionais: um para o JavaScript e outro para o CSS. Comece pelo menor componente possível da padaria:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = 'Ana';
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;p&gt;Bem-vinda à padaria.&lt;/p&gt;</pre>
+
+<p>Se você pedir ao compilador do Svelte o HTML que esse arquivo produz, ele devolve exatamente isto:</p>
+
+<pre class="out">&lt;h1&gt;Olá, Ana&lt;/h1&gt; &lt;p&gt;Bem-vinda à padaria.&lt;/p&gt;</pre>
+
+<p>Duas coisas aconteceram que merecem atenção. Primeiro: <code>{nome}</code> desapareceu e no lugar ficou <code>Ana</code> — as chaves são um buraco no HTML por onde o valor entra. Segundo: o arquivo que o navegador recebe <strong>não tem</strong> o <code>&lt;script&gt;</code> do componente. O compilador leu o script, calculou o valor e escreveu o resultado direto no HTML. Quem monta a página final é ele, não você.</p>
+
+<h3>A anatomia do arquivo</h3>
+
+<dl class="anatomy">
+  <dt>&lt;script&gt;</dt><dd>o bloco de <strong>JavaScript</strong>: onde os valores nascem. Fica no topo do arquivo, e tudo o que é declarado aqui pode ser usado mais abaixo, no HTML.</dd>
+  <dt>let nome</dt><dd>uma <strong>variável</strong> chamada <code>nome</code>. <code>let</code> quer dizer "isto pode mudar depois" (é o contrário de uma constante).</dd>
+  <dt>= 'Ana'</dt><dd>o <strong>valor inicial</strong>. Texto vai entre aspas simples ou duplas; número vai sem aspas.</dd>
+  <dt>&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</dt><dd>HTML com um <strong>buraco</strong>. As chaves podem conter qualquer expressão: um nome de variável, uma conta, uma chamada de função.</dd>
+  <dt>&lt;/script&gt;</dt><dd>fecha o bloco. O que vem depois é HTML comum, sem <code>document.getElementById</code>, sem <code>innerHTML</code>: o Svelte liga o valor ao lugar sozinho.</dd>
+</dl>
+
+<p>Esse é o primeiro choque de quem vem do JavaScript "puro". Em JS você escreveria <code>document.querySelector('h1').textContent = 'Olá, ' + nome</code>. No Svelte você escreve <code>{nome}</code> e o compilador gera o código que faz a ligação. A quantidade de código que você não precisou escrever é o motivo de o Svelte existir.</p>
+
+<div class="tip">
+<strong>Nome de arquivo com maiúscula</strong>
+<p>Componentes começam com letra maiúscula: <code>App.svelte</code>, <code>Cartao.svelte</code>, <code>ListaDeTarefas.svelte</code>. Não é capricho: é assim que o compilador distingue "um componente meu" de "uma tag do HTML". <code>&lt;app /&gt;</code> é uma tag desconhecida; <code>&lt;App /&gt;</code> é o seu componente.</p>
+</div>
+
+<hr>
+
+<h2>3. O valor que muda sozinho: <code>$state</code></h2>
+
+<p>Até aqui a placa está escrita à mão, só que com o valor vindo de uma variável. Falta o principal: quando o valor mudar, a tela acompanhar. No Svelte 5 isso é uma palavra só — <code>$state</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;button onclick={() =&gt; (nome = 'Bia')}&gt;trocar o nome&lt;/button&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Olá, Ana&lt;/h1&gt; &lt;button&gt;trocar o nome&lt;/button&gt;</pre>
+
+<p>Chama-se <code>$state</code>, com cifrão na frente, e é uma <strong>runa</strong> — um comando especial que o compilador do Svelte reconhece. Ela diz: "guarde este valor e me avise toda vez que ele mudar". Quem escuta o aviso é o HTML que usa a variável; quando chega o aviso, ele se redesenha.</p>
+
+<p>Sem <code>$state</code>, a variável continua sendo uma variável comum: o valor está lá, mas ninguém avisa o HTML de que ele mudou. É a diferença entre uma placa de papel e uma lousa com alguém de plantão apagando e reescrevendo. No papel, o preço novo só aparece quando alguém troca o papel.</p>
+
+<div class="trysvelte" data-goal="out:Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o componente cumprimenta o mundo. Troque o valor para que ele cumprimente a <strong>Ana</strong> e clique em Verificar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('mundo');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+</div>
+
+<p>Enquanto você edita, o componente é compilado de novo a cada Rodar — com o compilador de verdade do Svelte, o mesmo que compila o projeto da Ana. Se você escrever algo impossível, a caixa mostra a mensagem do compilador, não um aviso inventado pelo guia.</p>
+
+<hr>
+
+<h2>4. O clique: <code>onclick</code></h2>
+
+<p>Um botão que não faz nada é um enfeite. Para ele fazer algo, você diz <em>o que</em> fazer quando alguém clicar. No Svelte 5 isso é um atributo comum, com o nome do evento:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;button onclick={() =&gt; (nome = 'Bia')}&gt;trocar o nome&lt;/button&gt;</pre>
+
+<p>A parte da direita é uma <strong>função</strong>: um pedaço de código guardado para ser executado depois. Os parênteses vazios dizem que ela não precisa de informação nenhuma para trabalhar; a seta <code>=&gt;</code> separa "o que entra" de "o que acontece"; e o que acontece é <code>nome = 'Bia'</code> — a variável de estado recebe outro valor, o aviso é disparado e a tela se atualiza.</p>
+
+<dl class="anatomy">
+  <dt>onclick</dt><dd>o <strong>evento</strong>. O nome sempre começa com <code>on</code> e segue o nome do evento em minúsculas: <code>oninput</code>, <code>onsubmit</code>, <code>onkeydown</code>.</dd>
+  <dt>{…}</dt><dd>o <strong>valor</strong> do atributo é uma expressão JavaScript, não uma string. Repare que não há aspas em volta.</dd>
+  <dt>() =&gt; …</dt><dd>a <strong>função</strong> que roda no clique. O Svelte chama essa função quando o evento acontece.</dd>
+  <dt>nome = 'Bia'</dt><dd>a <strong>mudança de estado</strong>. Só variáveis criadas com <code>$state</code> avisam a tela.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Olá, Bia;;clique:button;;outre:^Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o botão troca para Bia e não volta mais. Faça ele <strong>alternar</strong>: um clique vai para Bia, outro clique volta para Ana.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;button onclick={() =&gt; (nome = 'Bia')}&gt;trocar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;button onclick={() =&gt; (nome = nome === 'Ana' ? 'Bia' : 'Ana')}&gt;trocar&lt;/button&gt;</pre>
+</div>
+
+<p>A solução usa uma expressão condicional: <code>nome === 'Ana' ? 'Bia' : 'Ana'</code> lê-se "se o nome for Ana, use Bia; senão, use Ana". Três pontinhos de sintaxe que voltam na aula de condicionais, com calma. O importante agora é que a tela obedece ao valor, e o valor obedece ao clique.</p>
+
+<hr>
+
+<h2>5. Os três blocos de um arquivo <code>.svelte</code></h2>
+
+<p>Todo componente pode ter até três blocos, sempre nesta ordem: <code>&lt;script&gt;</code>, o HTML, e <code>&lt;style&gt;</code>. Só o HTML é obrigatório — um componente com uma linha de texto é um componente válido.</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let titulo = $state('Pão francês');
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;h2&gt;{titulo}&lt;/h2&gt;
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+
+&lt;style&gt;
+  h2 {
+    color: #2e7d32;
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Bloco</th><th>Para que serve</th><th>É obrigatório?</th></tr>
+<tr><td><code>&lt;script&gt;</code></td><td>declarar estado, props, funções e importações</td><td>não</td></tr>
+<tr><td>HTML</td><td>o que aparece na tela, com <code>{ }</code> para os valores</td><td><strong>sim</strong></td></tr>
+<tr><td><code>&lt;style&gt;</code></td><td>o visual do componente, com escopo fechado</td><td>não</td></tr>
+</table>
+</div>
+
+<hr>
+
+<hr>
+
+<h2>6. Número com duas casas: <code>toFixed</code></h2>
+
+<p>O preço da Ana é noventa centavos, mas o componente mostrou <code>R$ 0.9</code>. Para uma placa na parede isso está errado: dinheiro tem duas casas. O JavaScript resolve com um método de número chamado <code>toFixed</code>, e o Svelte não muda nada nisso — é JavaScript normal dentro das chaves.</p>
+
+<pre class="file" data-file="src/Preco.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+
+<p>O <code>toFixed(2)</code> arredonda para duas casas decimais: <code>0.9</code> vira <code>"0.90"</code>, <code>2.345</code> vira <code>"2.35"</code>. E aqui vem o detalhe que morde: depois de <code>toFixed</code> o valor é uma <em>string</em>, não um número. Se você tentar somar <code>"0.90" + 0.10</code>, o resultado é <code>"0.900.1"</code> — texto colado, não soma. A regra é sempre a mesma: <strong>calcule com número, formate só na hora de mostrar</strong>.</p>
+
+<div class="trysvelte" data-goal="out:R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> o preço guardado é <code>0.9</code> e a placa mostra <code>R$ 0.9</code>. Formate para sair com duas casas — <code>R$ 0.90</code> — sem trocar o valor guardado.</p>
+<pre class="script" data-file="Preco.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Preco.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que o estado continua sendo um número: quem virou texto foi só o que aparece na tela. Essa separação entre <em>o dado</em> e <em>a forma de mostrar o dado</em> é uma das ideias mais úteis da programação, e volta em toda aula em que a Ana precisa mostrar dinheiro.</p>
+
+<h2>7. Estilo que não vaza</h2>
+
+<p>Se você escrever <code>h1 { color: green }</code> dentro de um componente, o Svelte faz uma coisa esperta: renomeia o seletor para que ele só valha ali dentro. Veja o CSS que o compilador gerou para o componente com estilo da Ana:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;button onclick={() =&gt; (nome = 'Bia')}&gt;trocar&lt;/button&gt;
+
+&lt;style&gt;
+  h1 {
+    color: #2e7d32;
+    font-family: system-ui, sans-serif;
+  }
+  button {
+    padding: 6px 12px;
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">h1.svelte-7mbznn {
+  color: #2e7d32;
+  font-family: system-ui, sans-serif;
+}
+button.svelte-7mbznn {
+  padding: 6px 12px;
+}</pre>
+
+<p>Aquele <code>svelte-7mbznn</code> é um selo que o compilador inventou para este componente, e ele também foi colocado nas tags do HTML gerado:</p>
+
+<pre class="out">&lt;h1 class="svelte-7mbznn"&gt;Olá, Ana&lt;/h1&gt; &lt;button class="svelte-7mbznn"&gt;trocar&lt;/button&gt;</pre>
+
+<p>É por isso que a regra "todo h1 verde" do <code>Cartao.svelte</code> não pinta os <code>h1</code> do resto do site. Em CSS tradicional isso dá dor de cabeça: nomes de classe inventados à mão, <em>BEM</em>, prefixos, disciplina. Aqui o problema simplesmente não existe — o escopo é do arquivo.</p>
+
+<p>O preço é que às vezes você <em>quer</em> atingir algo de fora. Para isso existe <code>:global(…)</code>, que desliga o escopo naquele seletor. Use com parcimônia: cada <code>:global</code> é uma porta que você abre no isolamento.</p>
+
+<hr>
+
+<h2>8. Rodando no computador da Ana</h2>
+
+<p>O projeto da Ana fica em <code>~/loja</code> e tem três comandos. O primeiro liga o servidor de desenvolvimento, que recompila a cada arquivo salvo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 436 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O endereço <code>http://localhost:5173/</code> é a sua máquina falando com você mesma: nada foi para a internet. Enquanto esse comando estiver rodando, cada <code>Ctrl+S</code> no arquivo aparece no navegador em menos de um segundo.</p>
+
+<p>Quando o trabalho está pronto, o comando de build gera a versão de produção — arquivos menores, sem nada de desenvolvimento:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-D4Bgwu4I.js  33.60 kB │ gzip: 12.93 kB
+✓ built in 625ms</pre>
+
+<p>Duas lições neste segundo terminal. A primeira: "111 modules transformed" é o Svelte compilando cada <code>.svelte</code> em JavaScript que o navegador entende. A segunda: o CSS e o JS viraram <em>um</em> arquivo com hash no nome (<code>index-D4Bgwu4I.js</code>) — é o que permite o navegador guardar em cache para sempre, porque se o conteúdo mudar o nome muda junto.</p>
+
+<div class="warning">
+<strong>Não abra o <code>dist/</code> clicando duas vezes</strong>
+<p>Os arquivos gerados usam módulos ES, e abrir <code>dist/index.html</code> direto do disco (<code>file://</code>) faz o navegador bloquear o carregamento por CORS. Para conferir o build, use <code>npm run preview</code>, que serve a pasta por http — o mesmo motivo pelo qual as caixas deste guia rodam num servidor de verdade.</p>
+</div>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Não são exemplos inventados: é o texto que você vai ver.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>$state</code> sem <code>let</code></strong>
+<p>A runa precisa estar na declaração de uma variável. Sem o <code>let</code>, o compilador não tem onde guardar o estado.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  contador = $state(0);
+&lt;/script&gt;
+
+&lt;button&gt;{contador}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 13): `$state(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+<p>A mensagem é comprida porque o Svelte aceita <code>$state</code> em três lugares diferentes. Para quem está começando, a tradução é uma só: <strong>escreva <code>let</code> antes do nome</strong>. E repare no "<em>linha 2, coluna 13</em>" — a posição exata do problema, que você usa para ir direto ao ponto.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — bloco aberto e não fechado</strong>
+<p>Toda chave que abre precisa fechar. Um <code>{#if</code> sem <code>{/if}</code> deixa o compilador esperando o resto do arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#if nome === 'Ana'}
+  &lt;p&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 4): Expected token }</pre>
+<p>"Expected token }" quer dizer "eu esperava uma chave de fechamento aqui". A linha apontada é o fim do arquivo, não o começo do bloco — por isso a dica prática é contar os pares: cada <code>{#if}</code> pede um <code>{/if}</code>, cada <code>{#each}</code> pede um <code>{/each}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — variável que não existe</strong>
+<p>Este não é erro de compilação: o arquivo compila, e o componente quebra na hora de desenhar. A mensagem vem do navegador.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;{naoExiste}&lt;/h1&gt;</pre>
+<pre class="out">naoExiste is not defined</pre>
+<p>Quase sempre é um nome digitado diferente do declarado — <code>nome</code> contra <code>Name</code>, <code>preco</code> contra <code>preço</code>. O compilador não tem como adivinhar a intenção: para ele, <code>naoExiste</code> seria uma variável global que alguém esqueceu de declarar. Confira letra por letra.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>O que é</th></tr>
+<tr><td><code>src/App.svelte</code></td><td>o componente principal</td></tr>
+<tr><td><code>src/main.js</code></td><td>o ponto de entrada: importa o <code>App</code> e chama <code>mount()</code></td></tr>
+<tr><td><code>index.html</code></td><td>a página que carrega o <code>main.js</code></td></tr>
+<tr><td><code>vite.config.js</code></td><td>liga o plugin do Svelte no Vite</td></tr>
+<tr><td><code>svelte.config.js</code></td><td>opções do compilador (pré-processadores, aliases)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nesta aula</th><th>O que faz</th><th>Onde aparece</th></tr>
+<tr><td><code>let x = $state(valor)</code></td><td>estado que avisa a tela quando muda</td><td>no <code>&lt;script&gt;</code></td></tr>
+<tr><td><code>{expressão}</code></td><td>mostra o valor de uma expressão</td><td>no HTML</td></tr>
+<tr><td><code>onclick={função}</code></td><td>roda a função no clique</td><td>numa tag</td></tr>
+<tr><td><code>&lt;style&gt;</code></td><td>CSS com escopo do componente</td><td>no fim do arquivo</td></tr>
+<tr><td><code>:global(seletor)</code></td><td>desliga o escopo naquele seletor</td><td>dentro do <code>&lt;style&gt;</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>Para que serve</th></tr>
+<tr><td><code>npm run dev</code></td><td>servidor de desenvolvimento com recarga automática</td></tr>
+<tr><td><code>npm run build</code></td><td>gera a versão de produção em <code>dist/</code></td></tr>
+<tr><td><code>npm run preview</code></td><td>serve o <code>dist/</code> por http para conferir</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual bloco é obrigatório num componente <code>.svelte</code>?</p>
+<label><input type="radio" name="q1"> o <code>&lt;script&gt;</code></label>
+<label><input type="radio" name="q1"> o <code>&lt;style&gt;</code></label>
+<label><input type="radio" name="q1"> o HTML, que é o que aparece na tela</label>
+<label><input type="radio" name="q1"> os três, sempre</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>$state</code> acrescenta a uma variável comum?</p>
+<label><input type="radio" name="q1"> deixa o valor mais rápido de ler</label>
+<label><input type="radio" name="q1"> transforma o valor em texto</label>
+<label><input type="radio" name="q1"> avisa o HTML quando o valor muda, para ele se redesenhar</label>
+<label><input type="radio" name="q1"> impede que o valor seja alterado</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o CSS escrito dentro do componente não afeta o resto da página?</p>
+<label><input type="radio" name="q1"> porque o compilador renomeia o seletor com um selo só daquele componente</label>
+<label><input type="radio" name="q1"> porque o navegador ignora o CSS de componentes</label>
+<label><input type="radio" name="q1"> porque o CSS é carregado depois do HTML</label>
+<label><input type="radio" name="q1"> porque o Svelte não permite <code>&lt;style&gt;</code> em componentes</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let preco = <input data-answer="$state(0.9)|$state(0.90)">&nbsp;;<br>&lt;p&gt;R$ {preco}&lt;/p&gt;<br><br>// o preço começa em noventa centavos e a tela acompanha quando mudar</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Componente é um <strong>arquivo <code>.svelte</code></strong> com nome em maiúscula: um pedaço de tela com identidade própria.</li>
+  <li>Ele tem até três blocos: <code>&lt;script&gt;</code>, HTML e <code>&lt;style&gt;</code> — só o HTML é obrigatório.</li>
+  <li><code>{expressão}</code> é o buraco por onde um valor entra no HTML.</li>
+  <li><code>let x = $state(valor)</code> cria <strong>estado reativo</strong>: quando muda, a tela muda sozinha.</li>
+  <li>Sem <code>$state</code>, a variável existe mas ninguém avisa a tela.</li>
+  <li><code>onclick={() =&gt; …}</code> liga o clique a uma função; o nome do evento vai em minúsculas, depois de <code>on</code>.</li>
+  <li>O <code>&lt;style&gt;</code> é escopado: o compilador põe um selo (<code>svelte-7mbznn</code>) nos seletores e nas tags.</li>
+  <li><code>npm run dev</code> serve em <code>localhost:5173</code>; <code>npm run build</code> gera <code>dist/</code>; <code>npm run preview</code> confere o build.</li>
+  <li>Os erros desta aula: <code>$state</code> sem <code>let</code>, bloco aberto sem fechar e variável que não existe.</li>
+  <li><code>preco.toFixed(2)</code> formata dinheiro; o valor guardado continua número, o que aparece é texto.</li>
+  <li>A saída mostrada no guia é a do compilador de verdade — se o seu resultado for diferente, o código é diferente.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

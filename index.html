@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guia Svelte — do zero ao site no ar | Guia Svelte</title>
+<meta name="description" content="Curso de Svelte 5 e SvelteKit para quem nunca programou: 144 aulas em português, com o componente compilando e rodando de verdade na sua tela.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Guia <span class="hl">Svelte</span></h1>
+
+<p class="intro">A Ana tem uma padaria, um caderno de encomendas e nenhuma paciência para atualizar planilha. Ela quer uma tela que mostre o pedido, some o total e se atualize sozinha quando ela digita. Este guia ensina a construir essa tela — do primeiro <code>&lt;h1&gt;</code> até o site publicado — usando Svelte 5 e SvelteKit, em português, <strong>para quem nunca programou</strong>.</p>
+
+<div class="note">
+<strong>Como este guia funciona</strong>
+<ul>
+  <li><strong>144 aulas</strong>, uma ideia por aula, na ordem em que se aprende de verdade.</li>
+  <li>Toda caixa "Experimente" <strong>compila o seu código com o compilador real do Svelte</strong> e monta o componente no navegador: não é imagem, não é simulação.</li>
+  <li>A saída mostrada nas aulas foi colhida do compilador desta versão (svelte 5.59.2) — se o seu resultado for diferente, o código é diferente.</li>
+  <li>Nada de instalar nada para começar: as três primeiras aulas rodam aqui mesmo, na página.</li>
+</ul>
+</div>
+
+<h2>1. Para quem é</h2>
+
+<p>Para quem nunca escreveu uma linha de código. O guia não supõe que você saiba JavaScript, HTML ou CSS: cada um deles aparece quando é necessário, explicado na hora, com a analogia antes do comando. Se você já programa em outra linguagem, o Nível 1 vai parecer devagar — é de propósito. O leitor que este guia atende é a Ana, e a Ana não sabe o que é uma variável.</p>
+
+<p>Se você já mexeu com React ou Vue, comece pela aula <em>Vindo de React ou Vue</em>, na Referência. Ela mostra o mesmo componente nas três linguagens e aponta o que muda de verdade: aqui não existe <code>useState</code>, não existe <code>setState</code>, não existe <code>useEffect</code> com lista de dependências — existe <code>$state</code>, e a tela acompanha.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nível</th><th>O que você aprende</th><th>Aulas</th></tr>
+<tr><td>1 · Fundamentos</td><td>componente, expressões, <code>$state</code>, <code>onclick</code>, condições, listas, formulários</td><td>48</td></tr>
+<tr><td>2 · Componentes e Interação</td><td>props, ciclo de vida, composição, stores, transições, testes</td><td>40</td></tr>
+<tr><td>3 · SvelteKit</td><td>rotas, dados no servidor, formulários, sessão, publicação</td><td>30</td></tr>
+<tr><td>Projetos</td><td>doze projetos completos, cada um em três versões</td><td>12</td></tr>
+<tr><td>Referência</td><td>sintaxe, runas, erros, glossário, folha de bolso</td><td>14</td></tr>
+</table>
+</div>
+
+<h2>2. O primeiro componente, agora</h2>
+
+<p>Este é o mesmo componente que a primeira aula constrói. Edite o texto, clique em Rodar e veja a tela mudar. O compilador do Svelte está rodando dentro desta página.</p>
+
+<div class="trysvelte" data-goal="outre:^Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> troque o nome para o seu e clique em Rodar. Depois troque de volta para <code>Ana</code> e clique em Verificar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('mundo');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;button onclick={() =&gt; (nome = 'Ana')}&gt;chamar a Ana&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;button onclick={() =&gt; (nome = 'Ana')}&gt;chamar a Ana&lt;/button&gt;</pre>
+</div>
+
+<h2>3. O que você vai construir</h2>
+
+<p>No fim do Nível 2, a Ana tem um caderno de pedidos que funciona: ela digita o nome do cliente, escolhe os pães, o total aparece e a lista de pedidos do dia se atualiza. No Nível 3, esse caderno vira um site de verdade — com endereço, rotas, dados que vêm do servidor e formulário que grava — e vai para o ar.</p>
+
+<p>No caminho, você vai esbarrar nos mesmos erros em que todo mundo esbarra: a variável sem <code>$state</code> que não atualiza a tela, o bloco <code>{#if}</code> sem fechar, o <code>on:click</code> copiado de um tutorial antigo. Cada aula tem uma seção "Quando dá errado" com a mensagem real do compilador, para você reconhecer o problema em vez de decorar a solução.</p>
+
+<h2>4. Como estudar</h2>
+
+<p>Uma aula por vez, na ordem, com o teclado na frente. Ler sobre componente não ensina componente: editar a caixa e ver o resultado, sim. Se a caixa mostrar uma mensagem vermelha, leia a mensagem inteira antes de mexer no código — ela diz a linha, a coluna e o que o compilador esperava.</p>
+
+<div class="tip">
+<strong>Sem pressa na primeira semana</strong>
+<p>As aulas 1 a 12 são a base de tudo. Quem corre por elas acaba voltando. Quem entende bem o que é estado e o que é prop resolve sozinho 80% dos problemas do resto do guia.</p>
+</div>
+
+<h2>5. O que este guia não é</h2>
+
+<p>Não é uma referência da API: para isso existe a documentação oficial, e a aula da Folha de Bolso aponta o caminho. Não é um curso de JavaScript avançado: o JavaScript que aparece é o necessário para a tela funcionar. E não é um guia de design: o CSS aqui é o mínimo para a coisa ficar legível e não vazar de um componente para outro.</p>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>144 aulas em cinco níveis, do primeiro componente ao site publicado.</li>
+  <li>Todo código das caixas é compilado e executado de verdade no seu navegador.</li>
+  <li>Svelte 5 com runas: <code>$state</code>, <code>$derived</code>, <code>$effect</code>, <code>$props</code>.</li>
+  <li>SvelteKit no Nível 3: rotas, <code>load</code>, formulários, sessão, deploy.</li>
+  <li>Sem instalar nada para estudar; para praticar, um projeto em <code>~/loja</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

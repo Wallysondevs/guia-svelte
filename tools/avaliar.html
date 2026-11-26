@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>avaliar — banco de provas das caixas do Guia Svelte</title>
+<style>body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:8px}</style>
+</head>
+<body>
+<p>Página interna do testador: compila e roda os componentes das caixas sem abrir as 144 páginas.</p>
+<script src="../assets/sveltesim.js"></script>
+<script>
+  // o testador espera este sinal para saber que o avaliador está no ar
+  window.__avaliadorPronto = false;
+  (function esperar() {
+    if (typeof window.__svelteAvaliar === "function") { window.__avaliadorPronto = true; return; }
+    setTimeout(esperar, 40);
+  })();
+</script>
+</body>
+</html>

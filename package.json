@@ -1,0 +1,10 @@
+{
+  "name": "guia-svelte-tools",
+  "private": true,
+  "description": "Ferramentas do Guia Svelte: renderiza componentes de verdade para colher a saida das licoes",
+  "dependencies": {
+    "svelte": "5.59.2",
+    "vite": "^7.1.0",
+    "esbuild": "^0.25.0"
+  }
+}
