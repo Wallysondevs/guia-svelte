@@ -111,7 +111,7 @@ Vary: Origin
 content-length: 4371
 content-type: text/html</pre>
 
-<p>A primeira linha é o que importa: <code>404 Not Found</code>. E o corpo dessa resposta é a página de erro da Ana <em>dentro</em> do layout do site. O comando abaixo tira os comentários internos do Svelte e recorta o miolo:</p>
+<p>O <code>content-length</code> muda a cada build — ele conta os bytes daquela resposta; o que não muda é o <code>404</code> e o <code>content-type</code>. A primeira linha é o que importa: <code>404 Not Found</code>. E o corpo dessa resposta é a página de erro da Ana <em>dentro</em> do layout do site. O comando abaixo tira os comentários internos do Svelte e recorta o miolo:</p>
 
 <pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/nao-existe | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;nav.*&lt;/footer&gt;'
 &lt;nav class="svelte-12qhfyh"&gt;&lt;a href="/" class="svelte-12qhfyh"&gt;Início&lt;/a&gt; &lt;a href="/paes" class="svelte-12qhfyh"&gt;Pães&lt;/a&gt; &lt;a href="/sobre" class="svelte-12qhfyh"&gt;Sobre&lt;/a&gt; &lt;a href="/contato" class="svelte-12qhfyh"&gt;Contato&lt;/a&gt;&lt;/nav&gt; &lt;main&gt;&lt;h1&gt;404&lt;/h1&gt; &lt;p&gt;Not Found&lt;/p&gt; &lt;a href="/"&gt;voltar para o início&lt;/a&gt;&lt;/main&gt; &lt;footer class="svelte-12qhfyh"&gt;Padaria da Ana&lt;/footer&gt;</pre>

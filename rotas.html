@@ -93,7 +93,7 @@ src/routes/paes/[slug]:
 src/routes/sobre:
 +page.svelte</pre>
 
-<p>Leia a saída como um mapa. Na raiz de <code>src/routes</code> há três arquivos que começam com <code>+</code> e três pastas. Cada pasta que tem um <code>+page.svelte</code> dentro é um endereço a mais no site. A pasta <code>paes</code> tem o arquivo dela e ainda uma subpasta <code>[slug]</code> — os colchetes são assunto de outra aula, mas já dá para ver que o mapa continua descendo.</p>
+<p>(Recortei da listagem as pastas <code>contato</code> e <code>(painel)</code>, que não interessam a esta seção.) Leia a saída como um mapa. Na raiz de <code>src/routes</code> há três arquivos que começam com <code>+</code> e três pastas. Cada pasta que tem um <code>+page.svelte</code> dentro é um endereço a mais no site. A pasta <code>paes</code> tem o arquivo dela e ainda uma subpasta <code>[slug]</code> — os colchetes são assunto de outra aula, mas já dá para ver que o mapa continua descendo.</p>
 
 <p>Repare também no que <strong>não</strong> existe: nenhum arquivo de configuração listando rotas. Nenhum <code>routes.json</code>. A informação está toda ali, nas pastas. Se você copiar a pasta <code>sobre</code> para uma máquina e colar dentro de <code>src/routes</code>, a rota <code>/sobre</code> passa a existir. Se renomear a pasta para <code>quem-somos</code>, o endereço vira <code>/quem-somos</code> e o antigo passa a responder 404.</p>
 
