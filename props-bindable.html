@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duas mãos no mesmo valor: $bindable | Guia Svelte</title>
+<meta name="description" content="Como usar $bindable no Svelte 5: prop gravável no filho, bind: no pai, valor padrão dentro da runa, o que muda sem a ligação e os erros reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Duas mãos no mesmo valor: $bindable</span></h1>
+
+<p class="intro">A Ana e a sobrinha anotam o troco no mesmo caderno. Se só a Ana escreve, a sobrinha precisa perguntar o valor toda vez. Se as duas escrevem no mesmo lugar, qualquer uma atualiza e a outra vê na hora — mas é preciso combinar que aquele número é de ambas. Em Svelte, uma prop comum é o caderno de uma mão só: o pai escreve, o filho lê. Para o filho também poder escrever, a prop precisa ser declarada com <code>$bindable()</code>. Nesta aula você vai ver os dois lados dessa combinação e o que acontece quando ela é feita pela metade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que muda numa prop declarada com <code>$bindable()</code>.</li>
+  <li>Como o pai liga os dois lados com <code>bind:valor</code>.</li>
+  <li>O que a saída real mostra quando o valor é o mesmo dos dois lados.</li>
+  <li>Por que a mudança do filho não chega ao pai sem <code>bind:</code>.</li>
+  <li>Como funciona o valor padrão dentro de <code>$bindable(...)</code>.</li>
+  <li>O que vale a prop quando o pai não passa nada.</li>
+  <li>Quando <code>$bindable</code> é a ferramenta certa e quando é excesso.</li>
+  <li>A relação com <code>bind:value</code> de um campo de formulário.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>O que o build do projeto da Ana mostra com uma prop de duas mãos.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: quem pode escrever</h2>
+
+<p>Toda prop tem um dono. Por padrão, o dono é o pai: ele calcula o valor e passa; o filho lê e desenha. Isso mantém o fluxo numa direção só, e é o que torna o componente previsível — se o filho mexesse no valor, o pai ficaria com uma cópia velha e ninguém saberia qual é a verdade.</p>
+
+<p>Mas existem casos em que o filho precisa escrever. Um campo de texto com máscara, um seletor de quantidade com botões de mais e menos, um componente de data que ajusta o dia. Nesses casos, o valor mora no pai — porque outras partes da tela também o usam — e o filho precisa alterá-lo. A solução é um contrato: o filho declara a prop como <em>gravável</em>, e o pai autoriza a ligação com <code>bind:</code>.</p>
+
+<p>O nome vem de "bind", que em programação quer dizer "ligar" — no sentido de amarrar duas pontas. Com a ligação, o pai e o filho passam a olhar para o mesmo valor: quando o pai muda, o filho recebe; quando o filho muda, o pai recebe. Não são duas cópias sincronizadas por código: é uma ligação declarada, que o compilador transforma em atualização nos dois sentidos.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O caderno do troco</td><td>a variável <code>$state</code> no pai</td></tr>
+<tr><td>A sobrinha só pode ler</td><td>prop comum: o filho recebe o valor e não escreve</td></tr>
+<tr><td>A sobrinha pode escrever também</td><td><code>$bindable()</code> na prop do filho</td></tr>
+<tr><td>O combinado de que as duas usam o caderno</td><td><code>bind:valor</code> no pai</td></tr>
+<tr><td>Um caderno separado para cada uma</td><td>o que acontece sem <code>bind:</code>: cada lado com o seu valor</td></tr>
+</table>
+</div>
+
+<p>Uma observação sobre o escopo: <code>$bindable</code> só existe para props de componente. Ligação com elementos do HTML — <code>bind:value</code> num <code>&lt;input&gt;</code> — é assunto da aula de <a href="bind.html">bind:</a>, e funciona com qualquer variável de estado. São duas coisas diferentes com a mesma palavra "bind", e vale não misturar.</p>
+
+<hr>
+
+<h2>2. O filho que aceita escrever</h2>
+
+<p>Do lado do filho, a mudança é de uma palavra. Em vez de receber a prop direto, ela é declarada como valor de <code>$bindable()</code>, com o padrão dentro dos parênteses.</p>
+<pre class="file" data-file="src/Filho.svelte">&lt;script&gt;
+  let { valor = $bindable(0) } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;No filho: {valor}&lt;/p&gt;
+&lt;button onclick={() =&gt; valor++}&gt;+1 no filho&lt;/button&gt;</pre>
+
+<p>Montado sem nada, o componente mostra o valor padrão e o botão que o altera:</p>
+<pre class="out">&lt;p&gt;No filho: 0&lt;/p&gt; &lt;button&gt;+1 no filho&lt;/button&gt;</pre>
+
+<p>Até aqui, parece uma variável de estado comum. A diferença aparece quando o pai entra em cena: o <code>$bindable()</code> avisa ao Svelte que aquela prop aceita ser ligada. Sem ele, o pai pode passar o valor, mas não pode usar <code>bind:</code> para compartilhar a escrita.</p>
+
+<h3>A anatomia do <code>$bindable</code></h3>
+<dl class="anatomy">
+  <dt>let { valor = $bindable(0) } = $props()</dt><dd>a prop vem de <code>$props()</code> como sempre; o que muda é o <strong>valor padrão</strong>, que passa a ser uma chamada de <code>$bindable</code>.</dd>
+  <dt>$bindable(0)</dt><dd>o <strong>0</strong> é o valor usado quando o pai não passa nada. Sem argumento, a prop vale <code>undefined</code>.</dd>
+  <dt>valor++</dt><dd>dentro do filho, a prop gravável é <strong>tratada como estado</strong>: pode ser atribuída, somada, comparada.</dd>
+  <dt>{valor}</dt><dd>na marcação, ela continua sendo lida como qualquer outro valor reativo.</dd>
+</dl>
+
+<p>Repare numa consequência: como o valor padrão vira <code>$bindable(...)</code>, a prop deixa de ter um padrão "simples". Se você quer um valor inicial e a possibilidade de ligação, o padrão vai dentro dos parênteses: <code>$bindable(0)</code> é o mesmo que "começa em 0 e aceita ligação".</p>
+
+<div class="tip">
+<strong>Só declare como bindable o que o filho muda</strong>
+<p>Uma prop que o filho apenas lê não precisa de <code>$bindable</code>, e declarar todas como bindable enfraquece o contrato: qualquer criança pode escrever em qualquer coisa, e o pai perde a noção de quem manda no valor. Trate <code>$bindable</code> como uma porta que você abre de propósito.</p>
+</div>
+
+<hr>
+
+<h2>3. O pai que liga os dois lados</h2>
+
+<p>Do lado do pai, a ligação é um atributo com <code>bind:</code> antes do nome da prop. O valor à direita é uma variável de estado do pai — sem chaves em volta do nome, porque o alvo da ligação precisa ser uma variável, não uma expressão.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Filho from './Filho.svelte';
+  let valor = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;No pai: {valor}&lt;/p&gt;
+&lt;Filho bind:valor /&gt;
+&lt;button onclick={() =&gt; valor++}&gt;+1 no pai&lt;/button&gt;</pre>
+
+<p>Na primeira renderização, os dois lados mostram o mesmo valor: o pai criou <code>valor = 0</code> e passou para o filho pela ligação. Depois disso, quem manda no número é a variável do pai, e o filho escreve nela quando o usuário clica no botão dele. A resposta do compilador para esse par de arquivos, na renderização inicial, é esta: <code>&lt;p&gt;No pai: 0&lt;/p&gt; &lt;p&gt;No filho: 0&lt;/p&gt;</code>, seguida dos dois botões.</p>
+
+<p>Três detalhes que evitam confusão. O primeiro: <code>bind:valor</code> não é uma prop chamada "bind" — é a prop <code>valor</code> com a marca de ligação. O segundo: se o filho não declarar <code>$bindable</code>, o componente ainda compila, mas a escrita do filho fica só nele; o pai não fica sabendo. O terceiro: o pai precisa de uma variável de estado no alvo, senão o compilador recusa — é o erro <code>Can only bind to state or props</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No pai</th><th>No filho</th><th>O que acontece</th></tr>
+<tr><td><code>&lt;Filho valor={x} /&gt;</code></td><td>prop comum</td><td>via de mão única: o filho lê</td></tr>
+<tr><td><code>&lt;Filho bind:valor={x} /&gt;</code></td><td><code>$bindable()</code></td><td>as duas mãos no mesmo valor</td></tr>
+<tr><td><code>&lt;Filho bind:valor={x} /&gt;</code></td><td>prop comum</td><td>compila; a escrita do filho não volta</td></tr>
+<tr><td><code>&lt;Filho bind:valor={1 + 1} /&gt;</code></td><td><code>$bindable()</code></td><td>erro: não se liga a uma conta</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. Experimente: a runa no lugar errado</h2>
+
+<p>A caixa abaixo usa <code>$bindable()</code> fora da desestruturação de <code>$props()</code> e o compilador recusa o arquivo. Sua missão é colocar a runa no lugar certo.</p>
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o compilador recusa com <code>`$bindable()` can only be used inside a `$props()` declaration</code>. Transforme a variável solta numa prop gravável e faça o clique chegar a <strong>Cliques: 1</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let valor = $bindable(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; valor++}&gt;Cliques: {valor}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { valor = $bindable(0) } = $props();
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; valor++}&gt;Cliques: {valor}&lt;/button&gt;</pre>
+</div>
+
+<p>A solução não muda o botão: muda a origem do valor. Antes era uma variável do componente; agora é uma prop gravável que, sozinha, usa o padrão <code>0</code>. O clique continua somando um, e a tela acompanha nos dois casos — o que o compilador cobrava era só a forma da declaração.</p>
+
+<p>Esse é o tipo de erro que acontece quando você aprende a runa e sai usando em todo lugar. A regra é curta: <code>$bindable()</code> só aparece como valor padrão de um nome que veio de <code>$props()</code>.</p>
+
+<hr>
+
+<h2>5. O valor padrão dentro do <code>$bindable</code></h2>
+
+<p>O padrão que você passa para o <code>$bindable</code> é o valor que o filho usa quando o pai não passa nada. Ele também precisa ser do tipo que o componente espera: número para contas, texto para exibição.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { valor = $bindable(10) } = $props();
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; valor++}&gt;+1&lt;/button&gt;
+&lt;p&gt;Total: {valor.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="out">&lt;button&gt;+1&lt;/button&gt; &lt;p&gt;Total: 10.00&lt;/p&gt;</pre>
+
+<p>Sem pai, o filho começa em <code>10</code> e mostra o total formatado. Isso é útil de um jeito específico: o componente pode ser usado sozinho, num teste ou numa demonstração, sem que ninguém precise montar um pai só para ele. E quando o pai aparece e passa um valor, o padrão sai de cena — mas continua documentando qual é o valor inicial esperado.</p>
+
+<p>Sem argumento nenhum, <code>$bindable()</code> deixa a prop valendo <code>undefined</code>:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { valor = $bindable() } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Valor: {valor}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;Valor: &lt;/p&gt;</pre>
+
+<p>O texto sai com dois-pontos e nada depois. Se você já viu essa forma num componente de biblioteca, é isso: o autor deixou a prop sem padrão de propósito, para o pai ser obrigado a passar o valor. Em código de aula, prefira sempre um padrão explícito — é uma linha a mais que evita uma tela vazia.</p>
+
+<hr>
+
+<h2>6. Experimente: o padrão que faltou</h2>
+
+<p>A caixa abaixo declara a prop gravável sem valor padrão, e a tela fica sem número. Sua missão é dar o padrão <code>0</code>.</p>
+<div class="trysvelte" data-goal="out:Valor: 0">
+<p class="try-task"><strong>Missão:</strong> a tela mostra <code>Valor:</code> e nada mais, porque <code>$bindable()</code> sem argumento vale <code>undefined</code>. Passe o padrão <code>0</code> para o <code>$bindable</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { valor = $bindable() } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Valor: {valor}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { valor = $bindable(0) } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Valor: {valor}&lt;/p&gt;</pre>
+</div>
+
+<p>É a menor correção desta aula: dois caracteres. E o efeito é grande na confiança do componente: com o padrão, ele funciona sozinho; sem, ele depende que alguém sempre passe o valor, e qualquer esquecimento aparece como uma tela com um buraco.</p>
+
+<hr>
+
+<h2>7. Experimente: comece em dez</h2>
+
+<p>A caixa abaixo começa o total em zero. Sua missão é fazer o componente abrir com o total <strong>10.00</strong>, mantendo o botão de somar.</p>
+<div class="trysvelte" data-goal="outre:Total: 10\.00">
+<p class="try-task"><strong>Missão:</strong> o total abre em <code>0.00</code>. Troque o valor padrão dentro de <code>$bindable(...)</code> para o total começar em dez reais.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { valor = $bindable(0) } = $props();
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; valor++}&gt;+1&lt;/button&gt;
+&lt;p&gt;Total: {valor.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { valor = $bindable(10) } = $props();
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; valor++}&gt;+1&lt;/button&gt;
+&lt;p&gt;Total: {valor.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que o <code>toFixed</code> continua funcionando: o valor é número nos dois casos. O padrão dentro de <code>$bindable</code> não é texto e não é uma "configuração" — é o valor inicial de verdade, do mesmo tipo que o pai passaria. Se você colocar <code>'10'</code> entre aspas, a soma vira concatenação e o total vira <code>101.00</code> depois do primeiro clique. Vale testar para ver o estrago.</p>
+
+<hr>
+
+<h2>8. Quando o pai não usa <code>bind:</code></h2>
+
+<p>Se o pai passa o valor sem a marca de ligação, o filho recebe o número e desenha. Ao escrever — no clique do botão, por exemplo — a mudança acontece no filho, mas o pai não é avisado. O valor do pai continua o de antes, e as duas telas passam a discordar.</p>
+
+<p>É por isso que o contrato tem duas partes: o filho declara <code>$bindable</code>, o pai escreve <code>bind:</code>. Faltando uma delas, cada lado fica com o seu número e o defeito aparece como "a tela do pai não atualiza" — um dos sintomas mais comuns em quem está começando com componentes.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Use</th><th>Por quê</th></tr>
+<tr><td>O filho só mostrar</td><td>prop comum</td><td>o valor é do pai, e só dele</td></tr>
+<tr><td>O filho alterar o valor do pai</td><td><code>$bindable</code> + <code>bind:</code></td><td>as duas mãos no mesmo valor</td></tr>
+<tr><td>O filho avisar que algo aconteceu</td><td>prop de função (<code>aoMudar</code>)</td><td>o pai decide o que fazer com o aviso</td></tr>
+<tr><td>O filho guardar um valor só dele</td><td><code>$state</code> no filho</td><td>não é assunto do pai</td></tr>
+</table>
+</div>
+
+<p>A terceira linha merece atenção. Muita gente usa <code>$bindable</code> para tudo, e acaba com um componente que escreve em cinco props do pai sem que o pai saiba onde. Uma prop de função é mais explícita: o filho chama <code>aoMudar(3)</code> quando o usuário escolhe 3, e o pai decide se guarda, se valida, se manda para o servidor. Custa mais linhas e ganha em clareza.</p>
+
+<div class="warning">
+<strong><code>bind</code> em elemento é outra história</strong>
+<p><code>&lt;input bind:value={nome}&gt;</code> liga o campo a uma variável de estado do próprio componente, e funciona com qualquer <code>$state</code>. Você vai ver isso em detalhe na aula de <a href="bind-input.html">bind:value</a>. O <code>$bindable</code> desta aula é o mesmo conceito aplicado a uma prop de componente — a ligação entre dois componentes.</p>
+</div>
+
+<hr>
+
+<h2>9. Lendo o valor dentro do filho</h2>
+
+<p>Uma prop gravável é lida como qualquer outra: aparece na marcação, entra em contas, serve de argumento para um snippet. O que muda é que ela também pode ser atribuída.</p>
+
+<p>Existe um detalhe de estilo que vale desde já: quando o filho muda o valor, é boa prática mudar de forma previsível e mínima. <code>valor++</code> é fácil de entender; <code>valor = valor * 2 + 1</code> dentro de um <code>onclick</code> deixa quem lê o pai sem saber o que esperar. Se a regra é complicada, dê um nome a ela numa função do <code>&lt;script&gt;</code> — <code>avancarUm()</code>, <code>limpar()</code> — e chame essa função no <code>onclick</code>. O componente fica legível e a regra ganha um lugar só, como nas aulas anteriores.</p>
+
+<p>Ao escrever essa função, lembre do que ela altera: a prop gravável é compartilhada com o pai, então cada atribuição aparece do outro lado. Uma função de filho que muda o valor é, na prática, uma alteração no estado do pai — e vale a mesma disciplina: mudar uma vez, com uma regra clara, e deixar o resto da tela reagir.</p>
+
+<p>Também vale saber que a ligação não é "mágica de texto": o pai e o filho compartilham a mesma célula de estado. Se o pai tiver um <code>$derived</code> que usa esse valor, ele recalcula quando o filho escreve. Se outra parte da tela mostra o mesmo valor, ela acompanha. É por isso que o valor deve morar no pai: ele é a fonte única, e a ligação é o cano.</p>
+
+<hr>
+
+<h2>10. Rodando na máquina da Ana</h2>
+
+<p>O componente desta aula é o filho com a prop gravável. Rodando o projeto, você vê o valor padrão e o botão que o altera:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Para ver a ligação funcionando, crie o <code>Filho.svelte</code> ao lado do <code>App.svelte</code> e use <code>bind:valor</code> no pai. Com a página aberta, clique no botão do filho e depois no botão do pai: os dois números andam juntos, porque são o mesmo valor. Depois, tire o <code>bind:</code> do pai e repita: cada botão muda só a sua tela, e a diferença entre as duas aparece na hora.</p>
+
+<p>No build, a prop gravável custa pouco:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CxFifPBt.js  36.94 kB │ gzip: 14.27 kB
+✓ built in 2.27s</pre>
+
+<p><code>36.94 kB</code>, perto do build da aula de valores padrão (<code>36.72 kB</code>). O que a ligação acrescenta é o código que avisa o pai quando o filho escreve — uma função por prop ligada, gerada na compilação. Nada de observação genérica, nada de varredura: o compilador sabe exatamente quais props são ligadas.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. As duas primeiras são sobre o lugar e a forma da runa; a terceira, sobre o alvo da ligação.</p>
+<div class="cenario">
+<strong>Erro 1 — <code>$bindable()</code> fora de <code>$props()</code></strong>
+<p>A runa só faz sentido como valor padrão de uma prop. Numa variável solta, ela seria uma promessa de ligação que ninguém pode cumprir.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { titulo = 'Comanda' } = $props();
+  let valor = $bindable(0);
+&lt;/script&gt;
+
+&lt;p&gt;{titulo}: {valor}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 14): `$bindable()` can only be used inside a `$props()` declaration</pre>
+<p>A mensagem é curta e diz o lugar certo: "só pode ser usada dentro de uma declaração <code>$props()</code>". A coluna 14 aponta o começo da chamada. Mova o nome para a desestruturação — e a variável solta desaparece.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — <code>$bindable</code> com dois argumentos</strong>
+<p>A runa aceita zero ou um argumento: o valor padrão. Não existe objeto de opções.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { valor = $bindable(0, { fallback: 10 }) } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{valor}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 16): `$bindable` must be called with zero or one arguments</pre>
+<p>A mensagem diz exatamente a regra: "deve ser chamada com zero ou um argumentos". A coluna 16 aponta a chamada. Se você viu <code>{ fallback: 10 }</code> em algum exemplo, era de outra versão ou de outra runa — aqui o segundo argumento é recusado.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — <code>bind:</code> num valor que não pode mudar</strong>
+<p>O alvo de uma ligação precisa poder receber valor novo. Uma constante, por definição, não pode.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const valor = 0;
+&lt;/script&gt;
+
+&lt;input bind:value={valor} /&gt;
+&lt;p&gt;{valor}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 7): Cannot bind to constant</pre>
+<p>"Cannot bind to constant" é literal. A coluna 7 aponta o alvo da ligação. Troque <code>const</code> por <code>let ... = $state(...)</code> — e lembre que essa regra vale para qualquer <code>bind:</code>, em elemento ou em componente.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No filho</th><th>O que faz</th></tr>
+<tr><td><code>let { valor = $bindable(0) } = $props()</code></td><td>prop gravável com padrão 0</td></tr>
+<tr><td><code>let { valor = $bindable() } = $props()</code></td><td>gravável, sem padrão (vale <code>undefined</code>)</td></tr>
+<tr><td><code>let { valor = $bindable('') } = $props()</code></td><td>gravável com padrão de texto</td></tr>
+<tr><td><code>valor++</code> / <code>valor = 3</code></td><td>escrita do filho no valor compartilhado</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No pai</th><th>Resultado</th></tr>
+<tr><td><code>&lt;Filho valor={x} /&gt;</code></td><td>o filho lê; escrever não volta ao pai</td></tr>
+<tr><td><code>&lt;Filho bind:valor={x} /&gt;</code></td><td>ligação nos dois sentidos (filho precisa de <code>$bindable</code>)</td></tr>
+<tr><td><code>&lt;Filho bind:valor /&gt;</code></td><td>atalho: o nome da variável é o mesmo da prop</td></tr>
+<tr><td><code>&lt;Filho bind:valor={1 + 1} /&gt;</code></td><td>erro: o alvo tem de ser variável ou prop</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td><code>$bindable()</code> fora de <code>$props()</code></td><td><code>`$bindable()` can only be used inside a `$props()` declaration</code></td></tr>
+<tr><td>Dois argumentos</td><td><code>`$bindable` must be called with zero or one arguments</code></td></tr>
+<tr><td><code>bind:</code> em constante</td><td><code>Cannot bind to constant</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>$bindable()</code> acrescenta a uma prop?</p>
+<label><input type="radio" name="q1"> Deixa a prop somente leitura</label>
+<label><input type="radio" name="q1"> Permite que o pai ligue a prop com <code>bind:</code> e que o filho a escreva</label>
+<label><input type="radio" name="q1"> Cria uma cópia da prop para o filho</label>
+<label><input type="radio" name="q1"> Faz a prop atualizar a cada segundo</label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O filho declara <code>$bindable</code>, mas o pai passa a prop sem <code>bind:</code>. O que acontece?</p>
+<label><input type="radio" name="q1"> O compilador recusa o arquivo do pai</label>
+<label><input type="radio" name="q1"> A ligação funciona do mesmo jeito</label>
+<label><input type="radio" name="q1"> O filho recebe o valor; o que ele escrever fica só nele</label>
+<label><input type="radio" name="q1"> O filho recebe <code>undefined</code></label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">3. O que vale a prop <code>valor</code> em <code>let { valor = $bindable() } = $props()</code> quando o pai não passa nada?</p>
+<label><input type="radio" name="q1"> <code>0</code></label>
+<label><input type="radio" name="q1"> <code>''</code></label>
+<label><input type="radio" name="q1"> <code>undefined</code></label>
+<label><input type="radio" name="q1"> O compilador recusa a declaração</label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let { valor = <input data-answer="$bindable(0)"> } = $props();<br><br>&lt;button onclick={() =&gt; valor++}&gt;+1&lt;/button&gt;<br><br>// a prop aceita ligação do pai e começa em zero</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Prop comum é de mão única: o pai passa, o filho lê.</li>
+  <li><code>$bindable(valorPadrão)</code> marca a prop como gravável pelo filho e ligável pelo pai.</li>
+  <li>O pai liga com <code>bind:valor={x}</code> ou, se o nome é o mesmo, <code>bind:valor</code>.</li>
+  <li>Faltando <code>bind:</code> ou <code>$bindable</code>, cada lado fica com o seu valor e as telas discordam.</li>
+  <li>O argumento de <code>$bindable</code> é o padrão usado quando o pai não passa nada; sem argumento, vale <code>undefined</code>.</li>
+  <li>O padrão precisa ser do tipo certo: texto onde se espera número gera concatenação, não soma.</li>
+  <li>O alvo de <code>bind:</code> tem de ser variável de estado ou prop, nunca constante ou conta.</li>
+  <li><code>$bindable()</code> só existe como valor padrão dentro de <code>$props()</code>, com zero ou um argumento.</li>
+  <li><code>bind:value</code> em elemento HTML é assunto da aula de <a href="bind-input.html">bind:value</a>; <code>$bindable</code> é entre componentes.</li>
+  <li>Para avisos e regras complicadas, prefira prop de função a uma prop gravável.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

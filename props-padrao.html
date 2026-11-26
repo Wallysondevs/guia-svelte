@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valores Padrão e Rest: props-padrao | Guia Svelte</title>
+<meta name="description" content="Props com valor padrão no Svelte 5: let { nome = 'Ana' } = $props(), quando o padrão entra, ...resto e o repasse {...resto} para um elemento.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Valores padrão e resto das props</span></h1>
+
+<p class="intro">A Ana manda imprimir blocos de comanda em branco, com os campos já preenchidos no que nunca muda: o nome da padaria, o horário, a frase de agradecimento. Quem usa o bloco só precisa escrever o que muda naquele pedido. Na aula de props você viu como um componente recebe valores de fora; nesta você vai ver o outro lado da mesma ideia: <strong>o que fazer quando o valor não vem</strong>. O Svelte resolve isso com um sinal de igual na desestruturação — e guarda o que sobra numa variável de <em>resto</em>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um valor padrão de prop e quando ele entra em cena.</li>
+  <li>A escrever <code>let { nome = 'Ana' } = $props()</code> e ver a saída nos dois casos.</li>
+  <li>A diferença entre prop ausente, <code>undefined</code>, <code>null</code>, <code>0</code> e <code>''</code>.</li>
+  <li>Como recolher as props que você não listou com <code>...resto</code>.</li>
+  <li>O que o resto contém quando ninguém passa nada.</li>
+  <li>Como repassar o resto para um elemento com <code>{...resto}</code>.</li>
+  <li>Por que o padrão é calculado uma vez só, na montagem.</li>
+  <li>O aviso real sobre ler <code>props.nome</code> direto no <code>&lt;script&gt;</code>.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>O que o build do projeto da Ana mostra com padrões e resto.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a resposta que já vem preenchida</h2>
+
+<p>Um formulário em branco obriga quem preenche a inventar uma resposta para tudo. Um formulário com sugestões impressas resolve metade do trabalho: quem quiser, apaga e escreve outra coisa; quem não quiser, deixa como está. Valor padrão de prop é essa sugestão impressa: um valor que o componente usa quando o pai não manda nada.</p>
+
+<p>Sem padrão, o componente precisa decidir o que fazer com <code>undefined</code> em cada lugar onde a prop é usada: um <code>{#if}</code> para o nome, outro para o preço, outro para o texto do botão. É código de proteção espalhado por toda a marcação. Com padrão, você resolve isso na porta de entrada, uma vez, e o resto do componente trabalha com a certeza de que o valor existe.</p>
+
+<p>A escrita é a mesma do JavaScript para parâmetros de função: sinal de igual e o valor, dentro da desestruturação. Quem já viu <code>function soma(a = 0)</code> reconhece na hora. E o efeito é o mesmo: o padrão só entra quando o valor não veio.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A comanda já com o nome da padaria impresso</td><td><code>nome = 'Ana'</code> na desestruturação</td></tr>
+<tr><td>O cliente escreve por cima</td><td>o pai passa <code>nome="Bia"</code></td></tr>
+<tr><td>A comanda com tudo impresso, nada escrito à mão</td><td>componente sem props: todos os padrões valem</td></tr>
+<tr><td>O espaço em branco no fim, para observações</td><td><code>...resto</code>: as props que você não listou</td></tr>
+<tr><td>A caixa "outros" da comanda</td><td><code>{...resto}</code> repassado para um elemento</td></tr>
+</table>
+</div>
+
+<p>Uma coisa importante: valor padrão não é o mesmo que valor inicial de estado. <code>$state(0)</code> cria um valor que pode mudar e que avisa a tela. Um padrão de prop é o valor que a prop assume quando o pai não manda nada; se o pai mandar, o padrão não existe naquela renderização. São papéis diferentes, e a confusão entre os dois gera componentes que ignoram o pai sem você entender por quê.</p>
+
+<hr>
+
+<h2>2. O primeiro valor padrão</h2>
+
+<p>Comece com duas props com padrão: o nome e o preço.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { nome = 'Ana', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<p>Montado sem nenhuma prop, o componente usa os dois padrões:</p>
+<pre class="out">&lt;h1&gt;Ana&lt;/h1&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+
+<p>Se o pai passar os dois valores, os padrões não entram — e o preço formata o valor dele:</p>
+<pre class="out">&lt;h1&gt;Bia&lt;/h1&gt; &lt;p&gt;R$ 4.50&lt;/p&gt;</pre>
+
+<p>Duas saídas do mesmo arquivo, com props diferentes. É exatamente isso que o padrão faz: garante que o componente funcione sozinho, sem exigir que o pai conheça todos os campos. Quem usa pode passar só o nome, só o preço, os dois ou nenhum.</p>
+
+<h3>A anatomia do padrão</h3>
+<dl class="anatomy">
+  <dt>let { nome = 'Ana' }</dt><dd>o <strong>nome da prop</strong> à esquerda do igual, e o <strong>valor padrão</strong> à direita. Vale para todas as props da mesma desestruturação.</dd>
+  <dt>= 0.9</dt><dd>o padrão pode ser número, texto, booleano, lista, objeto, ou o resultado de uma conta.</dd>
+  <dt>= $props()</dt><dd>o <strong>lado direito</strong> da declaração: a runa que entrega as props. O padrão fica no lado esquerdo, dentro das chaves.</dd>
+  <dt>preco.toFixed(2)</dt><dd>no corpo, a prop é um valor comum. Com padrão, você pode chamar métodos sem medo de o valor não existir.</dd>
+</dl>
+
+<p>Repare que o padrão vai <em>dentro</em> das chaves da desestruturação, não depois do <code>$props()</code>. Escrever <code>let { nome } = $props() || {}</code> é outra coisa e não faz o que você quer. O igual de padrão é uma regra da desestruturação do JavaScript, e o Svelte só aproveita a mesma sintaxe.</p>
+
+<div class="tip">
+<strong>Padrão bom é padrão neutro</strong>
+<p>Escolha valores que façam o componente parecer correto com o mínimo de informação: <code>'Ana'</code> para um nome de exemplo, <code>0</code> para um contador, <code>[]</code> para uma lista, <code>false</code> para um interruptor. Padrão estranho (<code>'não informado'</code> em todo campo) faz o componente parecer quebrado quando o pai esquece algo.</p>
+</div>
+
+<hr>
+
+<h2>3. Experimente: complete os padrões</h2>
+
+<p>A caixa abaixo tem um padrão só, e o preço sai vazio. Sua missão é fazer o componente mostrar o preço formatado quando ninguém passar nada.</p>
+<div class="trysvelte" data-goal="out:Ana R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> <code>preco</code> não tem padrão e a tela mostra <code>R$</code> sem número. Dê o padrão <code>0.9</code> e formate com <code>toFixed(2)</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'Ana', preco } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;
+&lt;p&gt;R$ {preco}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'Ana', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Note que a missão tem duas partes: dar o padrão e formatar. Só o padrão mostraria <code>R$ 0.9</code>, que não é dinheiro; só a formatação quebraria, porque <code>undefined</code> não tem <code>toFixed</code>. O padrão resolve a ausência do valor; a formatação resolve a aparência dele.</p>
+
+<p>Essa combinação de erros é comum no começo: você conserta um e o outro aparece. Ler a mensagem e ir por partes, como aqui, é mais rápido do que tentar adivinhar a correção inteira de uma vez.</p>
+
+<hr>
+
+<h2>4. Quando o padrão entra (e quando não)</h2>
+
+<p>O padrão só vale para um valor: <code>undefined</code>. Todo o resto passa direto, inclusive valores que parecem "vazios". A tabela abaixo é a que você vai consultar quando o componente mostrar algo inesperado.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que o pai manda</th><th>A prop vale</th><th>O padrão entra?</th></tr>
+<tr><td>nada (atributo ausente)</td><td><code>undefined</code></td><td>sim</td></tr>
+<tr><td><code>nome={undefined}</code></td><td><code>undefined</code></td><td>sim</td></tr>
+<tr><td><code>nome={null}</code></td><td><code>null</code></td><td>não</td></tr>
+<tr><td><code>nome=""</code></td><td><code>''</code></td><td>não</td></tr>
+<tr><td><code>preco={0}</code></td><td><code>0</code></td><td>não</td></tr>
+<tr><td><code>nome="Bia"</code></td><td><code>'Bia'</code></td><td>não</td></tr>
+</table>
+</div>
+
+<p>Essa regra tem consequência prática. Se a sua API devolve <code>null</code> num campo vazio, o padrão não vai entrar, e o componente vai receber <code>null</code> — que quebra na hora em que você chama <code>toFixed</code> ou <code>toUpperCase</code>. Duas saídas: normalizar no pai (<code>null</code> vira <code>undefined</code>) ou tratar no filho com o operador <code>??</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&#123;@const nomeFinal = nome ?? 'Ana'}
+&lt;h1&gt;&#123;nomeFinal}&lt;/h1&gt;</pre>
+
+<p>O <code>??</code> (chamado "coalescência nula") devolve o valor da direita quando o da esquerda é <code>null</code> <strong>ou</strong> <code>undefined</code> — um pouco mais generoso que o padrão da desestruturação. É a ferramenta certa quando os dados vêm de fora e você não controla o formato.</p>
+
+<hr>
+
+<h2>5. <code>...resto</code>: as props que sobraram</h2>
+
+<p>Um componente pode receber mais props do que ele lista. Em vez de recusar ou ignorar as extras, você pode recolhê-las todas numa variável de resto, com três pontos antes do nome.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { nome = 'Ana', ...resto } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;
+&lt;pre&gt;{JSON.stringify(resto)}&lt;/pre&gt;</pre>
+
+<p>Sem nenhuma prop extra, o resto é um objeto vazio:</p>
+<pre class="out">&lt;h1&gt;Ana&lt;/h1&gt; &lt;pre&gt;{}&lt;/pre&gt;</pre>
+
+<p>Com as props <code>quantidade={3}</code> e <code>obs="sem sal"</code> passadas pelo pai, o resto vem com as duas:</p>
+<pre class="out">&lt;h1&gt;Ana&lt;/h1&gt; &lt;pre&gt;{"quantidade":3,"obs":"sem sal"}&lt;/pre&gt;</pre>
+
+<p>Duas informações importantes nessas saídas. A primeira: <code>nome</code> não entrou no resto — ela foi listada antes dos três pontos, então é capturada pelo próprio nome. A segunda: o resto é sempre um objeto, nunca <code>undefined</code>; com zero extras, ele existe e está vazio. Isso significa que você pode chamar <code>Object.keys(resto).length</code> sem medo.</p>
+
+<h3>A anatomia do resto</h3>
+<dl class="anatomy">
+  <dt>...resto</dt><dd>os três pontos <strong>recolhem</strong> tudo o que não foi listado. O nome é livre: <code>resto</code>, <code>outras</code>, <code>extras</code>.</dd>
+  <dt>{ nome = 'Ana', ...resto }</dt><dd>o resto vem sempre <strong>por último</strong> na desestruturação. Não existe resto no meio.</dd>
+  <dt><pre>{JSON.stringify(resto)}</pre></dt><dd>para inspecionar o conteúdo, <code>JSON.stringify</code> transforma o objeto em texto legível.</dd>
+  <dt>{...resto}</dt><dd>com os mesmos três pontos, dentro de uma tag, o objeto é <strong>repassado</strong> como atributos.</dd>
+</dl>
+
+<p>O mesmo trio de pontos tem dois papéis dependendo do lugar. Na desestruturação (do lado esquerdo do igual), ele <em>junta</em> o que sobra num objeto. Numa tag, ele <em>espalha</em> as chaves daquele objeto como atributos. É a mesma sintaxe, com sentidos opostos — e é por isso que ela aparece duas vezes nos exemplos desta aula.</p>
+
+<hr>
+
+<h2>6. Experimente: conte as props extras</h2>
+
+<p>A caixa abaixo lista só o <code>nome</code>. Sua missão é recolher o resto e mostrar quantas props extras chegaram.</p>
+<div class="trysvelte" data-goal="out:Ana Extras: 0">
+<p class="try-task"><strong>Missão:</strong> troque o <code>?</code> pela contagem de props extras, usando <code>...resto</code> na desestruturação. Como aqui ninguém passa prop nenhuma, a contagem é zero.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'Ana' } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;
+&lt;p&gt;Extras: ?&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'Ana', ...resto } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;
+&lt;p&gt;Extras: {Object.keys(resto).length}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>Object.keys</code> devolve a lista de nomes das chaves de um objeto, e <code>.length</code> conta quantas são. Com nenhuma prop extra, a lista é vazia e a contagem é zero. Se o componente recebesse <code>quantidade={3}</code>, a mesma expressão mostraria <code>1</code>.</p>
+
+<hr>
+
+<h2>7. Repassar o resto para um elemento</h2>
+
+<p>O uso mais comum do resto é o repasse: o componente recebe props que não conhece e as entrega para uma tag, que sabe o que fazer com elas. Classes, identificadores, atributos de acessibilidade — tudo chega ao elemento.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { nome = 'Ana', ...resto } = $props();
+&lt;/script&gt;
+
+&lt;section {...resto}&gt;
+  &lt;h1&gt;{nome}&lt;/h1&gt;
+&lt;/section&gt;</pre>
+
+<p>Sem props extras, o repasse não acrescenta atributo nenhum:</p>
+<pre class="out">&lt;section&gt;&lt;h1&gt;Ana&lt;/h1&gt;&lt;/section&gt;</pre>
+
+<p>Com <code>class="cartao"</code> e <code>id="principal"</code> passados pelo pai, os dois atributos aparecem na <code>&lt;section&gt;</code>:</p>
+<pre class="out">&lt;section class="cartao" id="principal"&gt;&lt;h1&gt;Ana&lt;/h1&gt;&lt;/section&gt;</pre>
+
+<p>Repare que o componente não conhece nem <code>class</code> nem <code>id</code>: ele só repassa. Isso é o que permite criar componentes que se comportam como uma tag comum, aceitando qualquer atributo que o HTML aceite. É um padrão muito usado em bibliotecas de componentes, e a base dele é essa linha de três pontos.</p>
+
+<div class="warning">
+<strong>Cuidado com o que você repassa</strong>
+<p>O repasse é cego: se o pai passar um atributo que o elemento não aceita, ele vai aparecer no HTML do mesmo jeito. E se o resto contiver <code>class</code>, ele <strong>sobrescreve</strong> a classe que você escreveu na tag, a não ser que você combine as duas antes. Em projetos grandes, vale escrever um teste visual para conferir o HTML gerado.</p>
+</div>
+
+<hr>
+
+<h2>8. O padrão é calculado uma vez</h2>
+
+<p>Aqui está a parte que confunde. O valor padrão é calculado <strong>na montagem</strong> do componente, não a cada mudança de estado. Se ele depende de outra variável reativa, a conta é feita com o valor daquele instante e não se atualiza depois.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let subtotal = $state(0);
+  let { total = subtotal * 2 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;Total: 0&lt;/p&gt;</pre>
+
+<p>O <code>subtotal</code> vale <code>0</code> quando o componente monta, então <code>total</code> fica <code>0</code>. Se o subtotal mudar depois, <code>total</code> continua <code>0</code> — o padrão não é reativo. Para acompanhar, o caminho é <code>$derived</code>: <code>let total = $derived(subtotal * 2)</code>, que recalcula quando a origem muda.</p>
+
+<p>O mesmo cuidado vale para ler uma prop fora da desestruturação. Este código compila, mas o compilador avisa:</p>
+
+<div class="warning">
+<strong>Aviso real do compilador</strong>
+<p><code>This reference only captures the initial value of `props`. Did you mean to reference it inside a closure instead?</code> — com o código <code>state_referenced_locally</code>. Ele aparece quando você faz <code>let props = $props(); let nome = props.nome;</code>. A leitura acontece uma vez, e o valor não acompanha mudanças. Prefira desestruturar: <code>let { nome } = $props()</code>.</p>
+</div>
+
+<hr>
+
+<h2>9. Experimente: <code>$props()</code> no lugar certo</h2>
+
+<p>A caixa abaixo chama <code>$props()</code> dentro de uma função, e o compilador recusa o arquivo. Sua missão é mover a chamada para o lugar permitido.</p>
+<div class="trysvelte" data-goal="outre:^Ana">
+<p class="try-task"><strong>Missão:</strong> o compilador recusa com <code>`$props()` can only be used at the top level…</code>. Tire a função do caminho: desestruture direto de <code>$props()</code>, no topo do <code>&lt;script&gt;</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function pegarProps() {
+    return $props();
+  }
+
+  let { nome = 'Ana' } = pegarProps();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'Ana' } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;</pre>
+</div>
+
+<p>O conserto tem menos linhas que o erro: uma função e uma chamada viram uma declaração só. O <code>$props()</code> é uma runa — um comando que só faz sentido no topo do componente, no momento em que o Svelte prepara o arquivo. Dentro de uma função, ela seria executada depois, e o compilador sabe que isso não funciona.</p>
+
+<hr>
+
+<h2>10. Rodando na máquina da Ana</h2>
+
+<p>O componente do projeto tem padrão para nome e preço, e recolhe o resto. Rodando sem props, você vê os padrões e um resto vazio:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Para ver o outro lado, passe props no <code>App.svelte</code> e salve. O padrão sai de cena, o preço formata o valor novo e o resto ganha as chaves extras. O mesmo arquivo, dois comportamentos, e nada de <code>{#if}</code> espalhado pela marcação — tudo resolvido na porta de entrada.</p>
+
+<p>No build, padrão e resto quase não pesam:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CK_M3iiM.js  36.72 kB │ gzip: 14.14 kB
+✓ built in 1.67s</pre>
+
+<p><code>36.72 kB</code>, perto do build da aula de <code>{#if}</code> (<code>36.03 kB</code>). A diferença de menos de um kilobyte é o código que copia as props para o objeto de resto. Não existe penalidade em dar padrão a tudo o que faz sentido: você escreve menos proteção no corpo do componente e o leitor entende os valores possíveis só olhando o topo do arquivo.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas são sobre o lugar e a forma de declarar props.</p>
+<div class="cenario">
+<strong>Erro 1 — <code>export let</code> no meio de runas</strong>
+<p>O modo antigo de declarar props era <code>export let</code>. No Svelte 5, um componente que usa runas não pode misturar os dois modelos.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let nome = 'Ana';
+  let { preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+<p>A mensagem diz exatamente o que fazer: usar <code>$props()</code>. A linha apontada é a do <code>export let</code>, mesmo que ela venha antes da runa no arquivo. Se você está migrando um componente antigo, troque todas as declarações de uma vez — misturar é o que gera esse erro.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — <code>$props()</code> dentro de uma função</strong>
+<p>A runa só vale no topo do componente, como inicializador de uma declaração de variável. Dentro de uma função, ela seria executada em outro momento.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function pegarProps() {
+    return $props();
+  }
+
+  let { nome = 'Ana' } = pegarProps();
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 11): `$props()` can only be used at the top level of components as a variable declaration initializer</pre>
+<p>A mensagem é comprida e precisa: "<code>$props()</code> só pode ser usado no topo de componentes, como inicializador de declaração de variável". A coluna 11 aponta o começo da chamada. Mova a desestruturação para o topo e passe os valores que a função precisar como argumentos.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — a runa sem parênteses</strong>
+<p>Runa é chamada: <code>$props()</code>, com parênteses, mesmo sem argumento nenhum. Sem eles, o compilador não sabe se você quer a runa ou uma variável de mesmo nome.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { nome = 'Ana' } = $props;
+&lt;/script&gt;
+
+&lt;h1&gt;{nome}&lt;/h1&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 25): Cannot use rune without parentheses</pre>
+<p>"Cannot use rune without parentheses" é uma das mensagens mais curtas do Svelte. A coluna 25 é o fim da declaração, onde os parênteses deveriam estar. Vale para todas as runas: <code>$state()</code>, <code>$derived()</code>, <code>$effect()</code>, <code>$props()</code>.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>let { nome = 'Ana' } = $props()</code></td><td>prop com valor padrão</td></tr>
+<tr><td><code>let { nome = 'Ana', preco = 0 } = $props()</code></td><td>várias props, vários padrões</td></tr>
+<tr><td><code>let { ...tudo } = $props()</code></td><td>todas as props num objeto</td></tr>
+<tr><td><code>let { nome, ...resto } = $props()</code></td><td>uma prop pelo nome, o resto no objeto</td></tr>
+<tr><td><code>&lt;section {...resto}&gt;</code></td><td>repassa o objeto como atributos</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O padrão entra?</th><th>O que fazer</th></tr>
+<tr><td>Prop ausente</td><td>sim</td><td>nada</td></tr>
+<tr><td><code>null</code></td><td>não</td><td>usar <code>??</code> ou normalizar no pai</td></tr>
+<tr><td><code>''</code></td><td>não</td><td>testar com <code>||</code> se vazio conta como ausente</td></tr>
+<tr><td><code>0</code></td><td>não</td><td>cuidado: <code>0 || padrão</code> troca zero pelo padrão</td></tr>
+<tr><td>Valor calculado a partir de outro estado</td><td>sim, uma vez</td><td>usar <code>$derived</code> se precisa acompanhar</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td><code>export let</code> com runas</td><td><code>Cannot use `export let` in runes mode — use `$props()` instead</code></td></tr>
+<tr><td><code>$props()</code> fora do topo</td><td><code>can only be used at the top level of components…</code></td></tr>
+<tr><td>Runa sem parênteses</td><td><code>Cannot use rune without parentheses</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>let { nome = 'Ana' } = $props()</code> significa?</p>
+<label><input type="radio" name="q1"> O nome sempre vale 'Ana'</label>
+<label><input type="radio" name="q1"> O nome vale 'Ana' quando o pai não passa nada</label>
+<label><input type="radio" name="q1"> O nome vale 'Ana' quando o pai passa <code>null</code></label>
+<label><input type="radio" name="q1"> O nome vira uma variável de estado</label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que a variável <code>resto</code> contém em <code>let { nome, ...resto } = $props()</code>?</p>
+<label><input type="radio" name="q1"> Todas as props, inclusive <code>nome</code></label>
+<label><input type="radio" name="q1"> As props que não foram listadas antes dos três pontos</label>
+<label><input type="radio" name="q1"> Uma lista com os nomes das props</label>
+<label><input type="radio" name="q1"> <code>undefined</code> quando não há props extras</label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. Por que <code>let total = subtotal * 2</code> dentro da desestruturação de <code>$props()</code> não acompanha mudanças de <code>subtotal</code>?</p>
+<label><input type="radio" name="q1"> Porque <code>subtotal</code> não é reativo</label>
+<label><input type="radio" name="q1"> Porque o padrão é calculado uma vez, na montagem</label>
+<label><input type="radio" name="q1"> Porque a multiplicação não funciona com <code>$state</code></label>
+<label><input type="radio" name="q1"> Porque o padrão é sempre constante</label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let { nome = 'Ana', preco = 0.9, <input data-answer="...resto"> } = $props();<br><br>// recolha as props que não foram listadas</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Valor padrão se escreve dentro da desestruturação: <code>let { nome = 'Ana' } = $props()</code>.</li>
+  <li>O padrão só entra quando a prop vale <code>undefined</code> — não com <code>null</code>, <code>0</code> ou <code>''</code>.</li>
+  <li>Com padrão na porta de entrada, o corpo do componente não precisa de proteção espalhada.</li>
+  <li><code>...resto</code> recolhe as props não listadas, sempre por último na desestruturação.</li>
+  <li>O resto é sempre um objeto: vazio quando não há extras, nunca <code>undefined</code>.</li>
+  <li><code>{...resto}</code> numa tag repassa as chaves como atributos do elemento.</li>
+  <li>Repasse é cego: atributos desconhecidos aparecem e <code>class</code> pode ser sobrescrita.</li>
+  <li>O padrão é calculado uma vez, na montagem; para acompanhar mudanças, use <code>$derived</code>.</li>
+  <li>Ler <code>props.nome</code> direto no <code>&lt;script&gt;</code> gera o aviso <code>state_referenced_locally</code>.</li>
+  <li>Os erros desta aula: <code>export let</code> com runas, <code>$props()</code> fora do topo e runa sem parênteses.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>children: o componente que recebe conteúdo | Guia Svelte</title>
+<meta name="description" content="A prop children no Svelte 5: receber marcação do pai com {@render children()}, tratar o conteúdo vazio, snippets com nome e a saída do <slot>.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">children: o componente que recebe conteúdo</span></h1>
+
+<p class="intro">A Ana comprou molduras de madeira para a parede da padaria. A moldura é sempre a mesma — mesma cor, mesma borda, mesmo prego —, e o que ela pendura dentro muda: hoje o preço do pão, amanhã o aviso de feriado. Na programação, essa moldura é um componente que recebe <strong>conteúdo de fora</strong>: o componente pai escreve a marcação, e o filho decide onde ela aparece. Em Svelte 5 esse conteúdo chega numa prop chamada <code>children</code>, e quem o desenha é <code>{@render children()}</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que a prop <code>children</code> contém e de onde ela vem.</li>
+  <li>A escrever o componente que recebe e o que entrega conteúdo.</li>
+  <li>Como ler a saída real do componente quando ninguém passa nada.</li>
+  <li>Por que <code>{@render children()}</code> e não <code>{children}</code>.</li>
+  <li>Como tratar o caso de conteúdo vazio com um padrão.</li>
+  <li>Que snippets com nome chegam como props comuns, não como <code>children</code>.</li>
+  <li>Como passar dados do filho para o conteúdo do pai chamando <code>children(valor)</code>.</li>
+  <li>O que o antigo <code>&lt;slot&gt;</code> fazia e por que ele saiu de cena.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como reconhecer uma moldura reutilizável no seu próprio código.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a moldura e o quadro</h2>
+
+<p>Até agora, todo componente que você escreveu desenhava o próprio conteúdo. Um <code>Cartao.svelte</code> com título, preço e cor faz tudo sozinho. Isso funciona até o momento em que você quer a mesma moldura com conteúdos diferentes: um cartão com preço, outro com aviso, outro com o horário. Se o conteúdo estiver fixo dentro do componente, você precisa de três componentes ou de um monte de <code>{#if}</code>.</p>
+
+<p>A outra opção é o componente desenhar só a moldura e deixar um buraco para o conteúdo. Quem usa o componente preenche o buraco, escrevendo marcação normal entre a abertura e o fechamento da tag. O Svelte recolhe essa marcação e a entrega ao filho numa prop especial chamada <code>children</code>. O filho decide onde ela aparece — no meio, embaixo, dentro de um <code>&lt;section&gt;</code> — e o pai não precisa saber de nada disso.</p>
+
+<p>O ganho é de organização. A moldura fica num arquivo e cuida do visual e da estrutura. O conteúdo fica no pai e cuida da informação do momento. Mudou a cor da borda? Um arquivo. Mudou o texto do aviso? Outro. Nenhum dos dois precisa conhecer o interior do outro.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A moldura de madeira</td><td>o componente filho: borda, título, espaçamento</td></tr>
+<tr><td>O quadro pendurado dentro</td><td>a marcação que o pai passa entre as tags</td></tr>
+<tr><td>O prego onde o quadro encaixa</td><td><code>{@render children()}</code></td></tr>
+<tr><td>A moldura vazia na parede</td><td>o caso "sem conteúdo": precisa de um padrão</td></tr>
+<tr><td>Uma moldura diferente por quadro</td><td>três componentes copiados: o que o <code>children</code> evita</td></tr>
+</table>
+</div>
+
+<p>Uma palavra sobre o nome: <code>children</code> é o plural de "child" ("filho", em inglês). A escolha não é à toa — a marcação passada para dentro de um componente é tratada como filha dele na árvore da página. O Svelte reserva esse nome: quando o pai escreve conteúdo solto dentro da tag, o motor monta um snippet e o entrega na prop <code>children</code>.</p>
+
+<hr>
+
+<h2>2. O componente que recebe</h2>
+
+<p>Do lado do filho, <code>children</code> é uma prop como outra qualquer: vem na desestruturação de <code>$props()</code>. A diferença é que ela não é um texto nem um número — é um <strong>snippet</strong>, e snippet se desenha com <code>{@render}</code>.</p>
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { titulo = 'Cartão', children } = $props();
+&lt;/script&gt;
+
+&lt;section class="cartao"&gt;
+  &lt;h2&gt;{titulo}&lt;/h2&gt;
+  {#if children}
+    {@render children()}
+  {:else}
+    &lt;p&gt;Sem conteúdo.&lt;/p&gt;
+  {/if}
+&lt;/section&gt;</pre>
+
+<p>Esse componente, sozinho, sem ninguém passar conteúdo, mostra o caminho do "sem":</p>
+<pre class="out">&lt;section class="cartao"&gt;&lt;h2&gt;Cartão&lt;/h2&gt; &lt;p&gt;Sem conteúdo.&lt;/p&gt;&lt;/section&gt;</pre>
+
+<p>Duas coisas aconteceram. Primeiro, o <code>titulo</code> não foi passado, então valeu o padrão <code>'Cartão'</code>. Segundo, <code>children</code> não existe, a condição <code>{#if children}</code> deu falso e o bloco do <code>{:else}</code> apareceu. Sem esse cuidado, o componente quebraria ao tentar desenhar um snippet que ninguém mandou — o erro real é <code>children is not a function</code>.</p>
+
+<h3>A anatomia do recebimento</h3>
+<dl class="anatomy">
+  <dt>let { titulo = 'Cartão', children } = $props()</dt><dd>as <strong>props</strong>: <code>children</code> entra na mesma desestruturação que <code>titulo</code>, sem nada de especial.</dd>
+  <dt>{#if children}</dt><dd>o <strong>teste</strong>: a prop existe? Snippet existe quando o pai passou conteúdo.</dd>
+  <dt>{@render children()}</dt><dd>o <strong>desenho</strong>: aqui a marcação do pai entra na página, dentro do <code>&lt;section&gt;</code>.</dd>
+  <dt>{:else}<p>Sem conteúdo.</p></dt><dd>o <strong>padrão</strong>: o que mostrar quando ninguém passou nada. Uma frase basta; pode ser um snippet também.</dd>
+</dl>
+
+<p>Repare que o filho não sabe o que vai receber. Ele não pergunta "é um preço ou um aviso?", não tem <code>{#if}</code> por tipo de conteúdo. Ele só reserva o lugar e desenha o que chegar. É essa ignorância que torna a moldura reutilizável — e é ela que permite ao pai mudar o conteúdo sem tocar no filho.</p>
+
+<hr>
+
+<h2>3. Experimente: declare a prop que faltou</h2>
+
+<p>A caixa abaixo usa <code>children</code> sem declará-la em <code>$props()</code>. O componente quebra. Sua missão é consertar.</p>
+<div class="trysvelte" data-goal="out:Comanda Sem conteúdo.">
+<p class="try-task"><strong>Missão:</strong> a tela está em branco e o erro é <code>children is not defined</code>. Acrescente <code>children</code> à desestruturação de <code>$props()</code> e trate o caso vazio com <strong>Sem conteúdo.</strong></p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { titulo = 'Comanda' } = $props();
+&lt;/script&gt;
+
+&lt;h2&gt;{titulo}&lt;/h2&gt;
+{@render children()}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { titulo = 'Comanda', children } = $props();
+&lt;/script&gt;
+
+&lt;h2&gt;{titulo}&lt;/h2&gt;
+{#if children}
+  {@render children()}
+{:else}
+  &lt;p&gt;Sem conteúdo.&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>A missão tem duas partes de propósito, porque os dois erros andam juntos. Sem declarar <code>children</code>, o nome não existe e a mensagem é <code>children is not defined</code>. Declarando mas sem o teste, o nome existe e vale <code>undefined</code> — e aí a falha é outra, ou a moldura sai vazia, dependendo de onde o desenho acontece.</p>
+
+<p>O avaliador da caixa roda o componente como se ninguém tivesse passado conteúdo nenhum, então o caminho testado é sempre o do padrão. Na máquina da Ana é diferente: você vai ver o conteúdo aparecendo quando o pai passar algo.</p>
+
+<hr>
+
+<h2>4. O pai que entrega o conteúdo</h2>
+
+<p>Do lado de quem usa, a escrita é a de qualquer tag HTML: abre, escreve o conteúdo, fecha. A única diferença é que o nome da tag é o componente importado, e o conteúdo pode ser marcação de verdade.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+&lt;/script&gt;
+
+&lt;Cartao titulo="Pão francês"&gt;
+  &lt;p&gt;R$ 0,90&lt;/p&gt;
+&lt;/Cartao&gt;</pre>
+
+<p>O resultado da composição é uma <code>&lt;section&gt;</code> com a classe do filho, o título que o pai passou e o parágrafo do pai no lugar reservado: <code>&lt;section class="cartao"&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0,90&lt;/p&gt;&lt;/section&gt;</code>. Nenhuma tag intermediária, nenhum invólucro extra: o conteúdo entra exatamente onde o filho pediu.</p>
+
+<p>Três detalhes práticos do lado do pai. O primeiro: o conteúdo pode ser qualquer HTML — parágrafos, listas, imagens, outros componentes. O segundo: as variáveis usadas no conteúdo são as do pai, não as do filho; é o pai quem calcula o preço, o filho só desenha. O terceiro: se o componente for de fechamento automático (<code>&lt;Cartao /&gt;</code>), ele não recebe conteúdo nenhum, e o caminho do padrão aparece.</p>
+
+<div class="tip">
+<strong>Indentação ajuda a ler</strong>
+<p>Quando o conteúdo é grande, indente-o dois espaços a mais que a tag do componente. O compilador não liga, mas a leitura deixa claro onde começa e termina o que o pai está entregando. É o mesmo cuidado das aulas de blocos.</p>
+</div>
+
+<hr>
+
+<h2>5. Por que <code>{@render}</code> e não <code>{children}</code></h2>
+
+<p>Essa é a pergunta que separa quem entendeu de quem decorou. <code>children</code> não é texto: é uma função que sabe desenhar marcação. Se você colocar a função direto numa chave comum, o Svelte trata como valor e transforma em texto — e o texto de uma função é o código-fonte dela. Com um pai passando um parágrafo, a tela mostra literalmente isto: <code>($$renderer) =&gt; { $$renderer.push(`&lt;p&gt;oi&lt;/p&gt;`); }</code>.</p>
+
+<p>É o corpo da função do snippet, com o HTML dentro, escrito na tela. Feio e inútil — mas didático: mostra que o que chegou foi um <em>desenho a ser executado</em>, não uma frase pronta. O <code>{@render}</code> é a marca que diz "execute este snippet aqui e ponha o resultado no documento".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que você escreve</th><th>O que o Svelte faz</th><th>O que aparece</th></tr>
+<tr><td><code>{children}</code></td><td>trata como texto</td><td>o código-fonte da função</td></tr>
+<tr><td><code>{@render children()}</code></td><td>executa o snippet</td><td>a marcação do pai, desenhada</td></tr>
+<tr><td><code>{@render children}</code></td><td>não é chamada</td><td>erro de compilação</td></tr>
+<tr><td><code>{children()}</code></td><td>chama como função comum</td><td>o componente quebra</td></tr>
+</table>
+</div>
+
+<p>Se você já viu <code>&lt;slot /&gt;</code> em código antigo, a tradução é direta: <code>&lt;slot /&gt;</code> virou <code>{@render children()}</code>. A ideia é a mesma — "aqui entra o conteúdo do pai" —, mas agora o conteúdo é um snippet com nome, o que abre possibilidades que o slot não tinha, como passar valores.</p>
+
+<hr>
+
+<h2>6. Experimente: a moldura sem conteúdo</h2>
+
+<p>A caixa abaixo desenha o conteúdo do pai e não prevê o caso vazio. Sua missão é fazer a moldura mostrar uma frase quando ninguém passar nada.</p>
+<div class="trysvelte" data-goal="out:Sem conteúdo.">
+<p class="try-task"><strong>Missão:</strong> a moldura fica vazia quando ninguém passa conteúdo. Envolva o <code>{@render children()}</code> num teste e mostre <strong>Sem conteúdo.</strong> no caminho alternativo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;article class="moldura"&gt;
+  {@render children()}
+&lt;/article&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;article class="moldura"&gt;
+  {#if children}
+    {@render children()}
+  {:else}
+    &lt;p&gt;Sem conteúdo.&lt;/p&gt;
+  {/if}
+&lt;/article&gt;</pre>
+</div>
+
+<p>Na caixa, o componente é montado sem nenhum conteúdo, então o caminho do padrão é o único possível. Na renderização do servidor, o mesmo componente sem o teste quebra com <code>children is not a function</code> — você viu isso na seção 2. Ou seja: o padrão não é preciosismo, é o que impede a moldura de virar erro quando alguém a usa vazia.</p>
+
+<hr>
+
+<h2>7. Snippets com nome chegam como props</h2>
+
+<p>Existe uma segunda forma de um pai entregar marcação: com um snippet nomeado. Nesse caso, o conteúdo não vai para <code>children</code> — vai para uma prop com o nome que você deu. É o que permite o filho chamar o desenho do pai <strong>várias vezes</strong>, passando valores diferentes.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Lista from './Lista.svelte';
+  let produtos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;Lista itens={produtos}&gt;
+  {#snippet children(nome)}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/snippet}
+&lt;/Lista&gt;</pre>
+<pre class="file" data-file="src/Lista.svelte">&lt;script&gt;
+  let { children, itens } = $props();
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    {@render children(item)}
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O pai não escreveu conteúdo solto: declarou um snippet chamado <code>children</code> com um parâmetro. O filho recebe esse snippet na prop <code>children</code> e chama <code>{@render children(item)}</code> dentro do <code>{#each}</code>. O resultado é uma <code>&lt;ul&gt;</code> com um <code>&lt;li&gt;</code> por item — <code>&lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;li&gt;leite&lt;/li&gt;&lt;/ul&gt;</code> — e o filho não sabe que o desenho é um <code>&lt;li&gt;</code>.</p>
+
+<h3>A anatomia do snippet com nome</h3>
+<dl class="anatomy">
+  <dt>{#snippet children(nome)}</dt><dd>o <strong>nome reservado</strong> com um parâmetro: o filho pode chamar o seu desenho quantas vezes quiser, com valores diferentes.</dd>
+  <dt><Lista itens={produtos}></dt><dd>o filho recebe as <strong>props normais</strong> e o snippet no mesmo lugar — no pai, tudo é atributo ou conteúdo.</dd>
+  <dt>{@render children(item)}</dt><dd>no filho, a chamada <strong>passa o valor</strong> que o pai vai receber em <code>nome</code>.</dd>
+  <dt>{#each itens as item}</dt><dd>a lista mora no filho; o <strong>desenho de cada linha</strong> mora no pai.</dd>
+</dl>
+
+<p>Esse arranjo é o que substitui os slots nomeados do Svelte antigo. Cada snippet vira uma prop; se o nome for <code>children</code>, é o conteúdo padrão; se for outro, o pai precisa usar o nome na tag. Um componente pode receber vários snippets e usar cada um num lugar.</p>
+
+<hr>
+
+<h2>8. Conteúdo opcional com padrão dentro de um snippet</h2>
+
+<p>O padrão pode ser mais do que uma frase: pode ser um snippet, com a mesma estrutura de qualquer carimbo. Assim ele fica nomeado, reutilizável e fácil de trocar depois.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+{#snippet vazio()}
+  &lt;p&gt;Sem conteúdo.&lt;/p&gt;
+{/snippet}
+
+{#if children}
+  {@render children()}
+{:else}
+  {@render vazio()}
+{/if}</pre>
+<pre class="out">&lt;p&gt;Sem conteúdo.&lt;/p&gt;</pre>
+
+<p>Sozinho, o componente cai no snippet <code>vazio</code> e mostra a frase. Com um pai passando conteúdo, o <code>{#if children}</code> dá verdadeiro, o snippet do pai é desenhado e o <code>vazio</code> nunca aparece. Os dois caminhos continuam exclusivos, como no <code>{#if}</code> da primeira aula.</p>
+
+<p>Quando o padrão é um snippet com parâmetro, a forma fica ainda mais flexível: o mesmo carimbo de "vazio" pode receber uma mensagem diferente em cada componente que o usa. E vale a regra da aula de snippets: o carimbo precisa de parênteses e do argumento na chamada, senão o parâmetro chega vazio.</p>
+
+<hr>
+
+<h2>9. Experimente: o vazio sem mensagem</h2>
+
+<p>A caixa abaixo tem o snippet de reserva, mas a chamada está sem argumento. Sua missão é fazer a frase aparecer.</p>
+<div class="trysvelte" data-goal="out:Sem conteúdo.">
+<p class="try-task"><strong>Missão:</strong> o snippet <code>vazio</code> espera uma mensagem e a chamada está vazia, então a tela fica em branco. Passe o texto <code>Sem conteúdo.</code> na chamada.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+{#snippet vazio(mensagem)}
+  &lt;p&gt;{mensagem}&lt;/p&gt;
+{/snippet}
+
+{#if children}
+  {@render children()}
+{:else}
+  {@render vazio()}
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+{#snippet vazio(mensagem)}
+  &lt;p&gt;{mensagem}&lt;/p&gt;
+{/snippet}
+
+{#if children}
+  {@render children()}
+{:else}
+  {@render vazio('Sem conteúdo.')}
+{/if}</pre>
+</div>
+
+<p>É o mesmo mecanismo da aula de snippets com parâmetros, agora dentro de uma moldura. A diferença é que o caminho do padrão só é testado quando ninguém passa conteúdo — e é exatamente esse o caso da caixa, porque o avaliador monta o componente sem props.</p>
+
+<hr>
+
+<h2>10. O parente antigo: <code>&lt;slot&gt;</code></h2>
+
+<p>Antes do Svelte 5, o buraco para o conteúdo do pai era uma tag chamativa:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;slot&gt;Conteúdo padrão&lt;/slot&gt;</pre>
+<pre class="out">Conteúdo padrão</pre>
+
+<p>O comportamento era parecido: se o pai não mandasse nada, aparecia o conteúdo de reserva dentro da tag. O Svelte 5 ainda aceita, mas avisa no console que a sintaxe está fora de moda — e o conselho é migrar para <code>{@render ...}</code>. Mais do que isso: no mesmo componente, slot e <code>{@render}</code> não convivem, e o compilador recusa a mistura.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Svelte antigo</th><th>Svelte 5</th><th>Observação</th></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td><td>tradução direta</td></tr>
+<tr><td><code>&lt;slot&gt;padrão&lt;/slot&gt;</code></td><td><code>{#if children}…{:else}padrão{/if}</code></td><td>o padrão agora é explícito</td></tr>
+<tr><td><code>&lt;slot name="rodape" /&gt;</code></td><td><code>{@render rodape()}</code></td><td>snippet com nome vira prop</td></tr>
+<tr><td><code>slot="rodape"</code> no pai</td><td><code>{#snippet rodape()}…{/snippet}</code></td><td>o pai declara o snippet</td></tr>
+</table>
+</div>
+
+<p>Se você encontrar slot em código de outro projeto, não precisa reescrever tudo hoje: o compilador aceita e o aviso não quebra nada. Mas em código novo, escreva <code>children</code>. É o caminho que o Svelte 5 documenta e o que as aulas seguintes usam.</p>
+
+<hr>
+
+<h2>11. Rodando na máquina da Ana</h2>
+
+<p>O componente do projeto é o cartão que recebe conteúdo. Com o servidor de desenvolvimento ligado, você vê o caminho do padrão porque o <code>App.svelte</code> ainda não passa nada:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Para ver o outro caminho, envolva o cartão com conteúdo no <code>App.svelte</code>: <code>&lt;Cartao titulo="Pão francês"&gt;&lt;p&gt;R$ 0,90&lt;/p&gt;&lt;/Cartao&gt;</code> e salve. O parágrafo entra no lugar reservado, e a frase "Sem conteúdo." desaparece. Trocar o conteúdo não exige tocar no filho — esse é o teste que prova que a moldura está bem feita.</p>
+
+<p>No build, o componente com moldura custa um pouco menos que o build da aula anterior:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Dx5uhb0P.js  38.44 kB │ gzip: 14.76 kB
+✓ built in 946ms</pre>
+
+<p><code>38.44 kB</code>, contra <code>41.04 kB</code> da comanda com snippets parametrizados. A moldura não acrescenta mecanismo: <code>children</code> é uma prop, e o <code>{@render}</code> é a mesma marca que você já conhece. O que muda é quem escreve o conteúdo.</p>
+
+<hr>
+
+<h2>12. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas nascem de uma confusão de nomes — e nomes, aqui, são o contrato entre pai e filho.</p>
+<div class="cenario">
+<strong>Erro 1 — <code>$props()</code> duas vezes</strong>
+<p>O componente tem uma única porta de entrada para props. Chamar <code>$props()</code> duas vezes para desestruturar pedaços diferentes não é aceito.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+  let { titulo } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{titulo}&lt;/h1&gt;
+{@render children()}</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 19): Cannot use `$props()` more than once</pre>
+<p>A mensagem é direta e aponta a segunda chamada (linha 3, coluna 19). O conserto é juntar tudo numa desestruturação só: <code>let { children, titulo } = $props()</code>. Se o componente precisa de muitos nomes, uma linha comprida é melhor que duas chamadas.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — slot e <code>{@render}</code> no mesmo componente</strong>
+<p>As duas sintaxes não convivem. O compilador recusa a mistura para não deixar dois modelos de conteúdo no mesmo arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;slot /&gt;
+{@render children()}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Cannot use `&lt;slot&gt;` syntax and `{@render ...}` tags in the same component. Migrate towards `{@render ...}` tags completely</pre>
+<p>A mensagem já dá o caminho: migrar por completo. Troque o <code>&lt;slot /&gt;</code> por <code>{@render children()}</code>, declare <code>children</code> em <code>$props()</code> e o arquivo compila. É a tradução da tabela da seção 10, aplicada de uma vez.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — snippet com o mesmo nome da prop</strong>
+<p>Declarar um snippet chamado <code>children</code> num componente que já tirou <code>children</code> de <code>$props()</code> cria dois donos para o mesmo nome.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+{#snippet children()}
+  &lt;p&gt;oi&lt;/p&gt;
+{/snippet}
+
+{@render children()}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 10): `children` has already been declared</pre>
+<p>A mensagem é a mesma de variável repetida. Aqui o conflito é conceitual: você não pode ter, ao mesmo tempo, o conteúdo que vem do pai e um carimbo local com o mesmo nome. Renomeie o local — <code>padrao</code>, <code>vazio</code> — e siga em frente.</p>
+</div>
+
+<hr>
+
+<h2>13. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No filho</th><th>O que faz</th></tr>
+<tr><td><code>let { children } = $props()</code></td><td>recebe o conteúdo do pai</td></tr>
+<tr><td><code>{@render children()}</code></td><td>desenha o conteúdo naquele ponto</td></tr>
+<tr><td><code>{#if children}</code></td><td>testa se o pai passou algo</td></tr>
+<tr><td><code>{@render children(item)}</code></td><td>desenha passando um valor para o pai</td></tr>
+<tr><td><code>let { rodape } = $props()</code></td><td>recebe um snippet com nome</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No pai</th><th>O que acontece</th></tr>
+<tr><td><code>&lt;Cartao&gt;&lt;p&gt;oi&lt;/p&gt;&lt;/Cartao&gt;</code></td><td>o parágrafo vai para <code>children</code></td></tr>
+<tr><td><code>&lt;Cartao /&gt;</code></td><td>nada vai; o filho usa o padrão</td></tr>
+<tr><td><code>&lt;Cartao&gt;{#snippet rodape()}…{/snippet}&lt;/Cartao&gt;</code></td><td>o snippet vira a prop <code>rodape</code></td></tr>
+<tr><td><code>&lt;Lista itens={produtos} /&gt;</code></td><td>só props comuns, sem conteúdo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td><code>$props()</code> duas vezes</td><td><code>Cannot use `$props()` more than once</code></td></tr>
+<tr><td>slot + <code>{@render}</code></td><td><code>Cannot use `&lt;slot&gt;` syntax and `{@render ...}` tags in the same component</code></td></tr>
+<tr><td>nome repetido</td><td><code>`children` has already been declared</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que a prop <code>children</code> contém?</p>
+<label><input type="radio" name="q1"> O texto que o pai escreveu entre as tags, como string</label>
+<label><input type="radio" name="q1"> Um snippet com a marcação que o pai passou</label>
+<label><input type="radio" name="q1"> Uma lista de componentes filhos do arquivo</label>
+<label><input type="radio" name="q1"> O nome do componente pai</label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Por que o filho precisa de <code>{@render children()}</code> em vez de <code>{children}</code>?</p>
+<label><input type="radio" name="q1"> Porque <code>{children}</code> não compila</label>
+<label><input type="radio" name="q1"> Porque <code>children</code> é uma função que desenha marcação, e texto de função sai como código</label>
+<label><input type="radio" name="q1"> Porque <code>{@render}</code> deixa o HTML mais rápido</label>
+<label><input type="radio" name="q1"> Porque <code>{children}</code> só funciona com slot</label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. O que acontece com <code>&lt;Cartao /&gt;</code>, sem conteúdo, num filho que faz <code>{@render children()}</code> sem teste?</p>
+<label><input type="radio" name="q1"> O filho mostra uma moldura vazia, sem erro</label>
+<label><input type="radio" name="q1"> O filho quebra: o snippet não existe</label>
+<label><input type="radio" name="q1"> O pai deixa de compilar</label>
+<label><input type="radio" name="q1"> O Svelte cria um conteúdo padrão automático</label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;let { <input data-answer="children"> } = $props();<br>&lt;/script&gt;<br><br>&lt;section&gt;<br>&nbsp;&nbsp;{@render children()}<br>&lt;/section&gt;<br><br>// a prop que recebe o conteúdo vindo do pai</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>children</code> é uma prop especial: contém a marcação que o pai escreveu entre as tags.</li>
+  <li>Ela chega na desestruturação de <code>$props()</code>, como qualquer outra prop.</li>
+  <li>É um snippet, então se desenha com <code>{@render children()}</code> — nunca com <code>{children}</code>.</li>
+  <li>Sem teste, um pai que não passa nada quebra o filho: use <code>{#if children}</code> com um padrão.</li>
+  <li>O padrão pode ser uma frase ou um snippet nomeado, que aceita parâmetros.</li>
+  <li>Snippets com nome chegam como props com o nome dado; <code>children</code> é só o nome do conteúdo solto.</li>
+  <li><code>{@render children(item)}</code> permite ao filho passar valores para o desenho do pai.</li>
+  <li><code>&lt;slot&gt;</code> ainda funciona, mas está fora de moda e não convive com <code>{@render}</code>.</li>
+  <li>Os erros desta aula: <code>$props()</code> duas vezes, slot misturado e nome repetido.</li>
+  <li>Moldura com <code>children</code> é o padrão para cartões, seções, modais e layouts.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
