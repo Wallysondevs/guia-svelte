@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revisão do Nível 2 — o que ficou e o que falta | Guia Svelte</title>
+<meta name="description" content="Revisão do Nível 2 do Guia Svelte: estado e derivados, listas com filtro, snippets com parâmetros, ciclo de vida, testes, build e os erros que mais voltam.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Revisão do Nível 2</span></h1>
+
+<p class="intro">A Ana terminou o nível 2 com o projeto da padaria funcionando: vitrine, pedido, troco e testes. Antes de entrar no SvelteKit, ela fez o que faz no fim de cada mês na padaria — sentou com o caderno e conferiu o que aprendeu de verdade e o que só passou pelos olhos. Esta aula é essa conferência, com três missões que juntam tudo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O mapa do Nível 2: o que cada grupo de aulas entregou.</li>
+  <li>Como um componente resume estado, propriedade, lista e derivado ao mesmo tempo.</li>
+  <li>Como filtrar uma lista com <code>bind:value</code> e <code>$derived</code>.</li>
+  <li>Como passar parâmetros para um <code>{#snippet}</code>.</li>
+  <li>Por que a lista vazia precisa de uma mensagem própria.</li>
+  <li>O resumo do ciclo de vida e das formas de compartilhar dados.</li>
+  <li>O que o Vitest e o build dizem sobre o projeto hoje.</li>
+  <li>Os erros que mais voltam, para reconhecer em um segundo.</li>
+  <li>O que muda quando o projeto entra no SvelteKit.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. O mapa do Nível 2</h2>
+
+<p>O nível 2 não ensinou sintaxe nova: ensinou a usar bem a sintaxe do nível 1. Cada grupo de aulas respondeu a uma pergunta que só aparece quando o projeto cresce.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Grupo</th><th>Pergunta que respondeu</th><th>Peça central</th></tr>
+<tr><td>Ciclo de vida</td><td>o que roda quando o componente nasce e morre?</td><td><code>onMount</code>, <code>tick</code>, <code>$effect</code></td></tr>
+<tr><td>Composição</td><td>como um componente conversa com outro?</td><td><code>$props</code>, snippets, context, stores</td></tr>
+<tr><td>Recursos avançados</td><td>como lidar com listas grandes e trabalho repetido?</td><td><code>use:</code>, debounce, paginação</td></tr>
+<tr><td>Qualidade</td><td>como o projeto continua legível e confiável?</td><td>pastas, nomes, testes, medição, refatoração</td></tr>
+</table>
+</div>
+
+<p>Cada grupo desses tem uma aula de “quando dá errado”, e vale reler a mensagem antes de reler a explicação. A mensagem é a mesma que você vai encontrar no projeto; a explicação, não.</p>
+
+<p>Existe um jeito rápido de saber se o nível está firme: pegue um componente seu e tente explicar, em voz alta, o que cada variável guarda e quem a atualiza. Se você conseguir sem “mais ou menos”, está pronto. Se travar em alguma, é ali que falta revisão.</p>
+
+<p>Se algum desses grupos ficou nebuloso, não siga para o nível 3: o SvelteKit multiplica os conceitos. Rotas e dados de servidor são fáceis quando você já sabe o que é estado, propriedade e derivado — e são confusos quando não sabe.</p>
+
+<hr>
+
+<h2>2. O componente que resume o nível</h2>
+
+<p>Este componente pequeno usa quatro ideias do nível ao mesmo tempo: propriedade com valor padrão, estado em lista, derivado e laço com formatação.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { titulo = 'Vitrine da Ana' } = $props();
+  let precos = $state([0.9, 2.5, 4]);
+  let total = $derived(precos.reduce((soma, p) =&gt; soma + p, 0));
+&lt;/script&gt;
+
+&lt;h1&gt;{titulo}&lt;/h1&gt;
+
+&lt;ul&gt;
+  {#each precos as preco}
+    &lt;li&gt;R$ {preco.toFixed(2)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Vitrine da Ana&lt;/h1&gt; &lt;ul&gt;&lt;li&gt;R$ 0.90&lt;/li&gt;&lt;li&gt;R$ 2.50&lt;/li&gt;&lt;li&gt;R$ 4.00&lt;/li&gt;&lt;/ul&gt; &lt;p&gt;Total: R$ 7.40&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let { titulo = 'Vitrine da Ana' } = $props()</dt><dd>propriedade com valor padrão. Sem padrão, a demonstração mostraria um título vazio.</dd>
+  <dt>let precos = $state([...])</dt><dd>estado: a lista muda durante o uso e a tela acompanha.</dd>
+  <dt>let total = $derived(...)</dt><dd>derivado: não guarda um segundo valor, calcula a partir de <code>precos</code>.</dd>
+  <dt>{#each precos as preco}</dt><dd>laço: um <code>&lt;li&gt;</code> por preço, com a formatação de dinheiro em um lugar só.</dd>
+  <dt>R$ {total.toFixed(2)}</dt><dd>formatação na saída. O valor guardado continua número; o que aparece na tela é texto.</dd>
+</dl>
+
+<p>Se você conseguir explicar cada uma dessas cinco linhas para alguém que nunca programou, o nível 2 está consolidado. Se alguma delas exigir “mais ou menos isso”, volte à aula correspondente antes de seguir.</p>
+
+<hr>
+
+<h2>3. Estado, derivado e a tentação do <code>$effect</code></h2>
+
+<p>A distinção que mais rende no dia a dia é entre o que você guarda e o que você calcula. Guarde só o que vem de fora ou do usuário; calcule todo o resto.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Se sim</th><th>Se não</th></tr>
+<tr><td>o valor vem do usuário ou de fora?</td><td><code>$state</code></td><td>provavelmente <code>$derived</code></td></tr>
+<tr><td>dá para calcular a partir de outro valor?</td><td><code>$derived</code></td><td><code>$state</code></td></tr>
+<tr><td>precisa fazer algo quando o valor muda?</td><td><code>$effect</code>, com cuidado</td><td>nada</td></tr>
+<tr><td>esse “algo” é só calcular outro valor?</td><td><code>$derived</code>, não <code>$effect</code></td><td>—</td></tr>
+</table>
+</div>
+
+<p>Uma pergunta de controle que funciona bem: “se eu apagar esta variável e calcular o valor no lugar onde ele é usado, alguma coisa quebra?”. Se a resposta é não, ela não devia existir como estado. Estado a mais é a fonte mais comum de tela desatualizada.</p>
+
+<p>O <code>$effect</code> é a ferramenta mais poderosa e a mais fácil de usar errado. Ele serve para conversar com o mundo de fora — buscar dado, escrever no <code>localStorage</code>, medir um elemento. Para manter duas variáveis iguais, ele é sempre a resposta errada: vira laço, fica fora de sincronia ou os dois problemas juntos.</p>
+
+<hr>
+
+<h2>4. Filtrar uma lista com busca</h2>
+
+<p>Filtro é o exemplo que junta <code>bind:value</code>, <code>$derived</code> e <code>{#each}</code>. O campo de busca escreve no estado; o derivado recalcula a lista visível; o laço desenha o resultado.</p>
+
+<div class="trysvelte" data-goal="digitar:input=Son;;out:Sonho">
+<p class="try-task"><strong>Missão:</strong> o campo de busca guarda o texto digitado, mas a lista ignora. Faça a lista mostrar só os produtos cujo nome contém o que foi digitado, sem diferenciar maiúscula de minúscula.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let produtos = $state([{ nome: 'Pão francês' }, { nome: 'Sonho' }]);
+  let visiveis = produtos;
+&lt;/script&gt;
+
+&lt;input aria-label="Buscar" bind:value={busca} /&gt;
+{#each visiveis as produto}
+  &lt;p&gt;{produto.nome}&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let produtos = $state([{ nome: 'Pão francês' }, { nome: 'Sonho' }]);
+  let visiveis = $derived(
+    produtos.filter((p) =&gt; p.nome.toLowerCase().includes(busca.toLowerCase()))
+  );
+&lt;/script&gt;
+
+&lt;input aria-label="Buscar" bind:value={busca} /&gt;
+{#each visiveis as produto}
+  &lt;p&gt;{produto.nome}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p>A solução tem duas partes que se explicam sozinhas. <code>toLowerCase()</code> nas duas pontas faz a busca ignorar maiúscula. <code>includes</code> pergunta se o nome contém o texto, em vez de exigir igualdade — buscar “Son” encontra “Sonho”.</p>
+
+<p>Vale reparar no que o derivado não faz: ele não guarda o resultado, não dispara efeito nenhum e não muda a lista original. Ele apenas descreve uma conta que o Svelte refaz quando a busca muda — e só quando a busca muda. É esse detalhe que faz o filtro parecer instantâneo mesmo em listas grandes.</p>
+
+<p>Repare que <code>produtos</code> continua com os dois itens: o filtro não apaga dado, só escolhe o que desenhar. Essa separação é a razão de existir um derivado separado — a lista original precisa continuar inteira para quando a busca ficar vazia.</p>
+
+<hr>
+
+<h2>5. Snippet com parâmetro</h2>
+
+<p>Snippet é um pedaço de HTML com nome, e aceita parâmetros como uma função. A chamada acontece com <code>{@render}</code>:</p>
+
+<div class="trysvelte" data-goal="out:1. Pão 2. Sonho">
+<p class="try-task"><strong>Missão:</strong> o snippet espera a posição de cada item, e a chamada passa só o nome — a lista sai sem número. Passe também a posição, começando em 1.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['Pão', 'Sonho']);
+&lt;/script&gt;
+
+{#snippet item(nome, posicao)}
+  &lt;li&gt;{posicao}. {nome}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each itens as nome}
+    {@render item(nome)}
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['Pão', 'Sonho']);
+&lt;/script&gt;
+
+{#snippet item(nome, posicao)}
+  &lt;li&gt;{posicao}. {nome}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each itens as nome, i}
+    {@render item(nome, i + 1)}
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>O <code>{#each}</code> aceita um segundo nome depois do item, e ele recebe a posição a partir de zero — por isso o <code>i + 1</code>. Parâmetro que não é passado vale <code>undefined</code>, e o Svelte desenha <code>undefined</code> como nada: a lista saiu com o ponto e o nome, sem o número.</p>
+
+<hr>
+
+<h2>6. A lista vazia precisa de recado</h2>
+
+<p>Uma lista sem itens desenha nada. Para quem olha, a tela parece quebrada. A mensagem de lista vazia é parte do componente, não enfeite:</p>
+
+<div class="trysvelte" data-goal="out:Adicionar Nenhum item">
+<p class="try-task"><strong>Missão:</strong> o componente abre com a lista vazia e nenhuma explicação. Mostre <code>Nenhum item</code> quando não houver nada na lista.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state([]);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (itens = [...itens, 'Pão'])}&gt;Adicionar&lt;/button&gt;
+{#each itens as item}
+  &lt;p&gt;{item}&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state([]);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (itens = [...itens, 'Pão'])}&gt;Adicionar&lt;/button&gt;
+
+{#if itens.length === 0}
+  &lt;p&gt;Nenhum item&lt;/p&gt;
+{/if}
+
+{#each itens as item}
+  &lt;p&gt;{item}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p>A condição é <code>itens.length === 0</code> — “o tamanho da lista é zero”. Poderia ser <code>!itens.length</code>, que é mais curto e menos legível para quem começa. Prefira a versão que se lê em voz alta.</p>
+
+<hr>
+
+<h2>7. Ciclo de vida em uma página</h2>
+
+<p>Três funções cobrem quase todo o ciclo de vida. Elas respondem a “quando rodar” e “quando limpar”:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Quando roda</th><th>Para que serve</th></tr>
+<tr><td><code>onMount</code></td><td>uma vez, depois de montar</td><td>buscar dado, medir elemento, iniciar algo externo</td></tr>
+<tr><td><code>$effect</code></td><td>depois de cada mudança de estado que ele lê</td><td>conversar com o mundo de fora</td></tr>
+<tr><td><code>tick</code></td><td>depois que a tela foi atualizada</td><td>medir ou focar algo que acabou de aparecer</td></tr>
+<tr><td><code>untrack</code></td><td>dentro de um efeito</td><td>ler um valor sem virar dependência</td></tr>
+</table>
+</div>
+
+<p>A regra que evita a maioria dos problemas: <code>onMount</code> roda uma vez e não volta. Se o seu código precisa rodar de novo quando um valor muda, o lugar é <code>$effect</code> — e se o que ele faz é calcular outra coisa, o lugar é <code>$derived</code>.</p>
+
+<p>Uma consequência prática desse desenho: em Svelte puro, <code>onMount</code> roda no navegador e pode usar <code>window</code> e <code>document</code> à vontade. Se o mesmo componente for desenhado no servidor, o <code>onMount</code> simplesmente não roda lá — e é por isso que buscar dado dentro dele é seguro.</p>
+
+<p>Lembre também de limpar o que criou: um <code>setInterval</code>, um ouvinte de teclado, uma conexão. O retorno do <code>onMount</code> (ou do <code>$effect</code>) é a função de limpeza, chamada quando o componente sai da tela. Sem ela, o intervalo continua rodando depois que a tela sumiu.</p>
+
+<hr>
+
+<h2>8. Como os dados atravessam componentes</h2>
+
+<p>Quatro caminhos, do mais simples ao mais amplo. Escolha o menor que resolve:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Caminho</th><th>Alcance</th><th>Quando usar</th></tr>
+<tr><td><code>$props</code></td><td>pai para filho</td><td>um componente precisa de um dado do pai</td></tr>
+<tr><td>Snippet / <code>children</code></td><td>pai dentro do filho</td><td>o pai quer mandar pedaço de tela</td></tr>
+<tr><td><code>setContext</code> / <code>getContext</code></td><td>uma árvore de componentes</td><td>vários níveis precisam do mesmo dado</td></tr>
+<tr><td>Store</td><td>o projeto inteiro</td><td>estado global: sessão, carrinho, tema</td></tr>
+</table>
+</div>
+
+<p>Existe um teste simples para escolher: conte quantos componentes intermediários precisariam repassar o dado. Zero ou um: propriedade. Dois ou três: comece a pensar em context. A árvore inteira: store. O número é uma aproximação, mas evita a decisão por hábito.</p>
+
+<p>A ordem importa porque cada passo aumenta o acoplamento. Propriedade é explícita: quem lê o componente vê o que ele recebe. Store é implícita: qualquer arquivo pode importar e mudar. Comece explícito e só suba de nível quando o “passar de mão em mão” ficar insuportável.</p>
+
+<hr>
+
+<h2>9. O que o Vitest diz sobre o projeto hoje</h2>
+
+<p>A rede de proteção do projeto da Ana tem quatro casos: dois do cartão e dois do troco. É pouco, e é honesto — cada um deles descreve uma regra que ela quer manter.</p>
+
+<pre class="term">ana@notebook:~/loja$ npx vitest run
+
+ ✓ src/lib/Cartao.test.js (2 tests) 140ms
+ ✓ src/lib/troco.test.js (2 tests) 5ms
+
+ Test Files  2 passed (2)
+      Tests  4 passed (4)
+   Start at  17:26:27
+   Duration  5.21s (environment 70%, transform 20%, import 7%, tests 3%)</pre>
+
+<p>Dois arquivos, quatro casos, tudo verde. Note que um teste de componente custa 140 ms e um de módulo custa 5 ms: a diferença é o DOM de mentira sendo montado. Essa proporção é a dica de onde investir esforço — muitos testes de módulo, poucos de componente, cada um cobrindo o que só ele consegue cobrir.</p>
+
+<p>Uma coisa que os testes do projeto ainda não cobrem: o formulário de pedido. Ele tem regra de negócio (aceite obrigatório, quantidade mínima) e é justamente onde um teste de componente faria diferença. Fica como tarefa para o próximo mês.</p>
+
+<p>Repare também na linha do ambiente: ele consumiu 70% do tempo. O relatório não está reclamando; está dizendo onde o tempo vai. Medir é isso: transformar “parece lento” em um número que se pode acompanhar.</p>
+
+<hr>
+
+<h2>10. O que o build diz</h2>
+
+<p>A última conferência do mês é o build. Ele diz quanto o visitante baixa e se algo entrou no pacote sem querer:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BMDXiK3B.js  46.10 kB │ gzip: 17.68 kB
+✓ built in 1.78s</pre>
+
+<p>Cento e onze módulos e 17,68 kB comprimidos para uma página com vitrine, pedido e validação. Se esse número pular de um mês para o outro, alguma importação nova entrou — e a aula de performance mostrou como descobrir qual.</p>
+
+<p>Vale olhar também a lista de módulos quando o número cresce: 751 módulos foi o que a Ana viu ao importar uma biblioteca de utilidades para ordenar dois preços. O build conta; a decisão é sua.</p>
+
+<hr>
+
+<h2>11. O que muda quando entra o SvelteKit</h2>
+
+<p>O SvelteKit é a camada que transforma componentes em um site com endereços, dados de servidor e publicação. Ele não substitui nada do que você aprendeu: usa tudo. A diferença é que agora existe um lugar onde o código roda antes de chegar ao navegador.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No Svelte puro</th><th>No SvelteKit</th></tr>
+<tr><td><code>src/App.svelte</code> montado pelo <code>main.js</code></td><td>uma página por arquivo: <code>src/routes/+page.svelte</code></td></tr>
+<tr><td>você importa o componente na mão</td><td>a rota é o arquivo; o endereço é a pasta</td></tr>
+<tr><td>dado buscado no navegador com <code>onMount</code></td><td>dado buscado no <code>+page.js</code> ou no servidor</td></tr>
+<tr><td>estado global em store ou context</td><td>store, mais o estado de sessão do servidor</td></tr>
+<tr><td><code>npm run build</code> gera <code>dist/</code></td><td>o adaptador decide onde o site vai rodar</td></tr>
+</table>
+</div>
+
+<p>O conceito novo é o <em>servidor</em>: parte do código roda antes de a página chegar ao navegador, e lá não existe <code>window</code> nem <code>document</code>. É por isso que a aula de “o que roda no servidor” vem antes de SvelteKit — componente que toca o navegador no topo do script quebra na renderização do servidor.</p>
+
+<p>Fora isso, o dia a dia continua igual: <code>$state</code> para o que muda, <code>$derived</code> para o que se calcula, <code>$props</code> para o que vem de fora, teste para o que precisa continuar valendo. Quem chega ao SvelteKit com esses quatro conceitos firmes aprende rotas em uma tarde.</p>
+
+<hr>
+
+<h2>12. Quando dá errado</h2>
+
+<p>Três erros que voltam sempre, um de cada grupo do nível. As mensagens são as reais desta versão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — propriedade que não chega</strong>
+<p>Um componente recebe uma lista e a usa sem valor padrão. Se o pai não passar nada, o valor é <code>undefined</code> e o primeiro acesso quebra.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { itens } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{itens.length} itens&lt;/p&gt;</pre>
+<pre class="out">Cannot read properties of undefined (reading 'length')</pre>
+<p>“Não consigo ler propriedades de <code>undefined</code> (lendo ‘length’)”. O conserto é valor padrão: <code>let { itens = [] } = $props()</code>. Com ele, o componente funciona mesmo quando o pai esquece — e a tela mostra “0 itens” em vez de quebrar.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — tag movida sem o fechamento</strong>
+<p>Ao reorganizar o HTML, o fechamento do <code>&lt;article&gt;</code> ficou para trás. O compilador aponta a tag que abriu e não terminou.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(2.5);
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;Sonho&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): `&lt;article&gt;` was left open</pre>
+<p>“<code>&lt;article&gt;</code> ficou aberto”. Mover HTML exige mover o par: abrir e fechar juntos, ou o compilador não consegue montar a árvore.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — o mesmo nome importado duas vezes</strong>
+<p>Dois cartões diferentes, ambos chamados <code>Cartao</code>, importados no mesmo arquivo. O segundo import tenta criar um nome que já existe.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './lib/Cartao.svelte';
+  import Cartao from './lib/CartaoGrande.svelte';
+&lt;/script&gt;
+
+&lt;h1&gt;Loja da Ana&lt;/h1&gt;
+&lt;Cartao titulo="Pão francês" preco={0.9} /&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 9): Identifier 'Cartao' has already been declared</pre>
+<p>“O identificador ‘Cartao’ já foi declarado”, na linha 3, coluna 9. A saída é renomear na importação: <code>import CartaoVitrine from …</code> e usar <code>&lt;CartaoVitrine /&gt;</code>.</p>
+</div>
+
+<hr>
+
+<h2>13. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Se você precisa…</th><th>A peça é</th></tr>
+<tr><td>guardar valor que o usuário muda</td><td><code>$state</code></td></tr>
+<tr><td>calcular a partir de outro valor</td><td><code>$derived</code></td></tr>
+<tr><td>reagir a mudança conversando com o mundo</td><td><code>$effect</code></td></tr>
+<tr><td>rodar uma vez ao montar</td><td><code>onMount</code></td></tr>
+<tr><td>repetir HTML por item</td><td><code>{#each}</code></td></tr>
+<tr><td>dar nome a um pedaço de HTML</td><td><code>{#snippet}</code> + <code>{@render}</code></td></tr>
+<tr><td>receber dados do pai</td><td><code>$props</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que responde</th></tr>
+<tr><td><code>npx vitest run</code></td><td>as regras continuam valendo?</td></tr>
+<tr><td><code>npm run build</code></td><td>compila e quanto pesa?</td></tr>
+<tr><td><code>npm run dev</code></td><td>como está a página agora?</td></tr>
+<tr><td><code>grep -rn "texto" src</code></td><td>onde isso aparece no projeto?</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Um valor que depende de outro deve ser…</p>
+<label><input type="radio" name="q1"> um segundo <code>$state</code> atualizado por <code>$effect</code></label>
+<label><input type="radio" name="q1"> um <code>$derived</code></label>
+<label><input type="radio" name="q1"> uma constante calculada uma vez</label>
+<label><input type="radio" name="q1"> uma variável comum, sem runa</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>{#each itens as item, i}</code> entrega no segundo nome?</p>
+<label><input type="radio" name="q1"> o total de itens da lista</label>
+<label><input type="radio" name="q1"> o item anterior</label>
+<label><input type="radio" name="q1"> a posição do item, começando em zero</label>
+<label><input type="radio" name="q1"> uma cópia do item</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual é o caminho mais simples para um dado atravessar um nível de componente?</p>
+<label><input type="radio" name="q1"> <code>$props</code>, do pai para o filho</label>
+<label><input type="radio" name="q1"> uma store global</label>
+<label><input type="radio" name="q1"> <code>setContext</code> no avô</label>
+<label><input type="radio" name="q1"> um arquivo <code>.js</code> compartilhado</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let busca = $state('');<br>let produtos = $state([{ nome: 'Pão francês' }, { nome: 'Sonho' }]);<br><br>let visiveis = <input data-answer="$derived">(produtos.<input data-answer="filter">((p) =&gt; p.nome.includes(busca)));<br><br>// a lista que aparece na tela depende da busca</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O Nível 2 ensinou a usar bem a sintaxe do Nível 1: ciclo de vida, composição, escala e qualidade.</li>
+  <li>Guarde o que vem de fora ou do usuário; calcule todo o resto com <code>$derived</code>.</li>
+  <li><code>$effect</code> serve para conversar com o mundo de fora, não para sincronizar variáveis.</li>
+  <li>Filtro combina <code>bind:value</code>, <code>$derived</code> e <code>{#each}</code>.</li>
+  <li><code>{#each itens as item, i}</code> dá a posição, a partir de zero.</li>
+  <li>Snippet recebe parâmetros; parâmetro não passado vira <code>undefined</code> e some da tela.</li>
+  <li>Lista vazia precisa de mensagem: <code>{#if itens.length === 0}</code>.</li>
+  <li><code>onMount</code> roda uma vez; <code>$effect</code> a cada mudança; <code>tick</code> depois do desenho.</li>
+  <li>Propriedade é o caminho mais explícito; store é o mais amplo e o mais acoplado.</li>
+  <li>Quatro testes verdes e um build de 17,68 kB comprimidos: essa é a fotografia do projeto hoje.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

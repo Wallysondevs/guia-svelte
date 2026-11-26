@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formulário Completo — do rótulo à validação | Guia Svelte</title>
+<meta name="description" content="Um formulário de pedido completo em Svelte 5: rótulo ligado ao campo, bind:value, bind:group, bind:checked, validação com lista de erros e onsubmit com preventDefault.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Formulário Completo</span></h1>
+
+<p class="intro">A Ana recebia pedidos por mensagem: nome, quantidade, forma de pagamento, tudo no meio de uma conversa. Metade chegava sem o nome, e um pedido de trinta sonhos chegou como “três” porque ninguém sabia o que era o campo. Nesta aula ela monta um formulário de verdade, com rótulo em cada campo, validação antes de enviar e mensagens de erro no lugar certo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As peças de um formulário e o trabalho de cada uma.</li>
+  <li>Como ligar o rótulo ao campo, para leitor de tela e para o clique.</li>
+  <li>Como <code>bind:value</code> faz o valor caminhar nos dois sentidos.</li>
+  <li>Como usar <code>bind:group</code> em rádio e <code>bind:checked</code> em caixa de seleção.</li>
+  <li>Por que campo numérico devolve número, e campo de texto devolve texto.</li>
+  <li>Como validar antes de enviar, devolvendo uma lista de erros.</li>
+  <li>Como mostrar a lista de erros na tela.</li>
+  <li>Por que <code>onsubmit</code> precisa de <code>preventDefault()</code>.</li>
+  <li>Os três erros desta aula, com a mensagem real de cada um.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: formulário é uma conversa com regras</h2>
+
+<p>Um formulário é a Ana perguntando e o cliente respondendo. O que muda em relação à conversa é que aqui as regras estão escritas: o nome é obrigatório, a quantidade mínima é um, os termos precisam ser aceitos. Regra escrita no código vale sempre; regra combinada na conversa vale enquanto alguém lembra.</p>
+
+<p>Formulário bom tem três qualidades. Cada campo tem <strong>rótulo</strong>, para se saber o que perguntar. Cada campo tem um <strong>tipo</strong> certo, para o teclado do celular abrir no modo adequado. E o envio é <strong>conferido antes</strong>, com a mensagem de erro ao lado do campo que falhou.</p>
+
+<p>O resto é consequência: rotular bem evita dúvida, tipar bem evita digitação errada, validar bem evita pedido incompleto. Nenhuma das três é difícil separada; o problema é lembrar das três ao mesmo tempo — e é isso que esta aula organiza.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No formulário</th></tr>
+<tr><td>A plaquinha “nome do cliente”</td><td>O <code>&lt;label for="nome"&gt;</code></td></tr>
+<tr><td>A linha em branco para preencher</td><td>O <code>&lt;input&gt;</code></td></tr>
+<tr><td>“Escreva a quantidade em números”</td><td><code>type="number"</code></td></tr>
+<tr><td>Conferir o pedido antes de mandar para a cozinha</td><td>A função de validação no envio</td></tr>
+<tr><td>Devolver o pedido com a linha faltando assinalada</td><td>A lista de erros na tela</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. As peças de um formulário</h2>
+
+<p>Cada tipo de pergunta tem uma peça própria. Escolher a peça certa economiza validação e melhora o uso no celular:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Para quê</th><th>Como ligar ao estado</th></tr>
+<tr><td><code>&lt;input type="text"&gt;</code></td><td>texto livre: nome, telefone, endereço</td><td><code>bind:value={nome}</code></td></tr>
+<tr><td><code>&lt;input type="number"&gt;</code></td><td>quantidade, medida</td><td><code>bind:value={quantidade}</code> (devolve número)</td></tr>
+<tr><td><code>&lt;input type="radio"&gt;</code></td><td>uma escolha entre poucas</td><td><code>bind:group={pagamento}</code></td></tr>
+<tr><td><code>&lt;input type="checkbox"&gt;</code></td><td>sim ou não: aceito os termos</td><td><code>bind:checked={aceitou}</code></td></tr>
+<tr><td><code>&lt;select&gt;</code></td><td>uma escolha entre muitas</td><td><code>bind:value={sabor}</code></td></tr>
+<tr><td><code>&lt;textarea&gt;</code></td><td>texto longo: observação do pedido</td><td><code>bind:value={observacao}</code></td></tr>
+</table>
+</div>
+
+<p>Escolher <code>type="text"</code> para tudo funciona, e é o caminho que a Ana tinha no começo. O custo aparece no celular: sem <code>type="number"</code>, o teclado numérico não abre para a quantidade; sem <code>type="tel"</code>, o telefone vem com letras. E aparece também na validação: cada campo de texto exige <code>Number()</code> antes de qualquer conta.</p>
+
+<p>Repare que quatro das seis usam <code>bind:value</code>. A diferença aparece nas outras duas: rádio e caixa de seleção não guardam “um valor digitado”, guardam “estou marcado” ou “pertenço a este grupo”. Por isso têm diretivas próprias.</p>
+
+<hr>
+
+<h2>3. O formulário completo da Ana</h2>
+
+<p>Juntando as peças, este é o formulário de pedido. Ele tem nome, quantidade, forma de pagamento, aceite dos termos e a lista de erros embaixo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let quantidade = $state(1);
+  let pagamento = $state('pix');
+  let aceitou = $state(false);
+  let erros = $state([]);
+
+  function validar() {
+    erros = [];
+    if (nome.trim() === '') erros = [...erros, 'Informe o nome'];
+    if (quantidade &lt; 1) erros = [...erros, 'A quantidade mínima é 1'];
+    if (!aceitou) erros = [...erros, 'Aceite os termos'];
+    return erros.length === 0;
+  }
+
+  function enviar(evento) {
+    evento.preventDefault();
+    if (validar()) {
+      erros = ['Pedido enviado para a Ana'];
+    }
+  }
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+  &lt;label for="nome"&gt;Nome&lt;/label&gt;
+  &lt;input id="nome" bind:value={nome} /&gt;
+
+  &lt;label for="quantidade"&gt;Quantidade&lt;/label&gt;
+  &lt;input id="quantidade" type="number" bind:value={quantidade} /&gt;
+
+  &lt;fieldset&gt;
+    &lt;legend&gt;Pagamento&lt;/legend&gt;
+    &lt;label&gt;&lt;input type="radio" value="pix" bind:group={pagamento} /&gt; Pix&lt;/label&gt;
+    &lt;label&gt;&lt;input type="radio" value="cartao" bind:group={pagamento} /&gt; Cartão&lt;/label&gt;
+  &lt;/fieldset&gt;
+
+  &lt;label&gt;&lt;input type="checkbox" bind:checked={aceitou} /&gt; Aceito os termos&lt;/label&gt;
+
+  &lt;button&gt;Enviar pedido&lt;/button&gt;
+&lt;/form&gt;
+
+{#if erros.length &gt; 0}
+  &lt;ul class="erros"&gt;
+    {#each erros as erro}
+      &lt;li&gt;{erro}&lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}</pre>
+
+<p>No primeiro desenho — nenhum campo preenchido e nada aceito —, o HTML gerado é este:</p>
+
+<pre class="out">&lt;form&gt;&lt;label for="nome"&gt;Nome&lt;/label&gt; &lt;input id="nome" value=""/&gt; &lt;label for="quantidade"&gt;Quantidade&lt;/label&gt; &lt;input id="quantidade" type="number" value="1"/&gt; &lt;fieldset&gt;&lt;legend&gt;Pagamento&lt;/legend&gt; &lt;label&gt;&lt;input type="radio" value="pix" checked=""/&gt; Pix&lt;/label&gt; &lt;label&gt;&lt;input type="radio" value="cartao"/&gt; Cartão&lt;/label&gt;&lt;/fieldset&gt; &lt;label&gt;&lt;input type="checkbox"/&gt; Aceito os termos&lt;/label&gt; &lt;button&gt;Enviar pedido&lt;/button&gt;&lt;/form&gt;</pre>
+
+<p>Três detalhes para ler nessa saída. O rádio do Pix já vem marcado (<code>checked=""</code>), porque <code>pagamento</code> começa com <code>'pix'</code>. O campo de quantidade já vem com <code>1</code>. E a lista de erros não aparece — <code>erros</code> começa vazio, e o <code>{#if}</code> não desenha nada.</p>
+
+<hr>
+
+<h2>4. A anatomia de um campo com rótulo</h2>
+
+<p>Um campo sozinho não diz nada. O rótulo é a pergunta; o campo é a linha em branco. Eles precisam estar ligados por um <code>id</code>:</p>
+
+<pre class="file" data-file="src/Campo.svelte">&lt;label for="nome"&gt;Nome&lt;/label&gt;
+&lt;input id="nome" placeholder="Como devemos chamar você?" /&gt;</pre>
+
+<pre class="out">&lt;label for="nome"&gt;Nome&lt;/label&gt; &lt;input id="nome" placeholder="Como devemos chamar você?"/&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;label for="nome"&gt;</dt><dd>o rótulo. O <code>for</code> carrega o mesmo texto do <code>id</code> do campo: é essa combinação que os liga.</dd>
+  <dt>Nome</dt><dd>o texto visível. Curto e no singular: “Nome”, não “Informe o nome completo do cliente”.</dd>
+  <dt>&lt;input id="nome"&gt;</dt><dd>o campo. O <code>id</code> é único na página — dois campos com <code>id="nome"</code> deixam o rótulo apontando para o primeiro.</dd>
+  <dt>placeholder</dt><dd>a dica cinza dentro do campo. Ela não substitui o rótulo: em telas pequenas, o texto cinza desaparece quando a pessoa começa a digitar.</dd>
+</dl>
+
+<p>A ligação <code>for</code> + <code>id</code> faz duas coisas que não se veem. Primeiro, clicar no rótulo foca o campo — útil em tela pequena, onde acertar o campo é difícil. Segundo, o leitor de tela anuncia “Nome” antes de cada campo, e quem não vê a tela sabe o que está digitando. O compilador avisa quando essa ligação falta.</p>
+
+<hr>
+
+<h2>5. <code>bind:value</code>: o valor nos dois sentidos</h2>
+
+<p>Sem <code>bind</code>, o valor caminha de um lado só: do estado para a tela. Com <code>bind</code>, ele caminha nos dois sentidos — o que a pessoa digita volta para o estado, e o estado continua podendo mudar a tela.</p>
+
+<div class="trysvelte" data-goal="digitar:input=Ana;;out:Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o campo recebe o valor do estado, mas digitar não atualiza o parágrafo: só falta a via de volta. Faça o campo escrever no estado enquanto a pessoa digita.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;input aria-label="Nome" value={nome} /&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;input aria-label="Nome" bind:value={nome} /&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+</div>
+
+<p>O código inicial mostra “Olá, ” e não muda ao digitar. A solução troca <code>value={nome}</code> por <code>bind:value={nome}</code>: a diferença de uma palavra, e o parágrafo passa a acompanhar cada tecla.</p>
+
+<p>No campo numérico, <code>bind:value</code> faz uma coisa a mais: converte o texto digitado em número. O componente abaixo mostra o tipo do valor guardado:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let quantidade = $state(1);
+&lt;/script&gt;
+
+&lt;input type="number" bind:value={quantidade} /&gt;
+&lt;p&gt;{typeof quantidade}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input type="number" value="1"/&gt; &lt;p&gt;number&lt;/p&gt;</pre>
+
+<p>Isso importa para a validação: se a quantidade fosse texto, <code>quantidade &lt; 1</code> compararia texto com número. Com <code>type="number"</code> e <code>bind:value</code>, ela é número de verdade, e a comparação funciona como se espera.</p>
+
+<p>Também vale saber o que o <code>bind</code> não faz: ele não converte texto em número em campo de texto, não valida, não impede envio. Ele só mantém as duas pontas iguais. Todo o resto continua sendo trabalho do código — e é o assunto das próximas seções.</p>
+
+<hr>
+
+<h2>6. Validação: a lista de erros</h2>
+
+<p>Validar é conferir todas as regras e juntar o que falhou, em vez de parar no primeiro problema. A função da Ana zera a lista, testa uma regra por linha e devolve se está tudo certo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let aceitou = $state(false);
+  let erros = $state(['Informe o nome', 'Aceite os termos']);
+
+  function validar() {
+    erros = [];
+    if (nome.trim() === '') erros = [...erros, 'Informe o nome'];
+    if (!aceitou) erros = [...erros, 'Aceite os termos'];
+    return erros.length === 0;
+  }
+&lt;/script&gt;
+
+&lt;input aria-label="Nome" bind:value={nome} /&gt;
+
+{#if erros.length &gt; 0}
+  &lt;ul class="erros"&gt;
+    {#each erros as erro}
+      &lt;li&gt;{erro}&lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}</pre>
+
+<pre class="out">&lt;input aria-label="Nome" value=""/&gt; &lt;ul class="erros"&gt;&lt;li&gt;Informe o nome&lt;/li&gt;&lt;li&gt;Aceite os termos&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Esse é o HTML com duas regras quebradas. A lista aparece embaixo do formulário, uma linha por regra — e o cliente vê tudo o que falta de uma vez, não um erro por tentativa.</p>
+
+<p>Repare no <code>nome.trim()</code>: ele tira os espaços das pontas antes de comparar. Sem isso, digitar três espaços passaria na validação e o pedido chegaria sem nome. É uma linha pequena que evita um problema real.</p>
+
+<div class="trysvelte" data-goal="digitar:input=Ana;;out:Tudo certo">
+<p class="try-task"><strong>Missão:</strong> a mensagem de erro está guardada num valor fixo e nunca muda. Faça ela ser calculada a partir do nome: “Informe o nome” enquanto estiver vazio, “Tudo certo” quando houver texto.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let erro = $state('Informe o nome');
+&lt;/script&gt;
+
+&lt;input aria-label="Nome" bind:value={nome} /&gt;
+&lt;p&gt;{erro}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let erro = $derived(nome.trim() === '' ? 'Informe o nome' : 'Tudo certo');
+&lt;/script&gt;
+
+&lt;input aria-label="Nome" bind:value={nome} /&gt;
+&lt;p&gt;{erro}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>$derived</code> é a peça certa aqui: a mensagem não é um dado novo, é uma conclusão sobre o nome. Guardar essa conclusão num segundo <code>$state</code> exigiria lembrar de atualizá-la em cada mudança — e é assim que as mensagens de erro ficam desatualizadas na tela.</p>
+
+<hr>
+
+<h2>7. <code>onsubmit</code> e o <code>preventDefault()</code></h2>
+
+<p>O envio de um formulário tem um comportamento antigo do navegador: recarregar a página mandando os dados para o endereço atual. Num componente Svelte, recarregar apaga todo o estado — e o pedido some. Para evitar isso, o primeiro comando do handler cancela o comportamento padrão:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+
+  function enviar(evento) {
+    evento.preventDefault();
+    console.log('pedido de', nome);
+  }
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+  &lt;input bind:value={nome} /&gt;
+  &lt;button&gt;Enviar&lt;/button&gt;
+&lt;/form&gt;</pre>
+
+<p>O evento chega como argumento da função, e <code>preventDefault()</code> diz ao navegador: “não faça o que você faria sozinho”. A partir daí, quem decide o que acontece é o seu código. Note também que o <code>&lt;button&gt;</code> não tem <code>onclick</code>: dentro de um formulário, o botão dispara o <code>onsubmit</code> sozinho — é o caminho esperado, que também funciona quando a pessoa aperta Enter no campo.</p>
+
+<p>Uma armadilha comum é escrever <code>onsubmit={enviar()}</code>, com parênteses. Os parênteses chamam a função na hora do desenho, e o que fica no lugar do handler é o resultado da chamada — não a função. O <code>&lt;form&gt;</code> continua na tela, e o envio passa a não fazer nada. A forma correta é <code>onsubmit={enviar}</code>, sem parênteses: você entrega a função para ser chamada depois.</p>
+
+<div class="warning">
+<strong>O <code>preventDefault</code> vem primeiro</strong>
+<p>Se você validar antes e a validação falhar, o navegador recarrega a página do mesmo jeito e a lista de erros nunca aparece. Cancele o comportamento padrão na primeira linha do handler, sempre.</p>
+</div>
+
+<hr>
+
+<h2>8. O botão que só envia quando pode</h2>
+
+<p>Desabilitar o botão é uma decisão de produto, e tem custo: quem não entende por que o botão está apagado desiste. A alternativa é deixar o clique acontecer e explicar o que falta — que é o que o formulário da Ana faz.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Aguardando;;clique:input[type=checkbox];;clique:button;;outre:Pedido enviado">
+<p class="try-task"><strong>Missão:</strong> o botão envia mesmo sem o aceite dos termos. Faça o envio depender da caixa marcada: primeiro clique não envia, depois de marcar o segundo clique envia.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aceitou = $state(false);
+  let enviado = $state(false);
+&lt;/script&gt;
+
+&lt;label&gt;&lt;input type="checkbox" bind:checked={aceitou} /&gt; Aceito os termos&lt;/label&gt;
+&lt;button onclick={() =&gt; (enviado = true)}&gt;Enviar&lt;/button&gt;
+&lt;p&gt;{enviado ? 'Pedido enviado' : 'Aguardando'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aceitou = $state(false);
+  let enviado = $state(false);
+
+  function enviar() {
+    if (!aceitou) return;
+    enviado = true;
+  }
+&lt;/script&gt;
+
+&lt;label&gt;&lt;input type="checkbox" bind:checked={aceitou} /&gt; Aceito os termos&lt;/label&gt;
+&lt;button onclick={enviar}&gt;Enviar&lt;/button&gt;
+&lt;p&gt;{enviado ? 'Pedido enviado' : 'Aguardando'}&lt;/p&gt;</pre>
+</div>
+
+<p>Uma terceira opção, que a Ana adotou no fim, é desabilitar o botão <em>e</em> mostrar o motivo em texto. O botão apagado impede o clique; o texto ao lado explica o que falta. As duas informações juntas resolvem o problema do usuário — só uma delas, não.</p>
+
+<p>No projeto da Ana, essa decisão mudou com o público. No balcão, o botão apagado bastava, porque o cliente perguntava. Na página, ninguém pergunta: quem vê um botão apagado fecha a aba. Por isso a versão final mostra sempre o motivo em texto, mesmo com o botão liberado.</p>
+
+<p>O <code>return</code> sozinho dentro do <code>if</code> encerra a função sem fazer nada — é a forma mais curta de dizer “para aqui se não pode”. A caixa marcada é lida por <code>aceitou</code>, que o <code>bind:checked</code> mantém sincronizado com o que a pessoa marcou.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três saídas abaixo vieram do compilador e do renderizador desta versão. As duas primeiras param o projeto; a terceira quebra na hora de desenhar.</p>
+
+<div class="cenario">
+<strong>Erro 1 — um formulário dentro de outro</strong>
+<p>O HTML não permite formulário aninhado: o navegador “conserta” a estrutura ao carregar, e o Svelte perde a referência de qual elemento é qual. Por isso o compilador recusa antes.</p>
+<pre class="file" data-file="src/App.svelte">&lt;form&gt;
+  &lt;form&gt;
+    &lt;input /&gt;
+  &lt;/form&gt;
+&lt;/form&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): `&lt;form&gt;` cannot be a child of `&lt;form&gt;`. The browser will 'repair' the HTML (by moving, removing, or inserting elements) which breaks Svelte's assumptions about the structure of your components.</pre>
+<p>A mensagem explica o motivo: o navegador vai mover, remover ou inserir elementos para “consertar” o HTML, e isso quebra as suposições do Svelte sobre a estrutura. Um formulário por componente; para dividir, use um componente separado com os campos, sem outro <code>&lt;form&gt;</code> dentro.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — rótulo sem campo</strong>
+<p>Um <code>&lt;label&gt;</code> que não aponta para campo nenhum e não envolve um. O compilador avisa; a tela continua funcionando, e o leitor de tela não.</p>
+<pre class="file" data-file="src/App.svelte">&lt;label&gt;Nome&lt;/label&gt;
+&lt;input id="nome" /&gt;</pre>
+<pre class="term">aviso na compilação:
+
+a11y_label_has_associated_control (linha 1): A form label must be associated with a control</pre>
+<p>“Um rótulo de formulário precisa estar associado a um controle.” A correção é <code>&lt;label for="nome"&gt;</code> com o mesmo <code>id</code> do campo, ou envolver o campo com o <code>&lt;label&gt;</code>. O aviso não impede o build: por isso ele passa fácil.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — validar um campo que ainda não tem valor</strong>
+<p>Uma variável de estado criada sem valor inicial vale <code>undefined</code>. Chamar <code>trim()</code> nela quebra o componente antes de qualquer digitação.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state();
+
+  function validar() {
+    return nome.trim() !== '';
+  }
+
+  let valido = validar();
+&lt;/script&gt;
+
+&lt;p&gt;{valido ? 'ok' : 'vazio'}&lt;/p&gt;</pre>
+<pre class="out">Cannot read properties of undefined (reading 'trim')</pre>
+<p>“Não consigo ler propriedades de <code>undefined</code> (lendo ‘trim’)”. Campo de texto começa como texto vazio, não como <code>undefined</code>: <code>let nome = $state('')</code>. Parece detalhe, e é o tipo de detalhe que só aparece quando alguém abre a página pela primeira vez.</p>
+</div>
+
+<hr>
+
+<h2>10. O build do formulário</h2>
+
+<p>Com o formulário pronto, o build compila sem aviso. Vale rodar e olhar o resultado, porque é a última chance de ver algo estranho antes de publicar:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BMDXiK3B.js  46.10 kB │ gzip: 17.68 kB
+✓ built in 1.78s</pre>
+
+<p>Quarenta e seis quilobytes de JavaScript, 17,68 kB comprimidos — um pouco mais que a vitrine sem formulário, e o suficiente para uma página de pedido. Nenhum aviso de acessibilidade desta vez, o que confirma que os rótulos estão ligados aos campos.</p>
+
+<p>O build não testa o formulário: ele não preenche campo, não clica em enviar, não vê a lista de erros. Ele só garante que o código compila. A conferência de comportamento é a que a Ana faz clicando — ou a que um teste faz por ela.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Escreva</th></tr>
+<tr><td>ligar rótulo ao campo</td><td><code>&lt;label for="nome"&gt;</code> + <code>&lt;input id="nome"&gt;</code></td></tr>
+<tr><td>texto em duas vias</td><td><code>bind:value={nome}</code></td></tr>
+<tr><td>número em duas vias</td><td><code>&lt;input type="number" bind:value={quantidade}&gt;</code></td></tr>
+<tr><td>escolha única entre opções</td><td><code>bind:group={pagamento}</code> nos rádios</td></tr>
+<tr><td>sim ou não</td><td><code>bind:checked={aceitou}</code></td></tr>
+<tr><td>cancelar o recarregamento</td><td><code>evento.preventDefault()</code> no começo do handler</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Regra de validação</th><th>Como escrever</th></tr>
+<tr><td>campo obrigatório</td><td><code>if (nome.trim() === '') …</code></td></tr>
+<tr><td>mínimo de itens</td><td><code>if (quantidade &lt; 1) …</code></td></tr>
+<tr><td>aceite obrigatório</td><td><code>if (!aceitou) …</code></td></tr>
+<tr><td>tudo certo</td><td><code>return erros.length === 0</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>12. Checklist do formulário</h2>
+
+<p>Antes de dizer que um formulário está pronto, a Ana passa por esta lista. Nenhum item é difícil; todos são fáceis de esquecer.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Item</th><th>Como conferir</th></tr>
+<tr><td>todo campo tem rótulo ligado</td><td>clicar no rótulo foca o campo</td></tr>
+<tr><td>todo campo tem o tipo certo</td><td>no celular, o teclado abre adequado</td></tr>
+<tr><td>a validação cobre todas as regras</td><td>enviar vazio e ver a lista completa</td></tr>
+<tr><td>a mensagem de erro diz o que fazer</td><td>“Informe o nome”, não “erro 3”</td></tr>
+<tr><td>o envio não recarrega a página</td><td>o estado continua na tela depois do clique</td></tr>
+<tr><td>o sucesso também aparece</td><td>uma mensagem de “pedido enviado” no mesmo lugar</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que liga um <code>&lt;label&gt;</code> ao seu campo?</p>
+<label><input type="radio" name="q1"> o texto do rótulo ser igual ao <code>placeholder</code></label>
+<label><input type="radio" name="q1"> o <code>for</code> do rótulo ser igual ao <code>id</code> do campo</label>
+<label><input type="radio" name="q1"> os dois estarem dentro do mesmo <code>&lt;form&gt;</code></label>
+<label><input type="radio" name="q1"> o campo ter <code>name</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que o handler de <code>onsubmit</code> começa com <code>evento.preventDefault()</code>?</p>
+<label><input type="radio" name="q1"> para impedir que o usuário envie duas vezes</label>
+<label><input type="radio" name="q1"> para limpar os campos depois do envio</label>
+<label><input type="radio" name="q1"> para o navegador não recarregar a página e apagar o estado</label>
+<label><input type="radio" name="q1"> para o formulário funcionar sem JavaScript</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual diretiva guarda “sim ou não” numa caixa de seleção?</p>
+<label><input type="radio" name="q1"> <code>bind:checked</code></label>
+<label><input type="radio" name="q1"> <code>bind:value</code></label>
+<label><input type="radio" name="q1"> <code>bind:group</code></label>
+<label><input type="radio" name="q1"> <code>bind:this</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;label for="nome"&gt;Nome&lt;/label&gt;<br>&lt;input id="nome" <input data-answer="bind:value={nome}"> /&gt;<br><br>// o que a pessoa digita precisa voltar para a variável nome</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Formulário é uma conversa com regras escritas no código.</li>
+  <li><code>&lt;label for="nome"&gt;</code> + <code>&lt;input id="nome"&gt;</code> liga rótulo e campo.</li>
+  <li><code>bind:value</code> leva o valor nos dois sentidos; sem ele, a tela não acompanha a digitação.</li>
+  <li><code>type="number"</code> com <code>bind:value</code> guarda número, não texto.</li>
+  <li><code>bind:group</code> para rádio, <code>bind:checked</code> para caixa de seleção.</li>
+  <li>Validação junta todos os erros numa lista e devolve se está tudo certo.</li>
+  <li>Campo de texto começa com <code>''</code>; começar sem valor dá <code>undefined</code> e quebra no <code>trim()</code>.</li>
+  <li><code>onsubmit</code> precisa de <code>preventDefault()</code> na primeira linha.</li>
+  <li>Formulário dentro de formulário é recusado na compilação.</li>
+  <li>Rótulo sem campo funciona na tela e falha no leitor de tela: o compilador avisa.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
