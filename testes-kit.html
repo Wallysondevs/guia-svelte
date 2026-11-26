@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testando Rotas — load, actions e endpoints sob conferência | Guia Svelte</title>
+<meta name="description" content="Como testar as rotas do SvelteKit com Vitest: load, redirect, form action, endpoint e fetch falso, com a saída real do terminal e os erros que aparecem.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Testando Rotas</span></h1>
+
+<p class="intro">A Ana já sabe testar uma conta isolada: a aula de <a href="vitest.html">Vitest</a> deixou o cálculo do troco coberto. Mas a cliente não digita uma função no navegador — ela abre <code>/paes</code>, envia uma encomenda e espera a resposta certa. Entre a conta e a tela existe a <strong>rota</strong>: o arquivo que busca os dados, o que recebe o formulário e o que devolve JSON. Nesta aula você chama esses arquivos direto do teste, sem navegador, e vê o que o Vitest responde de verdade quando a rota está certa e quando a expectativa está errada.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma rota no SvelteKit e quais funções dela dá para testar.</li>
+  <li>Como chamar um <code>load</code> de <code>+page.server.js</code> com uma URL de mentira.</li>
+  <li>Como conferir um <code>redirect</code> com <code>isRedirect</code>.</li>
+  <li>Como montar um <code>FormData</code> e testar uma action até o caso de erro 400.</li>
+  <li>Como testar um endpoint <code>+server.js</code> com <code>Request</code> e <code>Response</code>.</li>
+  <li>Como passar um <code>fetch</code> falso para um <code>load</code> universal.</li>
+  <li>Por que a mensagem de falha aponta a linha da expectativa, e não a da rota.</li>
+  <li>O que muda entre testar uma função pura e testar uma rota.</li>
+  <li>Os três erros reais desta aula, com a saída do terminal.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: conferir o balcão, não só a receita</h2>
+
+<p>Na aula de Vitest, a Ana testou a conta do troco: entrou um número, saiu outro. É o teste mais fácil que existe, porque a função não conversa com ninguém. A rota é diferente. Ela recebe uma requisição, olha a URL, às vezes consulta o banco, às vezes devolve um erro 400 e às vezes manda o navegador para outro endereço. Testar a rota é conferir o balcão: o pedido entrou, a resposta saiu com o status certo e o corpo dizia o que devia dizer.</p>
+
+<p>O ganho é o mesmo do teste de função, multiplicado. Uma rota muda por muitos motivos — alguém troca o nome do campo do formulário, muda o código de status, esquece de devolver o total. Sem teste, você descobre no sábado cheio, com a cliente na frente do balcão. Com teste, descobre em um segundo, antes de publicar.</p>
+
+<p>O custo também existe: teste de rota exige montar os objetos que o SvelteKit montaria. Uma URL, um <code>Request</code>, um <code>FormData</code>, um <code>fetch</code>. Não é difícil, mas é diferente de chamar uma função com dois números. É esse vocabulário de mentira que esta aula ensina — e o nome técnico dele é <em>dublê</em> ou <em>stub</em>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No teste de rota</th></tr>
+<tr><td>O pedido que a cliente faz no balcão</td><td>O objeto <code>event</code>: <code>url</code>, <code>request</code>, <code>params</code></td></tr>
+<tr><td>A resposta: pão ou "acabou"</td><td>O retorno do <code>load</code> ou o <code>Response</code> do endpoint</td></tr>
+<tr><td>"Hoje não tem, volte amanhã"</td><td><code>redirect(307, '/paes/promo')</code></td></tr>
+<tr><td>"Falta o seu nome no pedido"</td><td><code>fail(400, { erro: 'Diga o seu nome' })</code></td></tr>
+<tr><td>O caderno onde a resposta é anotada</td><td><code>expect(...)</code>, que compara e reclama</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. O que existe numa rota para testar</h2>
+
+<p>Uma rota do SvelteKit é uma pasta com arquivos de nome fixo. Cada arquivo tem uma responsabilidade, e cada responsabilidade pede um teste diferente:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>O que faz</th><th>Como o teste chama</th><th>O que conferir</th></tr>
+<tr><td><code>+page.server.js</code></td><td>busca dados no servidor e trata formulários</td><td><code>load({ url })</code> e <code>actions.encomenda({ request })</code></td><td>o objeto devolvido, o status, o erro</td></tr>
+<tr><td><code>+page.js</code></td><td>busca dados no servidor ou no navegador</td><td><code>load({ params, fetch })</code></td><td>o que ele faz com a resposta do <code>fetch</code></td></tr>
+<tr><td><code>+server.js</code></td><td>um endpoint HTTP: devolve JSON, texto ou status</td><td><code>GET({ url })</code> e <code>POST({ request })</code></td><td><code>status</code>, cabeçalhos e corpo</td></tr>
+<tr><td><code>+page.svelte</code></td><td>o desenho da tela</td><td>precisa de navegador simulado</td><td>o HTML que aparece</td></tr>
+</table>
+</div>
+
+<p>Repare que os três primeiros são funções JavaScript comuns, exportadas por um arquivo comum. O SvelteKit só as chama em produção com objetos que ele mesmo monta. No teste, você monta esses objetos à mão — e é justamente aí que mora a liberdade: dá para simular uma URL com <code>?promo=1</code> sem abrir navegador, e simular um formulário vazio sem digitar nada.</p>
+
+<p>O quarto arquivo, o componente, é outra história. Ele espera um DOM, e o Node não tem um. Testar componente exige uma biblioteca de DOM, e o assunto fica para outra aula. Aqui o foco é a camada que decide: dados, status e destino.</p>
+
+<div class="tip">
+<strong>Teste a rota antes de testar a tela</strong>
+<p>Se a rota devolve o total errado, nenhum teste de tela vai consertar. Começar pelas funções é mais barato: o teste roda em milissegundos, não precisa de navegador e aponta a linha exata do problema.</p>
+</div>
+
+<hr>
+
+<h2>3. Instalando o Vitest no projeto Kit</h2>
+
+<p>O projeto da Ana fica em <code>~/loja/kit</code>. O Vitest entra como dependência de desenvolvimento, porque ele não vai para o site publicado:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npm install -D vitest
+
+added 16 packages, and audited 72 packages in 6s
+
+16 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities</pre>
+
+<p>A instalação traz o Vitest e as peças que ele usa. Repare que não houve configuração nenhuma: o Vitest lê o <code>vite.config.js</code> que já existe, com o plugin do SvelteKit, e por isso os atalhos de importação funcionam dentro do teste. O <code>#lib</code>, que a aula de <a href="load-server.html">+page.server.js</a> apresentou, resolve para <code>src/lib</code> do mesmo jeito que no build.</p>
+
+<p>O comando do dia a dia é <code>npx vitest run</code>, que roda tudo uma vez e sai. Sem o <code>run</code>, o Vitest fica vigiando os arquivos e roda de novo a cada salvamento — ótimo enquanto você escreve, ruim num script de publicação.</p>
+
+<hr>
+
+<h2>4. O primeiro teste: o <code>load</code> da rota</h2>
+
+<p>Comece pelo arquivo que a rota usa para buscar os pães. Ele tem um <code>load</code> e uma action de encomenda:</p>
+
+
+<pre class="file" data-file="src/routes/paes/+page.server.js">import { fail, redirect } from '@sveltejs/kit';
+import { paes } from '#lib/paes.js';
+
+export function load({ url }) {
+  if (url.searchParams.has('promo')) {
+    redirect(307, '/paes/promo');
+  }
+  return { paes, total: paes.length };
+}
+
+export const actions = {
+  encomenda: async ({ request }) =&gt; {
+    const dados = await request.formData();
+    const nome = String(dados.get('nome') ?? '').trim();
+    const quantidade = Number(dados.get('quantidade') ?? 0);
+
+    if (!nome) {
+      return fail(400, { nome, erro: 'Diga o seu nome' });
+    }
+    if (!Number.isInteger(quantidade) || quantidade &lt; 1) {
+      return fail(400, { nome, erro: 'Quantidade inválida' });
+    }
+
+    return { sucesso: true, nome, quantidade };
+  }
+};</pre>
+
+<p>O teste importa <code>load</code> e <code>actions</code> diretamente do arquivo. Nada de servidor, nada de navegador:</p>
+
+
+<pre class="file" data-file="src/routes/paes/paes.test.js">import { describe, it, expect } from 'vitest';
+import { isRedirect } from '@sveltejs/kit';
+import { load, actions } from './+page.server.js';
+
+describe('rota /paes', () =&gt; {
+  it('o load entrega os pães e o total', () =&gt; {
+    const dados = load({ url: new URL('http://localhost/paes') });
+    expect(dados.total).toBe(3);
+    expect(dados.paes[0].nome).toBe('Pão francês');
+  });
+
+  it('pedir com promo manda para a página de promoção', () =&gt; {
+    let erro;
+    try {
+      load({ url: new URL('http://localhost/paes?promo=1') });
+    } catch (e) {
+      erro = e;
+    }
+    expect(isRedirect(erro)).toBe(true);
+    expect(erro.location).toBe('/paes/promo');
+  });
+});
+
+describe('action encomenda', () =&gt; {
+  function pedido(campos) {
+    const dados = new FormData();
+    for (const [chave, valor] of Object.entries(campos)) dados.set(chave, valor);
+    return new Request('http://localhost/paes', { method: 'POST', body: dados });
+  }
+
+  it('aceita uma encomenda completa', async () =&gt; {
+    const r = await actions.encomenda({ request: pedido({ nome: 'Ana', quantidade: '6' }) });
+    expect(r).toEqual({ sucesso: true, nome: 'Ana', quantidade: 6 });
+  });
+
+  it('recusa quem esqueceu o nome', async () =&gt; {
+    const r = await actions.encomenda({ request: pedido({ nome: '', quantidade: '2' }) });
+    expect(r.status).toBe(400);
+    expect(r.data.erro).toBe('Diga o seu nome');
+  });
+});</pre>
+
+<p>Quatro testes, duas famílias. O <code>describe('rota /paes')</code> cobre o <code>load</code>: um caso comum e um caso de redirecionamento. O <code>describe('action encomenda')</code> cobre o formulário: um pedido válido e um pedido sem nome. Repare que a função <code>pedido</code> existe só para não repetir a criação do <code>FormData</code> nas duas vezes.</p>
+
+<p>O resultado no terminal é este:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npx vitest run
+
+ ✓ src/routes/paes/paes.test.js (4 tests) 38ms
+ ✓ src/routes/api/paes/endpoint.test.js (2 tests) 41ms
+ ✓ src/routes/paes/[slug]/load.test.js (2 tests) 27ms
+
+ Test Files  3 passed (3)
+      Tests  8 passed (8)
+   Start at  17:38:34
+   Duration  920ms (transform 36%, tests 30%, import 28%, worker 6%)</pre>
+
+<p>Oito testes em três arquivos, todos verdes. O tempo é de menos de um segundo: enquanto a Ana toma um café, o computador conferiu o balcão inteiro.</p>
+
+<h3>A anatomia de um teste de rota</h3>
+
+<dl class="anatomy">
+  <dt>import { load, actions }</dt><dd>o teste importa as funções exportadas pelo arquivo da rota. É a mesma importação que o SvelteKit faria; a diferença é quem chama.</dd>
+  <dt>load({ url })</dt><dd>o primeiro argumento é o <strong>evento</strong>. Aqui ele traz só o que o <code>load</code> usa: uma <code>URL</code> de verdade, criada com <code>new URL(...)</code>, apontando para <code>localhost</code>.</dd>
+  <dt>new FormData()</dt><dd>o corpo do formulário, montado à mão. Cada <code>set</code> vira um campo como se a cliente tivesse digitado.</dd>
+  <dt>new Request(url, { method, body })</dt><dd>a requisição que a action recebe. O <code>Request</code> é o mesmo objeto do navegador, e o Node 22 já o tem.</dd>
+  <dt>expect(...).toBe(...)</dt><dd>a comparação. Quando falha, o Vitest mostra o valor esperado e o recebido, na linha exata da expectativa.</dd>
+</dl>
+
+<p>Um detalhe que economiza tempo: <code>load</code> pode ser síncrono ou assíncrono, dependendo de como foi escrito. Se o seu for <code>async</code>, o teste precisa de <code>await</code>; se não for, o <code>await</code> não atrapalha. Use <code>await</code> sempre que tiver dúvida — o valor de um <code>load</code> assíncrono é uma promessa, e comparar a promessa com o objeto nunca dá certo.</p>
+
+<hr>
+
+<h2>5. Testando um redirect</h2>
+
+<p>O <code>load</code> da Ana tem uma regra: se a URL trouxer <code>?promo=1</code>, o cliente vai para a página de promoção. No SvelteKit, <code>redirect()</code> não devolve um valor: ele <strong>lança</strong> uma exceção que o framework captura. O teste precisa fazer o mesmo — capturar e conferir.</p>
+
+<p>É por isso que o teste usa <code>try/catch</code> e depois <code>isRedirect(erro)</code>. O valor lançado não é um <code>Error</code> comum, e comparar <code>erro.message</code> não é confiável. A função <code>isRedirect</code>, importada de <code>@sveltejs/kit</code>, é a forma oficial de perguntar "isto é um redirecionamento?".</p>
+
+<p>O mesmo vale para <code>error()</code>: existe <code>isHttpError</code> para conferir. E o código do status importa. Um <code>307</code> preserva o método e o corpo; um <code>303</code> transforma tudo em <code>GET</code>. Depois de um <code>POST</code> de formulário, o comum é <code>303</code>; num redirecionamento de URL, <code>307</code> ou <code>308</code>.</p>
+
+<div class="warning">
+<strong>Não compare a mensagem do redirect</strong>
+<p>A mensagem interna de um <code>redirect()</code> muda entre versões. O contrato que você quer testar é o <code>location</code>, e não o texto. Teste <code>erro.location</code>, que é o endereço para onde o navegador vai.</p>
+</div>
+
+<hr>
+
+<h2>6. Testando uma action com <code>FormData</code></h2>
+
+<p>A action <code>encomenda</code> lê dois campos, valida e devolve um objeto. Quando algo falta, ela devolve <code>fail(400, { ... })</code>, que é um objeto com <code>status</code> e <code>data</code> — não uma exceção. O teste confere os dois:</p>
+
+
+<pre class="file" data-file="src/routes/paes/paes.test.js">describe('action encomenda', () =&gt; {
+  function pedido(campos) {
+    const dados = new FormData();
+    for (const [chave, valor] of Object.entries(campos)) dados.set(chave, valor);
+    return new Request('http://localhost/paes', { method: 'POST', body: dados });
+  }
+
+  it('aceita uma encomenda completa', async () =&gt; {
+    const r = await actions.encomenda({ request: pedido({ nome: 'Ana', quantidade: '6' }) });
+    expect(r).toEqual({ sucesso: true, nome: 'Ana', quantidade: 6 });
+  });
+
+  it('recusa quem esqueceu o nome', async () =&gt; {
+    const r = await actions.encomenda({ request: pedido({ nome: '', quantidade: '2' }) });
+    expect(r.status).toBe(400);
+    expect(r.data.erro).toBe('Diga o seu nome');
+  });
+});</pre>
+
+<p>Três coisas merecem atenção. Primeiro: o formulário chega como texto, então <code>quantidade</code> é <code>"6"</code>, e a action converte com <code>Number</code>. O teste confirma que a conversão aconteceu ao esperar <code>quantidade: 6</code>, sem aspas. Segundo: o <code>fail</code> tem <code>status</code> e <code>data</code>, e o teste lê os dois. Terceiro: a action é <code>async</code>, então o teste é <code>async</code> e usa <code>await</code>.</p>
+
+<div class="trysvelte" data-goal="out:Pães na lista: 3">
+<p class="try-task"><strong>Missão:</strong> o <code>load</code> devolve <code>total: 0</code> e a tela mostra <code>Pães na lista: 0</code>. Faça a função devolver a quantidade certa, do mesmo jeito que o teste <code>expect(dados.total).toBe(3)</code> espera.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const paes = ['francês', 'forma', 'queijo'];
+  function load() {
+    return { total: 0 };
+  }
+  let dados = load();
+&lt;/script&gt;
+
+&lt;p&gt;Pães na lista: {dados.total}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const paes = ['francês', 'forma', 'queijo'];
+  function load() {
+    return { total: paes.length };
+  }
+  let dados = load();
+&lt;/script&gt;
+
+&lt;p&gt;Pães na lista: {dados.total}&lt;/p&gt;</pre>
+</div>
+
+<p>A caixa mostra por que o total errado é fácil de escrever e fácil de testar: a lista tem três itens, o retorno diz zero, e a tela obedece ao retorno. O teste não olha a lista — olha o que o <code>load</code> devolveu. É essa fronteira que o teste de rota protege.</p>
+
+<hr>
+
+<h2>7. Testando um endpoint <code>+server.js</code></h2>
+
+<p>O endpoint é a rota que não desenha tela: ela responde JSON. O arquivo exporta uma função por método HTTP. O teste chama a função e recebe um <code>Response</code> de verdade, com <code>status</code>, <code>headers</code> e <code>json()</code>:</p>
+
+
+<pre class="file" data-file="src/routes/api/paes/+server.js">import { json } from '@sveltejs/kit';
+import { paes } from '#lib/paes.js';
+
+export function GET({ url }) {
+  const busca = (url.searchParams.get('busca') ?? '').toLowerCase();
+  const encontrados = paes.filter((p) =&gt; p.nome.toLowerCase().includes(busca));
+  return json({ total: encontrados.length, paes: encontrados });
+}
+
+export async function POST({ request }) {
+  const corpo = await request.json();
+  if (!corpo.nome) {
+    return json({ erro: 'o nome é obrigatório' }, { status: 400 });
+  }
+  return json({ criado: { slug: 'novo', nome: corpo.nome } }, { status: 201 });
+}</pre>
+<pre class="file" data-file="src/routes/api/paes/endpoint.test.js">import { describe, it, expect } from 'vitest';
+import { GET, POST } from './+server.js';
+
+describe('endpoint /api/paes', () =&gt; {
+  it('devolve 200 e a lista filtrada', async () =&gt; {
+    const resposta = await GET({ url: new URL('http://localhost/api/paes?busca=queijo') });
+    expect(resposta.status).toBe(200);
+    const dados = await resposta.json();
+    expect(dados.total).toBe(1);
+    expect(dados.paes[0].slug).toBe('queijo');
+  });
+
+  it('responde 400 quando falta o nome', async () =&gt; {
+    const resposta = await POST({
+      request: new Request('http://localhost/api/paes', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({})
+      })
+    });
+    expect(resposta.status).toBe(400);
+    expect(await resposta.json()).toEqual({ erro: 'o nome é obrigatório' });
+  });
+});</pre>
+
+<p>O teste do <code>GET</code> monta uma URL com <code>?busca=queijo</code> e confere três coisas: o status <code>200</code>, o total <code>1</code> e o slug do primeiro item. O teste do <code>POST</code> monta um <code>Request</code> com cabeçalho <code>content-type: application/json</code> e corpo vazio, e espera <code>400</code> com a mensagem de erro.</p>
+
+<p>O cabeçalho não é enfeite: sem ele, <code>request.json()</code> não sabe que o corpo é JSON e a rota responde outra coisa. É o tipo de detalhe que o teste pega antes do navegador.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:POST /api/paes sem nome 400 · o nome é obrigatório">
+<p class="try-task"><strong>Missão:</strong> o teste do endpoint espera <code>resposta.status</code> igual a <code>400</code> e o corpo <code>o nome é obrigatório</code>. Faça a simulação responder os dois.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let status = $state(200);
+  let corpo = $state('lista de pães');
+
+  function responder() {
+    corpo = 'o nome é obrigatório';
+  }
+&lt;/script&gt;
+
+&lt;button onclick={responder}&gt;POST /api/paes sem nome&lt;/button&gt;
+&lt;p&gt;{status} · {corpo}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let status = $state(200);
+  let corpo = $state('lista de pães');
+
+  function responder() {
+    status = 400;
+    corpo = 'o nome é obrigatório';
+  }
+&lt;/script&gt;
+
+&lt;button onclick={responder}&gt;POST /api/paes sem nome&lt;/button&gt;
+&lt;p&gt;{status} · {corpo}&lt;/p&gt;</pre>
+</div>
+
+<p>Aqui a caixa é uma simulação didática do que o teste verifica. No endpoint de verdade, o status e o corpo saem de <code>json({ erro: ... }, { status: 400 })</code>; o teste lê os dois do <code>Response</code>. Guardar status e corpo em estados separados ajuda a enxergar que são duas informações diferentes — e que uma pode estar certa enquanto a outra está errada.</p>
+
+<hr>
+
+<h2>8. Testando o <code>load</code> universal com <code>fetch</code> falso</h2>
+
+<p>O <code>+page.js</code> é o load que roda nos dois lados. Ele recebe um <code>fetch</code> pronto, e esse <code>fetch</code> é especial: aceita caminho relativo, como <code>/api/paes</code>, porque o SvelteKit o embrulha para funcionar também no servidor. No teste, você passa o seu próprio <code>fetch</code>:</p>
+
+
+<pre class="file" data-file="src/routes/paes/[slug]/+page.js">export async function load({ params, fetch }) {
+  const resposta = await fetch(`/api/paes?busca=${params.slug}`);
+  if (!resposta.ok) {
+    return { encontrado: false };
+  }
+  const dados = await resposta.json();
+  return { encontrado: dados.total &gt; 0, pao: dados.paes[0] ?? null };
+}</pre>
+<pre class="file" data-file="src/routes/paes/[slug]/load.test.js">import { describe, it, expect } from 'vitest';
+import { load } from './+page.js';
+
+describe('load universal de /paes/[slug]', () =&gt; {
+  it('usa o fetch que recebeu, sem rede de verdade', async () =&gt; {
+    const falso = async (url) =&gt;
+      new Response(JSON.stringify({ total: 1, paes: [{ slug: 'queijo', nome: 'Pão de queijo' }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+
+    const dados = await load({ params: { slug: 'queijo' }, fetch: falso });
+    expect(dados.encontrado).toBe(true);
+    expect(dados.pao.nome).toBe('Pão de queijo');
+  });
+
+  it('quando a resposta falha, devolve encontrado: false', async () =&gt; {
+    const falso = async () =&gt; new Response('erro', { status: 500 });
+    const dados = await load({ params: { slug: 'sumido' }, fetch: falso });
+    expect(dados.encontrado).toBe(false);
+  });
+});</pre>
+
+<p>O <code>fetch</code> falso devolve um <code>Response</code> montado na hora, sem rede. O teste verifica o caminho feliz e o caminho de erro — a resposta <code>500</code> que faz o <code>load</code> devolver <code>encontrado: false</code>. Nenhum servidor foi ligado, e o teste roda em milissegundos.</p>
+
+<p>Esse é o maior ganho de testar rota com dublê: você consegue simular o que é difícil de provocar na vida real. Servidor fora do ar, banco lento, cliente sem nome, URL com promoção. O teste vira um laboratório de casos ruins, e os casos ruins são justamente os que ninguém testa à mão.</p>
+
+<hr>
+
+<h2>9. O teste que falha por culpa da expectativa</h2>
+
+<p>Um teste vermelho não quer dizer que a rota está errada. Muitas vezes o código está certo e a expectativa é que está errada. Foi o que aconteceu aqui: a Ana escreveu <code>toBe(4)</code> para o total de pães, mas a lista tem três.</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npx vitest run
+
+ ❯ src/routes/paes/paes.test.js (4 tests | 1 failed) 55ms
+   ❯ rota /paes (2)
+     × o load entrega os pães e o total 11ms
+     ✓ pedir com promo manda para a página de promoção 35ms
+   ✓ action encomenda (2)
+     ✓ aceita uma encomenda completa 6ms
+     ✓ recusa quem esqueceu o nome 1ms
+ ✓ src/routes/api/paes/endpoint.test.js (2 tests) 41ms
+ ✓ src/routes/paes/[slug]/load.test.js (2 tests) 78ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/routes/paes/paes.test.js > rota /paes > o load entrega os pães e o total
+AssertionError: expected 3 to be 4 // Object.is equality
+
+- Expected
++ Received
+
+- 4
++ 3
+
+ ❯ src/routes/paes/paes.test.js:8:25
+      6|   it('o load entrega os pães e o total', () => {
+      7|     const dados = load({ url: new URL('http://localhost/paes') });
+      8|     expect(dados.total).toBe(4);
+       |                         ^
+      9|     expect(dados.paes[0].nome).toBe('Pão francês');
+     10|   });
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 7 passed (8)</pre>
+
+<p>A leitura da falha é direta, e vale decorar a ordem: o Vitest mostra o teste que falhou, o valor esperado (<code>Expected 4</code>), o recebido (<code>Received 3</code>) e a linha exata da expectativa. A seta <code>^</code> embaixo de <code>toBe(4)</code> aponta para o que precisa mudar. A rota não aparece no rastro porque a rota não falhou.</p>
+
+<p>Quando o teste está errado, o conserto é no teste. Quando a rota está errada, o conserto é na rota. O trabalho do teste é justamente separar uma coisa da outra — e a mensagem do Vitest entrega essa separação de graça.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Encomenda encomendar Diga o seu nome">
+<p class="try-task"><strong>Missão:</strong> a action recusa quem esqueceu o nome, mas o componente mostra o erro justamente quando o nome foi preenchido. Envie o formulário vazio e faça a frase <em>Diga o seu nome</em> aparecer.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let erro = $state('');
+
+  function encomendar(evento) {
+    evento.preventDefault();
+    if (nome) {
+      erro = 'Diga o seu nome';
+    }
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Encomenda&lt;/h1&gt;
+&lt;form onsubmit={encomendar}&gt;
+  &lt;input bind:value={nome} aria-label="nome"&gt;
+  &lt;button&gt;encomendar&lt;/button&gt;
+&lt;/form&gt;
+{#if erro}
+  &lt;p&gt;{erro}&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let erro = $state('');
+
+  function encomendar(evento) {
+    evento.preventDefault();
+    if (!nome) {
+      erro = 'Diga o seu nome';
+    }
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Encomenda&lt;/h1&gt;
+&lt;form onsubmit={encomendar}&gt;
+  &lt;input bind:value={nome} aria-label="nome"&gt;
+  &lt;button&gt;encomendar&lt;/button&gt;
+&lt;/form&gt;
+{#if erro}
+  &lt;p&gt;{erro}&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>A condição invertida é o erro de lógica mais comum em validação: <code>if (nome)</code> quando o certo é <code>if (!nome)</code>. O teste da action pega isso no servidor; a caixa pega na tela. Os dois juntos fecham o caminho inteiro, e é por isso que o guia insiste em testar a rota e depois olhar a tela.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três saídas abaixo vieram de execuções reais neste projeto. A primeira é de importação, a segunda é de ambiente e a terceira é uma expectativa de endereço que não bate.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>$lib</code>, que o SvelteKit 3 removeu</strong>
+<p>O teste nem chega a rodar: o arquivo da rota importa <code>$lib/paes.js</code>, e o plugin do Kit recusa o atalho antigo. A mensagem ensina a troca.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npx vitest run src/routes/paes/paes.test.js
+
+ ❯ src/routes/paes/paes.test.js (0 test)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/routes/paes/paes.test.js [ src/routes/paes/paes.test.js ]
+SvelteKit error: module_removed_lib
+`$lib` has been removed. Use `#lib` instead: https://svelte.dev/docs/kit/$lib. To keep using `$lib`, add `alias: { '$lib': 'src/lib' }` to your SvelteKit config.
+https://svelte.dev/e/kit/module_removed_lib
+  Plugin: vite:import-analysis
+  File: src/routes/paes/+page.server.js:2:22
+  1  |  import { fail, redirect } from '@sveltejs/kit';
+  2  |  import { paes } from '$lib/paes.js';
+     |                        ^
+  3  |
+  4  |  export function load({ url }) {</pre>
+<p>A tradução: "troque <code>$lib</code> por <code>#lib</code>". O <code>#lib</code> está declarado no <code>package.json</code> do projeto, na seção <code>imports</code>, e funciona no build e no teste. A segunda opção da mensagem, declarar um apelido, serve para projetos migrados; projeto novo usa o nome novo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — teste de componente sem DOM</strong>
+<p>Este teste importa <code>+page.svelte</code> e tenta montar o componente. O Vitest roda em Node puro, e Node não tem <code>document</code>.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npx vitest run src/routes/dom/dom.test.js
+
+ ❯ src/routes/dom/dom.test.js (1 test | 1 failed) 5ms
+   × monta a página 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/routes/dom/dom.test.js > monta a página
+ReferenceError: document is not defined
+ ❯ src/routes/dom/dom.test.js:6:27
+      4|
+      5| it('monta a página', () => {
+      6|   mount(Pagina, { target: document.body });
+       |                           ^
+      7|   expect(document.querySelector('h1').textContent).toBe('Oi');
+      8| });</pre>
+<p>A mensagem é curta e honesta: <code>document is not defined</code>. Para testar componente, o projeto precisa de um ambiente de DOM, como <code>jsdom</code> ou <code>happy-dom</code>, configurado no Vitest. Sem isso, o caminho é testar a rota — que não precisa de tela — e conferir o componente no navegador.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — a expectativa que não bate</strong>
+<p>O código da rota está certo e o teste espera outro endereço. O Vitest mostra o esperado, o recebido e a linha exata.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npx vitest run -t "promo"
+
+ ❯ src/routes/paes/paes.test.js (4 tests | 1 failed | 3 skipped) 46ms
+   ❯ rota /paes (2)
+     ↓ o load entrega os pães e o total
+     × pedir com promo manda para a página de promoção 43ms
+   ↓ action encomenda (2)
+     ↓ aceita uma encomenda completa
+     ↓ recusa quem esqueceu o nome
+ ↓ src/routes/paes/[slug]/load.test.js (2 tests | 2 skipped)
+ ↓ src/routes/api/paes/endpoint.test.js (2 tests | 2 skipped)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/routes/paes/paes.test.js > rota /paes > pedir com promo manda para a página de promoção
+AssertionError: expected '/paes/promo' to be '/paes/promocao' // Object.is equality
+
+Expected: "/paes/promocao"
+Received: "/paes/promo"
+
+ ❯ src/routes/paes/paes.test.js:20:27
+     18|     }
+     19|     expect(isRedirect(erro)).toBe(true);
+     20|     expect(erro.location).toBe('/paes/promocao');
+       |                           ^
+     21|   });
+     22| });</pre>
+<p>Esse formato vale para texto, número, objeto e lista. Em objetos grandes, o Vitest mostra só as chaves que diferem, e é isso que permite achar o campo errado no meio de uma resposta comprida.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Objeto de mentira</th><th>Para que serve</th><th>Exemplo</th></tr>
+<tr><td><code>new URL(...)</code></td><td>simular endereço e parâmetros de busca</td><td><code>new URL('http://localhost/paes?promo=1')</code></td></tr>
+<tr><td><code>new Request(...)</code></td><td>simular o corpo e o método de um pedido</td><td><code>new Request(url, { method: 'POST', body: dados })</code></td></tr>
+<tr><td><code>new FormData()</code></td><td>simular campos de formulário</td><td><code>dados.set('nome', 'Ana')</code></td></tr>
+<tr><td><code>new Response(...)</code></td><td>simular a resposta de uma API</td><td><code>new Response('erro', { status: 500 })</code></td></tr>
+<tr><td><code>params</code></td><td>simular o pedaço variável da URL</td><td><code>{ slug: 'queijo' }</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função do Kit</th><th>O que ela responde</th></tr>
+<tr><td><code>isRedirect(valor)</code></td><td><code>true</code> se o valor lançado veio de <code>redirect()</code></td></tr>
+<tr><td><code>isHttpError(valor)</code></td><td><code>true</code> se veio de <code>error()</code></td></tr>
+<tr><td><code>json(dados, init)</code></td><td>um <code>Response</code> com JSON e status</td></tr>
+<tr><td><code>fail(status, dados)</code></td><td>um objeto <code>{ status, data }</code>, que não lança</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th></tr>
+<tr><td><code>npx vitest run</code></td><td>roda todos os testes uma vez e sai</td></tr>
+<tr><td><code>npx vitest</code></td><td>fica vigiando e roda de novo a cada salvamento</td></tr>
+<tr><td><code>npx vitest run src/routes/paes/paes.test.js</code></td><td>roda só um arquivo</td></tr>
+<tr><td><code>npx vitest run -t "promo"</code></td><td>roda só os testes cujo nome contém "promo"</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que o teste de um <code>load</code> de servidor precisa montar?</p>
+<label><input type="radio" name="q1"> um navegador com DOM e um servidor ligado</label>
+<label><input type="radio" name="q1"> um banco de dados de teste</label>
+<label><input type="radio" name="q1"> o evento com o que o <code>load</code> usa, como <code>url</code> e <code>params</code></label>
+<label><input type="radio" name="q1"> o CSS da página</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Por que o teste de redirect usa <code>isRedirect</code> em vez de comparar a mensagem?</p>
+<label><input type="radio" name="q1"> porque a mensagem é sempre vazia</label>
+<label><input type="radio" name="q1"> porque <code>redirect()</code> lança um valor especial, e a mensagem interna muda entre versões</label>
+<label><input type="radio" name="q1"> porque <code>isRedirect</code> é mais rápido</label>
+<label><input type="radio" name="q1"> porque o Vitest não compara texto</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que uma action devolve quando usa <code>fail(400, { erro: '…' })</code>?</p>
+<label><input type="radio" name="q1"> um objeto com <code>status</code> e <code>data</code>, sem lançar exceção</label>
+<label><input type="radio" name="q1"> uma <code>Response</code> com status 400</label>
+<label><input type="radio" name="q1"> um redirecionamento para a página de erro</label>
+<label><input type="radio" name="q1"> <code>null</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">const resposta = await POST({ request: new <input data-answer="Request">(url, { method: 'POST', body: corpo }) });<br>expect(resposta.<input data-answer="status">).toBe(400);<br><br>// o teste confere o código HTTP que o endpoint devolveu</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Rota é a camada entre a conta e a tela: <code>+page.server.js</code>, <code>+page.js</code> e <code>+server.js</code>.</li>
+  <li>O teste importa as funções da rota e monta os objetos que o SvelteKit montaria.</li>
+  <li><code>load</code> recebe o evento; no teste, uma <code>URL</code> de <code>localhost</code> basta para os casos simples.</li>
+  <li><code>redirect()</code> e <code>error()</code> lançam: capture e confira com <code>isRedirect</code> ou <code>isHttpError</code>.</li>
+  <li>Action se testa com <code>FormData</code> dentro de um <code>Request</code> <code>POST</code>; <code>fail</code> devolve <code>status</code> e <code>data</code>.</li>
+  <li>Endpoint se testa chamando <code>GET</code> ou <code>POST</code> e lendo o <code>Response</code> com <code>status</code>, <code>json()</code> e cabeçalhos.</li>
+  <li>O <code>fetch</code> do load universal pode ser trocado por uma função que devolve <code>Response</code> na hora.</li>
+  <li>Sem configuração extra, o Vitest lê o <code>vite.config.js</code> e respeita os atalhos <code>#lib</code>.</li>
+  <li>Teste de componente precisa de DOM; teste de rota não. Comece pela rota.</li>
+  <li>A falha aponta a linha da expectativa: leia <code>Expected</code> e <code>Received</code> antes de mexer no código.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
