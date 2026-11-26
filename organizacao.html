@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Organizando as Pastas — onde cada arquivo mora | Guia Svelte</title>
+<meta name="description" content="O mapa de pastas de um projeto Svelte, o import relativo com ./ e ../, e os erros reais do build quando o caminho ou o nome do arquivo está errado.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Organizando as Pastas</span></h1>
+
+<p class="intro">A Ana guardava tudo numa gaveta só: a nota fiscal, o cartão da fornecedora, o preço do pão e o telefone do padeiro. Funcionava até a gaveta encher. No projeto dela aconteceu igual: dez arquivos jogados em <code>src/</code>, todos chamados <code>Cartao.svelte</code> ou <code>Cartao2.svelte</code>. Nesta aula ela arruma as gavetas — e aprende por que o computador também depende dessa arrumação.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Para que servem as pastas de um projeto Svelte e o que vai em cada uma.</li>
+  <li>O papel de <code>src/lib</code> na organização do projeto da Ana.</li>
+  <li>Como ler a árvore de arquivos com <code>ls -R</code> no terminal.</li>
+  <li>O que <code>./</code> e <code>../</code> querem dizer num <code>import</code>.</li>
+  <li>Por que agrupar por assunto rende mais do que agrupar por tipo de arquivo.</li>
+  <li>Como deixar o próprio componente organizado por dentro, com blocos na ordem.</li>
+  <li>O que o build imprime quando o caminho apontado não existe.</li>
+  <li>O que muda quando o nome exportado no módulo está diferente.</li>
+  <li>Os três tropeços de organização desta aula, com a mensagem real de cada um.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: organização é sobre onde procurar</h2>
+
+<p>Existe uma diferença entre arquivo guardado e arquivo achado. Se a Ana precisa do preço do sonho e leva quarenta segundos abrindo arquivos até encontrar, o problema não é o conteúdo dos arquivos: é o endereço deles. Pasta é endereço.</p>
+
+<p>Um projeto Svelte já nasce com um endereço combinado. <code>src/</code> é onde fica o código que você escreve; <code>index.html</code> é a página que carrega tudo; <code>package.json</code> lista o que o projeto precisa. Quem chega no projeto da Ana pela primeira vez sabe onde olhar sem perguntar nada — porque o mapa é o mesmo em todo projeto Svelte do mundo.</p>
+
+<p>O ganho é o mesmo da padaria: quando o padeiro novo entra no turno, ele não precisa aprender o seu sistema particular de gavetas. Ele abre a gaveta escrita “farinha”. No código, essa gaveta tem nome: <code>src/lib/Cartao.svelte</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No projeto</th></tr>
+<tr><td>A bancada onde se trabalha</td><td><code>src/</code> — o código que você escreve</td></tr>
+<tr><td>A gaveta dos ingredientes</td><td><code>src/lib/</code> — componentes e funções reaproveitáveis</td></tr>
+<tr><td>A porta de entrada da loja</td><td><code>src/main.js</code> — monta o componente na página</td></tr>
+<tr><td>O letreiro na calçada</td><td><code>index.html</code> — a página que o navegador abre</td></tr>
+<tr><td>A lista de fornecedores</td><td><code>package.json</code> — as dependências do projeto</td></tr>
+<tr><td>A etiqueta na gaveta</td><td>O caminho do <code>import</code>: <code>'./lib/Cartao.svelte'</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. O mapa de um projeto Svelte</h2>
+
+<p>Um projeto criado com o <code>npm create vite</code> traz uma estrutura mínima. A Ana apagou os exemplos que vinham prontos e ficou com o essencial:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './lib/Cartao.svelte';
+  import { formatarPreco } from './lib/formato.js';
+
+  let precos = $state([0.9, 2.5, 4]);
+&lt;/script&gt;
+
+&lt;h1&gt;Loja da Ana&lt;/h1&gt;
+&lt;Cartao titulo="Pão francês" preco={0.9} /&gt;
+
+&lt;ul&gt;
+  {#each precos as preco}
+    &lt;li&gt;{formatarPreco(preco)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Repare que o <code>App.svelte</code> não sabe <em>como</em> um cartão é desenhado, nem <em>como</em> um preço é formatado. Ele pede: “me dá um cartão com este título e este preço”, “me dá este valor em reais”. Essa é a divisão que organiza o projeto inteiro — quem monta a página não precisa conhecer os detalhes das peças.</p>
+
+<p>O caminho entre parênteses é o endereço da peça. <code>'./lib/Cartao.svelte'</code> quer dizer: “a partir da pasta onde este arquivo está, entre em <code>lib</code> e pegue <code>Cartao.svelte</code>”. O ponto sozinho é a pasta atual; a barra separa as pastas; o nome do arquivo vem por último, com a extensão.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Caminho</th><th>O que quer dizer</th></tr>
+<tr><td><code>./lib/Cartao.svelte</code></td><td>na pasta atual, dentro de <code>lib</code></td></tr>
+<tr><td><code>./formato.js</code></td><td>na pasta atual, o arquivo <code>formato.js</code></td></tr>
+<tr><td><code>../lib/Cartao.svelte</code></td><td>suba uma pasta, entre em <code>lib</code></td></tr>
+<tr><td><code>svelte</code></td><td>sem ponto e sem barra: pacote instalado, não arquivo seu</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>3. O terminal mostra a árvore</h2>
+
+<p>Antes de mover arquivo, veja o que existe. O comando <code>ls</code> lista uma pasta; <code>ls -R</code> lista a pasta e tudo o que está dentro dela, em ordem:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls -R src
+src:
+App.svelte
+lib
+main.js
+
+src/lib:
+Cartao.svelte
+formato.js</pre>
+
+<p>Leia de cima para baixo. Primeiro a pasta pedida (<code>src:</code>) com o que está diretamente nela; depois cada subpasta que apareceu, uma seção por vez. O <code>main.js</code> e o <code>App.svelte</code> moram na raiz de <code>src</code>; o cartão e o módulo de formatação moram em <code>src/lib</code>.</p>
+
+<dl class="anatomy">
+  <dt>src:</dt><dd>o endereço que você pediu, terminado em dois-pontos. Tudo o que vem abaixo, até a próxima seção, está dentro dela.</dd>
+  <dt>App.svelte</dt><dd>o componente principal: o único que o <code>main.js</code> monta na página.</dd>
+  <dt>main.js</dt><dd>o ponto de entrada. Ele importa o <code>App</code> e chama <code>mount()</code>; não tem HTML nem estilo.</dd>
+  <dt>lib</dt><dd>uma pasta. Por estar sem extensão, você já sabe que precisa descer nela para ver o conteúdo — e é o que a seção seguinte mostra.</dd>
+  <dt>Cartao.svelte / formato.js</dt><dd>as peças reaproveitáveis. Uma desenha, a outra calcula. Estão separadas porque têm trabalhos diferentes.</dd>
+</dl>
+
+<p>Essa é a árvore inteira do projeto da Ana depois da limpeza: cinco arquivos. Um projeto pequeno não precisa de mais do que isso — e um projeto grande cresce a partir daqui, uma pasta por assunto.</p>
+
+<hr>
+
+<h2>4. Dentro de <code>src/lib</code>: as peças com nome</h2>
+
+<p>A pasta <code>lib</code> é a gaveta das peças. Nela ficam os componentes que não são a página em si e os módulos que guardam conta ou formatação. O cartão da vitrine é o exemplo mais simples:</p>
+
+<pre class="file" data-file="src/lib/Cartao.svelte">&lt;script&gt;
+  let { titulo = 'Pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{titulo}&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;</pre>
+
+<pre class="out">&lt;article&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;&lt;/article&gt;</pre>
+
+<p>O componente não sabe onde o preço nasceu. Ele recebe duas propriedades com valor padrão e desenha. Os padrões existem porque o compilador deste guia monta o componente sem passar nada — e você vê a saída acima em vez de um erro. No projeto da Ana, os padrões servem para outra coisa: um cartão de demonstração sempre que alguém esquecer de passar o título.</p>
+
+<p>Já o <code>formato.js</code> não desenha nada. Ele exporta uma função:</p>
+
+<pre class="file" data-file="src/lib/formato.js">export function formatarPreco(valor) {
+  return 'R$ ' + valor.toFixed(2);
+}</pre>
+
+<p>Um arquivo <code>.js</code> assim é a menor unidade que existe: não tem componente, não tem estilo, não precisa de navegador. Você pode chamá-lo direto do terminal do projeto para ver se está certo:</p>
+
+<pre class="term">ana@notebook:~/loja$ node --input-type=module -e "import('./src/lib/formato.js').then(m =&gt; console.log(m.formatarPreco(2.5)))"
+R$ 2.50</pre>
+
+<p>Uma linha de saída, nenhum navegador aberto. Isso é o motivo de separar cálculo de desenho: a conta pode ser conferida sozinha, dez vezes mais rápido do que abrindo a página e procurando o número na tela.</p>
+
+<div class="tip">
+<strong>Regra da gaveta</strong>
+<p>Se o arquivo desenha algo que aparece na tela, ele é <code>.svelte</code> e mora junto dos componentes. Se ele só calcula, formata ou busca dado, é <code>.js</code> e pode morar em <code>lib</code> também — mas nunca dentro do componente, escondido no meio do HTML.</p>
+</div>
+
+<div class="trysvelte" data-goal="out:Sonho custa R$ 2.50">
+<p class="try-task"><strong>Missão:</strong> os dados do produto foram agrupados num objeto chamado <code>produto</code>, mas o HTML continua procurando <code>nome</code> e <code>preco</code> soltos — e o componente quebra. Aponte para as propriedades do objeto.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let produto = $state({ nome: 'Sonho', preco: 2.5 });
+&lt;/script&gt;
+
+&lt;p&gt;{nome} custa R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let produto = $state({ nome: 'Sonho', preco: 2.5 });
+&lt;/script&gt;
+
+&lt;p&gt;{produto.nome} custa R$ {produto.preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Agrupar em objeto tem um preço: cada acesso ganha o prefixo <code>produto.</code>. Em troca, o nome do objeto diz a que conjunto o dado pertence, e você pode ter dois produtos no mesmo arquivo sem inventar <code>nome1</code> e <code>nome2</code>.</p>
+
+<hr>
+
+<h2>5. Agrupar por assunto, não por tipo</h2>
+
+<p>Existem duas escolas de arrumar pasta. A primeira separa por tipo de arquivo: uma pasta para componentes, uma para funções, uma para estilos. A segunda separa por assunto: tudo o que é da vitrine junto, tudo o que é do caixa junto.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Por tipo</th><th>Por assunto</th></tr>
+<tr><td><code>components/</code>, <code>utils/</code>, <code>styles/</code></td><td><code>vitrine/</code>, <code>caixa/</code>, <code>estoque/</code></td></tr>
+<tr><td>Uma mudança na vitrine mexe em três pastas</td><td>Uma mudança na vitrine mexe em uma pasta</td></tr>
+<tr><td>Fácil de explicar no começo</td><td>Fácil de manter quando cresce</td></tr>
+<tr><td><code>utils/</code> vira a pasta “de tudo”</td><td>A pasta diz o que o código faz</td></tr>
+</table>
+</div>
+
+<p>O guia prefere a segunda, com uma exceção: projeto pequeno, com menos de dez arquivos, não precisa de subpasta de assunto. <code>src/lib</code> e pronto. Criar <code>vitrine/</code> com dois arquivos dentro é organização de fachada — mais cliques, nenhuma vantagem.</p>
+
+<p>O critério prático é a pergunta que você faz ao procurar: “onde está o código que calcula o desconto da vitrine?”. Se a resposta é “em <code>utils/</code>, junto com mais trinta funções que não têm nada a ver”, a pasta está organizada por tipo e você vai sofrer. Se é “em <code>vitrine/desconto.js</code>”, você achou antes de abrir o editor.</p>
+
+<hr>
+
+<h2>6. O componente também tem organização por dentro</h2>
+
+<p>Pasta é o nível de fora. Existe o nível de dentro: a ordem do arquivo <code>.svelte</code>. A convenção do guia é sempre a mesma — primeiro o <code>&lt;script&gt;</code>, depois o HTML, por último o <code>&lt;style&gt;</code>. Dentro do script, uma ordem que também ajuda:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5, 4]);
+  let total = $derived(precos.reduce((soma, p) =&gt; soma + p, 0));
+&lt;/script&gt;
+
+{#snippet linha(valor)}
+  &lt;li&gt;{valor.toFixed(2)}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each precos as preco}
+    {@render linha(preco)}
+  {/each}
+&lt;/ul&gt;
+&lt;p&gt;Total: {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;0.90&lt;/li&gt;&lt;li&gt;2.50&lt;/li&gt;&lt;li&gt;4.00&lt;/li&gt;&lt;/ul&gt; &lt;p&gt;Total: 7.40&lt;/p&gt;</pre>
+
+<p>Três decisões de organização nesse arquivo pequeno. Primeira: <code>total</code> é <code>$derived</code>, não <code>$state</code> — ele não guarda um valor, ele calcula a partir de <code>precos</code>. Segunda: o pedaço de HTML que se repete virou <code>{#snippet}</code>, com nome e parâmetro, em vez de duas cópias do <code>&lt;li&gt;</code> escritas à mão. Terceira: o snippet ficou entre o script e o uso, na ordem em que se lê.</p>
+
+<div class="warning">
+<strong>O que não se guarda duas vezes</strong>
+<p>Se um valor pode ser calculado a partir de outro, guarde o de origem e derive o resto. Dois <code>$state</code> para a mesma informação criam duas verdades: uma atualiza, a outra esquece, e a tela mostra o número errado. É o erro de organização mais caro que existe dentro de um componente.</p>
+</div>
+
+<div class="trysvelte" data-goal="out:Total: 3.40">
+<p class="try-task"><strong>Missão:</strong> a lista tem dois preços, mas o total ficou congelado em <code>0</code>. Tire o <code>$state</code> do total e faça dele um valor derivado da lista — a soma dos preços.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $derived(precos.reduce((soma, p) =&gt; soma + p, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>A solução usa <code>reduce</code>, que percorre a lista acumulando um valor: começa em <code>0</code> e soma cada preço. O <code>$derived</code> refaz a conta sozinho sempre que <code>precos</code> mudar. Você escreve a conta uma vez e nunca mais precisa lembrar de atualizar o total.</p>
+
+<hr>
+
+<h2>7. O build de um projeto organizado</h2>
+
+<p>Com as peças nos seus lugares, o comando de produção roda sem aviso:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 113 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DZ9lvoL7.js  41.48 kB │ gzip: 15.97 kB
+✓ built in 2.44s</pre>
+
+<p>“113 modules transformed” conta tudo o que entrou no pacote: o Svelte, o seu componente, o módulo de formatação, cada dependência. Um projeto organizado não gera menos módulos — organiza os mesmos. O tamanho final é o preço do que você importou; o endereço não pesa nada.</p>
+
+<p>O que muda, de verdade, é o tempo até achar o problema quando ele aparece. Num projeto com quarenta arquivos na raiz, a mensagem de erro aponta um arquivo e você ainda precisa descobrir qual dos cinco <code>Cartao</code> é. Com pastas por assunto, o caminho na mensagem já é a resposta.</p>
+
+<hr>
+
+<h2>8. Quando o caminho não existe</h2>
+
+<p>A Ana moveu o <code>Cartao.svelte</code> para <code>lib</code> e esqueceu de atualizar o import. O <code>import</code> continuou pedindo o arquivo na raiz de <code>src</code>:</p>
+
+<div class="cenario">
+<strong>Erro 1 — caminho que não aponta para arquivo nenhum</strong>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartoes.svelte';
+&lt;/script&gt;
+
+&lt;h1&gt;Loja da Ana&lt;/h1&gt;
+&lt;Cartao titulo="Pão francês" preco={0.9} /&gt;</pre>
+
+<p>O editor não reclama, porque nada foi digitado errado — só o endereço está velho. Quem descobre é o build:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 19 modules transformed.
+✗ Build failed in 579ms
+error during build:
+Could not resolve "./Cartoes.svelte" from "src/App.svelte"</pre>
+
+<p>“Could not resolve” quer dizer <em>não consegui resolver</em> — não achei o arquivo que esse caminho aponta. A mensagem vem em duas partes: o caminho que falhou (<code>"./Cartoes.svelte"</code>) e o arquivo que pediu (<code>"src/App.svelte"</code>). Com os dois, você sabe exatamente onde olhar. Abaixo dessa linha o Vite ainda imprime a pilha de chamadas interna dele, que não ajuda em nada nesta hora.</p>
+</div>
+
+<div class="tip">
+<strong>O que conferir, nesta ordem</strong>
+<p>Primeiro: o nome do arquivo no disco é <strong>igual</strong>, letra por letra, ao do import? Maiúscula conta. Segundo: o caminho relativo aponta para a pasta certa — <code>./</code> é a pasta do arquivo que importa, <code>../</code> sobe uma. Terceiro: a extensão está escrita (<code>.svelte</code>, <code>.js</code>). Faltando qualquer um dos três, o build para com “Could not resolve”.</p>
+</div>
+
+<hr>
+
+<h2>9. Quando o nome exportado está errado</h2>
+
+<p>O caminho pode estar certo e o nome, não. O módulo exporta <code>formatarPreco</code>; o componente pediu <code>formatarPrecos</code>, no plural:</p>
+
+<div class="cenario">
+<strong>Erro 2 — arquivo certo, nome exportado errado</strong>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './lib/Cartao.svelte';
+  import { formatarPrecos } from './lib/formato.js';
+
+  let precos = $state([0.9, 2.5]);
+&lt;/script&gt;
+
+&lt;h1&gt;Loja da Ana&lt;/h1&gt;
+&lt;Cartao titulo="Pão francês" preco={0.9} /&gt;
+
+&lt;ul&gt;
+  {#each precos as preco}
+    &lt;li&gt;{formatarPrecos(preco)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 113 modules transformed.
+✗ Build failed in 620ms
+error during build:
+src/App.svelte (3:11): "formatarPrecos" is not exported by "src/lib/formato.js", imported by "src/App.svelte".
+
+1: &lt;script&gt;
+2:   import Cartao from './lib/Cartao.svelte';
+3:   import { formatarPrecos } from './lib/formato.js';
+              ^
+4:
+5:   let precos = $state([0.9, 2.5]);</pre>
+
+<p>Essa mensagem é melhor que a anterior, e vale aprender a ler. Ela começa pela posição — <code>src/App.svelte (3:11)</code>, linha 3, coluna 11 — depois diz o que não existe e onde deveria existir. Embaixo vem o trecho do arquivo com o acento circunflexo sob a palavra errada.</p>
+</div>
+
+<p>O erro é de organização na origem: o nome do export vive no <code>formato.js</code>, longe de quem importa. Por isso a mensagem cita os dois arquivos. A correção é escolher um dos dois nomes e usá-lo nos dois lugares — nunca “consertar” criando um alias para esconder a diferença.</p>
+
+<hr>
+
+<h2>10. Quando dois componentes têm o mesmo nome</h2>
+
+<p>Agora o caso mais comum de quem tem duas pastas de assunto: dois cartões diferentes, ambos chamados <code>Cartao</code>. A Ana importou os dois no mesmo arquivo:</p>
+
+<div class="cenario">
+<strong>Erro 3 — dois componentes com o mesmo nome</strong>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './lib/Cartao.svelte';
+  import Cartao from './lib/CartaoGrande.svelte';
+&lt;/script&gt;
+
+&lt;h1&gt;Loja da Ana&lt;/h1&gt;
+&lt;Cartao titulo="Pão francês" preco={0.9} /&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 3, coluna 9): Identifier 'Cartao' has already been declared</pre>
+
+<p>“O identificador ‘Cartao’ já foi declarado”: a segunda linha tenta criar o mesmo nome da primeira. O compilador nem chega a olhar o conteúdo dos arquivos — o problema está no script, antes de qualquer componente ser desenhado.</p>
+</div>
+
+<p>A saída é renomear na importação, no momento em que o nome entra no arquivo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import CartaoVitrine from './vitrine/Cartao.svelte';
+  import CartaoCaixa from './caixa/Cartao.svelte';
+&lt;/script&gt;
+
+&lt;h1&gt;Loja da Ana&lt;/h1&gt;
+&lt;CartaoVitrine titulo="Pão francês" preco={0.9} /&gt;
+&lt;CartaoCaixa titulo="Total" preco={2.7} /&gt;</pre>
+
+<p>Os arquivos no disco continuam com o mesmo nome, cada um na sua pasta. Quem mudou foram os nomes dentro deste arquivo — e a mudança conta uma história: aqui é o cartão da vitrine, ali o do caixa. Repare que o nome na importação e o nome na tag continuam iguais; é essa repetição que faz a tag ser reconhecida como componente.</p>
+
+<div class="trysvelte" data-goal="out:0.90 2.50">
+<p class="try-task"><strong>Missão:</strong> o pedaço de HTML que desenha a linha virou um <code>{#snippet}</code> chamado <code>precoFormatado</code>, mas o <code>{@render}</code> ainda chama pelo nome antigo. Acerte a chamada para a lista aparecer.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+&lt;/script&gt;
+
+{#snippet precoFormatado(valor)}
+  &lt;li&gt;{valor.toFixed(2)}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each precos as preco}
+    {@render linha(preco)}
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+&lt;/script&gt;
+
+{#snippet precoFormatado(valor)}
+  &lt;li&gt;{valor.toFixed(2)}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each precos as preco}
+    {@render precoFormatado(preco)}
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Ao rodar a caixa, o erro é <code>linha is not defined</code>. Um snippet e uma função são a mesma coisa para o compilador: um nome que precisa existir no momento em que é chamado. Nome de snippet é nome de gaveta — se a etiqueta está errada, ninguém acha o conteúdo.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pasta ou arquivo</th><th>O que vai ali</th></tr>
+<tr><td><code>src/App.svelte</code></td><td>o componente principal, que o <code>main.js</code> monta</td></tr>
+<tr><td><code>src/main.js</code></td><td>o ponto de entrada: importa o App e chama <code>mount()</code></td></tr>
+<tr><td><code>src/lib/</code></td><td>componentes e módulos reaproveitáveis</td></tr>
+<tr><td><code>index.html</code></td><td>a página que carrega o <code>main.js</code></td></tr>
+<tr><td><code>vite.config.js</code></td><td>liga o plugin do Svelte no Vite</td></tr>
+<tr><td><code>package.json</code></td><td>nome do projeto, scripts e dependências</td></tr>
+<tr><td><code>dist/</code></td><td>a saída do build; gerada, nunca editada à mão</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Quem produziu</th><th>Significa</th></tr>
+<tr><td><code>Could not resolve "./Cartoes.svelte" from "src/App.svelte"</code></td><td>Vite, no build</td><td>o caminho do import não aponta para arquivo nenhum</td></tr>
+<tr><td><code>"formatarPrecos" is not exported by "src/lib/formato.js"</code></td><td>Vite, no build</td><td>o arquivo existe, o nome exportado não</td></tr>
+<tr><td><code>Identifier 'Cartao' has already been declared</code></td><td>Svelte, na compilação</td><td>dois imports com o mesmo nome no mesmo arquivo</td></tr>
+<tr><td><code>… is not defined</code></td><td>navegador, ao desenhar</td><td>o nome usado na tela não existe no script</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O arquivo <code>src/lib/Cartao.svelte</code> quer importar <code>src/lib/formato.js</code>. Qual caminho está certo?</p>
+<label><input type="radio" name="q1"> <code>'src/lib/formato.js'</code></label>
+<label><input type="radio" name="q1"> <code>'./formato.js'</code></label>
+<label><input type="radio" name="q1"> <code>'formato.js'</code></label>
+<label><input type="radio" name="q1"> <code>'../lib/lib/formato.js'</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que o build imprime quando o <code>import</code> aponta para um arquivo que não existe?</p>
+<label><input type="radio" name="q1"> <code>Identifier has already been declared</code></label>
+<label><input type="radio" name="q1"> <code>is not exported by</code></label>
+<label><input type="radio" name="q1"> <code>Could not resolve</code>, com o caminho que falhou e o arquivo que pediu</label>
+<label><input type="radio" name="q1"> nada: o build termina e o navegador mostra o erro</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Um valor que pode ser calculado a partir da lista de preços deve ser…</p>
+<label><input type="radio" name="q1"> <code>$derived</code>, para acompanhar a lista sozinho</label>
+<label><input type="radio" name="q1"> outro <code>$state</code>, atualizado à mão depois de cada mudança</label>
+<label><input type="radio" name="q1"> uma variável comum, sem runa nenhuma</label>
+<label><input type="radio" name="q1"> uma constante <code>const</code> calculada uma vez</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import Cartao from '<input data-answer="./lib/Cartao.svelte">';<br><br>// o componente está em src/lib/Cartao.svelte,<br>// e este arquivo é src/App.svelte</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Pasta é endereço: o projeto fica previsível para você e para quem chega depois.</li>
+  <li><code>src/</code> guarda o código, <code>src/lib/</code> guarda as peças reaproveitáveis.</li>
+  <li><code>import X from './lib/X.svelte'</code>: o ponto é a pasta atual, a barra separa pastas.</li>
+  <li><code>../</code> sobe uma pasta; nome sem ponto e sem barra é pacote instalado.</li>
+  <li><code>ls -R</code> mostra a árvore inteira de uma pasta no terminal.</li>
+  <li>Agrupe por assunto quando o projeto crescer; <code>utils/</code> vira a pasta “de tudo”.</li>
+  <li>Dentro do componente: <code>&lt;script&gt;</code>, HTML, <code>&lt;style&gt;</code>; e derive o que dá para calcular.</li>
+  <li><code>Could not resolve</code> = caminho errado; <code>is not exported by</code> = nome do export errado.</li>
+  <li>Dois imports com o mesmo nome param a compilação: <code>Identifier 'X' has already been declared</code>.</li>
+  <li>Snippet e função precisam existir no momento da chamada; nome errado quebra na tela.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

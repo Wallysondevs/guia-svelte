@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Componentes Pequenos — uma peça, um trabalho | Guia Svelte</title>
+<meta name="description" content="Como dividir o componente gigante da Ana em peças pequenas com $props, quando dividir e quando não dividir, com as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Componentes Pequenos</span></h1>
+
+<p class="intro">O <code>App.svelte</code> da Ana chegou a duzentas linhas. Dentro dele tem a vitrine, o carrinho, o cálculo do frete e o rodapé com o endereço da padaria. Quando o frete mudou, ela passou meia hora procurando a linha certa. Nesta aula ela aprende a quebrar o arquivo em peças de um trabalho só — e a decidir quando quebrar vale a pena e quando só espalha o problema.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que faz um componente ser “grande” de verdade, além do número de linhas.</li>
+  <li>Como dividir um componente em peças com um trabalho cada.</li>
+  <li>Como uma peça recebe dados de fora com <code>$props()</code>.</li>
+  <li>Por que valor padrão evita peça quebrada em demonstração.</li>
+  <li>Como a lista monta vários pedaços iguais com <code>{#each}</code>.</li>
+  <li>Quando mover a conta do HTML para uma função com nome.</li>
+  <li>O sinal de que dividir cedo demais também custa caro.</li>
+  <li>Como medir o tamanho real dos arquivos com <code>wc -l</code>.</li>
+  <li>Os três erros de <code>$props()</code> desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: uma peça, um trabalho</h2>
+
+<p>Na cozinha da padaria, ninguém usa uma ferramenta só para tudo. A colher de pau mexe, a forma assa, a faca corta. Uma ferramenta que fizesse as três coisas seria péssima nas três — e ninguém saberia onde guardá-la.</p>
+
+<p>Componente é ferramenta. Um componente que faz a vitrine, o carrinho e o rodapé ao mesmo tempo é o mesmo problema: não dá para reaproveitar a vitrine em outra página sem levar o carrinho junto, não dá para testar o rodapé sozinho, e a menor mudança exige entender o arquivo inteiro.</p>
+
+<p>Um componente pequeno tem <strong>um trabalho</strong>, que cabe numa frase: “mostra um cartão de produto”, “formata um preço”, “mostra a lista de produtos”. Se você precisa de “e” para descrever o que ele faz, provavelmente são dois componentes dentro de um.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na cozinha</th><th>No componente</th></tr>
+<tr><td>A faca corta; a forma assa</td><td>Cada componente faz uma coisa que cabe numa frase</td></tr>
+<tr><td>Uma ferramenta que faz tudo</td><td>Um arquivo de duzentas linhas que mexe em tudo</td></tr>
+<tr><td>A receita diz “use a forma”</td><td>O pai diz <code>&lt;Cartao titulo=… preco=… /&gt;</code></td></tr>
+<tr><td>A forma precisa da massa pronta</td><td>O componente recebe os dados por propriedade</td></tr>
+<tr><td>Guardar a faca na gaveta das facas</td><td>Guardar o cartão em <code>src/lib/</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Como saber que o componente está grande</h2>
+
+<p>Contar linhas ajuda pouco: um arquivo de oitenta linhas com quatro responsabilidades é pior que um de duzentas com uma tabela de configuração. O que denuncia o exagero são outros sinais:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sinal</th><th>O que costuma significar</th></tr>
+<tr><td>Você precisa do “e” para descrever o componente</td><td>Duas ou mais responsabilidades juntas</td></tr>
+<tr><td>Um bloco de HTML se repete quase igual</td><td>Falta uma peça que receba o que muda</td></tr>
+<tr><td>A conta aparece no meio do HTML</td><td>Falta uma função com nome</td></tr>
+<tr><td>Você rola a tela para achar a parte que quer mudar</td><td>O arquivo já não cabe na cabeça</td></tr>
+<tr><td>Mudar o rodapé quebrou a vitrine</td><td>As partes compartilham estado sem precisar</td></tr>
+</table>
+</div>
+
+<p>Repare que nenhum sinal fala de número. O critério é de leitura: se para mexer numa parte você precisa entender três, o arquivo está grande. E o contrário também vale — se para entender uma linha você precisa abrir quatro arquivos, a divisão passou do ponto. Voltamos a isso na seção 9.</p>
+
+<hr>
+
+<h2>3. O componente que faz tudo</h2>
+
+<p>Esta é a vitrine da Ana antes da divisão. Ela mostra os produtos, formata os preços e calcula o total — tudo no mesmo lugar:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Sonho', preco: 2.5 }
+  ]);
+  let total = $derived(produtos.reduce((soma, p) =&gt; soma + p.preco, 0));
+&lt;/script&gt;
+
+&lt;h1&gt;Vitrine&lt;/h1&gt;
+
+{#each produtos as produto}
+  &lt;article&gt;
+    &lt;h2&gt;{produto.nome}&lt;/h2&gt;
+    &lt;p&gt;R$ {produto.preco.toFixed(2)}&lt;/p&gt;
+  &lt;/article&gt;
+{/each}
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Vitrine&lt;/h1&gt; &lt;article&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;&lt;/article&gt;&lt;article&gt;&lt;h2&gt;Sonho&lt;/h2&gt; &lt;p&gt;R$ 2.50&lt;/p&gt;&lt;/article&gt; &lt;p&gt;Total: R$ 3.40&lt;/p&gt;</pre>
+
+<p>Vinte linhas, tudo funcionando. O problema não é o tamanho de hoje: é o crescimento. Amanhã entram a foto do produto, o botão de adicionar ao carrinho e o selo de promoção. Cada um desses entra no mesmo <code>{#each}</code>, e a vitrine vira o arquivo que ninguém quer abrir.</p>
+
+<p>O detalhe mais importante está na linha do <code>&lt;article&gt;</code>: ela desenha <em>um</em> produto. O <code>{#each}</code> repete essa linha para cada item da lista. Ou seja, o arquivo já sabe qual é a peça — ele só não deu nome a ela.</p>
+
+<dl class="anatomy">
+  <dt>&lt;script&gt;</dt><dd>guarda duas coisas de naturezas diferentes: os <strong>dados</strong> (<code>produtos</code>) e o <strong>total derivado</strong>. Já são duas responsabilidades no mesmo bloco.</dd>
+  <dt>&lt;h1&gt;Vitrine&lt;/h1&gt;</dt><dd>o título da página. Isso não é papel de um cartão de produto; é papel de quem monta a página.</dd>
+  <dt>{#each produtos as produto}</dt><dd>o laço que monta a lista. O nome <code>produto</code> é o item da vez, e é ele que a peça precisa receber.</dd>
+  <dt>&lt;article&gt; … &lt;/article&gt;</dt><dd>o desenho de <strong>um</strong> produto: título e preço. Esse bloco é o candidato natural a virar componente.</dd>
+  <dt>R$ {produto.preco.toFixed(2)}</dt><dd>formatação do dinheiro no meio do HTML. Repete em qualquer outro lugar que mostre preço.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="out:Pão francês R$ 0.90 Sonho R$ 2.50">
+<p class="try-task"><strong>Missão:</strong> o componente desenha só o primeiro produto, porque a lista está escrita à mão. Transforme o bloco em um <code>{#each}</code> que repete o <code>&lt;article&gt;</code> para cada produto — assim a peça passa a valer para a lista inteira.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Sonho', preco: 2.5 }
+  ]);
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{produtos[0].nome}&lt;/h2&gt;
+  &lt;p&gt;R$ {produtos[0].preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Sonho', preco: 2.5 }
+  ]);
+&lt;/script&gt;
+
+{#each produtos as produto}
+  &lt;article&gt;
+    &lt;h2&gt;{produto.nome}&lt;/h2&gt;
+    &lt;p&gt;R$ {produto.preco.toFixed(2)}&lt;/p&gt;
+  &lt;/article&gt;
+{/each}</pre>
+</div>
+
+<p>Repare no que mudou: nenhuma informação nova apareceu. A lista já tinha dois produtos; o que faltava era o mecanismo que percorre. O <code>{#each}</code> é a ponte entre “uma peça” e “a lista de peças”, e é isso que permite dividir o componente sem repetir HTML.</p>
+
+<hr>
+
+<h2>4. A primeira divisão: nasce o cartão</h2>
+
+<p>Agora o bloco que desenha um produto ganha arquivo próprio. Ele recebe o título e o preço de fora, e não sabe de onde vieram:</p>
+
+<pre class="file" data-file="src/lib/Cartao.svelte">&lt;script&gt;
+  let { titulo = 'Pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{titulo}&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;</pre>
+
+<pre class="out">&lt;article&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;&lt;/article&gt;</pre>
+
+<p>O componente ficou com oito linhas e uma frase de descrição: “mostra um cartão de produto”. Nada de lista, nada de total, nada de título de página. Quem chama decide quais dados passar:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './lib/Cartao.svelte';
+
+  let produtos = $state([
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Sonho', preco: 2.5 }
+  ]);
+&lt;/script&gt;
+
+&lt;h1&gt;Vitrine&lt;/h1&gt;
+
+{#each produtos as produto}
+  &lt;Cartao titulo={produto.nome} preco={produto.preco} /&gt;
+{/each}</pre>
+
+<p>Sobrou para o <code>App</code> o trabalho de montar a página: título, lista e ordem. Sobrou para o <code>Cartao</code> o trabalho de desenhar. Cada um pode mudar sem arrastar o outro — desde que o contrato de dados continue o mesmo.</p>
+
+<dl class="anatomy">
+  <dt>let { titulo = 'Pão francês', preco = 0.9 } = $props()</dt><dd>declara que o componente <strong>recebe</strong> duas propriedades. O que vem antes do <code>=</code> é o nome que chega; depois do <code>=</code> é o valor padrão, usado quando ninguém passa nada.</dd>
+  <dt>{titulo}</dt><dd>usa o valor recebido dentro do HTML. O componente trata <code>titulo</code> como um dado local — ele não sabe nem se importa de onde veio.</dd>
+  <dt>&lt;Cartao titulo={produto.nome} preco={produto.preco} /&gt;</dt><dd>do lado de quem chama, o nome na esquerda é a propriedade; o valor entre chaves é a expressão que produz o dado.</dd>
+</dl>
+
+<p>Existe um custo nessa divisão, e ele é real: agora são dois arquivos para ler quando algo não aparece na tela. Se o cartão mostra o preço errado, você não sabe de longe se o problema é a conta no <code>App</code> ou a formatação no <code>Cartao</code>. O ganho vem quando a peça é usada em vários lugares — aí o custo é pago uma vez só.</p>
+
+<hr>
+
+<h2>5. A segunda divisão: a linha de preço</h2>
+
+<p>A formatação de dinheiro aparece em mais de um lugar. Em vez de repetir <code>toFixed(2)</code> em cada um, a Ana criou uma peça mínima:</p>
+
+<pre class="file" data-file="src/lib/PrecoLinha.svelte">&lt;script&gt;
+  let { valor = 0 } = $props();
+&lt;/script&gt;
+
+&lt;span&gt;R$ {valor.toFixed(2)}&lt;/span&gt;</pre>
+
+<pre class="out">&lt;span&gt;R$ 0.00&lt;/span&gt;</pre>
+
+<p>Cinco linhas. Um trabalho: mostrar um valor em reais. O valor padrão <code>0</code> garante que a peça nunca quebre sozinha — sem ele, <code>valor</code> seria <code>undefined</code> e <code>undefined.toFixed(2)</code> derrubaria o componente. Isso não é detalhe de estilo: é a diferença entre uma peça que aguenta ser usada e uma que exige que todo mundo passe tudo.</p>
+
+<p>Com as duas peças prontas, o <code>App</code> fica assim:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './lib/Cartao.svelte';
+  import PrecoLinha from './lib/PrecoLinha.svelte';
+
+  let produtos = $state([
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Sonho', preco: 2.5 }
+  ]);
+&lt;/script&gt;
+
+&lt;h1&gt;Vitrine&lt;/h1&gt;
+
+{#each produtos as produto}
+  &lt;Cartao titulo={produto.nome} preco={produto.preco} /&gt;
+{/each}
+
+&lt;p&gt;Menor preço: &lt;PrecoLinha valor={0.9} /&gt;&lt;/p&gt;</pre>
+
+<p>O arquivo principal continua montando; as peças continuam desenhando. É a mesma divisão de trabalho de uma cozinha: quem monta o prato é o cozinheiro, quem faz o molho é a panela. Se o molho mudar de receita, o prato continua igual.</p>
+
+<div class="trysvelte" data-goal="out:Pão francês">
+<p class="try-task"><strong>Missão:</strong> o cartão recebe a propriedade <code>nome</code>, mas o HTML usa <code>titulo</code>, que não existe — e a tela quebra. Faça o HTML usar o nome que o componente realmente recebe, com o valor padrão <code>'Pão francês'</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { nome } = $props();
+&lt;/script&gt;
+
+&lt;h2&gt;{titulo}&lt;/h2&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'Pão francês' } = $props();
+&lt;/script&gt;
+
+&lt;h2&gt;{nome}&lt;/h2&gt;</pre>
+</div>
+
+<p>A caixa mostra a mensagem <code>titulo is not defined</code> ao rodar o código inicial. É sempre a mesma história: propriedade é nome combinado entre duas partes. Se a peça declara <code>nome</code>, quem chama tem de passar <code>nome</code> — e o HTML de dentro tem de usar <code>nome</code> também.</p>
+
+<hr>
+
+<h2>6. A conta sai do HTML e ganha nome</h2>
+
+<p>Conta no meio do HTML funciona, mas não tem nome e por isso não pode ser reaproveitada nem conferida sozinha. Veja o caso do total:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let quantidade = $state(3);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {preco * quantidade}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 2.7&lt;/p&gt;</pre>
+
+<p>A conta está certa e a tela mostra <code>2.7</code>. Para uma padaria, o preço é <code>2.70</code> — e a diferença não é de matemática, é de <em>apresentação</em>. Arrumar isso com a conta solta no HTML significa mexer na expressão toda; arrumar com uma função significa dar um nome ao cálculo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let quantidade = $state(3);
+
+  function calcularTotal() {
+    return preco * quantidade;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {calcularTotal().toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 2.70&lt;/p&gt;</pre>
+
+<p>Agora existem dois assuntos separados: <em>quanto é</em> (a função) e <em>como mostrar</em> (o <code>toFixed</code> na tela). Se amanhã o total ganhar desconto, você muda a função e a tela não precisa saber. Se amanhã o preço tiver três casas, você muda a tela e a conta continua igual.</p>
+
+<div class="trysvelte" data-goal="out:Total: R$ 2.70">
+<p class="try-task"><strong>Missão:</strong> o total aparece como <code>R$ 2.7</code>, sem a segunda casa. Tire a conta do HTML: crie a função <code>calcularTotal()</code> que multiplica os dois valores e formate o resultado com duas casas.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let quantidade = $state(3);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {preco * quantidade}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let quantidade = $state(3);
+
+  function calcularTotal() {
+    return preco * quantidade;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {calcularTotal().toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>A função enxerga <code>preco</code> e <code>quantidade</code> porque está no mesmo arquivo, e elas são variáveis de estado. Se uma delas mudar, o Svelte chama a função de novo e a tela se atualiza — sem <code>$derived</code>, sem nada extra. A conta virou parte do desenho.</p>
+
+<hr>
+
+<h2>7. O contrato entre as peças</h2>
+
+<p>Dividir componente é criar contratos. O <code>Cartao</code> promete desenhar um produto se receber <code>titulo</code> e <code>preco</code>; o <code>App</code> promete passar os dois. Se um dos lados muda o nome, o contrato quebra — e quebra de um jeito silencioso, porque o Svelte não reclama de propriedade que ninguém passou.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No componente que recebe</th><th>No componente que usa</th></tr>
+<tr><td><code>let { titulo } = $props();</code></td><td><code>&lt;Cartao titulo="Pão" /&gt;</code></td></tr>
+<tr><td><code>let { preco = 0 } = $props();</code></td><td><code>&lt;Cartao preco={0.9} /&gt;</code> ou sem passar nada</td></tr>
+<tr><td><code>let { item } = $props();</code> (objeto)</td><td><code>&lt;Cartao item={produto} /&gt;</code></td></tr>
+</table>
+</div>
+
+<p>Repare na segunda linha: quem declara <code>preco = 0</code> aceita ser chamado sem <code>preco</code>. Quem declara só <code>preco</code> não aceita — vai receber <code>undefined</code> e quebrar na primeira conta. Valor padrão é a rede de proteção do contrato.</p>
+
+<p>Existe uma decisão a tomar em cada divisão: passar <strong>campos soltos</strong> (<code>titulo</code>, <code>preco</code>) ou <strong>o objeto inteiro</strong> (<code>item</code>)? Campos soltos deixam claro o que a peça usa; o objeto é mais curto e cresce sem mudar a chamada. Para peça pequena, prefira campos soltos: se o cartão só precisa do nome e do preço, ele não deveria poder mexer no resto do produto.</p>
+
+<hr>
+
+<h2>8. Medindo: quantas linhas cada um ficou</h2>
+
+<p>O terminal tem uma ferramenta simples para isso. <code>wc -l</code> conta as linhas de cada arquivo que você passar:</p>
+
+<pre class="term">ana@notebook:~/loja$ wc -l src/App.svelte src/lib/*.svelte
+ 17 src/App.svelte
+  8 src/lib/Cartao.svelte
+  5 src/lib/PrecoLinha.svelte
+ 30 total</pre>
+
+<p>Trinta linhas no total contra as vinte de antes. A divisão <strong>aumentou</strong> o código: cada arquivo novo custa uma linha de <code>&lt;script&gt;</code> de abertura e uma de fechamento, mais a importação. Isso não é defeito — é o preço da separação, e ele aparece em qualquer linguagem.</p>
+
+<p>O que melhorou foi a distribuição. O <code>App</code> tem 17 linhas e monta a página; o <code>Cartao</code> tem 8 e desenha um produto; o <code>PrecoLinha</code> tem 5 e formata dinheiro. Nenhum arquivo precisa ser lido inteiro para mexer numa parte. Se amanhã o cartão ganhar foto, ele vai para 12 linhas e ninguém mais é afetado.</p>
+
+<p>E o pacote final? O build do mesmo projeto, agora com três componentes, responde:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 113 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-NgHaxAVq.js  41.58 kB │ gzip: 15.99 kB
+✓ built in 1.27s</pre>
+
+<p>Cento e treze módulos, 41,58 kB — praticamente o mesmo peso de antes da divisão. Isso é importante: dividir componente <strong>não engorda</strong> o site. O compilador junta tudo num arquivo só no fim. O ganho é de leitura para quem programa, não de velocidade para quem visita.</p>
+
+<dl class="anatomy">
+  <dt>wc -l</dt><dd>“word count, lines”: conta linhas. O <code>-l</code> é a opção de linhas; sem ela, o comando conta palavras, letras e linhas.</dd>
+  <dt>src/App.svelte</dt><dd>um arquivo. Vários arquivos podem ser passados de uma vez, separados por espaço.</dd>
+  <dt>src/lib/*.svelte</dt><dd>o asterisco quer dizer “todos os arquivos com esta terminação nesta pasta”. O terminal troca o padrão pela lista real antes de rodar o comando.</dd>
+  <dt>30 total</dt><dd>a soma de todas as linhas contadas, na última linha da saída.</dd>
+</dl>
+
+<hr>
+
+<h2>9. Quando não dividir</h2>
+
+<p>Dividir cedo demais tem custo, e ele aparece rápido: um componente usado <strong>uma vez só</strong>, com propriedades que só ele entende, é uma indireção — você abre dois arquivos para ler uma coisa. O guia sugere três critérios antes de criar um arquivo novo:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Se a resposta for não</th></tr>
+<tr><td>Isso vai aparecer em mais de um lugar?</td><td>Deixe dentro do arquivo por enquanto</td></tr>
+<tr><td>Isso tem nome próprio e um trabalho só?</td><td>Ainda não é peça; é trecho</td></tr>
+<tr><td>Dá para descrever sem citar o resto da página?</td><td>A peça depende demais do contexto</td></tr>
+</table>
+</div>
+
+<p>Se as três respostas forem “não”, o trecho fica onde está. Um componente de quarenta linhas com uma responsabilidade clara é melhor que quatro arquivos de dez linhas amarrados por propriedades. O número que importa não é o de arquivos: é o de coisas que você precisa ter na cabeça ao mesmo tempo.</p>
+
+<div class="warning">
+<strong>Não divida no meio de uma tarefa</strong>
+<p>Reorganizar código enquanto conserta um bug é receita de confusão: você não sabe se quebrou por causa do conserto ou da mudança de lugar. Conserte primeiro, confirme na tela, e só então mova. A aula de refatoração volta a esse ponto.</p>
+</div>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas são erros de <code>$props()</code> — a linha onde o componente declara o que recebe.</p>
+
+<div class="cenario">
+<strong>Erro 1 — chamar <code>$props()</code> duas vezes</strong>
+<p>Cada componente tem um único ponto de entrada de dados. Duas chamadas não somam propriedades: a segunda é recusada.</p>
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { a } = $props();
+  let { b } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{a} {b}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 14): Cannot use `$props()` more than once</pre>
+<p>“Não é possível usar <code>$props()</code> mais de uma vez”. A correção é juntar tudo numa chamada só: <code>let { a, b } = $props()</code>. Repare que a linha apontada é a segunda chamada, e a coluna 14 é onde o <code>$props</code> começa.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>$props()</code> dentro de uma função</strong>
+<p>Propriedade é declarada no topo do componente, não no meio de uma função. O compilador precisa ver a declaração para montar o contrato.</p>
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  function pegar() {
+    return $props();
+  }
+&lt;/script&gt;
+
+&lt;p&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 11): `$props()` can only be used at the top level of components as a variable declaration initializer</pre>
+<p>A mensagem explica o lugar permitido: “só pode ser usado no nível de cima do componente, como inicializador de declaração de variável”. Em português direto: <code>let { x } = $props()</code>, no começo do <code>&lt;script&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — propriedade que não chega e é usada como número</strong>
+<p>Sem valor padrão, uma propriedade não passada vale <code>undefined</code>. O componente compila e quebra só na hora de desenhar.</p>
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { preco } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="out">Cannot read properties of undefined (reading 'toFixed')</pre>
+<p>“Não consigo ler propriedades de <code>undefined</code> (lendo ‘toFixed’)”. Traduzindo: <code>preco</code> não tem valor, então não há <code>toFixed</code> para chamar. A correção pode ser valor padrão (<code>preco = 0</code>) ou garantir que quem chama sempre passe o preço — as duas funcionam, a primeira protege mais.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Trabalho</th><th>Linhas no projeto da Ana</th></tr>
+<tr><td><code>App.svelte</code></td><td>monta a página: título, lista, ordem</td><td>17</td></tr>
+<tr><td><code>Cartao.svelte</code></td><td>mostra um produto: nome e preço</td><td>8</td></tr>
+<tr><td><code>PrecoLinha.svelte</code></td><td>mostra um valor em reais</td><td>5</td></tr>
+<tr><td><code>formato.js</code></td><td>formata valores, sem desenhar nada</td><td>3</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Escreva</th></tr>
+<tr><td>receber propriedades</td><td><code>let { titulo, preco } = $props();</code></td></tr>
+<tr><td>dar valor padrão</td><td><code>let { preco = 0 } = $props();</code></td></tr>
+<tr><td>passar um valor fixo</td><td><code>&lt;Cartao titulo="Sonho" /&gt;</code></td></tr>
+<tr><td>passar uma expressão</td><td><code>&lt;Cartao preco={produto.preco} /&gt;</code></td></tr>
+<tr><td>contar linhas de arquivos</td><td><code>wc -l src/App.svelte src/lib/*.svelte</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual é o sinal mais confiável de que um componente precisa ser dividido?</p>
+<label><input type="radio" name="q1"> ele passou de cem linhas</label>
+<label><input type="radio" name="q1"> você precisa do “e” para descrever o que ele faz</label>
+<label><input type="radio" name="q1"> ele tem um bloco <code>&lt;style&gt;</code></label>
+<label><input type="radio" name="q1"> ele usa <code>$props()</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>let { preco = 0 } = $props()</code> garante?</p>
+<label><input type="radio" name="q1"> que o preço nunca muda</label>
+<label><input type="radio" name="q1"> que o componente sempre recebe um preço de quem chama</label>
+<label><input type="radio" name="q1"> que, se ninguém passar o preço, ele vale <code>0</code> em vez de <code>undefined</code></label>
+<label><input type="radio" name="q1"> que o preço é formatado com duas casas automaticamente</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Depois de dividir em três arquivos, o total de linhas do projeto da Ana…</p>
+<label><input type="radio" name="q1"> aumentou: cada arquivo novo custa declaração e importação</label>
+<label><input type="radio" name="q1"> diminuiu, porque o código repetido desapareceu</label>
+<label><input type="radio" name="q1"> ficou exatamente igual</label>
+<label><input type="radio" name="q1"> não pode ser medido antes do build</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let { titulo = 'Pão francês', <input data-answer="preco = 0"> } = $props();<br><br>&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;<br><br>// o preço pode não vir de quem usa o componente</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Componente pequeno tem <strong>um trabalho</strong>, descrito numa frase sem “e”.</li>
+  <li>O sinal de exagero é a leitura difícil, não o número de linhas.</li>
+  <li>O bloco que desenha um item é o candidato natural a virar peça.</li>
+  <li><code>let { titulo, preco } = $props()</code> declara o que a peça recebe de fora.</li>
+  <li>Valor padrão (<code>preco = 0</code>) protege a peça de chamada incompleta.</li>
+  <li><code>{#each}</code> repete a peça para cada item da lista, sem copiar HTML.</li>
+  <li>Conta dentro do HTML não tem nome; mova para uma função como <code>calcularTotal()</code>.</li>
+  <li>Dividir aumenta o total de linhas e a quantidade de arquivos: o ganho é de leitura.</li>
+  <li>Usado uma vez só, com propriedades próprias, o trecho pode ficar onde está.</li>
+  <li><code>$props()</code> aparece uma vez, no topo do script; sem valor padrão, propriedade ausente vale <code>undefined</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

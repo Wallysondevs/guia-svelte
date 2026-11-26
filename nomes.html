@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nomes e Convenções — o nome que o compilador entende | Guia Svelte</title>
+<meta name="description" content="Maiúscula em componente, minúscula em variável: as convenções de nome do Svelte 5, com os avisos e erros reais do compilador na tela.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Nomes e Convenções</span></h1>
+
+<p class="intro">A Ana tem uma pasta com quarenta arquivos: <code>cartao.svelte</code>, <code>Cartao.svelte</code>, <code>cartao-novo.svelte</code>, <code>cartaoFINAL.svelte</code>. Ela sabe o que cada um faz — até o dia em que precisa mexer no preço e abre o arquivo errado três vezes seguidas. Nome de arquivo, de variável e de função não é enfeite: é a primeira coisa que você e o compilador leem. Nesta aula, a Ana aprende as convenções que o Svelte cobra e as que ele só combina com você.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que o computador também depende do nome, não só você.</li>
+  <li>A diferença entre <code>Cartao</code>, <code>cartao</code> e <code>cartao-de-preco</code>.</li>
+  <li>Por que componente começa com maiúscula e variável com minúscula.</li>
+  <li>Como escrever nomes compostos com camelCase sem inventar abreviação.</li>
+  <li>O que fazer com nomes que o Svelte já usa, como <code>class</code> e <code>onclick</code>.</li>
+  <li>A regra prática para nomear booleanos, funções e listas.</li>
+  <li>Como renomear um arquivo no terminal e o que muda na importação.</li>
+  <li>O aviso real do compilador quando o componente fica em minúscula.</li>
+  <li>Os três erros de nome desta aula, com a mensagem copiada do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o nome é uma etiqueta que o computador lê</h2>
+
+<p>Na padaria, a Ana cola etiqueta em tudo: “farinha”, “açúcar”, “sonho”. Se ela escrever “farinha” num pote de sal, o erro não é de português — é de operação: alguém vai salgar o pão doce. Nome errado custa tempo e dinheiro, mesmo quando está escrito corretamente.</p>
+
+<p>Com código é igual, com um agravante. O nome de uma variável não serve só para você se achar: ele é a chave que o compilador usa para ligar o valor ao lugar da tela. Quando você escreve <code>{preco}</code> no HTML, o compilador procura uma variável chamada exatamente <code>preco</code>. Se ela se chama <code>Preco</code>, a ligação não acontece — e o erro que aparece na tela não fala de maiúscula, fala de “is not defined”.</p>
+
+<p>Existe ainda um segundo nível: o Svelte usa a <strong>forma</strong> do nome para decidir o que ele é. Nome com maiúscula no começo é componente; nome com minúscula é variável, função ou tag do HTML. Essa é a convenção mais importante do guia inteiro, e a única que o compilador avisa quando você quebra.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Etiqueta do pote de farinha</td><td>O nome da variável: <code>precoUnitario</code></td></tr>
+<tr><td>Placa grande na parede: “PÃO”</td><td>O nome do componente: <code>CartaoDePreco</code></td></tr>
+<tr><td>Duas etiquetas “farinha” em potes diferentes</td><td>Duas variáveis com o mesmo nome: erro na hora</td></tr>
+<tr><td>Etiqueta escrita à mão, torta, ilegível</td><td><code>let a1 = $state(0)</code>: funciona, mas ninguém entende depois</td></tr>
+<tr><td>O pote sem etiqueta</td><td>O valor usado na tela sem ter sido declarado</td></tr>
+</table>
+</div>
+
+<p>Repare que nenhuma dessas convenções é capricho de estilo. As duas primeiras linhas são <strong>regras do compilador</strong>: quebram o programa. As duas últimas são <strong>acordos entre pessoas</strong>: o programa roda, mas o próximo a ler sofre — e esse próximo pode ser você em duas semanas.</p>
+
+<hr>
+
+<h2>2. As três famílias de nomes</h2>
+
+<p>Antes de escrever qualquer coisa, separe o que você está nomeando. No Svelte existem três famílias, e cada uma tem um formato próprio:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que é</th><th>Formato</th><th>Exemplo</th></tr>
+<tr><td>Componente (arquivo e importação)</td><td>PascalCase: cada palavra com maiúscula, sem espaço e sem hífen</td><td><code>CartaoDePreco.svelte</code></td></tr>
+<tr><td>Variável, função, propriedade</td><td>camelCase: primeira palavra minúscula, as seguintes com maiúscula</td><td><code>precoUnitario</code>, <code>calcularTroco()</code></td></tr>
+<tr><td>Tag do HTML</td><td>minúscula, como o navegador já conhece</td><td><code>button</code>, <code>input</code>, <code>section</code></td></tr>
+</table>
+</div>
+
+<p>O nome <code>CartaoDePreco</code> tem três pedaços colados: <code>Cartao</code>, <code>De</code>, <code>Preco</code>. Cada pedaço começa com maiúscula. Já <code>precoUnitario</code> tem dois pedaços, e só o segundo começa com maiúscula. A isso damos o nome de <em>camelCase</em> (corcunda de camelo: as maiúsculas no meio parecem corcovas).</p>
+
+<p>Fique de olho numa armadilha de português: <strong>nada de acento em nome de código</strong>. A linguagem aceita <code>preço</code> — o compilador não reclama —, mas cada teclado, cada editor e cada colega vai digitar isso de um jeito, e você vai perder minutos procurando <code>preço</code> com cedilha contra <code>preco</code> sem. Escreva <code>preco</code>. O texto que aparece na tela continua sendo “preço”, com acento, porque aí é texto e não nome.</p>
+
+<hr>
+
+<h2>3. Maiúscula para componente, minúscula para o resto</h2>
+
+<p>Comece pelo componente que a Ana usa para mostrar um preço na vitrine. Ele tem um nome comprido e chato de digitar — e é assim mesmo: nome comprido e claro vale mais do que nome curto e obscuro.</p>
+
+<pre class="file" data-file="src/CartaoDePreco.svelte">&lt;script&gt;
+  let { titulo = 'Pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{titulo}&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;</pre>
+
+<p>E aqui está o mesmo componente com dados de verdade, como o compilador o entrega:</p>
+
+<pre class="out">&lt;article&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;&lt;/article&gt;</pre>
+
+<p>Repare no que o nome do arquivo fez: <strong>nada</strong> dentro do HTML. O compilador não escreve <code>CartaoDePreco</code> em lugar nenhum. O nome do arquivo serve para você importar:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import CartaoDePreco from './CartaoDePreco.svelte';
+&lt;/script&gt;
+
+&lt;h1&gt;Loja da Ana&lt;/h1&gt;
+&lt;CartaoDePreco titulo="Pão francês" preco={0.9} /&gt;</pre>
+
+<p>Aqui o nome importado e a tag que você usa são <strong>o mesmo</strong>, os dois com maiúscula. Essa repetição é de propósito: quem lê o HTML sabe que <code>&lt;CartaoDePreco /&gt;</code> é um componente seu, e não uma tag que o navegador inventou. Uma tag do HTML tem sempre nome conhecido — <code>div</code>, <code>p</code>, <code>button</code> —, então qualquer tag com maiúscula no meio é, por definição, código de alguém.</p>
+
+<div class="tip">
+<strong>Maiúscula é a fronteira</strong>
+<p>O compilador decide assim: se a tag começa com minúscula, é HTML; se começa com maiúscula, é componente. Não existe lista para consultar — a regra é a primeira letra. É a única do guia em que a forma do nome muda o significado do código.</p>
+</div>
+
+<hr>
+
+<h2>4. A anatomia de um nome composto</h2>
+
+<p>Um nome bom responde três perguntas sem que ninguém precise abrir o arquivo: o que é, de quem é e para que serve. Veja o script da Ana, que calcula o total de uma compra:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precoUnitario = $state(0.9);
+  let quantidade = $state(3);
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {(precoUnitario * quantidade).toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 2.70&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let</dt><dd>diz que o valor pode mudar. Nome de variável que muda começa em minúscula, sempre.</dd>
+  <dt>precoUnitario</dt><dd>duas palavras coladas: <code>preco</code> (o que é) e <code>Unitario</code> (de quem é, de uma unidade só). A maiúscula do meio marca onde uma palavra termina.</dd>
+  <dt>quantidade</dt><dd>uma palavra só, minúscula. Não precisa inventar <code>qtd</code>: abreviação economiza três letras e custa uma consulta ao dicionário mental de quem lê.</dd>
+  <dt>total</dt><dd>o resultado que a tela mostra. Nome curto é bom quando o significado é óbvio no contexto.</dd>
+  <dt>{(precoUnitario * quantidade).toFixed(2)}</dt><dd>a conta dentro das chaves. Repare que <code>total</code> foi declarado e não foi usado: o valor dele é <code>0</code>, e a tela mostra a conta, não a variável.</dd>
+</dl>
+
+<p>Esse último ponto merece atenção, porque é um erro de nome disfarçado de erro de conta. A Ana declarou <code>total</code> pensando “o total vai aparecer aqui”, mas escreveu a multiplicação na tela. Funciona — e continua funcionando quando <code>quantidade</code> muda —, só que agora existem duas ideias de total no arquivo: a variável parada em zero e a conta viva no HTML. Quem lê não sabe qual é a verdadeira. O certo é escolher uma: ou <code>total</code> é uma variável calculada, ou não existe.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome fraco</th><th>Problema</th><th>Nome melhor</th></tr>
+<tr><td><code>p</code></td><td>não diz o que é</td><td><code>preco</code></td></tr>
+<tr><td><code>preco2</code></td><td>o número não significa nada</td><td><code>precoComDesconto</code></td></tr>
+<tr><td><code>valor</code></td><td>valor de quê?</td><td><code>valorPago</code></td></tr>
+<tr><td><code>flag</code></td><td>nome de coisa que você não sabe nomear</td><td><code>temTroco</code></td></tr>
+<tr><td><code>dados</code></td><td>tudo é dado</td><td><code>produtos</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. camelCase na prática</h2>
+
+<p>Vamos ver a convenção trabalhando num caso com decisão de verdade. A Ana precisa saber se há troco a devolver:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let temTroco = $state(false);
+  let valorPago = $state(10);
+  let precoTotal = $state(10);
+&lt;/script&gt;
+
+{#if temTroco}
+  &lt;p&gt;Devolver R$ {(valorPago - precoTotal).toFixed(2)}&lt;/p&gt;
+{:else}
+  &lt;p&gt;Sem troco&lt;/p&gt;
+{/if}</pre>
+
+<pre class="out">&lt;p&gt;Sem troco&lt;/p&gt;</pre>
+
+<p>Três nomes, três decisões. <code>temTroco</code> começa com um verbo (“tem”) porque guarda sim ou não: lê-se como uma pergunta, e a resposta está no valor. <code>valorPago</code> diz de que lado do balcão vem o dinheiro. <code>precoTotal</code> diz o outro lado. Se a Ana tivesse chamado os dois de <code>valor</code>, a subtração <code>valor - valor</code> daria zero e ninguém entenderia por quê.</p>
+
+<dl class="anatomy">
+  <dt>temTroco</dt><dd>booleano (verdadeiro ou falso). Comece com <code>tem</code>, <code>eh</code>, <code>pode</code> ou <code>mostra</code> — o nome já conta que a resposta é sim ou não.</dd>
+  <dt>valorPago</dt><dd>número com origem clara. O sufixo <code>Pago</code> evita a confusão com o preço.</dd>
+  <dt>precoTotal</dt><dd>o prefixo <code>preco</code> agrupa os nomes que falam de dinheiro; quem lê o arquivo acha todos juntos.</dd>
+</dl>
+
+<p>Agora a pergunta que sempre aparece: <strong>camelCase ou snake_case?</strong> Snake é <code>tem_troco</code>, com underline. O JavaScript aceita os dois, e o compilador do Svelte também:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tem_troco = $state(false);
+&lt;/script&gt;
+
+{#if tem_troco}
+  &lt;p&gt;Devolver o troco&lt;/p&gt;
+{:else}
+  &lt;p&gt;Sem troco&lt;/p&gt;
+{/if}</pre>
+
+<pre class="out">&lt;p&gt;Sem troco&lt;/p&gt;</pre>
+
+<p>Compila e roda igual. Então por que o guia insiste em camelCase? Porque o resto do mundo Svelte já usa camelCase: as runas (<code>$state</code>), as propriedades (<code>onclick</code>, <code>bind:value</code>), as funções da linguagem (<code>toFixed</code>, <code>querySelector</code>). Misturar os dois estilos no mesmo arquivo faz o olho tropeçar a cada linha. O custo de escolher snake_case é pequeno no começo e cresce com o projeto — cada arquivo novo é uma decisão repetida.</p>
+
+<div class="trysvelte" data-goal="out:Pão francês Sonho">
+<p class="try-task"><strong>Missão:</strong> a lista deveria mostrar o nome de cada produto, e a tela saiu vazia. O problema está no nome usado dentro do <code>{#each}</code>: a lista se chama <code>produtos</code>, mas um produto sozinho se chama <code>produto</code>. Conserte.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Sonho', preco: 2.5 }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as produto}
+    &lt;li&gt;{produtos.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Sonho', preco: 2.5 }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as produto}
+    &lt;li&gt;{produto.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>O nome no singular e no plural é uma convenção que economiza explicação: <code>produtos</code> é a lista inteira, <code>produto</code> é o item da vez. Com esses dois nomes, <code>{#each produtos as produto}</code> lê-se em voz alta: “para cada produto da lista de produtos, chame este de produto”. Sem eles, você precisa de comentário.</p>
+
+<hr>
+
+<h2>6. Nomes que já têm dono</h2>
+
+<p>Alguns nomes não são seus. <code>class</code>, <code>onclick</code>, <code>value</code>, <code>id</code> são atributos do HTML, e o Svelte trata cada um de um jeito. Se você quiser receber um deles como propriedade do componente, precisa <strong>renomear na chegada</strong>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { class: classe = 'destaque' } = $props();
+&lt;/script&gt;
+
+&lt;p class={classe}&gt;Pão francês&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p class="destaque"&gt;Pão francês&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>class: classe</dt><dd>dois-pontos: “o nome lá fora é <code>class</code>, aqui dentro chame de <code>classe</code>”. Do lado esquerdo fica o nome do atributo, do lado direito o nome que você usa no código.</dd>
+  <dt>= 'destaque'</dt><dd>valor padrão. Se ninguém passar <code>class</code>, o componente usa <code>destaque</code> — e a saída confirma isso.</dd>
+  <dt>class={classe}</dt><dd>no HTML, o atributo volta a se chamar <code>class</code>, agora com o valor que veio de fora.</dd>
+</dl>
+
+<p>Esse <code>class: classe</code> não é só uma questão de bonito. <code>class</code> é palavra reservada da linguagem: escrever <code>let class = 'destaque'</code> no script é recusado pelo compilador com a mensagem <code>Unexpected keyword 'class'</code>. Renomear na chegada é o caminho legal para usar o nome.</p>
+
+<div class="warning">
+<strong>Não renomeie à toa</strong>
+<p>Renomear tem custo: quem usa o componente precisa saber que a propriedade se chama <code>class</code> e que lá dentro virou <code>classe</code>. Faça isso só quando o nome for obrigatório — atributos do HTML, palavras reservadas e nomes de runas. Para o resto, escolha um nome livre e pronto.</p>
+</div>
+
+<div class="trysvelte" data-goal="out:Padaria da Ana">
+<p class="try-task"><strong>Missão:</strong> o título não aparece porque a propriedade foi escrita com maiúscula, e maiúscula é para componente. Deixe o nome em minúscula e dê o valor padrão <code>'Padaria da Ana'</code> para o título aparecer.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { Titulo } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{Titulo}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { titulo = 'Padaria da Ana' } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{titulo}&lt;/h1&gt;</pre>
+</div>
+
+<p>Repare no que a caixa mostra: o código inicial não dá erro nenhum, só desenha um <code>h1</code> vazio. Propriedade que não chega vale <code>undefined</code>, e o Svelte desenha <code>undefined</code> como nada. É por isso que valor padrão é tão comum em componente: ele transforma “não veio” em “veio o combinado”.</p>
+
+<hr>
+
+<h2>7. Nomes de arquivo: PascalCase, sem hífen, sem acento</h2>
+
+<p>A regra do arquivo é a mesma do componente, porque são a mesma coisa: o arquivo <code>CartaoDePreco.svelte</code> <em>é</em> o componente <code>CartaoDePreco</code>. A Ana começou com hífen, que é o padrão de nome de arquivo na web, e teve de renomear:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls src/lib
+cartao-de-preco.svelte
+ana@notebook:~/loja$ mv src/lib/cartao-de-preco.svelte src/lib/CartaoDePreco.svelte
+ana@notebook:~/loja$ ls src/lib
+CartaoDePreco.svelte</pre>
+
+<p>O comando <code>mv</code> quer dizer <em>mover</em>, e mover um arquivo para o mesmo lugar com outro nome é renomear. Repare que o terminal não responde nada quando dá certo — silêncio é sucesso. O <code>ls</code> depois é a prova: o arquivo agora se chama <code>CartaoDePreco.svelte</code>.</p>
+
+<p>Por que hífen atrapalha? Porque hífen não pode aparecer em nome de variável. Se o arquivo se chamasse <code>cartao-de-preco.svelte</code>, você teria de importar assim:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import CartaoDePreco from './cartao-de-preco.svelte';
+&lt;/script&gt;
+
+&lt;CartaoDePreco titulo="Sonho" preco={2.5} /&gt;</pre>
+
+<p>Funciona — o nome do arquivo pode ter hífen —, mas agora existem dois nomes para a mesma coisa: o do disco e o do código. Cada arquivo novo é uma chance de errar a importação. Com PascalCase nos dois, o nome é um só.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Funciona?</th><th>Observação</th></tr>
+<tr><td><code>CartaoDePreco.svelte</code></td><td>sim, e é o padrão</td><td>o mesmo nome no disco e na importação</td></tr>
+<tr><td><code>cartao-de-preco.svelte</code></td><td>sim</td><td>obriga a inventar outro nome na importação</td></tr>
+<tr><td><code>cartaoDePreco.svelte</code></td><td>sim</td><td>começa em minúscula: o compilador avisa</td></tr>
+<tr><td><code>CartãoDePreço.svelte</code></td><td>sim, mas evite</td><td>acento no nome do arquivo quebra script, deploy e colega</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>8. O aviso que o compilador dá quando o nome é minúsculo</h2>
+
+<p>Vamos quebrar a regra de propósito para ver o que acontece. A Ana renomeou o componente para minúscula e usou a tag em minúscula:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import cartao from './lib/cartao.svelte';
+&lt;/script&gt;
+
+&lt;h1&gt;Loja da Ana&lt;/h1&gt;
+&lt;cartao titulo="Pão francês" preco={0.9} /&gt;</pre>
+
+<p>O código compila. O aviso aparece no terminal, durante a montagem do projeto:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+5:06:34 PM [vite-plugin-svelte] src/App.svelte:6:0 `&lt;cartao&gt;` will be treated as an HTML element unless it begins with a capital letter
+https://svelte.dev/e/component_name_lowercase
+4:
+5: &lt;h1&gt;Loja da Ana&lt;/h1&gt;
+6: &lt;cartao titulo="Pão francês" preco={0.9} /&gt;
+                                              ^
+7:</pre>
+
+<p>Leia a frase com calma: “<code>&lt;cartao&gt;</code> será tratado como um elemento HTML, a menos que comece com letra maiúscula”. O compilador está dizendo que a tag virou uma tag desconhecida do navegador, que não desenha nada visível e não recebe as propriedades. O componente importado fica no script sem uso.</p>
+
+<p>O aviso também mostra a linha e a coluna exatas (<code>src/App.svelte:6:0</code>) e um trecho de contexto — as linhas 4 a 7 com o acento circunflexo embaixo do problema. Isso volta na aula de depuração: esse tipo de trecho é o mapa do erro.</p>
+
+<div class="warning">
+<strong>Aviso não é erro — e é pior por isso</strong>
+<p>O build terminou com sucesso mesmo com o aviso. A tela saiu sem o cartão, e nada no navegador explica o motivo. Erro de compilação para o trabalho; aviso passa batido e vira bug. Leia os dois.</p>
+</div>
+
+<hr>
+
+<h2>9. Nomes de função, de lista e de evento</h2>
+
+<p>Falta a família mais numerosa: as funções. A convenção é começar com um verbo, no infinitivo, e continuar com o objeto da ação:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>O que conta</th></tr>
+<tr><td><code>calcularTroco()</code></td><td>verbo + objeto: devolve um valor, não muda a tela</td></tr>
+<tr><td><code>adicionarAoCarrinho()</code></td><td>verbo + destino: muda o estado</td></tr>
+<tr><td><code>formatarPreco()</code></td><td>verbo + formato: devolve texto pronto para a tela</td></tr>
+<tr><td><code>somarClique()</code></td><td>nome do que aconteceu, não do que o botão é</td></tr>
+</table>
+</div>
+
+<p>Quando a função é usada direto num evento, o nome aparece duas vezes: na declaração e no <code>onclick</code>. Se os dois nomes não batem, o componente quebra na hora de desenhar:</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o botão não faz nada porque o <code>onclick</code> aponta para <code>Somar</code>, com maiúscula, e a função se chama <code>somar</code>. Conserte o nome no atributo para o clique contar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+
+  function somar() {
+    cliques++;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={Somar}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+
+  function somar() {
+    cliques++;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<p>O erro que a caixa mostra ao rodar é <code>Somar is not defined</code>. Repare: o compilador aceitou o arquivo, porque <code>Somar</code> poderia ser uma função global que existe em outro lugar. Quem descobre que não existe é o navegador, na hora de desenhar. Nome de função errado é quase sempre isso: compila, e quebra na tela.</p>
+
+<p>Para listas, use plural na lista e singular no item — a regra que você já viu na caixa do <code>{#each}</code>. Para o que guarda várias informações da mesma coisa, agrupe num objeto com nome no singular: <code>produto = $state({ nome, preco })</code>. Assim <code>produto.nome</code> e <code>produto.preco</code> já dizem de quem são.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas as três são erros de nome, e nenhuma delas é erro de digitação no sentido de “letra trocada”.</p>
+
+<div class="cenario">
+<strong>Erro 1 — nome que começa com número</strong>
+<p>Nome de variável não pode começar com algarismo. O compilador lê o número e espera um operador depois dele.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let 2nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;{2nome}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 8): Identifier directly after number</pre>
+<p>“Identificador logo depois de um número”: o <code>2</code> foi lido como número, e o que veio depois não faz sentido. A correção é começar por letra — <code>nome2</code> ou, melhor, um nome que diga o que é: <code>segundoNome</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — dois nomes iguais no mesmo script</strong>
+<p>A Ana copiou uma linha para testar outro valor e esqueceu de apagar a antiga. O compilador não escolhe por você.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let nome = $state('Bia');
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 6): Identifier 'nome' has already been declared</pre>
+<p>“O identificador ‘nome’ já foi declarado”. A linha apontada é a <strong>segunda</strong> — a primeira declaração é a que vale. Aqui o erro está na coluna 6, exatamente onde o nome repetido começa.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — nome que a tela usa e o script não declara</strong>
+<p>Este compila: o compilador supõe que <code>contadorr</code> venha de fora. O erro aparece na hora de desenhar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let contador = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; contador++}&gt;Cliques: {contador}&lt;/button&gt;
+&lt;p&gt;{contadorr}&lt;/p&gt;</pre>
+<pre class="out">contadorr is not defined</pre>
+<p>Uma letra a mais no segundo <code>contador</code>, e o componente inteiro para de desenhar — inclusive o botão, que estava certo. Quando a tela fica em branco sem erro de compilação, a primeira suspeita é nome que não existe. Volte ao <code>&lt;script&gt;</code> e confira letra por letra.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que você nomeia</th><th>Formato</th><th>Exemplo</th></tr>
+<tr><td>Arquivo de componente</td><td>PascalCase, <code>.svelte</code></td><td><code>ListaDePrecos.svelte</code></td></tr>
+<tr><td>Importação de componente</td><td>igual ao arquivo</td><td><code>import ListaDePrecos from …</code></td></tr>
+<tr><td>Tag de componente</td><td>igual à importação</td><td><code>&lt;ListaDePrecos /&gt;</code></td></tr>
+<tr><td>Tag do HTML</td><td>minúscula</td><td><code>&lt;ul&gt;</code>, <code>&lt;li&gt;</code></td></tr>
+<tr><td>Estado, função, propriedade</td><td>camelCase</td><td><code>precoUnitario</code></td></tr>
+<tr><td>Booleano</td><td>pergunta: <code>tem</code>, <code>eh</code>, <code>pode</code></td><td><code>temTroco</code></td></tr>
+<tr><td>Lista e item</td><td>plural na lista, singular no item</td><td><code>produtos</code> / <code>produto</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que o Svelte faz</th></tr>
+<tr><td>Tag com maiúscula no começo</td><td>trata como componente seu</td></tr>
+<tr><td>Tag com minúscula no começo</td><td>trata como HTML e avisa <code>component_name_lowercase</code></td></tr>
+<tr><td>Nome repetido no mesmo script</td><td>erro <code>Identifier … has already been declared</code></td></tr>
+<tr><td>Nome com hífen ou espaço</td><td>erro <code>Unexpected token</code></td></tr>
+<tr><td>Nome que a tela usa e o script não tem</td><td>compila e quebra na tela: <code>… is not defined</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Por que o componente <code>CartaoDePreco.svelte</code> começa com letra maiúscula?</p>
+<label><input type="radio" name="q1"> porque o Svelte só aceita arquivos com maiúscula em sistema Linux</label>
+<label><input type="radio" name="q1"> porque é a forma que o compilador usa para separar componente de tag do HTML</label>
+<label><input type="radio" name="q1"> porque nomes em minúscula não podem ser importados</label>
+<label><input type="radio" name="q1"> porque a maiúscula deixa o arquivo mais rápido de compilar</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O código <code>&lt;cartao /&gt;</code> com minúscula, importado de <code>./Cartao.svelte</code>, o que produz?</p>
+<label><input type="radio" name="q1"> um erro de compilação que impede o build</label>
+<label><input type="radio" name="q1"> o componente desenhado normalmente, sem aviso</label>
+<label><input type="radio" name="q1"> uma tag HTML desconhecida, com aviso <code>component_name_lowercase</code> no terminal</label>
+<label><input type="radio" name="q1"> um erro só quando o leitor clica na tag</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. Qual destes nomes segue a convenção do guia para um booleano que indica se há troco?</p>
+<label><input type="radio" name="q1"><code>troco</code></label>
+<label><input type="radio" name="q1"><code>Troco</code></label>
+<label><input type="radio" name="q1"><code>troco_flag</code></label>
+<label><input type="radio" name="q1"><code>temTroco</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let <input data-answer="precoUnitario"> = $state(0.9);<br>let quantidade = $state(3);<br><br>&lt;p&gt;Total: R$ {(precoUnitario * quantidade).toFixed(2)}&lt;/p&gt;<br><br>// o preço de UMA unidade, em camelCase, sem abreviação</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O nome é lido pelo compilador, não só por você: ele liga valor e tela.</li>
+  <li><strong>Maiúscula no começo = componente</strong>; minúscula = variável, função ou tag do HTML.</li>
+  <li>Arquivo de componente em PascalCase: <code>CartaoDePreco.svelte</code>, sem hífen e sem acento.</li>
+  <li>Variáveis, funções e propriedades em camelCase: <code>precoUnitario</code>, <code>calcularTroco</code>.</li>
+  <li>Booleano se lê como pergunta: <code>temTroco</code>, <code>ehMaior</code>, <code>podePagar</code>.</li>
+  <li>Lista no plural, item no singular: <code>produtos</code> / <code>produto</code>.</li>
+  <li>Nomes que já têm dono (<code>class</code>, <code>onclick</code>) entram renomeados: <code>let { class: classe } = $props()</code>.</li>
+  <li>snake_case compila, mas mistura de estilos custa leitura; o projeto escolhe um padrão.</li>
+  <li>O aviso <code>component_name_lowercase</code> não impede o build e deixa a tela vazia — é o mais perigoso dos avisos.</li>
+  <li>Nome repetido e nome começando com número param na compilação; nome inexistente quebra na tela com <code>… is not defined</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
