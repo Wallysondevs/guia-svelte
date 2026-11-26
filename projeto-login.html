@@ -296,7 +296,7 @@ ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padar
 
 <h2>6. Versão 3 — o porteiro na porta</h2>
 
-<p>A versão 2 protege o painel dentro do próprio <code>+page.server.js</code>. Com dez rotas protegidas, seriam dez cópias da mesma checagem — e basta esquecer uma. O <code>hooks.server.js</code> existe para rodar <strong>antes</strong> de qualquer rota, em todo pedido.</p>
+<p>A versão 2 protege o painel dentro do próprio <code>+page.server.js</code>. Com dez rotas protegidas, seriam dez cópias da mesma checagem — e uma esquecida já abre o buraco. O <code>hooks.server.js</code> existe para rodar <strong>antes</strong> de qualquer rota, em todo pedido.</p>
 
 <pre class="file" data-file="src/hooks.server.js">import { redirect } from '@sveltejs/kit';
 

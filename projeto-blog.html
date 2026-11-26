@@ -286,7 +286,7 @@ ana@notebook:~/loja$ curl -s http://localhost:5174/post/sem-receita | grep -o "&
 &lt;/ul&gt;</pre>
 </div>
 
-<p>Datas no formato <code>ano-mês-dia</code> têm uma propriedade útil: comparadas como texto, elas já ficam na ordem do calendário. É por isso que o <code>localeCompare</code> basta aqui — com <code>10/03/2026</code> a mesma comparação erraria, porque "10" vem antes de "9".</p>
+<p>Datas no formato <code>ano-mês-dia</code> têm uma propriedade útil: comparadas como texto, elas já ficam na ordem do calendário. É por isso que o <code>localeCompare</code> resolve aqui — com <code>10/03/2026</code> a mesma comparação erraria, porque "10" vem antes de "9".</p>
 
 <hr>
 
