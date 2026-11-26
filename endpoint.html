@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>+server.js — o endereço que devolve JSON | Guia Svelte</title>
+<meta name="description" content="Endpoints do SvelteKit com +server.js: GET, POST, json(), error(), os métodos permitidos, o 405 automático e as mensagens reais do servidor da Ana.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">+server.js</span></h1>
+
+<p class="intro">A Ana tem um balcão para clientes e uma janela para entregadores. O entregador não quer ver o cardápio na parede: ele quer uma lista com número de pedido e endereço, entregue na mão, em formato combinado. No SvelteKit essa janela é o arquivo <code>+server.js</code>: um endereço que responde dados, não uma página. É o mesmo servidor, outra porta de entrada — e o formato combinado se chama <strong>JSON</strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um endpoint e por que ele não tem HTML.</li>
+  <li>Como criar um endereço com <code>+server.js</code> e uma função <code>GET</code>.</li>
+  <li>Como responder JSON com <code>json()</code> e escolher o status.</li>
+  <li>Como ler o corpo de um <code>POST</code> com <code>request.json()</code>.</li>
+  <li>Como recusar um pedido inválido com <code>error(400, …)</code>.</li>
+  <li>O que é o <code>405</code> e o cabeçalho <code>allow</code> que o SvelteKit escreve sozinho.</li>
+  <li>Quem chama um endpoint: o <code>load</code>, um formulário e outro programa.</li>
+  <li>Como ler as respostas com <code>curl -i</code> e conferir status e cabeçalhos.</li>
+  <li>Três erros reais de endpoint, copiados do terminal.</li>
+  <li>Quando usar <code>json()</code>, <code>text()</code> ou um <code>Response</code> na mão.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: uma janela que entrega lista, não vitrine</h2>
+
+<p>Página é vitrine: tem título, cor, imagem e é feita para olho humano. Endpoint é janela de serviço: entrega dado cru para quem sabe o que fazer com ele. O mesmo pedido de "lista de pedidos" pode sair como página colorida em <code>/painel</code> e como lista em JSON em <code>/api/pedidos</code>. São duas portas do mesmo prédio.</p>
+
+<p>Quem usa a janela? Outro programa. Pode ser o seu próprio <code>load</code> buscando dados, pode ser o JavaScript do navegador atualizando uma lista sem recarregar, pode ser o aplicativo do entregador no celular. Nenhum deles quer o seu HTML; todos querem os dados. Por isso o endpoint responde com um tipo de conteúdo declarado: <code>application/json</code>.</p>
+
+<p>JSON é só texto com regras: chaves entre aspas, valores que podem ser texto, número, verdadeiro/falso, nulo, lista ou outro objeto. Ele é a língua franca porque qualquer linguagem lê e escreve. Quando o seu <code>load</code> faz <code>await resposta.json()</code>, está transformando esse texto de volta em objeto JavaScript.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>A vitrine, com pão e preço</td><td><code>+page.svelte</code></td></tr>
+<tr><td>A janela do entregador</td><td><code>+server.js</code></td></tr>
+<tr><td>A lista impressa no formato combinado</td><td>O corpo em JSON</td></tr>
+<tr><td>"Pedido aceito" ou "falta o nome"</td><td>O status <code>201</code> ou <code>400</code></td></tr>
+<tr><td>"Aqui não atendo esse tipo de pedido"</td><td><code>405 Method Not Allowed</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. O primeiro endpoint: a lista de pedidos</h2>
+
+<p>O arquivo se chama <code>+server.js</code> e mora numa pasta de rota, igual ao <code>+page.svelte</code>. A diferença é que ele exporta funções com nome de método HTTP: <code>GET</code> para buscar, <code>POST</code> para criar, e assim por diante.</p>
+
+<pre class="file" data-file="src/routes/api/pedidos/+server.js">import { json, error } from '@sveltejs/kit';
+import { listar, criar } from '#lib/pedidos.js';
+
+export function GET({ url }) {
+	const sabor = url.searchParams.get('sabor');
+	const lista = sabor ? listar().filter((p) =&gt; p.sabor === sabor) : listar();
+	return json(lista);
+}
+
+export async function POST({ request }) {
+	const corpo = await request.json();
+
+	if (!corpo.cliente) {
+		error(400, 'todo pedido precisa de um cliente');
+	}
+
+	const pedido = criar(corpo.cliente, corpo.sabor ?? 'queijo');
+	return json(pedido, { status: 201 });
+}</pre>
+
+<dl class="anatomy">
+  <dt>export function GET</dt><dd>o método. O nome é maiúsculo e reservado: <code>GET</code>, <code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>. Um <code>get</code> minúsculo é só uma função que ninguém chama.</dd>
+  <dt>({ url })</dt><dd>o evento, igual ao do <code>load</code>: traz <code>url</code>, <code>params</code>, <code>request</code>, <code>cookies</code> e <code>locals</code>.</dd>
+  <dt>return json(lista)</dt><dd>monta a resposta com o cabeçalho <code>content-type: application/json</code> e status 200. Sem o <code>json()</code>, o SvelteKit recusa a resposta.</dd>
+  <dt>await request.json()</dt><dd>lê o corpo da requisição e transforma o texto em objeto. Só faz sentido em <code>POST</code>, <code>PUT</code> e <code>PATCH</code>.</dd>
+  <dt>error(400, '…')</dt><dd>interrompe e responde com status 400 e a mensagem. O texto vai no corpo, no formato de erro do SvelteKit.</dd>
+  <dt>{ status: 201 }</dt><dd>o segundo argumento do <code>json()</code>: cabeçalhos e status. 201 é "criei algo".</dd>
+</dl>
+
+<p>Repare no que <strong>não</strong> existe: nenhum HTML, nenhum componente, nenhum <code>export let</code>. Um endpoint é uma função que recebe requisição e devolve resposta. Se você precisar de página, o arquivo é outro; e os dois no mesmo endereço não convivem.</p>
+
+<hr>
+
+<h2>3. A saída real: status, cabeçalho e corpo</h2>
+
+<p>O <code>curl</code> com <code>-i</code> mostra os cabeçalhos junto com o corpo. É a forma mais direta de ver o que o endpoint respondeu sem depender de navegador:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i localhost:5173/api/pedidos | head -4
+HTTP/1.1 200 OK
+Vary: Origin
+content-length: 114
+content-type: application/json</pre>
+
+<p>Quatro linhas, três informações. <code>200 OK</code> é o status de sucesso. <code>content-type: application/json</code> avisa o cliente como interpretar o corpo. <code>content-length: 114</code> é o tamanho em bytes — se o seu número for diferente, o conteúdo é diferente, e isso já é uma pista de conferência.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/api/pedidos
+[{"id":1,"cliente":"Ana","sabor":"frango","pronto":true},{"id":2,"cliente":"Bia","sabor":"queijo","pronto":false}]</pre>
+
+<p>O corpo é uma lista de objetos. Quem consome decide o que fazer: o aplicativo do entregador desenha cartões, o seu <code>load</code> passa a lista para o componente, um script de relatório soma totais. O endpoint não tem opinião sobre a aparência.</p>
+
+<div class="trysvelte" data-goal="out:201 Criado">
+<p class="try-task"><strong>Missão:</strong> a resposta do servidor tem o status dentro do campo <code>status</code>. Mostre <strong>201 Criado</strong> — o código e a palavra.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	// no projeto, este objeto vem da resposta do endpoint
+	const resposta = { status: 201, corpo: { id: 3, cliente: 'Dora' } };
+&lt;/script&gt;
+
+&lt;p&gt;{resposta.codigo} Criado&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	// no projeto, este objeto vem da resposta do endpoint
+	const resposta = { status: 201, corpo: { id: 3, cliente: 'Dora' } };
+&lt;/script&gt;
+
+&lt;p&gt;{resposta.status} Criado&lt;/p&gt;</pre>
+</div>
+
+<p>Status é número, mas quem lê prefere palavra. A lista curta que vale decorar: <code>200</code> deu certo, <code>201</code> criei algo, <code>400</code> o pedido está malformado, <code>401</code> falta identificação, <code>404</code> não existe, <code>405</code> esse método não é aceito aqui, <code>500</code> o servidor quebrou. O número vai no cabeçalho; a explicação vai no corpo.</p>
+
+<hr>
+
+<h2>4. Criar com <code>POST</code> e recusar com <code>error()</code></h2>
+
+<p>Buscar é fácil porque não muda nada. Criar exige ler o que chegou, conferir e responder com o resultado. O <code>POST</code> abaixo lê o corpo, testa o campo obrigatório e devolve o pedido criado com status 201:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST -H 'content-type: application/json' -d '{"cliente":"Dora","sabor":"queijo"}' localhost:5173/api/pedidos -w '\n%{http_code}\n'
+{"id":3,"cliente":"Dora","sabor":"queijo","pronto":false}
+201</pre>
+
+<p>O <code>-X POST</code> escolhe o método, o <code>-H 'content-type: application/json'</code> avisa o formato do corpo e o <code>-d</code> manda o corpo. Sem o cabeçalho, o servidor não tem como saber que aquele texto é JSON; com ele, o <code>request.json()</code> funciona. O <code>-w '\n%{http_code}\n'</code> imprime o status no fim, que é o que o corpo não mostra.</p>
+
+<p>Agora o mesmo endereço com um corpo vazio. A validação entra em ação e o <code>error()</code> responde 400 com a mensagem:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST -H 'content-type: application/json' -d '{}' localhost:5173/api/pedidos -w '\n%{http_code}\n'
+{"status":400,"message":"todo pedido precisa de um cliente"}
+400</pre>
+
+<p>Aquele <code>{"status":400,"message":"…"}</code> é o formato de erro do SvelteKit: o número que você passou e o texto que você escreveu. Não é o formato que você escolheu — é o que o <code>error()</code> monta. Se você quiser um formato próprio, monte a resposta com <code>json(..., { status: 400 })</code> em vez de <code>error()</code>.</p>
+
+<div class="tip">
+<strong>Mensagem de erro também é interface</strong>
+<p>Quem lê o corpo de um 400 pode ser uma pessoa ou outro programa. Escreva a mensagem pensando nos dois: "todo pedido precisa de um cliente" diz o que fazer; "erro de validação" não diz nada. Não coloque caminho de arquivo, consulta SQL nem nome de tabela — isso é presente para quem procura falhas.</p>
+</div>
+
+<hr>
+
+<h2>5. Os métodos que você não escreveu</h2>
+
+<p>Se o endpoint só tem <code>GET</code> e <code>POST</code>, o que acontece quando alguém manda <code>PUT</code>? O SvelteKit responde sozinho, com 405 e a lista do que é aceito. Você não escreve esse código; ele existe porque você <em>não</em> escreveu a função.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -X PUT localhost:5173/api/pedidos
+PUT method not allowed
+ana@notebook:~/loja$ curl -s -X DELETE -i localhost:5173/api/pedidos | head -4
+HTTP/1.1 405 Method Not Allowed
+Vary: Origin
+allow: GET, POST, HEAD
+content-length: 25</pre>
+
+<p>A linha <code>allow: GET, POST, HEAD</code> é o recado completo: "aqui aceito estes". O <code>HEAD</code> aparece porque é o <code>GET</code> sem corpo — o SvelteKit responde de graça. Um cliente bem feito lê esse cabeçalho e sabe o que pode tentar antes de tentar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Método</th><th>Para que serve</th><th>Corpo na resposta?</th></tr>
+<tr><td><code>GET</code></td><td>buscar dados</td><td>sim</td></tr>
+<tr><td><code>POST</code></td><td>criar algo novo</td><td>sim, normalmente o criado</td></tr>
+<tr><td><code>PUT</code></td><td>substituir um recurso inteiro</td><td>às vezes</td></tr>
+<tr><td><code>PATCH</code></td><td>alterar parte de um recurso</td><td>às vezes</td></tr>
+<tr><td><code>DELETE</code></td><td>apagar</td><td>normalmente não</td></tr>
+<tr><td><code>HEAD</code></td><td>os cabeçalhos do <code>GET</code>, sem o corpo</td><td>não</td></tr>
+<tr><td><code>OPTIONS</code></td><td>perguntar o que é aceito</td><td>o <code>allow</code></td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="clique:#put;;outre:405 PUT">
+<p class="try-task"><strong>Missão:</strong> o servidor só aceita <code>GET</code> e <code>POST</code>. Faça o botão <code>PUT</code> mostrar <strong>405 PUT method not allowed</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let resposta = $state('');
+
+	function pedir(metodo) {
+		resposta = metodo === 'put' ? '405 PUT method not allowed' : '200 OK';
+	}
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; pedir('GET')}&gt;GET&lt;/button&gt;
+&lt;button id="put" onclick={() =&gt; pedir('PUT')}&gt;PUT&lt;/button&gt;
+&lt;p&gt;{resposta}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let resposta = $state('');
+
+	function pedir(metodo) {
+		resposta = metodo === 'PUT' ? '405 PUT method not allowed' : '200 OK';
+	}
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; pedir('GET')}&gt;GET&lt;/button&gt;
+&lt;button id="put" onclick={() =&gt; pedir('PUT')}&gt;PUT&lt;/button&gt;
+&lt;p&gt;{resposta}&lt;/p&gt;</pre>
+</div>
+
+<p>A comparação com <code>'put'</code> minúsculo passa despercebida porque não gera erro: ela simplesmente nunca é verdadeira. É o mesmo padrão do campo com nome trocado — JavaScript não sabe qual era a sua intenção. Métodos HTTP são maiúsculos por convenção forte; trate o texto como chave exata.</p>
+
+<hr>
+
+<h2>6. Quem chama o endpoint</h2>
+
+<p>O endpoint que você acabou de escrever tem três clientes possíveis, e cada um precisa de uma coisa diferente do cabeçalho. Vale conhecer os três porque o mesmo erro aparece nos três: esquecer o <code>content-type</code> no <code>POST</code>.</p>
+
+<p>O primeiro é o <code>load</code>, que você já conhece. Ele usa o <code>fetch</code> do evento e precisa esperar a resposta, senão recebe uma promessa:</p>
+
+<pre class="file" data-file="src/routes/painel/+page.js">export async function load({ fetch }) {
+	const resposta = await fetch('/api/pedidos');
+	const pedidos = await resposta.json();
+
+	return { pedidos };
+}</pre>
+
+<p>O segundo é o JavaScript do navegador, num <code>onclick</code>. É o mesmo <code>fetch</code>, mas global, e o cabeçalho precisa ser escrito à mão:</p>
+
+<pre class="file" data-file="src/lib/NovoPedido.svelte">&lt;script&gt;
+	let cliente = $state('');
+	let aviso = $state('');
+
+	async function enviar() {
+		const resposta = await fetch('/api/pedidos', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ cliente, sabor: 'queijo' })
+		});
+
+		const corpo = await resposta.json();
+		aviso = resposta.ok ? 'pedido ' + corpo.id + ' criado' : corpo.message;
+	}
+&lt;/script&gt;
+
+&lt;input bind:value={cliente} placeholder="quem pediu" /&gt;
+&lt;button onclick={enviar}&gt;enviar&lt;/button&gt;
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+
+<p>O terceiro cliente é qualquer programa de fora: o aplicativo do entregador, um script de planilha, o <code>curl</code> do seu terminal. Para esse, não existe SvelteKit nem <code>fetch</code> especial: existe HTTP puro, com método, cabeçalho e corpo. É por isso que o endpoint é a porta mais universal do projeto.</p>
+
+<div class="trysvelte" data-goal="digitar:input=Dora;;outre:recebido: Dora">
+<p class="try-task"><strong>Missão:</strong> o campo preenche a variável <code>cliente</code>, mas o aviso mostra outra coisa. Digite <code>Dora</code> e faça aparecer <strong>recebido: Dora</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let cliente = $state('Dora');
+	let corpo = { nome: 'Bia' };
+&lt;/script&gt;
+
+&lt;input placeholder="quem pediu" bind:value={cliente} /&gt;
+&lt;p&gt;recebido: {corpo.nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let cliente = $state('');
+&lt;/script&gt;
+
+&lt;input placeholder="quem pediu" bind:value={cliente} /&gt;
+&lt;p&gt;recebido: {cliente}&lt;/p&gt;</pre>
+</div>
+
+<p>Aqui o defeito é de origem: o componente mostra o objeto fixo em vez da variável que o campo atualiza. Em endpoint de verdade, o equivalente é montar o <code>body</code> com um valor que não veio do formulário. A tela parece funcionar — até alguém digitar algo diferente do que estava escrito no código.</p>
+
+<hr>
+
+<h2>7. <code>json()</code>, <code>text()</code> ou <code>Response</code></h2>
+
+<p>O SvelteKit dá três caminhos para responder. O mais usado é <code>json()</code>, que serializa o objeto e ajusta o cabeçalho. Para texto puro — um arquivo <code>.txt</code>, um CSV, um XML — existe <code>text()</code>. E para tudo o que os dois não cobrem, existe o <code>Response</code> padrão da plataforma, com o corpo e os cabeçalhos que você quiser.</p>
+
+<pre class="file" data-file="src/routes/api/versao/+server.js">import { json, text } from '@sveltejs/kit';
+
+export function GET({ url }) {
+	if (url.searchParams.get('formato') === 'texto') {
+		return text('versão 3.4.1');
+	}
+
+	return json({ versao: '3.4.1' }, { headers: { 'cache-control': 'max-age=60' } });
+}</pre>
+
+<p>O <code>cache-control</code> é um exemplo do que só se faz com cabeçalho: dizer ao cliente por quanto tempo ele pode guardar a resposta. Dado que muda a cada segundo não deve ter cache; dado que muda uma vez por dia economiza muito com <code>max-age</code>.</p>
+
+<div class="warning">
+<strong>Não devolva objeto puro</strong>
+<p>É tentador escrever <code>return { ola: 'Ana' }</code> e esperar que o SvelteKit "entenda". Ele não entende: a função precisa devolver um <code>Response</code>, e é isso que <code>json()</code> e <code>text()</code> fazem por você. O erro aparece no terminal como <code>endpoint_invalid_response</code> — um dos cenários abaixo.</p>
+</div>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — devolver um objeto em vez de uma resposta</strong>
+<p>A função devolveu dado solto. O SvelteKit espera um <code>Response</code> e recusa, dizendo qual rota e o que faltou.</p>
+<pre class="file" data-file="src/routes/api/pedidos/+server.js">export function GET() {
+	return { ola: 'Ana' };
+}</pre>
+<pre class="term">SvelteKit error: endpoint_invalid_response
+Invalid response from route `/api/pedidos`: handler should return a `Response` object
+https://svelte.dev/e/kit/endpoint_invalid_response
+500 GET /api/pedidos</pre>
+<p>A tradução é direta: "o manipulador deve devolver um <code>Response</code>". Trocar por <code>return json({ ola: 'Ana' })</code> resolve. O endereço na mensagem mostra exatamente qual rota falhou — útil quando há dez endpoints no projeto.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — corpo que não é JSON</strong>
+<p>O cliente mandou dados de formulário, e o servidor tentou ler como JSON. O <code>request.json()</code> estoura com o texto recebido.</p>
+<pre class="file" data-file="src/routes/api/pedidos/+server.js">import { json } from '@sveltejs/kit';
+
+export async function POST({ request }) {
+	const corpo = await request.json();
+	return json(corpo);
+}</pre>
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST -H 'content-type: application/x-www-form-urlencoded' -d 'cliente=Dora' localhost:5173/api/pedidos
+{"status":500,"message":"Internal Error"}</pre>
+<p>No terminal do servidor, a linha que explica:</p>
+<pre class="term">SyntaxError: Unexpected token 'c', "cliente=Dora" is not valid JSON
+    at async POST (src/routes/api/pedidos/+server.js:4:16)
+500 POST /api/pedidos</pre>
+<p>O <code>'c'</code> inesperado é a primeira letra de <code>cliente</code>. Duas correções possíveis: exigir JSON do cliente (<code>content-type: application/json</code>) ou ler com <code>request.formData()</code> quando o corpo é de formulário. Escolher errado aqui é a causa mais comum de "funciona no meu teste, quebra no site".</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — método que não existe na rota</strong>
+<p>Não é falha de código: é o SvelteKit protegendo o endereço. Quem chamou com <code>PUT</code> recebe 405 e a lista do que pode.</p>
+<pre class="file" data-file="src/routes/api/pedidos/+server.js">export function GET({ url }) {
+	const sabor = url.searchParams.get('sabor');
+	const lista = sabor ? listar().filter((p) =&gt; p.sabor === sabor) : listar();
+	return json(lista);
+}
+
+export async function POST({ request }) {
+	const corpo = await request.json();
+	if (!corpo.cliente) {
+		error(400, 'todo pedido precisa de um cliente');
+	}
+	return json(criar(corpo.cliente, corpo.sabor ?? 'queijo'), { status: 201 });
+}</pre>
+<pre class="term">ana@notebook:~/loja$ curl -s -X PUT localhost:5173/api/pedidos
+PUT method not allowed
+ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' -X PUT localhost:5173/api/pedidos
+405</pre>
+<p>O corpo muda conforme o cliente: com <code>accept: text/html</code> vem uma página de erro; sem ele, vem o texto curto. O status é sempre 405. Se você <em>queria</em> aceitar <code>PUT</code>, falta escrever a função <code>export function PUT</code>.</p>
+</div>
+
+<hr>
+
+<h2>9. Conferindo um endpoint sem navegador</h2>
+
+<p>Endpoint é a parte do projeto mais fácil de conferir, porque ele não depende de tela. Um roteiro de quatro comandos cobre quase tudo: buscar, criar, criar inválido e método errado. Se os quatro status estiverem certos, o caminho está certo.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' localhost:5173/api/pedidos
+200
+ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'content-type: application/json' -d '{"cliente":"Dora"}' localhost:5173/api/pedidos
+201
+ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'content-type: application/json' -d '{}' localhost:5173/api/pedidos
+400
+ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' -X PUT localhost:5173/api/pedidos
+405</pre>
+
+<p>O <code>-o /dev/null</code> joga o corpo fora e deixa só o status. É o que você quer quando a pergunta é "o código está certo?" e não "a mensagem está boa?". Quando a pergunta for a mensagem, tire o <code>-o /dev/null</code> e leia o corpo.</p>
+
+<pre class="file" data-file="src/lib/ListaPedidos.svelte">&lt;script&gt;
+	const pedidos = [
+		{ id: 1, cliente: 'Ana', pronto: true },
+		{ id: 2, cliente: 'Bia', pronto: false }
+	];
+&lt;/script&gt;
+
+&lt;p&gt;{pedidos.length} pedido(s)&lt;/p&gt;
+&lt;ul&gt;
+	{#each pedidos as p}
+		&lt;li&gt;{p.cliente}: {p.pronto ? 'pronto' : 'na fila'}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;p&gt;2 pedido(s)&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Ana: pronto&lt;/li&gt;&lt;li&gt;Bia: na fila&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O componente acima é o outro lado do endpoint: recebe a lista e desenha. A saída é a do compilador, com os dados fixos no script. No projeto, a lista chega do <code>fetch</code> — o desenho é o mesmo.</p>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>export function GET(evento)</code></td><td>responde a uma busca</td></tr>
+<tr><td><code>export async function POST(evento)</code></td><td>cria algo a partir do corpo</td></tr>
+<tr><td><code>await request.json()</code></td><td>lê o corpo JSON</td></tr>
+<tr><td><code>await request.formData()</code></td><td>lê o corpo de formulário</td></tr>
+<tr><td><code>json(dado, { status })</code></td><td>resposta JSON com status</td></tr>
+<tr><td><code>text('…')</code></td><td>resposta de texto puro</td></tr>
+<tr><td><code>error(400, '…')</code></td><td>resposta de erro no formato do SvelteKit</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Status</th><th>Quando usar</th></tr>
+<tr><td><code>200</code></td><td>busca ou alteração que deu certo</td></tr>
+<tr><td><code>201</code></td><td>algo foi criado</td></tr>
+<tr><td><code>400</code></td><td>o pedido do cliente está incompleto ou malformado</td></tr>
+<tr><td><code>404</code></td><td>o recurso pedido não existe</td></tr>
+<tr><td><code>405</code></td><td>o método não é aceito neste endereço</td></tr>
+<tr><td><code>500</code></td><td>o servidor falhou; a explicação fica no terminal</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que um <code>+server.js</code> devolve?</p>
+<label><input type="radio" name="q1"> um componente Svelte</label>
+<label><input type="radio" name="q1"> um <code>Response</code>, normalmente criado por <code>json()</code> ou <code>text()</code></label>
+<label><input type="radio" name="q1"> um objeto com os dados da página</label>
+<label><input type="radio" name="q1"> uma string com o HTML da rota</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que o status <code>201</code> comunica?</p>
+<label><input type="radio" name="q1"> que houve erro de validação</label>
+<label><input type="radio" name="q1"> que o método não é aceito</label>
+<label><input type="radio" name="q1"> que algo foi criado com sucesso</label>
+<label><input type="radio" name="q1"> que o corpo está vazio</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Quem responde <code>405</code> quando o método não existe na rota?</p>
+<label><input type="radio" name="q1"> o próprio SvelteKit, e ainda manda o cabeçalho <code>allow</code></label>
+<label><input type="radio" name="q1"> o navegador, antes de enviar</label>
+<label><input type="radio" name="q1"> o <code>hooks.server.js</code></label>
+<label><input type="radio" name="q1"> o <code>curl</code>, que inventa o código</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { json, error } from '@sveltejs/kit';<br><br>export async function <input data-answer="POST">({ request }) {<br>&nbsp;&nbsp;const corpo = await request.<input data-answer="json">();<br>&nbsp;&nbsp;if (!corpo.cliente) {<br>&nbsp;&nbsp;&nbsp;&nbsp;error(400, 'falta o cliente');<br>&nbsp;&nbsp;}<br>&nbsp;&nbsp;return json(corpo, { status: 201 });<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>+server.js</code> cria um endereço que responde dados, não uma página.</li>
+  <li>As funções exportadas têm nome de método HTTP, em maiúsculas: <code>GET</code>, <code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>.</li>
+  <li>A resposta tem de ser um <code>Response</code>: use <code>json()</code> ou <code>text()</code>, ou monte o <code>Response</code> à mão.</li>
+  <li><code>json(dado, { status })</code> define o corpo e o código; o cabeçalho <code>content-type</code> vem junto.</li>
+  <li><code>request.json()</code> lê corpo JSON; <code>request.formData()</code> lê corpo de formulário.</li>
+  <li><code>error(400, '…')</code> responde no formato <code>{"status":400,"message":"…"}</code>.</li>
+  <li>Método sem função correspondente vira <code>405</code> com <code>allow: GET, POST, HEAD</code> — de graça.</li>
+  <li>O mesmo endereço serve ao <code>load</code>, ao <code>fetch</code> do navegador e a qualquer programa de fora.</li>
+  <li><code>curl -i</code> mostra status e cabeçalhos; <code>-o /dev/null -w '%{http_code}'</code> mostra só o status.</li>
+  <li>Mensagem de erro de endpoint é interface: diga o que fazer, sem vazar caminho, SQL ou nome de tabela.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Form Actions — o formulário que o servidor entende | Guia Svelte</title>
+<meta name="description" content="Form actions do SvelteKit: actions no +page.server.js, method POST, o prop form, fail(), redirect(303) e as respostas reais de um envio, com e sem JavaScript.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Form Actions</span></h1>
+
+<p class="intro">A Ana anota encomenda em papel porque o papel nunca cai. O formulário da web tem o mesmo valor: funciona antes de qualquer JavaScript carregar. No SvelteKit, quem recebe o formulário é uma <strong>action</strong> — uma função no <code>+page.server.js</code> que lê os campos, confere, grava e responde. O navegador envia, o servidor decide, a página volta com a resposta na mão. Sem mágica, sem biblioteca, sem depender do navegador moderno.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma form action e onde ela mora.</li>
+  <li>Como o <code>&lt;form method="POST"&gt;</code> aponta para a action.</li>
+  <li>Como ler os campos com <code>request.formData()</code>.</li>
+  <li>Como recusar um envio com <code>fail(400, { … })</code> e mostrar a mensagem.</li>
+  <li>Como redirecionar depois de gravar, com <code>redirect(303, …)</code>.</li>
+  <li>O que é o prop <code>form</code> e quando ele vale <code>null</code>.</li>
+  <li>Actions nomeadas com <code>?/limpar</code> e a regra do <code>default</code>.</li>
+  <li>O que o servidor responde em cada caso: 200, 400, 303, 404 e 415.</li>
+  <li>Três erros reais, com o status que cada um devolve.</li>
+  <li>Como testar um formulário inteiro com <code>curl</code>, sem clicar.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: papel que nunca cai</h2>
+
+<p>Formulário é a parte do site em que a pessoa fala com o servidor. Ela escreve o nome, escolhe o sabor, clica em "anotar". Para isso funcionar, alguém precisa receber esses campos e decidir o que fazer. Numa página Svelte comum, esse alguém é o seu JavaScript, no <code>onclick</code>. No SvelteKit existe uma opção melhor: o <strong>servidor</strong> recebe.</p>
+
+<p>Receber no servidor tem três vantagens que aparecem no primeiro dia de uso. Primeira: funciona sem JavaScript, então funciona em navegador antigo, em rede ruim e quando o script falha. Segunda: a validação fica onde ninguém pode burlar — no servidor. Terceira: a gravação acontece perto do banco, sem ida e volta extra.</p>
+
+<p>Chama-se <em>form action</em> porque o alvo do formulário é uma ação nomeada. O HTML envia um <code>POST</code> para a própria página, com um sufixo dizendo qual ação executar: <code>?/anotar</code>. O SvelteKit olha o nome, chama a função correspondente e monta a resposta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>O cliente preenche a ficha no balcão</td><td>O <code>&lt;form method="POST"&gt;</code></td></tr>
+<tr><td>"Anotar pedido" escrito no topo da ficha</td><td><code>action="?/anotar"</code></td></tr>
+<tr><td>Quem lê a ficha e decide</td><td>A função dentro de <code>actions</code></td></tr>
+<tr><td>"Falta o seu nome" devolvido na hora</td><td><code>fail(400, { falta: '…' })</code></td></tr>
+<tr><td>Mandar a pessoa para a fila certa</td><td><code>redirect(303, '/…')</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. A action no <code>+page.server.js</code></h2>
+
+<p>A rota <code>/encomenda</code> tem dois trabalhos: mostrar a fila e receber um pedido novo. O primeiro é <code>load</code>; o segundo é <code>actions</code>. Os dois convivem no mesmo arquivo, em exports diferentes:</p>
+
+<pre class="file" data-file="src/routes/encomenda/+page.server.js">import { fail, redirect } from '@sveltejs/kit';
+import { listar, criar } from '#lib/pedidos.js';
+
+export function load() {
+	return { pedidos: listar() };
+}
+
+export const actions = {
+	anotar: async ({ request }) =&gt; {
+		const dados = await request.formData();
+		const cliente = dados.get('cliente')?.trim();
+		const sabor = dados.get('sabor');
+
+		if (!cliente) {
+			return fail(400, { cliente, falta: 'escreva o nome de quem pediu' });
+		}
+
+		criar(cliente, sabor);
+		return { ok: true, cliente };
+	},
+
+	limpar: async () =&gt; {
+		redirect(303, '/encomenda?limpo=1');
+	}
+};</pre>
+
+<dl class="anatomy">
+  <dt>export const actions</dt><dd>um objeto em que cada chave é o nome de uma ação. Os nomes viram o sufixo do formulário: <code>?/anotar</code>, <code>?/limpar</code>.</dd>
+  <dt>async ({ request })</dt><dd>o evento, como no <code>load</code>. Aqui o que importa é <code>request</code>, com o corpo do formulário.</dd>
+  <dt>await request.formData()</dt><dd>lê os campos e devolve algo parecido com um objeto de formulário. <code>dados.get('cliente')</code> pega o valor do campo com <code>name="cliente"</code>.</dd>
+  <dt>?.trim()</dt><dd>encadeamento opcional mais <code>trim</code>: se o campo não vier, não estoura; se vier, tira os espaços das pontas. Campo com só espaços deve contar como vazio.</dd>
+  <dt>return fail(400, { … })</dt><dd>recusa o envio com status 400 e um objeto que a página recebe. O <code>return</code> é obrigatório: sem ele, o SvelteKit não sabe que houve falha.</dd>
+  <dt>return { ok: true }</dt><dd>sucesso. O status padrão é 200 e a página redesenha com esse objeto no prop <code>form</code>.</dd>
+  <dt>redirect(303, '/…')</dt><dd>interrompe a action e manda o navegador para outro endereço. O 303 é o código certo depois de um <code>POST</code>.</dd>
+</dl>
+
+<pre class="file" data-file="src/routes/encomenda/+page.svelte">&lt;script&gt;
+	let { data, form } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Nova encomenda&lt;/h1&gt;
+
+{#if form?.ok}
+	&lt;p class="ok"&gt;Anotado para {form.cliente}.&lt;/p&gt;
+{:else if form?.falta}
+	&lt;p class="erro"&gt;{form.falta}&lt;/p&gt;
+{/if}
+
+&lt;form method="POST" action="?/anotar"&gt;
+	&lt;input name="cliente" placeholder="quem pediu" value={form?.cliente ?? ''} /&gt;
+	&lt;select name="sabor"&gt;
+		&lt;option value="queijo"&gt;queijo&lt;/option&gt;
+		&lt;option value="frango"&gt;frango&lt;/option&gt;
+	&lt;/select&gt;
+	&lt;button&gt;anotar&lt;/button&gt;
+&lt;/form&gt;
+
+&lt;form method="POST" action="?/limpar"&gt;
+	&lt;button&gt;limpar a fila&lt;/button&gt;
+&lt;/form&gt;
+
+&lt;p&gt;Na fila: {data.pedidos.length}&lt;/p&gt;</pre>
+
+<p>Repare no <code>value={form?.cliente ?? ''}</code>: quando a action recusa por falta de nome, o campo volta vazio — mas quando recusa por outro motivo, o que a pessoa digitou reaparece. Perder o que já foi escrito é uma das formas mais rápidas de irritar quem usa o formulário.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Anotado para Caio\.">
+<p class="try-task"><strong>Missão:</strong> o formulário está ligado, mas a mensagem sai errada. Faça aparecer <strong>Anotado para Caio.</strong> depois do clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let cliente = $state('Caio');
+	let aviso = $state('');
+	const dados = {};
+
+	function enviar(evento) {
+		evento.preventDefault();
+		aviso = 'Anotado para ' + dados.cliente + '.';
+	}
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+	&lt;input bind:value={cliente} /&gt;
+	&lt;button&gt;anotar&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let cliente = $state('Caio');
+	let aviso = $state('');
+
+	function enviar(evento) {
+		evento.preventDefault();
+		aviso = 'Anotado para ' + cliente + '.';
+	}
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+	&lt;input bind:value={cliente} /&gt;
+	&lt;button&gt;anotar&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>evento.preventDefault()</code> impede o envio de verdade e deixa o JavaScript cuidar de tudo. É o jeito antigo, e ele tem um custo que o SvelteKit resolve: sem JavaScript, esse formulário não faz nada. Na action de verdade, o <code>preventDefault</code> não existe — quem decide é o servidor.</p>
+
+<hr>
+
+<h2>3. A saída real de um envio</h2>
+
+<p>Testar formulário com <code>curl</code> é mais simples do que parece: o navegador manda um <code>POST</code> com os campos separados por <code>&amp;</code>, no formato de formulário. O <code>-d</code> faz esse papel.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST -H 'accept: text/html' -d 'cliente=Caio&amp;sabor=frango' 'localhost:5173/encomenda?/anotar' | grep -o '&lt;p class="ok"&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p class="ok"&gt;Anotado para Caio.&lt;/p&gt;</pre>
+
+<p>O <code>-H 'accept: text/html'</code> é o detalhe que engana. Sem ele, o <code>curl</code> recebe JSON — o mesmo JSON que o <code>use:enhance</code> usa no navegador. Com ele, o SvelteKit entende que o cliente quer uma página e devolve HTML completo, com a mensagem dentro. O status é 200, porque o envio deu certo.</p>
+
+<p>Quando a validação recusa, o status muda para 400 e a mensagem vem no lugar da confirmação:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST -H 'accept: text/html' -d 'cliente=' 'localhost:5173/encomenda?/anotar' | grep -o '&lt;p class="erro"&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p class="erro"&gt;escreva o nome de quem pediu&lt;/p&gt;
+ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'accept: text/html' -d 'cliente=' 'localhost:5173/encomenda?/anotar'
+400</pre>
+
+<p>O <code>400</code> é parte da resposta, não um acidente: a action chamou <code>fail(400, …)</code> e o SvelteKit repassou o status. Um formulário que devolve 500 quando falta um campo está dizendo a coisa errada — o servidor não quebrou, o pedido é que veio incompleto.</p>
+
+<pre class="file" data-file="src/lib/Aviso.svelte">&lt;script&gt;
+	const form = { falta: 'escreva o nome de quem pediu' };
+&lt;/script&gt;
+
+{#if form?.falta}
+	&lt;p class="erro"&gt;{form.falta}&lt;/p&gt;
+{:else}
+	&lt;p&gt;tudo certo&lt;/p&gt;
+{/if}</pre>
+
+<pre class="out">&lt;p class="erro"&gt;escreva o nome de quem pediu&lt;/p&gt;</pre>
+
+<p>O componente acima isola a decisão do que mostrar. O compilador gerou exatamente um parágrafo, com a classe de erro e o texto do <code>fail</code>. No projeto, o mesmo trecho roda dentro da página e o <code>form</code> vem do servidor em vez de estar escrito no script.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:escreva o nome de quem pediu">
+<p class="try-task"><strong>Missão:</strong> com o campo vazio, o envio deve mostrar o recado de validação. Faça aparecer <strong>escreva o nome de quem pediu</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let cliente = $state('');
+	let aviso = $state('');
+
+	function enviar(evento) {
+		evento.preventDefault();
+		aviso = cliente ? 'anotado' : 'anotado';
+	}
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+	&lt;input bind:value={cliente} /&gt;
+	&lt;button&gt;anotar&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let cliente = $state('');
+	let aviso = $state('');
+
+	function enviar(evento) {
+		evento.preventDefault();
+		aviso = cliente ? 'anotado' : 'escreva o nome de quem pediu';
+	}
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+	&lt;input bind:value={cliente} /&gt;
+	&lt;button&gt;anotar&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+</div>
+
+<p>Aqui a validação está no navegador, que é onde ela <em>não</em> basta: qualquer pessoa pode desligar o JavaScript e enviar o formulário mesmo assim. No projeto, a mesma conferência existe duas vezes — no campo, para avisar rápido, e na action, para valer de verdade. Regra sem exceção: validação que protege dado mora no servidor.</p>
+
+<hr>
+
+<h2>4. Action nomeada e o 303</h2>
+
+<p>O segundo formulário da página aponta para <code>?/limpar</code>. Aquela action não devolve dado: ela chama <code>redirect(303, '/encomenda?limpo=1')</code> e o navegador vai para o endereço novo. O 303 é o código certo aqui — diz "terminei o POST, agora pegue o resultado com um GET".</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i -X POST -H 'accept: text/html' -d '' 'localhost:5173/encomenda?/limpar' | grep -i '^HTTP/\|^location'
+HTTP/1.1 303 See Other
+location: /encomenda?limpo=1</pre>
+
+<p>O <code>-d ''</code> não é enfeite: sem corpo e sem <code>content-type</code>, o SvelteKit recusa o <code>POST</code> com 415. Um navegador sempre manda o cabeçalho; o <code>curl</code>, não. Se você esquecer, o erro não é do seu código.</p>
+
+<p>Se você devolvesse 200 depois de gravar, o botão "atualizar" do navegador reenviaria o formulário e gravaria duas vezes. O 303 resolve isso: depois dele, a página atual é um <code>GET</code>, e atualizar só busca de novo. É por isso que todo formulário que grava termina em redirecionamento.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Resposta da action</th><th>Status</th><th>O que a página recebe</th></tr>
+<tr><td><code>return { ok: true }</code></td><td>200</td><td><code>form.ok</code> verdadeiro</td></tr>
+<tr><td><code>return fail(400, { … })</code></td><td>400</td><td><code>form</code> com os campos que você mandou</td></tr>
+<tr><td><code>redirect(303, '/x')</code></td><td>303</td><td>nada: o navegador vai para <code>/x</code></td></tr>
+<tr><td><code>error(403, '…')</code></td><td>403</td><td>a página de erro, não a do formulário</td></tr>
+<tr><td>nome que não existe</td><td>404</td><td>a página de erro</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="out:escreva o nome de quem pediu">
+<p class="try-task"><strong>Missão:</strong> este é o pedaço da página que desenha a resposta da action. O servidor devolveu <code>falta</code>. Faça aparecer <strong>escreva o nome de quem pediu</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const form = { cliente: '', falta: 'escreva o nome de quem pediu' };
+&lt;/script&gt;
+
+{#if form?.ok}
+	&lt;p&gt;{form.falta}&lt;/p&gt;
+{:else}
+	&lt;p&gt;nada a avisar&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const form = { cliente: '', falta: 'escreva o nome de quem pediu' };
+&lt;/script&gt;
+
+{#if form?.falta}
+	&lt;p&gt;{form.falta}&lt;/p&gt;
+{:else}
+	&lt;p&gt;nada a avisar&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>O <code>{:else}</code> não é obrigatório, mas evita a página muda. Sem ele, uma renderização sem envio não mostra nada — o que é correto e, ao mesmo tempo, deixa o leitor sem saber se o formulário existe. Uma mensagem neutra resolve.</p>
+
+<hr>
+
+<h2>5. <code>fail()</code> ou <code>error()</code>?</h2>
+
+<p>As duas funções recusam. A diferença está no que acontece com a página. <code>fail()</code> volta para o formulário, com os dados que você mandou, e mantém a pessoa no lugar onde ela estava. <code>error()</code> troca a página pela tela de erro e perde o formulário.</p>
+
+<p>Use <code>fail()</code> quando o problema é do preenchimento: campo vazio, e-mail sem arroba, quantidade negativa. É conserto rápido, e a pessoa deve poder corrigir ali mesmo. Use <code>error()</code> quando o problema é de permissão ou de recurso: não existe o pedido, você não é o dono, o servidor está fora. Aí não adianta mostrar o formulário de novo.</p>
+
+<pre class="file" data-file="src/routes/encomenda/+page.server.js">limpar: async ({ locals }) =&gt; {
+	if (!locals.dono) {
+		error(403, 'só a Ana pode limpar a fila');
+	}
+
+	redirect(303, '/encomenda?limpo=1');
+}</pre>
+
+<p>Repare que o <code>error()</code> é chamado sem <code>return</code>. Ele interrompe a execução lançando um erro especial, então a linha seguinte nunca roda — exatamente como o <code>redirect</code> no primeiro exemplo. Se você escrever <code>return error(...)</code>, funciona também, mas o hábito é chamar direto e deixar o SvelteKit cuidar do resto.</p>
+
+<hr>
+
+<h2>6. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — <code>default</code> e action nomeada no mesmo arquivo</strong>
+<p>A regra parece estranha até você ver a mensagem: se existe action com nome, não pode existir <code>default</code>. Um formulário sem sufixo não tem como escolher entre duas.</p>
+<pre class="file" data-file="src/routes/encomenda/+page.server.js">export const actions = {
+	default: async ({ request }) =&gt; {
+		const dados = await request.formData();
+		criar(dados.get('cliente'), dados.get('sabor'));
+		return { ok: true };
+	},
+	limpar: async () =&gt; {
+		return { ok: true };
+	}
+};</pre>
+<pre class="term">SvelteKit error: action_default_with_named
+When using named actions, the default action cannot be used. See the docs for more info: https://svelte.dev/docs/kit/form-actions#Named-actions
+https://svelte.dev/e/kit/action_default_with_named
+500 POST /encomenda?/anotar</pre>
+<p>A correção é escolher: ou só <code>default</code> (e os formulários sem sufixo), ou só actions nomeadas (e todo formulário com <code>?/nome</code>). O guia usa a segunda forma porque ela permite dois botões na mesma página.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>POST</code> sem <code>content-type</code></strong>
+<p>O navegador sempre manda esse cabeçalho; ferramentas de linha de comando, não. O resultado é 415, "tipo de mídia não suportado", em JSON:</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST 'localhost:5173/encomenda?/anotar' -w '\n%{http_code}\n'
+{"type":"error","location":"/encomenda","error":{"status":415,"message":"Unsupported Media Type"}}
+415</pre>
+<p>Conserto: mandar o corpo com <code>-d 'cliente=Ana'</code>, que já inclui o cabeçalho, ou declarar <code>-H 'content-type: application/x-www-form-urlencoded'</code>. Sem corpo nenhum, use <code>-d ''</code> — o cabeçalho vem junto e o 415 desaparece.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — apontar para uma action que não existe</strong>
+<p>O formulário diz <code>?/apagar</code> e não há <code>apagar</code> em <code>actions</code>. O SvelteKit responde 404, e não uma mensagem de campo:</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -i -X POST -d 'cliente=Ana' 'localhost:5173/encomenda?/apagar' | head -1
+HTTP/1.1 404 Not Found
+ana@notebook:~/loja$ curl -s -X POST -H 'accept: text/html' -d 'cliente=Ana' 'localhost:5173/encomenda?/apagar' | head -c 60
+&lt;!doctype html&gt;
+&lt;html lang="pt-BR"&gt;
+	&lt;head&gt;
+		&lt;meta charset=</pre>
+<p>Sem <code>accept: text/html</code> a resposta vem em JSON; com o cabeçalho, vem a página de erro. Nos dois casos o status é 404 — o endereço existe, a ação não. Confira o nome no <code>action="?/…"</code> contra as chaves do objeto <code>actions</code>.</p>
+</div>
+
+<hr>
+
+<h2>7. O formulário que melhora quando o JavaScript chega</h2>
+
+<p>O mesmo <code>&lt;form method="POST"&gt;</code> serve a dois mundos. Sem JavaScript, o navegador faz o envio clássico: recarrega a página, o servidor responde HTML, a mensagem aparece. Com JavaScript, o SvelteKit pode interceptar o envio, mandar os campos em segundo plano e trocar só o pedaço que mudou — mais rápido, mesma action, mesmas regras.</p>
+
+<p>É por isso que a escolha de fazer o formulário no servidor não é nostalgia. Você escreve uma vez e ganha os dois comportamentos. O que muda é só uma diretiva no componente, o <code>use:enhance</code>, que é assunto da próxima aula. A action não muda nada: continua lendo <code>request.formData()</code> e devolvendo <code>fail</code> ou dados.</p>
+
+<p>Vale entender o que o navegador faz sozinho nesse caminho, porque é o que explica os códigos que você viu. O envio de formulário é um <code>POST</code> de verdade; a página que volta é uma resposta HTTP; o redirecionamento é um 303 que o navegador segue sozinho. Nada disso depende de Svelte. O SvelteKit só organiza o arquivo e entrega o formulário pronto.</p>
+
+<hr>
+
+<h2>8. Onde a action guarda o dado</h2>
+
+<p>No projeto da Ana, a action chama <code>criar()</code> de um módulo que guarda a lista numa variável. Isso funciona para estudar e tem uma consequência que você precisa conhecer: a lista vive na memória do servidor. Reiniciou o processo, a lista volta ao que estava escrito no código.</p>
+
+<pre class="file" data-file="src/lib/pedidos.js">let pedidos = [
+	{ id: 1, cliente: 'Ana', sabor: 'frango', pronto: true },
+	{ id: 2, cliente: 'Bia', sabor: 'queijo', pronto: false }
+];
+
+export function criar(cliente, sabor) {
+	const pedido = { id: pedidos.length + 1, cliente, sabor, pronto: false };
+	pedidos = [...pedidos, pedido];
+	return pedido;
+}</pre>
+
+<p>Outro detalhe do mesmo módulo: a lista é <strong>do processo</strong>, não do visitante. Duas pessoas que abrirem a página veem a mesma fila, e o pedido de uma aparece para a outra. Em produção, isso é o comportamento esperado de um painel de cozinha compartilhado — e um desastre se o dado fosse carrinho de compras. Guarde a pergunta: <em>este dado é de quem?</em></p>
+
+<p>Trocar a memória por banco de dados não muda a action: ela continua lendo o formulário, validando e chamando uma função. O que muda é o conteúdo de <code>criar()</code>. Essa é a vantagem de separar o módulo: o dia da troca fica num arquivo só, e o formulário nem percebe.</p>
+<hr>
+
+<h2>9. Testando o formulário inteiro com <code>curl</code></h2>
+
+<p>Formulário é chato de testar clicando: você precisa digitar, apagar, corrigir, recarregar. Com <code>curl</code>, cada caso é uma linha e o resultado é comparável. Um roteiro de quatro casos cobre o essencial.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'accept: text/html' -d 'cliente=Caio&amp;sabor=frango' 'localhost:5173/encomenda?/anotar'
+200
+ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'accept: text/html' -d 'cliente=' 'localhost:5173/encomenda?/anotar'
+400
+ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'accept: text/html' -d '' 'localhost:5173/encomenda?/limpar'
+303
+ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' -X POST -d 'cliente=Ana' 'localhost:5173/encomenda?/apagar'
+404</pre>
+
+<p>Quatro números, quatro significados: criou, recusou por validação, redirecionou, não achou a ação. Se um deles vier diferente do esperado, você sabe qual caso quebrou sem abrir navegador. Depois, quando a página for automatizada com uma ferramenta de teste, esses mesmos casos viram testes.</p>
+
+<div class="warning">
+<strong>Não confie no <code>required</code> do HTML</strong>
+<p>O atributo <code>required</code> no campo é conveniência para quem usa o formulário, não proteção. Ele é do navegador: qualquer requisição feita fora dele passa direto, como o <code>curl</code> acabou de mostrar. Toda regra que protege dado precisa existir na action também.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>export const actions = { … }</code></td><td>as ações da rota, no <code>+page.server.js</code></td></tr>
+<tr><td><code>&lt;form method="POST" action="?/anotar"&gt;</code></td><td>envia os campos para a ação <code>anotar</code></td></tr>
+<tr><td><code>await request.formData()</code></td><td>lê os campos do formulário</td></tr>
+<tr><td><code>return fail(400, { … })</code></td><td>recusa e volta para a página com dados</td></tr>
+<tr><td><code>return { ok: true }</code></td><td>sucesso, status 200</td></tr>
+<tr><td><code>redirect(303, '/x')</code></td><td>manda para outro endereço depois do POST</td></tr>
+<tr><td><code>error(403, '…')</code></td><td>troca a página pela tela de erro</td></tr>
+<tr><td><code>let { data, form } = $props()</code></td><td>lê o load e a resposta da action</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Status</th><th>Quem produziu</th></tr>
+<tr><td>200</td><td>a action devolveu dados</td></tr>
+<tr><td>400</td><td><code>fail(400, …)</code></td></tr>
+<tr><td>303</td><td><code>redirect(303, …)</code></td></tr>
+<tr><td>404</td><td>ação inexistente</td></tr>
+<tr><td>415</td><td>POST sem <code>content-type</code></td></tr>
+<tr><td>500</td><td>a action lançou um erro comum</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Onde ficam as form actions?</p>
+<label><input type="radio" name="q1"> no <code>+page.svelte</code>, dentro de um <code>onsubmit</code></label>
+<label><input type="radio" name="q1"> no <code>+page.server.js</code>, dentro de <code>export const actions</code></label>
+<label><input type="radio" name="q1"> no <code>hooks.server.js</code></label>
+<label><input type="radio" name="q1"> no <code>+server.js</code>, na função <code>POST</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual é a diferença entre <code>fail()</code> e <code>error()</code>?</p>
+<label><input type="radio" name="q1"> nenhuma, os dois devolvem 400</label>
+<label><input type="radio" name="q1"> <code>fail()</code> é para o servidor e <code>error()</code> para o navegador</label>
+<label><input type="radio" name="q1"> <code>fail()</code> volta ao formulário com dados; <code>error()</code> mostra a página de erro</label>
+<label><input type="radio" name="q1"> <code>error()</code> só funciona em <code>load</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que redirecionar com 303 depois de gravar?</p>
+<label><input type="radio" name="q1"> para o botão atualizar não reenviar o POST e gravar duas vezes</label>
+<label><input type="radio" name="q1"> porque 200 não existe em formulário</label>
+<label><input type="radio" name="q1"> para o navegador guardar a resposta em cache</label>
+<label><input type="radio" name="q1"> porque o SvelteKit não aceita outro status</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">export const actions = {<br>&nbsp;&nbsp;anotar: async ({ request }) =&gt; {<br>&nbsp;&nbsp;&nbsp;&nbsp;const dados = await request.<input data-answer="formData">();<br>&nbsp;&nbsp;&nbsp;&nbsp;if (!dados.get('cliente')) {<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return <input data-answer="fail">(400, { falta: 'falta o nome' });<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;&nbsp;&nbsp;return { ok: true };<br>&nbsp;&nbsp;}<br>};</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Form action é uma função no <code>+page.server.js</code>, dentro de <code>export const actions</code>.</li>
+  <li>O formulário aponta para ela com <code>method="POST"</code> e <code>action="?/nome"</code>.</li>
+  <li>Os campos chegam por <code>await request.formData()</code>; cada <code>name</code> é uma chave.</li>
+  <li><code>return fail(400, { … })</code> recusa e devolve dados para o prop <code>form</code>.</li>
+  <li><code>redirect(303, '/x')</code> termina o POST e evita reenvio ao atualizar a página.</li>
+  <li>Com action nomeada não pode existir <code>default</code>: escolha um dos dois estilos.</li>
+  <li>A resposta muda com o cabeçalho <code>accept</code>: HTML para navegador, JSON para o enhance.</li>
+  <li><code>POST</code> sem <code>content-type</code> recebe 415; ação inexistente recebe 404.</li>
+  <li>Validação no navegador é conveniência; a que protege dado mora na action.</li>
+  <li>Quatro <code>curl</code> com <code>-w '%{http_code}'</code> testam o formulário inteiro sem clicar.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Promessas e Streaming — o que chega antes | Guia Svelte</title>
+<meta name="description" content="Como o load devolve promessas e o SvelteKit transmite a página em partes: {#await}, primeiro byte contra total, o chunk de resolve e os erros reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Promessas e Streaming</span></h1>
+
+<p class="intro">A Ana tem um problema de relógio: o pão sai em dois segundos, mas o relatório de quanto cada pedido esperou leva vinte. Se o balcão só abrisse depois do relatório, a fila dobraria na porta. No SvelteKit acontece o mesmo, e a solução é a mesma da padaria: entregue o que já está pronto e mande o resto quando ficar. O nome disso é <strong>streaming</strong>, e a ferramenta é uma <strong>promessa</strong> devolvida pelo <code>load</code> junto com o bloco <code>{#await}</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma promessa e por que o <code>load</code> pode devolver uma sem esperar.</li>
+  <li>Como o bloco <code>{#await}</code> mostra um texto enquanto o valor não chega.</li>
+  <li>Como <code>{:then}</code> e <code>{:catch}</code> completam o bloco.</li>
+  <li>Como medir o tempo do primeiro byte contra o tempo total com <code>curl</code>.</li>
+  <li>O que o SvelteKit escreve no HTML para "completar depois".</li>
+  <li>Por que o streaming só acontece no <code>+page.server.js</code>.</li>
+  <li>O que fazer quando a promessa falha no meio do caminho.</li>
+  <li>O custo do streaming: cache, robô de busca e layout que pula.</li>
+  <li>Três erros reais, com a mensagem do compilador e do servidor.</li>
+  <li>Como conferir tudo isso sem abrir o navegador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o balcão abre antes do bolo assar</h2>
+
+<p>Uma <strong>promessa</strong> é um valor que ainda não existe, mas vai existir. Você não segura o valor: segura o papel que diz "chego já". Em JavaScript, toda operação lenta devolve um desses — ler arquivo, consultar banco, chamar outra API. E existe uma regra que vale a pena decorar: <em>uma promessa não bloqueia nada até alguém usar <code>await</code> nela</em>.</p>
+
+<p>O <code>load</code> do SvelteKit aproveita essa regra. Se você devolver a promessa dentro do objeto, sem <code>await</code>, o servidor responde na hora com o que já tem e deixa a promessa terminar em segundo plano. Quando ela termina, o restante do HTML é enviado pelo mesmo canal, ainda aberto. O navegador completa a página. O visitante nunca ficou olhando uma tela branca.</p>
+
+<p>O ganho é de percepção. Uma página que leva 1,2 segundo para ficar completa parece instantânea se o título e a moldura aparecem em 0,1 segundo. Uma página que espera tudo para aparecer de uma vez parece lenta mesmo quando o total é o mesmo. Streaming não deixa o servidor mais rápido: ele muda <em>quando</em> as coisas chegam.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>O balcão que já atende enquanto o bolo assa</td><td>O HTML enviado antes da promessa resolver</td></tr>
+<tr><td>O bilhete "o relatório sai às 10h"</td><td>O bloco <code>{#await}</code> com o texto de espera</td></tr>
+<tr><td>A bandeja que chega depois</td><td>O segundo pedaço da resposta, com o valor</td></tr>
+<tr><td>O forno que desliga no meio</td><td>A promessa rejeitada e o <code>{:catch}</code></td></tr>
+<tr><td>Guardar tudo pronto antes de abrir</td><td><code>await</code> no <code>load</code>, sem streaming</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. O <code>load</code> que devolve promessas</h2>
+
+<p>A rota <code>/cozinha</code> mostra duas coisas: a fila, que é rápida, e o relatório de espera, que é lento. O <code>load</code> busca a fila e devolve o relatório <strong>como promessa</strong>. Repare na ausência do <code>await</code> antes do <code>async</code> interno:</p>
+
+<pre class="file" data-file="src/routes/cozinha/+page.server.js">import { listar } from '#lib/pedidos.js';
+
+const espera = (ms) =&gt; new Promise((ok) =&gt; setTimeout(ok, ms));
+
+export async function load() {
+	// a parte rápida sai na hora…
+	const fila = listar();
+
+	// …e a parte lenta sai depois, sem segurar a página
+	const relatorio = (async () =&gt; {
+		await espera(1200);
+		return fila.map((p) =&gt; ({ ...p, espera: p.pronto ? '0 min' : '12 min' }));
+	})();
+
+	return { fila, relatorio };
+}</pre>
+
+<p>O <code>(async () =&gt; { … })()</code> é uma função assíncrona chamada na hora: ela começa a trabalhar e devolve a promessa imediatamente. Se você escrevesse <code>const relatorio = await (async () =&gt; …)()</code>, o <code>load</code> esperaria e o streaming sumiria. É uma diferença de uma palavra que muda o comportamento inteiro.</p>
+
+<p>Do lado da tela, o componente recebe <code>data</code> com os dois campos, mas trata o segundo como algo que pode não estar pronto. É para isso que existe o bloco <code>{#await}</code>:</p>
+
+<pre class="file" data-file="src/routes/cozinha/+page.svelte">&lt;script&gt;
+	let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Cozinha&lt;/h1&gt;
+&lt;p&gt;Na frente: {data.fila.length} pedido(s)&lt;/p&gt;
+
+{#await data.relatorio}
+	&lt;p&gt;calculando o tempo de espera…&lt;/p&gt;
+{:then tempos}
+	&lt;ul&gt;
+		{#each tempos as t}
+			&lt;li&gt;{t.cliente}: {t.espera}&lt;/li&gt;
+		{/each}
+	&lt;/ul&gt;
+{:catch erro}
+	&lt;p&gt;não deu para calcular: {erro.message}&lt;/p&gt;
+{/await}</pre>
+
+<dl class="anatomy">
+  <dt>{#await promessa}</dt><dd>abre o bloco. O conteúdo aqui dentro aparece <strong>enquanto</strong> a promessa não resolve — é o texto de espera.</dd>
+  <dt>{:then valor}</dt><dd>o pedaço que aparece quando a promessa dá certo. O nome depois de <code>then</code> é a variável que recebe o resultado.</dd>
+  <dt>{:catch erro}</dt><dd>o pedaço que aparece quando dá errado. Aqui, um objeto de erro; <code>erro.message</code> é o texto da falha.</dd>
+  <dt>{/await}</dt><dd>fecha o bloco. Cada <code>{#await}</code> precisa de um <code>{/await}</code>, senão o compilador reclama.</dd>
+  <dt>await</dt><dd>a palavra do JavaScript que <em>espera</em>. Dentro do <code>load</code>, ela existe e é o que tira o streaming. Aqui, dentro da marcação, ela é só o nome do bloco.</dd>
+</dl>
+
+<p>Atenção a uma confusão comum: o <code>{#await}</code> da marcação e o <code>await</code> do JavaScript são coisas diferentes com o mesmo nome. Um é bloco de HTML, o outro é operador de linguagem. O bloco não espera nada — ele <em>desenha conforme</em>. O operador bloqueia a função até o valor chegar.</p>
+
+<hr>
+
+<h2>3. A saída real: o que o servidor manda primeiro</h2>
+
+<p>Para ver o streaming sem navegador, o <code>curl</code> tem duas medidas úteis: <code>time_starttransfer</code> é quando o primeiro byte chegou, e <code>time_total</code> é quando a resposta terminou. Se os dois números forem parecidos, não houve transmissão em partes. Se o primeiro for bem menor, houve.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w 'primeiro byte %{time_starttransfer}s · total %{time_total}s\n' localhost:5173/cozinha
+primeiro byte 0.097875s · total 1.256349s</pre>
+
+<p>Um décimo de segundo para o primeiro byte, um segundo e um quarto para terminar. A diferença é exatamente o <code>espera(1200)</code> do <code>load</code>: a página saiu com a fila e com o aviso, e o relatório chegou depois, pelo mesmo cano. Se você comentar o <code>return</code> da promessa e usar <code>await</code>, os dois números passam a ser iguais.</p>
+
+<p>O HTML que chega primeiro contém o texto de espera, e não a lista. Este é o componente isolado, compilado de verdade, com uma promessa que resolve na hora — mesmo assim, a primeira renderização mostra o aviso:</p>
+
+<pre class="file" data-file="src/lib/Relatorio.svelte">&lt;script&gt;
+	const relatorio = Promise.resolve(['Ana', 'Bia']);
+&lt;/script&gt;
+
+{#await relatorio}
+	&lt;p&gt;calculando…&lt;/p&gt;
+{:then nomes}
+	&lt;p&gt;{nomes.length} pedidos&lt;/p&gt;
+{/await}</pre>
+
+<pre class="out">&lt;p&gt;calculando…&lt;/p&gt;</pre>
+
+<p>Não é falha: é o retrato do instante zero. O renderizador do servidor não espera promessa nenhuma; ele desenha o que dá e devolve. Quem completa o resto é o navegador, quando o pedaço final chega.</p>
+
+<p>E o tal pedaço final tem uma cara. No fim do HTML do <code>/cozinha</code> vem um <code>&lt;script&gt;</code> com o valor já resolvido:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/cozinha | grep -o 'calculando o tempo de espera…'
+calculando o tempo de espera…
+ana@notebook:~/loja$ curl -s localhost:5173/cozinha | tail -c 130
+nte:"Ana",sabor:"frango",pronto:true,espera:"0 min"},{id:2,cliente:"Bia",sabor:"queijo",pronto:false,espera:"12 min"}]])&lt;/script&gt;</pre>
+
+<p>Aquele final é o SvelteKit fechando o buraco deixado pela promessa. No meio do HTML, no lugar do relatório, ficou um marcador — algo como <code>relatorio:__sveltekit_dev.defer(1)</code> — dizendo "este valor chega no pedaço 1". O <code>script</code> no fim entrega o pedaço 1. No build de produção o nome muda, a ideia não.</p>
+
+<div class="trysvelte" data-goal="depois:500;;out:2 pedidos">
+<p class="try-task"><strong>Missão:</strong> a promessa entrega uma lista de nomes depois de 300 ms. Enquanto isso o aviso aparece; depois, mostre <strong>2 pedidos</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const relatorio = new Promise((ok) =&gt; {
+		setTimeout(() =&gt; ok(['Ana', 'Bia']), 300);
+	});
+&lt;/script&gt;
+
+{#await relatorio}
+	&lt;p&gt;calculando…&lt;/p&gt;
+{:then nomes}
+	&lt;p&gt;{nomes} pedidos&lt;/p&gt;
+{/await}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const relatorio = new Promise((ok) =&gt; {
+		setTimeout(() =&gt; ok(['Ana', 'Bia']), 300);
+	});
+&lt;/script&gt;
+
+{#await relatorio}
+	&lt;p&gt;calculando…&lt;/p&gt;
+{:then nomes}
+	&lt;p&gt;{nomes.length} pedidos&lt;/p&gt;
+{/await}</pre>
+</div>
+
+<p>O <code>depois:500</code> da meta é o que dá tempo à promessa. Em uma caixa de teste, esperar é parte da verificação: sem isso, o avaliador olharia a tela no instante do aviso e diria que está errado. Guarde a ideia — teste de coisa assíncrona sempre tem uma espera, e escolher o tempo errado cria teste instável.</p>
+
+<hr>
+
+<h2>4. Por que só no <code>+page.server.js</code></h2>
+
+<p>Streaming depende de o servidor manter a resposta aberta e mandar mais HTML depois. Isso exige que o <code>load</code> rode no servidor. No <code>+page.js</code> o mesmo objeto com promessa funciona, mas o SvelteKit não transmite: o HTML sai com o aviso e a promessa termina no navegador, sem nada a transmitir.</p>
+
+<p>Não acredite na explicação sem medir. O teste abaixo usa uma rota de rascunho, <code>/teste-promessa</code>, com o mesmo <code>load</code> movido para um <code>+page.js</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w 'primeiro byte %{time_starttransfer}s · total %{time_total}s\n' localhost:5173/teste-promessa
+primeiro byte 0.024051s · total 0.024117s</pre>
+
+<p>Os dois números praticamente iguais contam a história: não há pedaço para transmitir, porque o servidor não prometeu nada. O aviso sai junto com a página e o resto acontece no navegador. É útil para o visitante, mas não é streaming.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Promessa no <code>return</code></th><th>Transmite?</th></tr>
+<tr><td><code>+page.server.js</code></td><td>devolvida sem <code>await</code></td><td><strong>sim</strong></td></tr>
+<tr><td><code>+page.server.js</code></td><td>com <code>await</code></td><td>não: espera tudo</td></tr>
+<tr><td><code>+page.js</code></td><td>devolvida sem <code>await</code></td><td>não: resolve no navegador</td></tr>
+<tr><td>Qualquer um</td><td>promessa que rejeita sem <code>{:catch}</code></td><td>a página quebra no ponto da falha</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. Quando a promessa falha</h2>
+
+<p>Promessa tem dois finais: deu certo ou deu errado. O <code>{:catch}</code> existe para o segundo caso, e ele não é opcional em página de verdade. Sem ele, a falha sobe e derruba o componente — e como o componente já foi enviado ao navegador, o visitante vê a página pela metade.</p>
+
+<pre class="file" data-file="src/routes/cozinha/+page.server.js">export function load() {
+	const quebrada = Promise.reject(new Error('o forno desligou'));
+	return { fila: [], relatorio: quebrada };
+}</pre>
+
+<p>Com esse <code>load</code>, o servidor responde 200 e desenha o aviso. A rejeição aparece no terminal, mas não impede a resposta — o SvelteKit já tinha mandado o primeiro pedaço:</p>
+
+<pre class="term">Error: o forno desligou
+    at load (src/routes/cozinha/+page.server.js:2:34)
+200 GET /cozinha</pre>
+
+<p>No navegador, o <code>{:catch}</code> da página pega o erro e mostra o texto. Se você não tivesse escrito esse bloco, o erro apareceria como falha de renderização e o aviso "calculando…" ficaria na tela para sempre. Uma promessa sem tratamento é uma tela travada esperando algo que já falhou.</p>
+
+<div class="trysvelte" data-goal="out:deu ruim: o forno desligou">
+<p class="try-task"><strong>Missão:</strong> esta promessa já nasce rejeitada e a página quebra. Trate o erro e mostre <strong>deu ruim: o forno desligou</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const relatorio = Promise.reject(new Error('o forno desligou'));
+&lt;/script&gt;
+
+{#await relatorio}
+	&lt;p&gt;calculando…&lt;/p&gt;
+{:then nomes}
+	&lt;p&gt;{nomes.length} pedidos&lt;/p&gt;
+{/await}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const relatorio = Promise.reject(new Error('o forno desligou'));
+&lt;/script&gt;
+
+{#await relatorio}
+	&lt;p&gt;calculando…&lt;/p&gt;
+{:then nomes}
+	&lt;p&gt;{nomes.length} pedidos&lt;/p&gt;
+{:catch erro}
+	&lt;p&gt;deu ruim: {erro.message}&lt;/p&gt;
+{/await}</pre>
+</div>
+
+<p>O <code>erro.message</code> é o texto que você passou ao <code>new Error(...)</code>. Em produção, cuidado com o que vai nessa mensagem: ela aparece na tela do visitante. "o forno desligou" é simpático; o caminho do arquivo e a consulta SQL não são.</p>
+
+<hr>
+
+<h2>6. O valor que não é promessa</h2>
+
+<p>O <code>{#await}</code> aceita qualquer coisa, não só promessa. Se o valor já estiver resolvido — uma lista, um número — o bloco cai direto no <code>{:then}</code>, sem passar pelo aviso. Isso é útil quando o campo pode vir de dois jeitos: prometido ou pronto.</p>
+
+<p>E existe a forma curta, sem o bloco de espera: <code>{#await promessa then valor}</code> seguido do conteúdo. Serve quando não faz sentido mostrar aviso — uma lista que já está em cache, por exemplo. O efeito é o mesmo; muda só a quantidade de linhas.</p>
+
+<pre class="file" data-file="src/routes/cozinha/+page.svelte">{#await data.relatorio then tempos}
+	&lt;p&gt;{tempos.length} pedidos com tempo calculado&lt;/p&gt;
+{/await}</pre>
+
+<p>Forma curta tem um custo: se a promessa falhar, não há <code>{:catch}</code> para onde ir. Use quando a falha não é possível ou quando ela não precisa de tratamento próprio. Em página com dado de fora, prefira a forma completa.</p>
+
+<div class="trysvelte" data-goal="depois:500;;out:2 pedidos">
+<p class="try-task"><strong>Missão:</strong> o <code>data.relatorio</code> é uma promessa, e a página tentou usá-la como lista antes de ela resolver. Espere a promessa e mostre <strong>2 pedidos</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const data = {
+		relatorio: new Promise((ok) =&gt; setTimeout(() =&gt; ok(['Ana', 'Bia']), 300))
+	};
+&lt;/script&gt;
+
+&lt;p&gt;{data.relatorio.length} pedidos&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const data = {
+		relatorio: new Promise((ok) =&gt; setTimeout(() =&gt; ok(['Ana', 'Bia']), 300))
+	};
+&lt;/script&gt;
+
+{#await data.relatorio}
+	&lt;p&gt;calculando…&lt;/p&gt;
+{:then nomes}
+	&lt;p&gt;{nomes.length} pedidos&lt;/p&gt;
+{/await}</pre>
+</div>
+
+<p>O erro do código inicial é silencioso: <code>Promise.length</code> é <code>undefined</code>, e a tela escreve "undefined pedidos". Nenhum aviso, nenhum erro — só um texto errado. É o mesmo tipo de defeito do campo com nome trocado, e a defesa é a mesma: olhar a saída de verdade, não a intenção.</p>
+
+<hr>
+
+<h2>7. O custo do streaming</h2>
+
+<p>Streaming não é de graça. A resposta fica aberta por mais tempo, o que ocupa uma conexão do servidor e deixa o cache mais difícil. Um proxy no meio do caminho pode segurar os pedaços até o fim e anular o ganho. E robôs de busca antigos leem só o primeiro pedaço, então o conteúdo importante não deve ficar apenas na parte transmitida.</p>
+
+<p>Há também o pulo de layout. Quando o relatório chega, a lista aparece e empurra o que estava abaixo. Se a página tem botão no rodapé, ele muda de lugar na frente do leitor. A solução é reservar espaço: um <code>min-height</code> no contêiner do bloco, ou um esqueleto com a mesma altura do conteúdo final.</p>
+
+<div class="warning">
+<strong>Não transmita segredo</strong>
+<p>O que chega no segundo pedaço viaja como texto no HTML, igual ao primeiro. Streaming muda o momento, não a visibilidade. Se o dado não pode ser lido pelo visitante, ele não pode ser mandado — nem depois, nem escondido.</p>
+</div>
+
+<div class="tip">
+<strong>Comece pelo <code>await</code></strong>
+<p>Se a página ainda não tem problema de lentidão, escreva o <code>load</code> com <code>await</code> e pronto. Streaming é remédio para uma dor específica: uma parte lenta que não precisa segurar o resto. Adicionar promessa sem necessidade troca simplicidade por complexidade e não melhora nada.</p>
+</div>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — bloco <code>{#await}</code> sem fechar</strong>
+<p>Todo bloco aberto precisa fechar. O compilador aponta o fim do arquivo, não o começo do bloco, porque é ali que ele desiste de esperar.</p>
+<pre class="file" data-file="src/routes/cozinha/+page.svelte">&lt;script&gt;
+	let { data } = $props();
+&lt;/script&gt;
+
+{#await data.relatorio}
+	&lt;p&gt;calculando…&lt;/p&gt;
+{:then tempos}
+	&lt;p&gt;{tempos.length} pedidos&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>"Block was left open" quer dizer "bloco ficou aberto". A linha citada é a última do arquivo. Conte os pares: cada <code>{#await}</code> pede um <code>{/await}</code>, e o mesmo vale para <code>{#if}</code>, <code>{#each}</code> e <code>{#snippet}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — promessa rejeitada sem tratamento</strong>
+<p>O servidor responde, o aviso fica na tela e o erro só aparece no terminal. Quem olha a página não vê nada de errado — só um "calculando…" eterno.</p>
+<pre class="file" data-file="src/routes/cozinha/+page.server.js">export function load() {
+	const quebrada = Promise.reject(new Error('o forno desligou'));
+	return { fila: [], relatorio: quebrada };
+}</pre>
+<pre class="term">Error: o forno desligou
+    at load (src/routes/cozinha/+page.server.js:2:34)
+200 GET /cozinha</pre>
+<p>O <code>200</code> no fim é o detalhe cruel: o status é de sucesso porque o primeiro pedaço saiu bem. A correção é no componente, com <code>{:catch}</code>, e no servidor, evitando promessa que nasce rejeitada — prefira criar a promessa que pode falhar dentro de um <code>try</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>await</code> no lugar errado</strong>
+<p>Com <code>await</code> antes da função assíncrona interna, o <code>load</code> espera o relatório inteiro. A página funciona, o resultado é o mesmo — e o streaming desaparece sem nenhum aviso.</p>
+<pre class="file" data-file="src/routes/cozinha/+page.server.js">const relatorio = await (async () =&gt; {
+	await espera(1200);
+	return fila.map((p) =&gt; ({ ...p, espera: p.pronto ? '0 min' : '12 min' }));
+})();</pre>
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w 'primeiro byte %{time_starttransfer}s · total %{time_total}s\n' localhost:5173/cozinha
+primeiro byte 1.231678s · total 1.231746s</pre>
+<p>Os dois números praticamente iguais são a assinatura do "esperei tudo". Não há mensagem de erro porque não há erro: só uma otimização que deixou de acontecer. Meça antes e depois quando mexer nesse trecho.</p>
+</div>
+
+<hr>
+
+<h2>9. A navegação interna também espera</h2>
+
+<p>Quando o visitante chega pela primeira vez, o servidor manda o HTML em pedaços, como você viu. Quando ele clica num link interno e vai de <code>/painel</code> para <code>/cozinha</code>, não há HTML novo: o SvelteKit pede só o <code>data</code> da nova rota, em JSON, e o componente já está no navegador. O campo <code>relatorio</code> chega como o mesmo tipo de promessa, e o mesmo <code>{#await}</code> trata os dois casos.</p>
+
+<p>Isso é conveniente e explica por que o componente não precisa saber de onde veio. O bloco <code>{#await}</code> funciona igual nos dois caminhos: mostra o aviso, recebe o valor, desenha. Quem muda é o transporte — HTML em pedaços na primeira visita, JSON na navegação — e não o seu código.</p>
+
+<p>Se a promessa demora e o visitante clica em outro link antes dela resolver, o SvelteKit cancela a navegação e descarta a resposta antiga. Você não precisa de <code>AbortController</code> para isso: o trabalho de cancelar é dele. Vale saber porque é comum ver o aviso "calculando…" sumir sem nunca ter mostrado o resultado — foi uma navegação abandonada.</p>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>{#await p}</code></td><td>bloco com conteúdo de espera</td></tr>
+<tr><td><code>{:then valor}</code></td><td>o que aparece quando a promessa resolve</td></tr>
+<tr><td><code>{:catch erro}</code></td><td>o que aparece quando ela rejeita</td></tr>
+<tr><td><code>{#await p then v}</code></td><td>forma curta, sem bloco de espera</td></tr>
+<tr><td><code>{/await}</code></td><td>fecha o bloco; obrigatório</td></tr>
+<tr><td><code>return { lento: promessa }</code></td><td>no <code>+page.server.js</code>, transmite o valor depois</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Medida do <code>curl</code></th><th>O que significa</th></tr>
+<tr><td><code>%{time_starttransfer}</code></td><td>quando o primeiro byte chegou</td></tr>
+<tr><td><code>%{time_total}</code></td><td>quando a resposta terminou</td></tr>
+<tr><td>primeiro ≪ total</td><td>houve transmissão em partes</td></tr>
+<tr><td>primeiro ≈ total</td><td>não houve: tudo veio de uma vez</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Para o SvelteKit transmitir um valor depois, o <code>load</code> deve…</p>
+<label><input type="radio" name="q1"> usar <code>await</code> em tudo</label>
+<label><input type="radio" name="q1"> devolver <code>JSON.stringify</code> do valor</label>
+<label><input type="radio" name="q1"> devolver a promessa no objeto, sem <code>await</code></label>
+<label><input type="radio" name="q1"> chamar <code>stream()</code> de <code>@sveltejs/kit</code></label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que <code>{:catch erro}</code> faz?</p>
+<label><input type="radio" name="q1"> tenta a promessa de novo</label>
+<label><input type="radio" name="q1"> mostra um conteúdo quando a promessa rejeita</label>
+<label><input type="radio" name="q1"> esconde o erro do terminal</label>
+<label><input type="radio" name="q1"> cancela a promessa</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que significa primeiro byte ≪ total no <code>curl</code>?</p>
+<label><input type="radio" name="q1"> a resposta foi enviada em partes, com o resto chegando depois</label>
+<label><input type="radio" name="q1"> o servidor está com problema de memória</label>
+<label><input type="radio" name="q1"> o navegador guardou a página em cache</label>
+<label><input type="radio" name="q1"> a promessa foi rejeitada</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">export function load() {<br>&nbsp;&nbsp;const relatorio = (async () =&gt; { /&#42; … &#42;/ })();<br>&nbsp;&nbsp;return { fila: [], <input data-answer="relatorio"> };<br>}<br><br>&lt;!-- no componente --&gt;<br>{#await data.relatorio}<br>&nbsp;&nbsp;&lt;p&gt;calculando…&lt;/p&gt;<br>{:<input data-answer="then"> nomes}<br>&nbsp;&nbsp;&lt;p&gt;{nomes.length} pedidos&lt;/p&gt;<br>{/await}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Promessa é um valor que ainda não existe; o <code>load</code> pode devolvê-la sem esperar.</li>
+  <li>Devolver a promessa no objeto faz o SvelteKit enviar o HTML em partes: isso é streaming.</li>
+  <li><code>{#await}</code> mostra o conteúdo de espera; <code>{:then}</code> e <code>{:catch}</code> completam o bloco.</li>
+  <li>Sem <code>{:catch}</code>, uma promessa rejeitada deixa a tela parada no aviso.</li>
+  <li>O streaming só acontece no <code>+page.server.js</code>; no <code>+page.js</code> a promessa resolve no navegador.</li>
+  <li><code>await</code> antes da função assíncrona interna mata o streaming sem gerar erro.</li>
+  <li><code>curl</code> com <code>%{time_starttransfer}</code> e <code>%{time_total}</code> mostra se houve transmissão em partes.</li>
+  <li>O valor transmitido chega num <code>&lt;script&gt;</code> no fim do HTML, fechando o marcador deixado no meio.</li>
+  <li>O custo: resposta aberta por mais tempo, cache mais difícil e layout que pula se o espaço não for reservado.</li>
+  <li>Streaming não esconde dado: o que chega depois também é visível no navegador.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
