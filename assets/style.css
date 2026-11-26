@@ -250,7 +250,7 @@ kbd {
   padding-right: 80px;
 }
 .file { padding-top: 34px; }
-.file::before {
+.file[data-file]::before {
   content: attr(data-file);
   position: absolute; top: 0; left: 0;
   padding: 3px 12px;
