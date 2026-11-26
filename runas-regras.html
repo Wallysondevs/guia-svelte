@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>As Regras das Runas — onde, como e por quê | Guia Svelte</title>
+<meta name="description" content="As cinco runas do Svelte 5 e as regras que valem para todas: onde podem existir, por que precisam de parênteses, o cifrão reservado e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">As Regras das Runas</span></h1>
+
+<p class="intro">A Ana já conhece as runas uma por uma: guardar, calcular, reagir, receber. Agora ela quer saber <em>por que</em> às vezes o código é recusado antes de rodar. Runas não são funções que vêm de uma biblioteca: são palavras que o compilador reconhece e troca por código. Por isso elas têm regras de lugar, de forma e de nome — e conhecer essas regras economiza horas de mensagem vermelha.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que uma <strong>runa</strong> é para o compilador.</li>
+  <li>As cinco runas do Svelte 5 e o papel de cada uma.</li>
+  <li>Em quais arquivos as runas existem: <code>.svelte</code> e <code>.svelte.js</code>.</li>
+  <li>Por que toda runa é uma chamada com parênteses.</li>
+  <li>Por que a runa precisa ser o valor inicial de uma declaração.</li>
+  <li>Que o cifrão é reservado para nomes de variável.</li>
+  <li>Como um componente entra no <strong>modo runas</strong> e o que muda nele.</li>
+  <li>Por que <code>export let</code> e <code>$:</code> não convivem com runas.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como o projeto da Ana compila um módulo <code>.svelte.js</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: runas são palavras do compilador</h2>
+
+<p>Quando você escreve <code>$state(0)</code>, o navegador nunca vê essa palavra. Antes de a página abrir, o compilador do Svelte leu o seu arquivo e trocou a runa por código de verdade. O mesmo vale para <code>$derived</code>, <code>$effect</code> e <code>$props</code>: são marcas que o compilador entende e traduz.</p>
+
+<p>É por isso que elas não se comportam como funções comuns. Uma função comum pode ser chamada em qualquer lugar, guardada numa variável, passada como argumento, importada de um arquivo. Uma runa não: ela depende de saber <em>onde</em> está para gerar o código certo. <code>$state(0)</code> numa declaração vira um sinal reativo; <code>$state(0)</code> solto não tem onde se apoiar.</p>
+
+<p>Comparando com a padaria: as runas são como as etiquetas oficiais da vigilância sanitária. Elas só valem na embalagem certa, no lugar certo, com o número certo. Colar a etiqueta num guardanapo não faz o guardanapo virar produto registrado.</p>
+
+<p>Tem uma vantagem nisso. Como o compilador vê a runa antes de o código rodar, ele pode gerar código menor e mais direto do que uma biblioteca conseguiria: ele sabe exatamente quem depende de quem. E tem uma desvantagem: fora das posições reconhecidas, a runa não é traduzida — e aí você recebe uma mensagem de erro em vez de um comportamento estranho. Mensagem é melhor. O difícil é entender o que ela quer dizer.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função comum</th><th>Runa</th></tr>
+<tr><td>pode ser chamada em qualquer lugar</td><td>só em posições que o compilador reconhece</td></tr>
+<tr><td>é importada de um módulo</td><td>não se importa: já existe em qualquer componente</td></tr>
+<tr><td>pode ser guardada numa variável</td><td>usa-se na declaração, não como valor solto</td></tr>
+<tr><td>roda no navegador como está escrita</td><td>desaparece: o compilador troca por outro código</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. As cinco runas do Svelte 5</h2>
+
+<p>O guia já usou quatro. A quinta aparece quando um componente precisa aceitar que o pai mude o valor de uma prop. Vale ter o mapa completo antes das regras:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Runa</th><th>Para que serve</th><th>Devolve</th></tr>
+<tr><td><code>$state(valor)</code></td><td>guarda um valor que avisa a tela</td><td>o valor, observável</td></tr>
+<tr><td><code>$derived(conta)</code></td><td>calcula a partir de outros valores</td><td>o resultado da conta</td></tr>
+<tr><td><code>$effect(função)</code></td><td>faz algo depois do desenho</td><td>nada (só a limpeza, opcional)</td></tr>
+<tr><td><code>$props()</code></td><td>recebe o que o pai mandou</td><td>um objeto com as props</td></tr>
+<tr><td><code>$bindable(valor)</code></td><td>marca uma prop que o filho pode escrever</td><td>o valor, com permissão de volta</td></tr>
+</table>
+</div>
+
+<p>Existem ainda os sufixos e auxiliares: <code>$state.raw</code>, <code>$state.snapshot</code>, <code>$derived.by</code>, <code>$effect.pre</code>, <code>$effect.root</code>, <code>$props.id</code>. Todos obedecem às mesmas regras de lugar — são variações da mesma palavra, não palavras novas.</p>
+
+<hr>
+
+<h2>3. Onde as runas existem</h2>
+
+<p>Runa só funciona em arquivo que o Svelte compila: <code>.svelte</code> (componente) e <code>.svelte.js</code> ou <code>.svelte.ts</code> (módulo de estado). Num arquivo <code>.js</code> comum, o compilador do Svelte nem passa — e a runa chega ao navegador como uma palavra desconhecida.</p>
+
+<p>O Svelte protege você desse caso com uma mensagem específica, que aparece no console do navegador quando um componente importa estado de um arquivo sem o sufixo:</p>
+
+<pre class="out">Svelte error: rune_outside_svelte
+The `$state` rune is only available inside `.svelte` and `.svelte.js/ts` files
+https://svelte.dev/e/rune_outside_svelte</pre>
+
+<p>"A runa <code>$state</code> só está disponível dentro de arquivos <code>.svelte</code> e <code>.svelte.js/ts</code>". O módulo que causou o erro era este:</p>
+
+<pre class="file" data-file="src/carrinho.js">export let paes = $state(0);
+
+export function somar() {
+  paes += 1;
+}</pre>
+
+<p>A correção é renomear o arquivo para <code>carrinho.svelte.js</code> — sem mudar uma linha do conteúdo. O sufixo não é enfeite: é o aviso ao Vite de que aquele módulo precisa passar pelo compilador do Svelte antes de ir para o navegador.</p>
+
+<p>Um módulo <code>.svelte.js</code> é útil quando várias telas compartilham o mesmo estado — a cesta da Ana vista pela tela de venda e pela tela de caixa, por exemplo. Ele exporta funções e valores, e cada componente que importa participa do mesmo estado.</p>
+
+<p>A forma do módulo é simples: as runas no nível de cima do arquivo, e funções exportadas para que os componentes leiam e mudem o estado. Nada de HTML, nada de <code>export default</code>: é um módulo de JavaScript, só que compilado pelo Svelte. O componente importa as funções e usa no HTML como qualquer outra função — a reatividade viaja junto.</p>
+
+<hr>
+
+<h2>4. Toda runa é uma chamada</h2>
+
+<p>A primeira regra de forma: runa tem parênteses. <code>$state</code> sozinho, <code>$derived</code> sozinho, <code>$effect</code> sozinho não são nada — o compilador recusa com a mesma mensagem para todos os casos:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $derived;
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 3, coluna 14): Cannot use rune without parentheses</pre>
+
+<p>"Não posso usar a runa sem parênteses". É uma mensagem fácil de resolver: coloque a conta dentro dos parênteses, <code>$derived(qtd * 0.9)</code>, ou o valor inicial, <code>$state(0)</code>.</p>
+
+<div class="trysvelte" data-goal="out:Total: 1.80">
+<p class="try-task"><strong>Missão:</strong> a runa está sem a conta dentro. Conserte para a tela mostrar <strong>Total: 1.80</strong> (dois pães a noventa centavos).</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $derived;
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $derived(qtd * 0.9);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que a solução também formata o número com <code>toFixed(2)</code>. A meta pede o texto <code>Total: 1.80</code>, e sem a formatação sairia <code>Total: 1.8</code> — a diferença entre "a conta está certa" e "a tela está certa".</p>
+
+<hr>
+
+<h2>5. A runa precisa de dono</h2>
+
+<p>A segunda regra de forma: a runa é o <strong>valor inicial de uma declaração</strong>. Ela precisa estar do lado direito de um <code>let</code>, de um <code>const</code> ou de um campo de classe. Sozinha, ela não tem onde guardar o resultado:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães: 0&lt;/p&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 2, coluna 2): `$state(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+
+<p>"<code>$state(...)</code> só pode ser usado como valor inicial de uma declaração de variável, campo de classe, ou primeira atribuição a um campo de classe no construtor". A mensagem é longa porque cobre os três lugares possíveis. Na prática: dê um nome ao estado.</p>
+
+<h3>A anatomia de uma chamada de runa</h3>
+
+<dl class="anatomy">
+  <dt>let</dt><dd>o <strong>dono</strong>. Pode ser <code>let</code>, <code>const</code> ou um campo de classe. Sem ele, a runa não tem onde guardar nada.</dd>
+  <dt>paes</dt><dd>o <strong>nome</strong> do estado. Escolha um nome que diga o que o valor significa; <code>x</code> não diz nada.</dd>
+  <dt>= $state(</dt><dd>a <strong>runa</strong> ocupando o valor inicial. É esta posição, do lado direito do sinal, que o compilador reconhece.</dd>
+  <dt>0</dt><dd>o <strong>argumento</strong>. Um só, sempre: o valor inicial, a conta, a função — depende da runa.</dd>
+  <dt>)</dt><dd>o <strong>fechamento</strong>. Faltando, o erro é de sintaxe e nem chega a falar de runa.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="out:Pães: 0">
+<p class="try-task"><strong>Missão:</strong> o estado foi criado sem nome e o componente nem compila. Dê um nome a ele e mostre o valor no parágrafo, mantendo o texto <strong>Pães: 0</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães: 0&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {paes}&lt;/p&gt;</pre>
+</div>
+
+<p>Esse erro é o mais comum de todos, porque <code>$state(0)</code> parece uma chamada que "cria" o estado, como se o compilador guardasse o valor em algum lugar secreto. Não existe lugar secreto: o estado mora na variável que você declara.</p>
+
+<hr>
+
+<h2>6. O cifrão é reservado</h2>
+
+<p>Terceira regra: você não pode inventar nomes que começam com <code>$</code>. O cifrão é do compilador — ele usa esse sinal para reconhecer runas e, no modo antigo, leituras de store. Tentar declarar uma variável com cifrão dá erro imediato:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let $paes = 1;
+&lt;/script&gt;
+
+&lt;p&gt;{$paes}&lt;/p&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 2, coluna 6): The $ prefix is reserved, and cannot be used for variables and imports</pre>
+
+<p>"O prefixo <code>$</code> é reservado e não pode ser usado para variáveis e importações". A correção é simples: tire o cifrão do nome. O valor não muda de comportamento; <code>paes</code> é uma variável comum, e se você quiser que ela avise a tela, embrulhe-a com <code>$state</code>.</p>
+
+<div class="trysvelte" data-goal="out:1">
+<p class="try-task"><strong>Missão:</strong> o nome da variável usa o cifrão reservado. Renomeie para que o componente compile e mostre <strong>1</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let $paes = 1;
+&lt;/script&gt;
+
+&lt;p&gt;{$paes}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let paes = 1;
+&lt;/script&gt;
+
+&lt;p&gt;{paes}&lt;/p&gt;</pre>
+</div>
+
+<p>Um detalhe que confunde: no modo antigo, <code>$nome</code> é uma forma legítima de ler uma store — o compilador transforma em assinatura. É justamente por isso que o prefixo é reservado: se você pudesse declarar <code>$nome</code>, o compilador não saberia distinguir a sua variável da leitura de store.</p>
+
+<hr>
+
+<h2>7. O que entra no modo runas</h2>
+
+<p>Um componente entra no <strong>modo runas</strong> na primeira runa que aparece. A partir daí, valem as regras novas — e as antigas param de funcionar. Não existe meio-termo: o arquivo é inteiro de um mundo ou do outro.</p>
+
+<p>É por isso que <code>export let</code> e <code>$:</code> dão erro num componente que já usa <code>$state</code>. Eles pertencem ao modo antigo, e o compilador prefere recusar a mistura a adivinhar a intenção:</p>
+
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+
+<p>"Não posso usar <code>export let</code> no modo runas — use <code>$props()</code> em vez disso". A mensagem entrega a solução. O mesmo acontece com a reatividade antiga:</p>
+
+<pre class="out">Erro de compilação (linha 3, coluna 2): `$:` is not allowed in runes mode, use `$derived` or `$effect` instead</pre>
+
+<p>"<code>$:</code> não é permitido no modo runas; use <code>$derived</code> ou <code>$effect</code>". Note que a mensagem te dá a escolha: se a linha calculava um valor, é <code>$derived</code>; se ela fazia algo, é <code>$effect</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Modo antigo</th><th>Modo runas</th></tr>
+<tr><td><code>export let nome</code></td><td><code>let { nome } = $props()</code></td></tr>
+<tr><td><code>let x = 0</code> (reativo por atribuição)</td><td><code>let x = $state(0)</code></td></tr>
+<tr><td><code>$: total = a * b</code></td><td><code>let total = $derived(a * b)</code></td></tr>
+<tr><td><code>$: { … }</code> para efeitos</td><td><code>$effect(() =&gt; { … })</code></td></tr>
+<tr><td><code>on:click={…}</code></td><td><code>onclick={…}</code></td></tr>
+</table>
+</div>
+
+<p>O modo antigo tem aula própria, com as regras dele e o motivo de ainda existir. O guia inteiro ensina o modo runas; quando você encontrar código antigo num projeto, a tabela acima é o mapa da tradução.</p>
+
+<p>Como saber em qual modo está um arquivo que você abriu? Procure uma runa. Se houver qualquer <code>$state</code>, <code>$derived</code>, <code>$effect</code> ou <code>$props</code> no script, o componente é do modo novo. Se não houver nenhuma, ele é do modo antigo — e é por isso que um componente simples com <code>let contador = 0</code> e um <code>onclick</code> ainda funciona hoje: ele nunca entrou no modo runas.</p>
+
+<hr>
+
+<h2>8. As regras que resolvem quase tudo</h2>
+
+<p>Se você guardar cinco frases, escapa da maioria das mensagens de erro deste guia:</p>
+
+<ol>
+  <li><strong>Runa é chamada.</strong> Sempre com parênteses: <code>$state(0)</code>, <code>$derived(conta)</code>, <code>$props()</code>.</li>
+  <li><strong>Runa tem dono.</strong> Sempre como valor inicial de <code>let</code>, <code>const</code> ou campo de classe.</li>
+  <li><strong>Runa mora no topo.</strong> No <code>&lt;script&gt;</code> do componente ou no nível de cima de um módulo <code>.svelte.js</code>; dentro de funções valem as exceções, e <code>$props</code> não tem exceção.</li>
+  <li><strong>Runa não se importa.</strong> Não existe <code>import { $state } from 'svelte'</code>; ela já está disponível em qualquer arquivo compilado.</li>
+  <li><strong>Runa e modo antigo não se misturam.</strong> Um componente é de um mundo só.</li>
+</ol>
+
+<p>A terceira regra merece um exemplo, porque é a que mais aparece em código copiado de outro lugar. <code>$props()</code> só pode ser chamado no topo do componente: dentro de um <code>if</code>, de uma função ou de um laço, o compilador recusa. O motivo é o mesmo de sempre — as props precisam existir antes de o corpo do componente rodar.</p>
+
+<p>Vale guardar também o que <strong>não</strong> é regra, para não inventar limitações. Não é proibido ter várias variáveis de estado no mesmo componente; não é proibido usar a mesma runa em componentes diferentes; não é proibido misturar estado, derivado e efeito no mesmo arquivo. As regras são sobre <em>onde</em> e <em>como</em> a runa aparece, não sobre quantas você usa.</p>
+
+<hr>
+
+<h2>9. Rodando no computador da Ana</h2>
+
+<p>O projeto da Ana agora tem um módulo de estado compartilhado. O servidor de desenvolvimento não reclama de nada, porque o arquivo tem o sufixo certo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 571 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Na tela, o número de pães sobe a cada clique, mesmo com o estado morando fora do componente. O componente importa funções, e cada função acessa o mesmo estado do módulo.</p>
+
+<p>O build mostra dois módulos a mais do que o projeto de um componente só — o módulo de estado e o código que o liga ao componente:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 113 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DDzxuA-W.js  38.03 kB │ gzip: 14.61 kB
+✓ built in 1.65s</pre>
+
+<p>Se você renomear <code>carrinho.svelte.js</code> para <code>carrinho.js</code> e rodar de novo, o build passa — e a página quebra no navegador com <code>rune_outside_svelte</code>. O erro não é de compilação: é de execução. Por isso o console do navegador é parte do trabalho.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>Três mensagens de compilação, cada uma de uma regra diferente. Repare que todas dizem o que fazer — nenhuma delas é um mistério.</p>
+
+<div class="cenario">
+<p><strong>1. <code>export let</code> no modo runas.</strong> O componente usa <code>$state</code> e tenta declarar prop do jeito antigo:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let nome = 'Ana';
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {paes} pães&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+<p>A correção é trocar a linha por <code>let { nome = 'Ana' } = $props()</code>. A mensagem é literal: "use <code>$props()</code> instead".</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. A reatividade antiga com runas.</strong> O <code>$:</code> do Svelte 4 não funciona no modo novo:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let a = $state(1);
+  $: b = a * 2;
+&lt;/script&gt;
+
+&lt;p&gt;{b}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 2): `$:` is not allowed in runes mode, use `$derived` or `$effect` instead</pre>
+<p>Aqui a linha calcula um valor, então o substituto é <code>let b = $derived(a * 2)</code>. Se a linha fizesse algo (um <code>console.log</code>, uma chamada), o substituto seria <code>$effect</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. <code>$props()</code> dentro de um <code>if</code>.</strong> A runa das props só existe no topo do componente:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  if (true) {
+    let { nome } = $props();
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Padaria&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 19): `$props()` can only be used at the top level of components as a variable declaration initializer</pre>
+<p>"<code>$props()</code> só pode ser usado no nível de cima dos componentes, como valor inicial de uma declaração de variável". Tire a linha de dentro do <code>if</code> e deixe no topo do script.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Regra</th><th>Certo</th><th>Errado</th></tr>
+<tr><td>chamar</td><td><code>$state(0)</code></td><td><code>$state</code></td></tr>
+<tr><td>ter dono</td><td><code>let x = $state(0)</code></td><td><code>$state(0);</code></td></tr>
+<tr><td>lugar</td><td>topo do <code>&lt;script&gt;</code></td><td>dentro de <code>if</code> ou função</td></tr>
+<tr><td>nome</td><td><code>paes</code></td><td><code>$paes</code></td></tr>
+<tr><td>origem</td><td>já disponível</td><td><code>import { $state } from 'svelte'</code></td></tr>
+<tr><td>arquivo</td><td><code>App.svelte</code>, <code>carrinho.svelte.js</code></td><td><code>carrinho.js</code></td></tr>
+<tr><td>modo</td><td>só runas</td><td>runas + <code>export let</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Regra quebrada</th></tr>
+<tr><td><code>Cannot use rune without parentheses</code></td><td>faltou chamar</td></tr>
+<tr><td><code>can only be used as a variable declaration initializer…</code></td><td>faltou dono</td></tr>
+<tr><td><code>can only be used at the top level…</code></td><td>lugar errado</td></tr>
+<tr><td><code>The $ prefix is reserved</code></td><td>nome proibido</td></tr>
+<tr><td><code>Cannot use `export let` in runes mode</code></td><td>mistura de modos</td></tr>
+<tr><td><code>`$:` is not allowed in runes mode</code></td><td>mistura de modos</td></tr>
+<tr><td><code>rune_outside_svelte</code></td><td>arquivo sem o sufixo <code>.svelte</code></td></tr>
+<tr><td><code>Cannot use `$props()` more than once</code></td><td>duas desmontagens de props</td></tr>
+</table>
+</div>
+
+<p>Nenhuma dessas mensagens é um castigo: são o compilador dizendo onde ele parou de entender. Ler a mensagem inteira — inclusive a linha e a coluna — resolve mais rápido do que procurar o erro a olho.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Em qual arquivo uma runa funciona?</p>
+<label><input type="radio" name="q1"> em qualquer arquivo <code>.js</code> importado pelo componente</label>
+<label><input type="radio" name="q1"> apenas em arquivos <code>.html</code></label>
+<label><input type="radio" name="q1"> em <code>.svelte</code> e <code>.svelte.js</code> (ou <code>.svelte.ts</code>)</label>
+<label><input type="radio" name="q1"> em qualquer arquivo, desde que importada de <code>svelte</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. Por que <code>$state(0);</code> sozinho dá erro?</p>
+<label><input type="radio" name="q1"> porque a runa precisa ser o valor inicial de uma declaração, com nome</label>
+<label><input type="radio" name="q1"> porque zero não é um valor válido para estado</label>
+<label><input type="radio" name="q1"> porque faltou importar <code>$state</code></label>
+<label><input type="radio" name="q1"> porque a runa só aceita texto</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. O que acontece num componente que usa <code>$state</code> e também <code>export let</code>?</p>
+<label><input type="radio" name="q1"> funciona: as duas formas convivem sem problema</label>
+<label><input type="radio" name="q1"> o compilador recusa: <code>export let</code> não existe no modo runas</label>
+<label><input type="radio" name="q1"> a prop vira estado automaticamente</label>
+<label><input type="radio" name="q1"> o componente passa a rodar no modo antigo</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let paes = <input data-answer="$state(0)|$state( 0 )">&nbsp;;<br>&lt;p&gt;Pães: {paes}&lt;/p&gt;<br><br>// a variável precisa avisar a tela quando o valor mudar</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Runa é uma palavra que o <strong>compilador</strong> reconhece e troca por código; não é função de biblioteca.</li>
+  <li>As cinco runas: <code>$state</code>, <code>$derived</code>, <code>$effect</code>, <code>$props</code> e <code>$bindable</code>.</li>
+  <li>Elas existem em <code>.svelte</code> e <code>.svelte.js/.ts</code>; em <code>.js</code> comum o erro é <code>rune_outside_svelte</code>, em tempo de execução.</li>
+  <li>Toda runa é chamada: sem parênteses, <code>Cannot use rune without parentheses</code>.</li>
+  <li>Toda runa tem dono: é o valor inicial de <code>let</code>, <code>const</code> ou campo de classe.</li>
+  <li>O cifrão é reservado: nomes começando com <code>$</code> são recusados.</li>
+  <li>Um componente entra no modo runas na primeira runa que usa, e não volta atrás.</li>
+  <li>No modo runas, <code>export let</code> e <code>$:</code> dão erro; os substitutos são <code>$props()</code>, <code>$derived</code> e <code>$effect</code>.</li>
+  <li><code>$props()</code> só pode ser chamado no topo do componente, e uma vez só.</li>
+  <li>Ler a mensagem inteira, com linha e coluna, é mais rápido do que procurar o erro a olho.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$state com Objetos e Listas — a cesta inteira | Guia Svelte</title>
+<meta name="description" content="Objetos e listas reativos no Svelte 5: $state profundo, push, índice, objetos aninhados, cópias que perdem a reatividade e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">$state com Objetos e Listas</span></h1>
+
+<p class="intro">A cesta da Ana não é um número: é uma coisa só, com pães, preço e a lista de itens dentro. Guardar cada pedaço numa variável separada vira um novelo — muda um, esquece o outro. Nesta aula, o objeto inteiro é o estado: um <code>$state</code> só, que avisa a tela quando qualquer pedaço lá dentro muda, inclusive os mais fundos.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como guardar um objeto inteiro em <code>$state</code>.</li>
+  <li>Por que mexer numa propriedade (<code>cesta.paes = 3</code>) já atualiza a tela.</li>
+  <li>Como listas reativas funcionam com <code>push</code>, <code>splice</code> e índice.</li>
+  <li>O que muda em objetos com dois ou três níveis.</li>
+  <li>As três armadilhas: desmontar, copiar e usar <code>$state.raw</code>.</li>
+  <li>Quando trocar o objeto inteiro com <code>{ ...cesta }</code> compensa.</li>
+  <li>Como tirar uma cópia segura com <code>$state.snapshot</code>.</li>
+  <li>O custo de vigiar objetos grandes.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como o projeto da Ana compila um componente com objeto reativo.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a cesta é uma coisa só</h2>
+
+<p>Na padaria, a cesta é um objeto físico: ela tem pães dentro, tem um preço por unidade e tem um lugar na prateleira. Se a Ana anotar "2 pães" num papel e "0,90" em outro, os dois papéis podem se perder ou discordar. Se ela anotar tudo na mesma etiqueta, a cesta e a sua descrição andam juntas.</p>
+
+<p>Em JavaScript, essa etiqueta com vários campos se chama <strong>objeto</strong>: um valor único que guarda outros valores, cada um com um nome. Uma <strong>lista</strong> (ou <em>array</em>) é a versão sem nome: os valores ficam numa fila, acessados por posição. E aqui está a boa notícia do Svelte 5: um <code>$state</code> com um objeto dentro vigia o objeto <em>por dentro</em>. Mover um pão de lugar já avisa a tela.</p>
+
+<p>Esse comportamento se chama <strong>reatividade profunda</strong>. É o que permite escrever <code>cesta.paes = 3</code> e ver o número mudar, em vez de reconstruir o objeto inteiro a cada mudança. O preço é um pouco de trabalho do compilador, que embrulha cada objeto e cada lista que entram no estado.</p>
+
+<p>Um motivo prático para guardar tudo junto: os valores de um objeto sempre combinam entre si. Se a Ana mudar a quantidade e esquecer de mudar o total guardado noutra variável, a tela mostra uma conta que não fecha. Com a cesta inteira num estado só, qualquer mudança passa pelo mesmo lugar, e a tela recalcula o que depende dela.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A cesta inteira</td><td>Um objeto: <code>$state({ paes: 2, preco: 0.9 })</code></td></tr>
+<tr><td>Quantos pães tem dentro</td><td>Uma propriedade: <code>cesta.paes</code></td></tr>
+<tr><td>Trocar um pão de lugar</td><td><code>cesta.paes = 3</code> — a tela acompanha</td></tr>
+<tr><td>Uma lista de compras</td><td><code>$state(['pão', 'café'])</code></td></tr>
+<tr><td>Uma etiqueta copiada à mão</td><td>Desmontar ou copiar: perde a ligação com o estado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. O primeiro objeto reativo</h2>
+
+<p>Um objeto literal se escreve entre chaves, com pares <code>nome: valor</code> separados por vírgula. Embrulhado em <code>$state</code>, ele vira estado reativo de ponta a ponta:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cesta = $state({ paes: 2, preco: 0.9 });
+&lt;/script&gt;
+
+&lt;p&gt;{cesta.paes} pães: R$ {(cesta.paes * cesta.preco).toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;2 pães: R$ 1.80&lt;/p&gt;</pre>
+
+<p>Duas leituras com ponto, uma conta e um texto. Quando <code>cesta.paes</code> mudar, o parágrafo inteiro é recalculado — não só a parte que mostra o número. Isso importa: a conta e o texto andam sempre juntos.</p>
+
+<h3>A anatomia do objeto reativo</h3>
+
+<dl class="anatomy">
+  <dt>{ paes: 2, preco: 0.9 }</dt><dd>o <strong>objeto</strong>: campos com nome, separados por vírgula. Objeto não é lista; a ordem dos campos não significa nada.</dd>
+  <dt>$state(…)</dt><dd>a <strong>runa</strong> embrulha o objeto inteiro, não cada campo.</dd>
+  <dt>cesta.paes</dt><dd>a <strong>leitura</strong> de um campo. O ponto é o "de" do português: <em>os pães da cesta</em>.</dd>
+  <dt>cesta.paes = 3</dt><dd>a <strong>escrita</strong> de um campo. O Svelte é avisado e redesenha o que usa aquele campo.</dd>
+  <dt>{ ...cesta }</dt><dd>a <strong>cópia</strong> do objeto com os campos espalhados. Objeto novo, mesmo conteúdo — e a ligação com o estado é refeita.</dd>
+</dl>
+
+<div class="tip">
+<strong>Uma runa para o objeto, não para os campos</strong>
+<p>Você já viu a mensagem de erro que aparece quando <code>$state</code> é usado num campo: <code>$state(...) can only be used as a variable declaration initializer…</code>. A regra é simples: a runa embrulha o valor inteiro. Os campos ficam reativos por consequência.</p>
+</div>
+
+<hr>
+
+<h2>3. Mexer por dentro</h2>
+
+<p>Com o objeto em <code>$state</code>, você muda um campo e pronto. Não é preciso criar um objeto novo nem chamar nada:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cesta = $state({ paes: 2, preco: 0.9 });
+&lt;/script&gt;
+
+&lt;p&gt;{cesta.paes} pães: R$ {(cesta.paes * cesta.preco).toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; cesta.paes++}&gt;mais um pão&lt;/button&gt;</pre>
+
+<p>O botão não mexe no parágrafo. Ele mexe no campo, e o Svelte faz a ponte. No texto gerado, o parágrafo continua o mesmo:</p>
+
+<pre class="out">&lt;p&gt;2 pães: R$ 1.80&lt;/p&gt; &lt;button&gt;mais um pão&lt;/button&gt;</pre>
+
+<p>O que muda está no JavaScript compilado: cada campo lido no HTML vira uma dependência daquele pedaço da tela. Quando o campo muda, só aquele pedaço é atualizado. Num objeto com vinte campos e uma lista embaixo, isso é a diferença entre redesenhar tudo e redesenhar o que mudou.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operação</th><th>Como se escreve</th><th>Funciona com <code>$state</code>?</th></tr>
+<tr><td>trocar um campo</td><td><code>cesta.paes = 3</code></td><td>sim</td></tr>
+<tr><td>somar a um campo</td><td><code>cesta.paes++</code></td><td>sim</td></tr>
+<tr><td>adicionar um campo</td><td><code>cesta.desconto = 10</code></td><td>sim</td></tr>
+<tr><td>apagar um campo</td><td><code>delete cesta.desconto</code></td><td>sim</td></tr>
+<tr><td>trocar o objeto inteiro</td><td><code>cesta = { paes: 0 }</code></td><td>sim</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. Listas reativas</h2>
+
+<p>Uma lista é um objeto com posições numeradas. O <code>$state</code> vigia a lista do mesmo jeito que vigia um objeto: qualquer método que mude o conteúdo avisa a tela.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'café']);
+&lt;/script&gt;
+
+&lt;p&gt;Itens: {itens.join(', ')}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Itens: pão, café&lt;/p&gt;</pre>
+
+<p><code>join(', ')</code> transforma a lista num texto com vírgulas. É só apresentação: a lista continua sendo lista. Para adicionar um item, <code>itens.push('leite')</code>; para tirar o último, <code>itens.pop()</code>; para mudar uma posição, <code>itens[0] = 'pão de queijo'</code>.</p>
+
+<p>O detalhe que surpreende quem vem do Svelte antigo: no Svelte 4, <code>push</code> não atualizava a tela; era preciso reatribuir (<code>itens = [...itens, 'leite']</code>). No Svelte 5, com <code>$state</code>, o <code>push</code> funciona. Os dois jeitos continuam válidos; o importante é que, com <code>$state</code>, você não é obrigado a reconstruir a lista.</p>
+
+<p>Para mostrar a lista na tela, o caminho natural é o bloco <code>{#each}</code>, que percorre os itens e repete um pedaço de HTML para cada um. Com <code>$state</code>, a lista que o <code>{#each}</code> percorre também se atualiza sozinha quando um item entra ou sai. Essa combinação — lista reativa mais repetição — é o que faz uma lista de compras de verdade funcionar; o bloco tem aula própria nesta trilha.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Itens: 2">
+<p class="try-task"><strong>Missão:</strong> o botão empurra um item para a lista, mas a tela fica em 1. Faça a contagem subir para <strong>2</strong> sem mexer no botão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = ['pão'];
+&lt;/script&gt;
+
+&lt;p&gt;Itens: {itens.length}&lt;/p&gt;
+&lt;button onclick={() =&gt; itens.push('café')}&gt;mais um&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['pão']);
+&lt;/script&gt;
+
+&lt;p&gt;Itens: {itens.length}&lt;/p&gt;
+&lt;button onclick={() =&gt; itens.push('café')}&gt;mais um&lt;/button&gt;</pre>
+</div>
+
+<p>A lista sem runa é uma lista comum: o <code>push</code> acontece de verdade, mas ninguém avisa a tela. Esse é o mesmo papel contra lousa da aula de <code>$state</code>, agora com vários itens dentro.</p>
+
+<hr>
+
+<h2>5. Objetos dentro de objetos</h2>
+
+<p>A profundidade não é um problema. O <code>$state</code> embrulha o objeto inteiro, e cada objeto ou lista encontrado no caminho é embrulhado na hora em que é lido. Na prática, você mexe no caminho completo e a tela acompanha:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let loja = $state({ cesta: { paes: 2 } });
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {loja.cesta.paes}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pães: 2&lt;/p&gt;</pre>
+
+<p><code>loja.cesta.paes</code> é o caminho: da loja, para a cesta, até o número de pães. Três níveis, um <code>$state</code>. Se a Ana precisar de quatro, funciona igual — e se algum nível faltar, o erro aparece na hora de desenhar, como você vai ver nos cenários.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Pães: 3">
+<p class="try-task"><strong>Missão:</strong> a loja foi declarada com <code>$state.raw</code> e o clique não muda nada. Faça a tela ir para <strong>Pães: 3</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let loja = $state.raw({ cesta: { paes: 2 } });
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {loja.cesta.paes}&lt;/p&gt;
+&lt;button onclick={() =&gt; loja.cesta.paes++}&gt;mais um&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let loja = $state({ cesta: { paes: 2 } });
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {loja.cesta.paes}&lt;/p&gt;
+&lt;button onclick={() =&gt; loja.cesta.paes++}&gt;mais um&lt;/button&gt;</pre>
+</div>
+
+<p>A diferença entre as duas versões do exercício está numa palavra: <code>.raw</code>. No <code>raw</code>, o Svelte não embrulha o conteúdo; o objeto é guardado cru e só a troca do valor inteiro avisa a tela. Para quem precisa vigiar o que está dentro, é o <code>$state</code> comum.</p>
+
+<hr>
+
+<h2>6. As três cópias que perdem a reatividade</h2>
+
+<p>Quase todo problema de "a tela não atualiza" em objeto vem de uma cópia feita no lugar errado. As três mais comuns:</p>
+
+<p><strong>1. Desmontar o objeto numa variável.</strong> <code>let { paes } = cesta</code> copia o valor do campo para uma variável nova. A variável tem o número <code>2</code>, e esse número não acompanha mais o objeto. Para continuar ligado, leia o caminho no HTML: <code>{cesta.paes}</code>.</p>
+
+<p><strong>2. Copiar o objeto com <code>let apelido = cesta</code>.</strong> Aqui não há cópia — há <em>dois nomes para o mesmo objeto</em>. Mudar <code>cesta.paes</code> também muda <code>apelido.paes</code>, porque são a mesma coisa. O perigo é o oposto: você acha que está mexendo numa cópia e está mexendo no original.</p>
+
+<pre class="out">&lt;p&gt;Original: 3 · Apelido: 3&lt;/p&gt;</pre>
+
+<p><strong>3. Usar o objeto em <code>$state.raw</code>.</strong> Como você viu, o <code>raw</code> não vigia o conteúdo. Ele é para listas grandes que são trocadas inteiras, não para o caderno que muda item por item.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Pães: 3">
+<p class="try-task"><strong>Missão:</strong> o valor foi copiado para <code>paes</code> e a tela ficou congelada. Mostre o valor vivo da cesta depois do clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cesta = $state({ paes: 2 });
+  let { paes } = cesta;
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {paes}&lt;/p&gt;
+&lt;button onclick={() =&gt; cesta.paes++}&gt;mais um&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cesta = $state({ paes: 2 });
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {cesta.paes}&lt;/p&gt;
+&lt;button onclick={() =&gt; cesta.paes++}&gt;mais um&lt;/button&gt;</pre>
+</div>
+
+<p>A solução apaga a linha da desmontagem. Quando o HTML lê <code>cesta.paes</code>, o Svelte registra aquela leitura como dependência — e o clique avisa exatamente esse pedaço da tela.</p>
+
+<hr>
+
+<h2>7. Trocar o objeto inteiro com <code>{ ...cesta }</code></h2>
+
+<p>Existe um segundo jeito de mudar um objeto: construir um novo, com os campos antigos espalhados e um deles trocado. Os três pontinhos copiam os campos para o objeto novo.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cesta = $state({ paes: 2, preco: 0.9 });
+
+  function somar() {
+    cesta = { ...cesta, paes: cesta.paes + 1 };
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {cesta.paes}&lt;/p&gt;
+&lt;button onclick={somar}&gt;mais um&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pães: 2&lt;/p&gt; &lt;button&gt;mais um&lt;/button&gt;</pre>
+
+<p>Funciona e tem um uso legítimo: quando você quer que o objeto antigo continue intacto em outro lugar (um histórico de estados, um desfazer). O custo é criar um objeto novo a cada mudança e jogar fora o antigo — em listas grandes, isso pesa.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Jeito</th><th>Vantagem</th><th>Custo</th></tr>
+<tr><td><code>cesta.paes++</code></td><td>mínimo de trabalho; só o campo muda</td><td>o objeto antigo é mutado — quem guardou referência vê a mudança</td></tr>
+<tr><td><code>cesta = { ...cesta, paes: 3 }</code></td><td>objeto novo; o antigo fica intacto</td><td>copia todos os campos a cada mudança</td></tr>
+<tr><td><code>cesta = structuredClone(cesta)</code></td><td>cópia profunda, sem compartilhar filhos</td><td>caro; e o Svelte não rastreia o clone até você reatribuir</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>8. Tirar uma foto: <code>$state.snapshot</code></h2>
+
+<p>Quando o objeto precisa sair do componente — para uma API, para o <code>localStorage</code>, para uma biblioteca que não conhece o Svelte —, o embrulho reativo atrapalha. A função <code>$state.snapshot</code> devolve uma cópia comum, sem embrulho:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cesta = $state({ paes: 2, preco: 0.9 });
+  const copia = $state.snapshot(cesta);
+&lt;/script&gt;
+
+&lt;p&gt;{copia.paes} pães&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;2 pães&lt;/p&gt;</pre>
+
+<p>A foto é do momento: se a cesta mudar depois, a cópia não muda. É o comportamento que você quer ao enviar dados para fora — o que vai junto é o valor, não a ligação. Para o HTML, continue lendo o estado vivo.</p>
+
+<p>O caso clássico é o botão de finalizar pedido: você junta os itens da cesta num objeto comum, envia para o servidor e continua mexendo na cesta na tela sem que o pedido enviado mude junto. Sem a foto, o envio carregaria o embrulho reativo — e o servidor receberia um objeto cheio de detalhes internos do Svelte, que não servem para nada do outro lado.</p>
+
+<hr>
+
+<h2>9. O custo de vigiar objetos</h2>
+
+<p>Reatividade profunda tem preço, e vale saber onde ele aparece. O Svelte embrulha cada objeto e cada lista na primeira leitura, e mantém um registro de quem depende de quê. Num objeto pequeno, isso é invisível. Numa lista de dez mil itens que muda inteira a cada segundo, o registro vira trabalho.</p>
+
+<p>Duas saídas para esse caso. A primeira é <code>$state.raw</code>, que não embrulha nada: você ganha velocidade e perde a atualização automática por dentro, trocando o valor inteiro quando precisa. A segunda é não guardar a lista enorme como estado: mantenha a lista numa variável comum e guarde no estado apenas o que a tela mostra (a página atual, o filtro, o total).</p>
+
+<p>Para o caderno da Ana — algumas dezenas de itens, mudanças de um por vez — o <code>$state</code> comum é a escolha certa. Otimizar antes de medir costuma trocar um problema que existe por outro que não existe.</p>
+
+<hr>
+
+<h2>10. Rodando no computador da Ana</h2>
+
+<p>O servidor de desenvolvimento mostra a cesta na tela e atualiza a cada clique:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 571 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Na tela aparecem "2 pães" e o botão. Cada clique reconstrói o objeto com <code>{ ...cesta, paes: cesta.paes + 1 }</code> e o número sobe. Se você abrir o painel do navegador e inspecionar o elemento, vai ver o texto mudando sem recarregar a página.</p>
+
+<p>O build é o de sempre:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BvuCvLoU.js  36.21 kB │ gzip: 13.99 kB
+✓ built in 1.31s</pre>
+
+<p>O código que faz o embrulho dos objetos — chamado pelo Svelte de <em>proxy</em> — vai junto no pacote. É por isso que o mesmo componente pesa algumas dezenas de kilobytes: o motor da reatividade viaja com a aplicação.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Dois erros de compilação e um de renderização, todos colhidos do compilador de verdade.</p>
+
+<div class="cenario">
+<p><strong>1. <code>$state</code> dentro do objeto.</strong> A runa embrulha o valor inteiro; colocar outra dentro de um campo não é permitido:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cesta = $state({ itens: $state(['pão']) });
+&lt;/script&gt;
+
+&lt;p&gt;{cesta.itens.length}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 30): `$state(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+<p>A correção é tirar a runa de dentro: <code>let cesta = $state({ itens: ['pão'] })</code>. O conteúdo já é reativo por estar dentro do objeto embrulhado.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. <code>$state</code> dentro da lista.</strong> O mesmo vale para listas — a runa não é um enfeite por item:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let lista = [$state(1), 2];
+&lt;/script&gt;
+
+&lt;p&gt;{lista[0]}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 15): `$state(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+<p>Escreva <code>let lista = $state([1, 2])</code>. Um embrulho para a lista inteira resolve o problema de todos os itens.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. O caminho que não existe.</strong> Este compila e quebra ao desenhar, porque <code>loja.cesta</code> é <code>undefined</code>:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let loja = $state({});
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {loja.cesta.paes}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'paes')</pre>
+<p>"Não consigo ler propriedades de algo indefinido (lendo <code>paes</code>)". O caminho para no meio: não há <code>cesta</code> dentro de <code>loja</code>. A correção é começar com a estrutura completa (<code>{ cesta: { paes: 0 } }</code>) ou usar um valor de reserva antes de acessar.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Quero…</th><th>Escrevo…</th><th>Funciona?</th></tr>
+<tr><td>mudar um campo</td><td><code>cesta.paes = 3</code></td><td>sim, com <code>$state</code></td></tr>
+<tr><td>mudar um campo fundo</td><td><code>loja.cesta.paes = 3</code></td><td>sim</td></tr>
+<tr><td>adicionar item</td><td><code>itens.push('leite')</code></td><td>sim</td></tr>
+<tr><td>trocar item por posição</td><td><code>itens[0] = 'pão de queijo'</code></td><td>sim</td></tr>
+<tr><td>trocar o objeto</td><td><code>cesta = { ...cesta, paes: 3 }</code></td><td>sim</td></tr>
+<tr><td>copiar para fora</td><td><code>$state.snapshot(cesta)</code></td><td>sim, é uma foto</td></tr>
+<tr><td>desmontar num nome só</td><td><code>let { paes } = cesta</code></td><td>não acompanha</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que significa</th></tr>
+<tr><td><code>can only be used as a variable declaration initializer…</code></td><td>a runa está num campo; embrulhe o valor inteiro</td></tr>
+<tr><td><code>Cannot read properties of undefined (reading 'x')</code></td><td>faltou um nível no caminho do objeto</td></tr>
+<tr><td><code>state_referenced_locally</code></td><td>o valor foi lido uma vez e copiado; leia no HTML</td></tr>
+<tr><td><code>state_unsafe_mutation</code></td><td>escrita de estado dentro de derivado ou do template</td></tr>
+</table>
+</div>
+
+<p>A ideia que amarra a aula: um <code>$state</code> é um embrulho em volta de um valor. Objetos e listas ficam reativos por dentro porque o embrulho se estende aos filhos na primeira leitura. Toda vez que a tela parar de acompanhar, desconfie de uma cópia no caminho — desmontagem, apelido ou <code>raw</code>.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual declaração deixa a lista reativa por dentro?</p>
+<label><input type="radio" name="q1"> <code>let itens = ['pão', 'café']</code></label>
+<label><input type="radio" name="q1"> <code>let itens = $state(['pão', 'café'])</code></label>
+<label><input type="radio" name="q1"> <code>let itens = [$state('pão'), $state('café')]</code></label>
+<label><input type="radio" name="q1"> <code>const itens = $state.raw(['pão', 'café'])</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que <code>let { paes } = cesta</code> para de acompanhar a cesta?</p>
+<label><input type="radio" name="q1"> porque <code>$state</code> não funciona com objetos</label>
+<label><input type="radio" name="q1"> porque a desmontagem apaga o campo do objeto</label>
+<label><input type="radio" name="q1"> porque a variável recebe uma cópia do valor, sem ligação com o objeto</label>
+<label><input type="radio" name="q1"> porque a tela só lê variáveis com cifrão</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>let apelido = cesta</code> faz com um objeto de estado?</p>
+<label><input type="radio" name="q1"> cria um segundo nome para o mesmo objeto: mudar um muda o outro</label>
+<label><input type="radio" name="q1"> cria uma cópia profunda, independente</label>
+<label><input type="radio" name="q1"> congela o objeto</label>
+<label><input type="radio" name="q1"> transforma o objeto numa lista</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let cesta = <input data-answer="$state({ paes: 2 })">;<br>&lt;p&gt;{cesta.paes} pães&lt;/p&gt;<br>&lt;button onclick={() =&gt; cesta.paes++}&gt;mais um&lt;/button&gt;<br><br>// o clique precisa atualizar a tela sem trocar o objeto</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um <code>$state</code> embrulha o valor inteiro: objeto ou lista ficam reativos por dentro.</li>
+  <li><code>cesta.paes = 3</code> e <code>cesta.paes++</code> atualizam a tela sem reconstruir o objeto.</li>
+  <li>Listas aceitam <code>push</code>, <code>pop</code>, <code>splice</code> e atribuição por índice com reatividade.</li>
+  <li>Caminhos fundos (<code>loja.cesta.paes</code>) funcionam igual; caminho faltando quebra na renderização.</li>
+  <li>Desmontar (<code>let { paes } = cesta</code>) copia o valor e perde a ligação.</li>
+  <li><code>let apelido = cesta</code> não copia: cria dois nomes para o mesmo objeto.</li>
+  <li><code>$state.raw</code> não vigia o conteúdo; é para valores grandes trocados inteiros.</li>
+  <li><code>{ ...cesta, paes: 3 }</code> troca o objeto inteiro, com o custo de copiar todos os campos.</li>
+  <li><code>$state.snapshot</code> tira uma cópia comum para enviar o dado para fora.</li>
+  <li>Listas reativas combinam com <code>{#each}</code>: a repetição acompanha as mudanças da lista.</li>
+  <li>A runa não entra em campo nem em item de lista: ela embrulha o valor inteiro.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$effect — o que fazer quando algo muda | Guia Svelte</title>
+<meta name="description" content="A runa $effect do Svelte 5: efeitos que rodam depois do desenho, limpeza com return, dependências, $effect.pre e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">$effect</span></h1>
+
+<p class="intro">A Ana quer um relógio na parede da padaria: a cada segundo, o número muda. Isso não é conta nem valor guardado — é uma <em>ação</em> que precisa acontecer quando a página já está desenhada. No Svelte, ações desse tipo moram numa runa chamada <code>$effect</code>. Ela é a peça que faz, enquanto <code>$state</code> guarda e <code>$derived</code> calcula.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um <strong>efeito</strong> e por que ele não roda no servidor.</li>
+  <li>Como escrever <code>$effect(() =&gt; { … })</code>.</li>
+  <li>Quando o efeito roda: depois do desenho, e de novo a cada dependência.</li>
+  <li>Como limpar o que o efeito criou, devolvendo uma função.</li>
+  <li>Por que o <code>return</code> de um efeito não devolve valor.</li>
+  <li>Como o Svelte descobre de quais valores o efeito depende.</li>
+  <li>A diferença entre <code>$effect</code> e <code>$effect.pre</code>.</li>
+  <li>Por que calcular dentro de um efeito é quase sempre um erro.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como o projeto da Ana compila um componente com relógio.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: guardar, calcular e fazer</h2>
+
+<p>Três verbos organizam um componente. <strong>Guardar</strong> é o que o estado faz: o número de pães, o preço, o nome do cliente. <strong>Calcular</strong> é o que o derivado faz: o total, o desconto, o troco. <strong>Fazer</strong> é tudo o que mexe no mundo fora do valor: ligar um relógio, escutar o teclado, avisar o título da aba, guardar no navegador.</p>
+
+<p>O terceiro verbo precisa de um lugar próprio porque tem regras próprias. Fazer algo durante o desenho da tela é arriscado; fazer algo toda vez que qualquer valor muda é caro; fazer algo e esquecer de desfazer é vazamento. O <code>$effect</code> existe para dar a essas ações um momento certo (depois do desenho) e um escopo certo (o componente que as criou).</p>
+
+<p>Na padaria, o relógio é o exemplo perfeito. Ele não é um dado da Ana, nem uma conta dos dados dela: é um aparelho que precisa ser ligado quando a parede está pronta e desligado quando a parede sai. É exatamente esse o par que o efeito oferece: a ação e a limpeza.</p>
+
+<p>Efeito é a runa mais cara das três, e por um motivo honesto: ele mexe no mundo. O mundo tem tempo, tem aparelhos, tem memória que não é devolvida sozinha. Cada execução precisa ser barata e cada recurso criado precisa de um caminho de volta. Quando o assunto pode ser resolvido com estado e derivado, resolva com eles — o efeito é para o que não tem outro lugar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O caderno de pedidos</td><td><code>$state</code>: guarda</td></tr>
+<tr><td>A conta do total</td><td><code>$derived</code>: calcula</td></tr>
+<tr><td>Ligar o relógio da parede</td><td><code>$effect</code>: faz, depois do desenho</td></tr>
+<tr><td>Desligar o relógio quando a parede sai</td><td>A função devolvida pelo efeito</td></tr>
+<tr><td>Conferir as horas a cada segundo</td><td>O efeito roda de novo quando uma dependência muda</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. O primeiro <code>$effect</code> da Ana</h2>
+
+<p>Um efeito é uma função que o Svelte chama por você. No exemplo abaixo, ele muda o título da aba do navegador sempre que o número de pães muda:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let paes = $state(0);
+
+  $effect(() =&gt; {
+    document.title = 'Pães: ' + paes;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {paes}&lt;/p&gt;
+&lt;button onclick={() =&gt; paes++}&gt;mais um&lt;/button&gt;</pre>
+
+<p>O HTML gerado não tem nenhuma marca do efeito:</p>
+
+<pre class="out">&lt;p&gt;Pães: 0&lt;/p&gt; &lt;button&gt;mais um&lt;/button&gt;</pre>
+
+<p>Isso é esperado e é uma das coisas mais importantes da aula: <strong>efeito não aparece no HTML</strong>. Ele não desenha nada; ele age no ambiente. Quem desenha continua sendo a marcação com as chaves. O título da aba, que é onde o efeito trabalha, vive fora do corpo da página e não faz parte do HTML gerado.</p>
+
+<h3>A anatomia do efeito</h3>
+
+<dl class="anatomy">
+  <dt>$effect(</dt><dd>a <strong>runa</strong>. Ela registra a função e diz quando chamá-la.</dd>
+  <dt>() =&gt; { … }</dt><dd>a <strong>ação</strong>. Não recebe parâmetros; o que ela precisa está no escopo do componente.</dd>
+  <dt>document.title = …</dt><dd>o <strong>mundo fora</strong>. Aqui, o título da aba. Poderia ser um <code>setInterval</code>, um <code>addEventListener</code>, uma biblioteca de gráficos.</dd>
+  <dt>paes</dt><dd>a <strong>dependência</strong>. O efeito lê <code>paes</code>, então o Svelte o reinscreve quando <code>paes</code> muda.</dd>
+  <dt>return () =&gt; { … }</dt><dd>a <strong>limpeza</strong>, opcional. Roda antes da próxima execução e quando o componente sai da tela.</dd>
+</dl>
+
+<div class="tip">
+<strong>Efeito é coisa de navegador</strong>
+<p>O Svelte renderiza componentes também no servidor, para entregar HTML pronto. Nesse caminho não existe aba, não existe <code>document</code>, não existe relógio — e os efeitos simplesmente não rodam. Por isso a saída acima mostra <code>Pães: 0</code> sem nenhum sinal do título. O efeito começa a viver quando a página chega ao navegador.</p>
+</div>
+
+<hr>
+
+<h2>3. Quando o efeito roda</h2>
+
+<p>A ordem é sempre esta: o Svelte desenha o HTML, o navegador mostra, e só então os efeitos rodam. Isso evita o efeito medir uma tela que ainda não existe. Depois da primeira execução, o efeito fica de pé esperando uma dependência mudar — e roda outra vez quando isso acontece.</p>
+
+<p>Há uma diferença visível entre o HTML do servidor e a tela do navegador. Veja o componente do relógio:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tiques = $state(0);
+  $effect(() =&gt; {
+    const id = setInterval(() =&gt; tiques++, 100);
+    return () =&gt; clearInterval(id);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Tiques: {tiques}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Tiques: 0&lt;/p&gt;</pre>
+
+<p>No HTML gerado, zero. No navegador, o número começa a subir sozinho algumas dezenas de milissegundos depois de a página aparecer, porque o <code>setInterval</code> só foi ligado quando o efeito rodou. Se você recarregar, o zero volta a aparecer por um instante: é o intervalo entre o desenho e a primeira batida do relógio.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Momento</th><th>O que já aconteceu</th></tr>
+<tr><td>Renderização (servidor ou navegador)</td><td>o HTML está pronto; nenhum efeito rodou</td></tr>
+<tr><td>Depois do desenho</td><td>primeira execução de cada <code>$effect</code></td></tr>
+<tr><td>Uma dependência muda</td><td>limpeza da execução anterior e nova execução</td></tr>
+<tr><td>Componente sai da tela</td><td>limpeza da última execução</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. O primeiro experimento: ligue o relógio</h2>
+
+<p>O componente abaixo mostra o texto "esperando" e nunca muda. Sua missão é usar um efeito com <code>setTimeout</code> para trocar o texto para "pronto" meio segundo depois de a página aparecer.</p>
+
+<div class="trysvelte" data-goal="outre:^esperando;;depois:600;;out:pronto">
+<p class="try-task"><strong>Missão:</strong> a tela deve começar em <strong>esperando</strong> e virar <strong>pronto</strong> depois de um tempo, sem clique nenhum.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pronto = $state(false);
+&lt;/script&gt;
+
+&lt;p&gt;{pronto ? 'pronto' : 'esperando'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pronto = $state(false);
+  $effect(() =&gt; {
+    const id = setTimeout(() =&gt; (pronto = true), 300);
+    return () =&gt; clearTimeout(id);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{pronto ? 'pronto' : 'esperando'}&lt;/p&gt;</pre>
+</div>
+
+<p>A meta confere o texto antes (<code>esperando</code>), espera 600 milissegundos e confere de novo (<code>pronto</code>). Sem o efeito, o texto nunca sai do primeiro estado. Note que a solução também devolve a limpeza: se o componente sair da tela antes dos 300 milissegundos, o <code>clearTimeout</code> cancela o relógio e nada tenta desenhar numa tela que não existe.</p>
+
+<hr>
+
+<h2>5. A limpeza: o que o efeito devolve</h2>
+
+<p>Todo efeito que cria algo precisa saber destruir o que criou. Um intervalo sem <code>clearInterval</code> continua rodando para sempre, consumindo bateria e memória. Um <code>addEventListener</code> sem <code>removeEventListener</code> segura o componente inteiro na memória. O Svelte resolve isso aceitando uma função de limpeza como retorno do efeito:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let segundos = $state(0);
+
+  $effect(() =&gt; {
+    const id = setInterval(() =&gt; segundos++, 1000);
+    return () =&gt; clearInterval(id);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Na tela há {segundos} segundos.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Na tela há 0 segundos.&lt;/p&gt;</pre>
+
+<p>A função devolvida não é chamada por você: o Svelte a chama na hora certa — antes da próxima execução do efeito e quando o componente é destruído. Isso mantém a regra simples: cada execução limpa a anterior, e nada fica acumulado.</p>
+
+<p>Pense num ouvinte de evento que filtra a lista de produtos conforme a Ana digita. O efeito lê o texto da busca, então roda a cada letra. Sem limpeza, cada letra deixaria um ouvinte antigo para trás; depois de vinte letras, vinte ouvintes responderiam à mesma tecla. Com a limpeza, o ouvinte da execução anterior sai antes de o novo entrar, e o componente tem sempre exatamente um.</p>
+
+<div class="trysvelte" data-goal="outre:^Tiques: 0;;depois:350;;outre:^Tiques: [1-9]">
+<p class="try-task"><strong>Missão:</strong> faça o contador de tiques andar sozinho. O número começa em <strong>0</strong> e precisa passar de zero em menos de meio segundo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let tiques = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Tiques: {tiques}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let tiques = $state(0);
+  $effect(() =&gt; {
+    const id = setInterval(() =&gt; tiques++, 100);
+    return () =&gt; clearInterval(id);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Tiques: {tiques}&lt;/p&gt;</pre>
+</div>
+
+<p>Um detalhe de quem escreve isso pela primeira vez: <code>() =&gt; clearInterval(id)</code> é uma função que ainda não rodou. Se você escrever <code>return clearInterval(id)</code>, o intervalo é cancelado imediatamente e o contador nunca sai do zero. A limpeza precisa ser <em>entregue</em> para o Svelte chamar depois.</p>
+
+<hr>
+
+<h2>6. As dependências do efeito</h2>
+
+<p>O Svelte descobre as dependências do efeito do mesmo jeito que faz com o derivado: executando a função e anotando cada valor reativo que ela lê. Isso tem uma consequência direta: <strong>o que o efeito não lê, não o faz rodar de novo</strong>.</p>
+
+<p>É por isso que, às vezes, um efeito parece "morto": ele mexe na tela uma vez e nunca mais. Quase sempre falta a leitura de alguma coisa dentro da função.</p>
+
+<div class="trysvelte" data-goal="outre:execuções: 1;;clique:button;;outre:execuções: 2;;clique:button;;outre:execuções: 3">
+<p class="try-task"><strong>Missão:</strong> o efeito roda uma vez e para. Faça <code>execuções</code> chegar a 2 no primeiro clique e a 3 no segundo, sem escrever o número à mão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(0);
+  let execucoes = $state(0);
+  let conta = 0;
+
+  $effect(() =&gt; {
+    conta = conta + 1;
+    execucoes = conta;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {qtd} · execuções: {execucoes}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(0);
+  let execucoes = $state(0);
+  let conta = 0;
+
+  $effect(() =&gt; {
+    qtd;
+    conta = conta + 1;
+    execucoes = conta;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {qtd} · execuções: {execucoes}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um&lt;/button&gt;</pre>
+</div>
+
+<p>A linha <code>qtd;</code> sozinha parece inútil, e para o JavaScript é: ela só lê o valor. Para o Svelte, é a diferença entre um efeito que observa e um efeito que roda uma vez. Em código de produção, prefira ler o valor fazendo algo com ele — <code>document.title = 'Cliques: ' + qtd</code> — em vez de uma linha solta só para marcar presença.</p>
+
+<p>Atenção ao contador do exemplo: <code>conta</code> é uma variável comum, sem runa. Se ela fosse <code>$state</code>, o incremento <code>conta = conta + 1</code> leria <code>conta</code> dentro do efeito, criando uma dependência de si mesma. O resultado seria um laço infinito, com a mensagem que aparece na seção 8.</p>
+
+<p>Quando você precisa ler um valor <em>sem</em> que ele vire dependência, existe <code>untrack</code>: uma função que recebe uma conta e executa sem registrar leituras. É útil para ler um valor de configuração que nunca muda dentro do efeito, ou para consultar um estado antigo sem reagendar a execução. Use com parcimônia: cada <code>untrack</code> é uma dependência que você esconde de quem lê o código.</p>
+
+<hr>
+
+<h2>7. <code>$effect.pre</code> e as outras formas</h2>
+
+<p>O <code>$effect</code> tem irmãos para casos específicos. Nenhum é obrigatório no começo; existem para quando você precisa de controle fino.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando roda</th><th>Para que serve</th></tr>
+<tr><td><code>$effect(…)</code></td><td>depois do desenho</td><td>o caso normal: relógios, assinaturas, bibliotecas</td></tr>
+<tr><td><code>$effect.pre(…)</code></td><td>antes do desenho</td><td>medir algo antes de a tela mudar</td></tr>
+<tr><td><code>$effect.root(…)</code></td><td>cria um efeito fora da árvore</td><td>iniciar um serviço que vive por conta própria</td></tr>
+<tr><td><code>$effect.tracking()</code></td><td>dentro de um efeito</td><td>saber se você está num contexto reativo (<code>true</code>/<code>false</code>)</td></tr>
+<tr><td><code>$effect.pending()</code></td><td>durante <em>await</em></td><td>saber se há promessa pendente</td></tr>
+</table>
+</div>
+
+<p>O <code>pre</code> é o mais usado dos irmãos. Imagine medir a altura de um elemento antes de trocar o conteúdo: com <code>$effect</code>, a medição aconteceria depois da troca; com <code>$effect.pre</code>, antes. É uma diferença de milissegundos que decide se a conta vê o estado antigo ou o novo.</p>
+
+<p>Já o <code>$effect.root</code> raramente aparece numa aula introdutória: ele serve para criar um efeito que não pertence a nenhum componente, como um serviço global que precisa ser limpo à mão. Se você não sabe se precisa, não precisa.</p>
+
+<hr>
+
+<h2>8. O efeito não é lugar de calcular</h2>
+
+<p>Como o efeito roda quando um valor muda, é tentador usá-lo para atualizar outro valor. O código abaixo parece funcionar e é uma armadilha:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let n = $state(0);
+
+  $effect(() =&gt; {
+    n = n + 1;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Contagem: {n}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Contagem: 0&lt;/p&gt;</pre>
+
+<p>O efeito lê <code>n</code> e escreve <code>n</code>. Cada escrita muda a dependência, o que agenda outra execução, que escreve de novo. Em desenvolvimento, o Svelte interrompe o laço com uma mensagem clara no console:</p>
+
+<pre class="out">Svelte error: effect_update_depth_exceeded
+Maximum update depth exceeded. This typically indicates that an effect reads and writes the same piece of state
+https://svelte.dev/e/effect_update_depth_exceeded</pre>
+
+<p>"Profundidade de atualização excedida: isso normalmente indica que um efeito lê e escreve o mesmo pedaço de estado." Quando o que você quer é o valor calculado, a runa é <code>$derived</code>; quando é fazer algo no mundo, a runa é <code>$effect</code>. Um efeito que só muda estado para a tela mostrar quase sempre deveria ser um derivado.</p>
+
+<p>Existe uma terceira saída, e ela é a mais comum de todas: o valor não precisa ser estado. Se o número só serve para a tela mostrar e nunca é lido por um clique, por uma conta ou por outra parte do componente, ele pode ser uma variável comum calculada no próprio HTML. Menos runas, menos reações, menos lugares para errar.</p><div class="warning">
+<strong>Três usos honestos do efeito</strong>
+<p>Mexer no que está fora da página (título, <code>localStorage</code>, foco do teclado); ligar e desligar aparelhos (intervalos, ouvintes de evento, gráficos, mapas); chamar código de terceiros que precisa de um elemento já desenhado. Se a sua ação não é um desses três, desconfie.</p>
+</div>
+
+<hr>
+
+<h2>9. Rodando no computador da Ana</h2>
+
+<p>O componente do relógio roda no projeto dela com o servidor de desenvolvimento:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 571 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Na tela, o número de segundos sobe sozinho, um por segundo. Se você abrir o inspetor do navegador e olhar o HTML, vai ver o texto mudando — o efeito não reescreve o HTML à mão; ele muda o valor, e o Svelte atualiza o pedaço certo da tela.</p>
+
+<p>O build junta tudo num pacote só:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DtDhhfRU.js  36.51 kB │ gzip: 14.04 kB
+✓ built in 3.68s</pre>
+
+<p>O build inclui o agendador de efeitos do Svelte, que decide a ordem das execuções. É ele que garante que um efeito só rode depois do desenho e que a limpeza aconteça antes da próxima execução — garantias que você ganha sem escrever.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são de compilação. Existe ainda um erro de execução, <code>effect_orphan</code>, que aparece quando um efeito é criado fora da inicialização do componente:</p>
+
+<pre class="out">Svelte error: effect_orphan
+`$effect` can only be used inside an effect (e.g. during component initialisation)
+https://svelte.dev/e/effect_orphan</pre>
+
+<p>Ele acontece, por exemplo, quando você chama <code>$effect</code> dentro de uma função que só roda no clique. O efeito precisa de um componente vivo para pertencer; criado depois, não tem onde se pendurar.</p>
+
+<div class="cenario">
+<p><strong>1. Efeito sem função.</strong> A runa precisa de uma função para chamar depois:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  $effect();
+&lt;/script&gt;
+
+&lt;p&gt;Pães: 0&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): `$effect` must be called with exactly one argument</pre>
+<p>"<code>$effect</code> precisa ser chamado com exatamente um argumento". E esse argumento tem de ser uma função: <code>$effect(() =&gt; { … })</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. Efeito guardado numa variável.</strong> O efeito não devolve valor; ele é uma instrução, não uma expressão:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let x = $effect(() =&gt; {});
+&lt;/script&gt;
+
+&lt;p&gt;Pães: 0&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 10): `$effect()` can only be used as an expression statement</pre>
+<p>"<code>$effect()</code> só pode ser usado como instrução de expressão". Em outras palavras: escreva a chamada sozinha, numa linha, sem <code>let</code> nem <code>return</code>. Se você precisa guardar algo do efeito, guarde o que ele criou (como o <code>id</code> do intervalo).</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. A runa sem parênteses.</strong> Escrever só <code>$effect</code> não registra nada:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  $effect;
+&lt;/script&gt;
+
+&lt;p&gt;Pães: 0&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use rune without parentheses</pre>
+<p>"Não posso usar a runa sem parênteses". Toda runa é chamada: <code>$effect(função)</code>, <code>$state(valor)</code>, <code>$derived(conta)</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>$effect(() =&gt; { … })</code></td><td>roda depois do desenho e a cada mudança das dependências</td></tr>
+<tr><td><code>return () =&gt; { … }</code></td><td>limpeza: roda antes da próxima execução e na destruição</td></tr>
+<tr><td><code>$effect.pre(() =&gt; { … })</code></td><td>igual, mas antes do desenho</td></tr>
+<tr><td><code>$effect.root(() =&gt; { … })</code></td><td>efeito fora da árvore de componentes; devolve a função de parada</td></tr>
+<tr><td><code>$effect.tracking()</code></td><td><code>true</code> se houver contexto reativo</td></tr>
+<tr><td><code>untrack(() =&gt; …)</code></td><td>lê um valor sem virar dependência dele</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que fazer</th></tr>
+<tr><td><code>must be called with exactly one argument</code></td><td>passar uma função para <code>$effect</code></td></tr>
+<tr><td><code>can only be used as an expression statement</code></td><td>tirar o <code>let</code> e a atribuição</td></tr>
+<tr><td><code>Cannot use rune without parentheses</code></td><td>chamar a runa com <code>(…)</code></td></tr>
+<tr><td><code>effect_orphan</code></td><td>mover o <code>$effect</code> para o corpo do componente</td></tr>
+<tr><td><code>effect_update_depth_exceeded</code></td><td>parar de escrever o estado que o efeito lê; usar <code>$derived</code></td></tr>
+</table>
+</div>
+
+<p>Uma última regra de bolso, que resolve a maioria das dúvidas: se o resultado da sua ação pode ser lido na tela, ele provavelmente devia ser derivado; se o resultado é algo fora da tela, é efeito. E todo efeito que cria algo ganha uma função de limpeza — sem exceção.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Quando o <code>$effect</code> roda pela primeira vez?</p>
+<label><input type="radio" name="q1"> antes de o HTML ser gerado, no servidor</label>
+<label><input type="radio" name="q1"> depois que a tela é desenhada, no navegador</label>
+<label><input type="radio" name="q1"> no primeiro clique do usuário</label>
+<label><input type="radio" name="q1"> só quando o componente é destruído</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Para que serve a função devolvida pelo efeito?</p>
+<label><input type="radio" name="q1"> é o valor que aparece na tela</label>
+<label><input type="radio" name="q1"> é chamada a cada clique do usuário</label>
+<label><input type="radio" name="q1"> limpa o que a execução anterior criou, antes da próxima e na destruição</label>
+<label><input type="radio" name="q1"> substitui o <code>$derived</code> em cálculos</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Um efeito que lê e escreve o mesmo estado provoca qual erro?</p>
+<label><input type="radio" name="q1"> <code>effect_update_depth_exceeded</code></label>
+<label><input type="radio" name="q1"> <code>state_referenced_locally</code></label>
+<label><input type="radio" name="q1"> <code>Cannot assign to constant</code></label>
+<label><input type="radio" name="q1"> nenhum: o Svelte aceita e a tela estabiliza</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">$effect(() =&gt; {<br>&nbsp;&nbsp;const id = setInterval(() =&gt; segundos++, 1000);<br>&nbsp;&nbsp;return <input data-answer="() => clearInterval(id)">;<br>});<br><br>// o relógio precisa ser desligado quando o componente sair</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>$effect</code> é a runa do <strong>fazer</strong>: ela age fora do valor, ao contrário de <code>$state</code> e <code>$derived</code>.</li>
+  <li>O efeito roda depois do desenho e de novo a cada mudança das dependências que ele lê.</li>
+  <li>Efeitos não rodam no servidor: o HTML gerado não mostra nada do que eles fazem.</li>
+  <li>Devolver uma função do efeito registra a limpeza; ela roda antes da próxima execução e na destruição.</li>
+  <li>O que o efeito não lê, não o faz rodar de novo — daí a importância da leitura de dependências.</li>
+  <li><code>$effect.pre</code> roda antes do desenho; <code>$effect.root</code> cria efeito fora da árvore.</li>
+  <li>Escrever o estado que o efeito lê gera <code>effect_update_depth_exceeded</code>; para cálculos, use <code>$derived</code>.</li>
+  <li>Criar efeito fora da inicialização gera <code>effect_orphan</code>.</li>
+  <li>Erros de compilação desta aula: <code>$effect()</code> sem função, efeito guardado em variável e runa sem parênteses.</li>
+  <li>Todo efeito que cria algo precisa de limpeza — intervalo, ouvinte, conexão, gráfico.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$derived.by — a conta de várias linhas | Guia Svelte</title>
+<meta name="description" content="Quando a conta não cabe numa linha: $derived.by do Svelte 5, o return obrigatório, condições, objetos derivados e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">$derived.by</span></h1>
+
+<p class="intro">A Ana resolveu dar desconto para quem leva três pães ou mais, e a conta do desconto não é uma linha só: primeiro o bruto, depois a regra do desconto, depois o valor final. O <code>$derived</code> aceita uma expressão; quando a conta precisa de parágrafos, entra a versão com função, <code>$derived.by</code>. É a mesma ideia da aula passada, com espaço para pensar.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Quando uma conta deixa de caber numa expressão só.</li>
+  <li>A escrever <code>let x = $derived.by(() =&gt; { … })</code>.</li>
+  <li>Por que o <code>return</code> é obrigatório e o que acontece sem ele.</li>
+  <li>Como usar <code>if</code> dentro de um valor derivado.</li>
+  <li>Como devolver um objeto com várias contas prontas.</li>
+  <li>Como derivar listas e totais sem repetir cálculo.</li>
+  <li>Por que escrever estado dentro de um derivado quebra o componente.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como o projeto da Ana roda com <code>npm run dev</code> e <code>npm run build</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a conta que precisa de parágrafos</h2>
+
+<p>Na lousa da padaria, "três pães ou mais, dez por cento de desconto" é uma regra com etapas. A Ana não calcula de cabeça em uma passada: ela olha a quantidade, decide se o desconto vale, calcula o bruto, aplica o desconto e escreve o resultado. Quatro passos, uma decisão no meio.</p>
+
+<p>Um <code>$derived</code> comum aceita uma expressão: <code>qtd * unitario</code>. Se você tentar espremer a regra do desconto ali, vai escrever uma linha comprida com dois operadores ternários aninhados — funciona, mas ninguém consegue ler nem corrigir depois. O <code>$derived.by</code> existe para esse caso: ele aceita uma <strong>função</strong>, com quantas linhas você precisar, desde que ela devolva o resultado.</p>
+
+<p>A diferença entre os dois é de forma, não de conceito. Nos dois casos você tem um valor que se recalcula quando as dependências mudam. O que muda é o espaço para explicar a conta — e, num time, o espaço para explicar é o que separa código que envelhece bem de código que assusta.</p>
+
+<p>Existe um custo em escolher a versão longa, e ele é pequeno: a função tem chaves, um <code>return</code> e mais linhas para ler. O ganho é maior quando a regra muda com o tempo. A Ana já mudou a regra do desconto duas vezes — primeiro era dez por cento em qualquer quantidade, depois passou a valer a partir de três pães. Na versão com <code>if</code>, a mudança foi numa linha e ninguém precisou decifrar a expressão.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A regra escrita no cartaz: "3 pães ou mais, 10%"</td><td>O <code>if</code> dentro do <code>.by</code></td></tr>
+<tr><td>O bruto calculado antes do desconto</td><td>Uma <code>const</code> intermediária dentro da função</td></tr>
+<tr><td>O valor que vai para a lousa</td><td>O que a função devolve no <code>return</code></td></tr>
+<tr><td>Reconferir a conta quando a quantidade muda</td><td>O Svelte refaz a função sozinho</td></tr>
+<tr><td>Esquecer de anotar o resultado final</td><td>Função sem <code>return</code>: o derivado vira vazio</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. <code>$derived</code> ou <code>$derived.by</code>?</h2>
+
+<p>Os dois criam valores derivados. A escolha é sobre legibilidade e sobre o que a conta precisa no meio do caminho.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Use</th><th>Por quê</th></tr>
+<tr><td><code>qtd * unitario</code></td><td><code>$derived(…)</code></td><td>uma expressão, sem variáveis intermediárias</td></tr>
+<tr><td>conta com <code>if</code></td><td><code>$derived.by(…)</code></td><td>expressão não tem <code>if</code> com várias etapas</td></tr>
+<tr><td>vários passos com nomes</td><td><code>$derived.by(…)</code></td><td>as <code>const</code> do meio explicam a conta</td></tr>
+<tr><td>devolver objeto com totais</td><td><code>$derived.by(…)</code></td><td>o <code>return</code> monta o pacote</td></tr>
+<tr><td>uma comparação: <code>a &gt; 10</code></td><td><code>$derived(…)</code></td><td>cabe e se lê de uma vez</td></tr>
+</table>
+</div>
+
+<p>Uma regra prática: se você precisa de reticências para descrever a conta em voz alta ("primeiro isso, aí se…, então…"), use <code>.by</code>. Se a conta é uma frase só, use a versão curta. Nada impede converter uma na outra depois — é uma mudança de três linhas.</p>
+
+<p>Vale saber que os dois aceitam as mesmas dependências: estado, props, outros derivados e até valores de contexto. O que o <code>.by</code> não aceita é deixar de ser função. Na dúvida entre as duas formas, comece pela curta: quando a linha passar de umas sessenta letras, a versão longa paga o espaço que ocupa.</p>
+
+<hr>
+
+<h2>3. O primeiro <code>$derived.by</code> da Ana</h2>
+
+<p>A função entra entre parênteses, e o resultado sai no <code>return</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let total = $derived.by(() =&gt; {
+    const bruto = qtd * unitario;
+    return bruto;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 1.80&lt;/p&gt;</pre>
+
+<p>O resultado é o mesmo do <code>$derived</code> da aula anterior, e é isso que você deve guardar: <code>.by</code> não é um recurso diferente, é a mesma runa com espaço para uma função. A função roda quando alguma dependência muda — e as dependências são descobertas executando a função, não lendo o texto dela.</p>
+
+<h3>A anatomia da função derivada</h3>
+
+<dl class="anatomy">
+  <dt>$derived.by(</dt><dd>a <strong>runa com o sufixo</strong> <code>.by</code>, que avisa: o argumento é uma função.</dd>
+  <dt>() =&gt; { … }</dt><dd>a <strong>função</strong> que calcula. Sete caracteres que dizem "recebo nada, devolvo alguma coisa".</dd>
+  <dt>const bruto = …</dt><dd>uma <strong>variável intermediária</strong>, só para dar nome a um passo. Não é estado: é conta.</dd>
+  <dt>return bruto</dt><dd>a <strong>entrega</strong>. O valor do derivado é exatamente o que o <code>return</code> devolve.</dd>
+  <dt>});</dt><dd>fecha a função e a chamada. Os dois sinais precisam estar na ordem: <code>}</code> fecha o corpo, <code>)</code> fecha a runa.</dd>
+</dl>
+
+<div class="tip">
+<strong>Uma função, não uma chamada imediata</strong>
+<p>Repare que <code>() =&gt; { … }</code> é a função em si, não o resultado dela. Quem chama é o Svelte, na hora certa. Se você escrever <code>$derived.by((() =&gt; 1)())</code>, está chamando você mesmo e o derivado recebe um número — o que quebra em tempo de execução, porque a runa espera uma função.</p>
+</div>
+
+<hr>
+
+<h2>4. O <code>return</code> é a entrega</h2>
+
+<p>Um erro que aparece toda semana: escrever a conta inteira e esquecer de devolver. A função roda, o valor é calculado, e ninguém recebe nada.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let total = $derived.by(() =&gt; {
+    const bruto = qtd * unitario;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ &lt;/p&gt;</pre>
+
+<p>O texto aparece cortado porque <code>total</code> é <code>undefined</code> — a função terminou sem devolver nada. Numa função de JavaScript, chegar ao fim sem <code>return</code> significa "devolvo <code>undefined</code>", e é exatamente isso que o derivado recebe.</p>
+
+<p>Repare que o compilador <strong>não reclama</strong>: para ele, devolver nada é permitido. Quem denuncia é a tela vazia. Esse é o motivo de o guia insistir no hábito de terminar toda função derivada com <code>return</code>, mesmo quando parece óbvio.</p>
+
+<p>Cuidado também com o <code>return</code> que só existe dentro de um <code>if</code>. Se a condição for falsa, a função chega ao fim sem devolver nada, e o derivado fica vazio naquele caso. A regra do desconto da seção 6 escapa disso porque tem um segundo <code>return</code> no fim, fora de qualquer condição — o caminho de fuga está sempre aberto.</p>
+
+<hr>
+
+<h2>5. O primeiro experimento: devolva a conta</h2>
+
+<p>A função abaixo calcula o bruto e esquece de devolver. Sua missão é terminar a conta com um <code>return</code> que entregue o valor já formatado.</p>
+
+<div class="trysvelte" data-goal="out:Total: 1.80">
+<p class="try-task"><strong>Missão:</strong> faça a tela mostrar <strong>Total: 1.80</strong>, devolvendo da função o valor com duas casas.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let total = $derived.by(() =&gt; {
+    const bruto = qtd * unitario;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let total = $derived.by(() =&gt; {
+    const bruto = qtd * unitario;
+    return bruto.toFixed(2);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+</div>
+
+<p>A meta compara o texto inteiro e espera <code>Total: 1.80</code>. Se você devolver o número <code>1.8</code>, a tela mostra <code>Total: 1.8</code> e a verificação falha — não por maldade, mas porque a formatação faz parte do que a tela promete.</p>
+
+<hr>
+
+<h2>6. A regra do desconto, com <code>if</code></h2>
+
+<p>Agora o caso que motivou a runa: uma condição no meio da conta. Três pães ou mais ganham dez por cento; menos que isso, nada.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(3);
+  let desconto = $derived.by(() =&gt; {
+    if (qtd &gt;= 3) return 0.1;
+    return 0;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Desconto: {desconto * 100}%&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Desconto: 10%&lt;/p&gt;</pre>
+
+<p><code>&gt;=</code> quer dizer "maior ou igual"; com três pães a condição é verdadeira e o desconto é dez por cento. Com dois pães, a condição é falsa e a segunda linha devolve zero. Cada <code>return</code> encerra a função, então não é preciso <code>else</code>: quando o primeiro dispara, o segundo nem é lido.</p>
+
+<p>Isso é uma comodidade que a expressão não tem. Numa linha só, você precisaria de <code>qtd &gt;= 3 ? 0.1 : 0</code> — o operador ternário, que serve para o caso simples e vira um ninho ilegível quando a regra tem três faixas.</p>
+
+<p>Com três faixas (nenhum desconto, dez por cento, quinze por cento), a versão com <code>if</code> continua legível: um teste por faixa, do mais generoso para o menos. A versão ternária precisaria de um ternário dentro do outro, e aí a regra do desconto vira um quebra-cabeça que ninguém quer abrir seis meses depois.</p>
+
+<p>Repare que a função não recebe parâmetro nenhum. Ela lê <code>qtd</code> direto do componente, e o Svelte registra essa leitura como dependência. É por isso que a mesma função pode ser chamada de novo sem argumentos: as informações de que ela precisa já estão no escopo.</p>
+
+<div class="trysvelte" data-goal="outre:^Desconto: 0%;;clique:button;;clique:button;;outre:^Desconto: 10%">
+<p class="try-task"><strong>Missão:</strong> o desconto está fixo em 10%. Faça a regra funcionar: <strong>0%</strong> no começo e <strong>10%</strong> só a partir de três pães (dois cliques).</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(1);
+  let desconto = $derived.by(() =&gt; {
+    return 0.1;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Desconto: {desconto * 100}%&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um pão&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(1);
+  let desconto = $derived.by(() =&gt; {
+    if (qtd &gt;= 3) return 0.1;
+    return 0;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Desconto: {desconto * 100}%&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um pão&lt;/button&gt;</pre>
+</div>
+
+<p>A verificação olha três momentos: antes do clique, depois de um e depois de dois. Só o terceiro mostra dez por cento. Esse tipo de meta, com vários passos, é o jeito de provar que uma condição funciona nos dois lados.</p>
+
+<hr>
+
+<h2>7. Devolvendo mais de um valor</h2>
+
+<p>Quando a conta produz três números que a tela usa, o derivado pode devolver um objeto com os três. É melhor que três derivados separados: a conta é feita uma vez e os valores saem consistentes entre si.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let conta = $derived.by(() =&gt; {
+    const bruto = qtd * unitario;
+    return { bruto, desconto: bruto * 0.1 };
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Bruto: R$ {conta.bruto.toFixed(2)}&lt;/p&gt;
+&lt;p&gt;Desconto: R$ {conta.desconto.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Bruto: R$ 1.80&lt;/p&gt; &lt;p&gt;Desconto: R$ 0.18&lt;/p&gt;</pre>
+
+<p>O <code>return { bruto, desconto: … }</code> usa a forma curta do objeto: quando o nome da variável é igual ao nome do campo, basta escrever uma vez. E o resultado é lido com ponto, como qualquer objeto: <code>conta.bruto</code>.</p>
+
+<p>O objeto é novo a cada recálculo — e isso é bom. Nada dentro dele muda por fora, então a tela nunca vê um valor pela metade: ou o objeto antigo com os dois números, ou o novo com os dois atualizados. Devolver objeto também economiza runas: um derivado só, três leituras.</p>
+
+<div class="trysvelte" data-goal="out:Bruto: R$ 1.80">
+<p class="try-task"><strong>Missão:</strong> a função devolve só o número do bruto, e a tela espera um objeto. Faça <code>conta.bruto</code> valer <strong>1.80</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let conta = $derived.by(() =&gt; {
+    const bruto = qtd * unitario;
+    return bruto;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Bruto: R$ {conta.bruto.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let conta = $derived.by(() =&gt; {
+    const bruto = qtd * unitario;
+    return { bruto, desconto: bruto * 0.1 };
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Bruto: R$ {conta.bruto.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Antes da correção, a caixa mostra o erro <code>Cannot read properties of undefined (reading 'toFixed')</code>: um número não tem a propriedade <code>bruto</code>, então ler <code>conta.bruto</code> devolve <code>undefined</code>. É o mesmo tropeço da aula de props, com outra roupa.</p>
+
+<hr>
+
+<h2>8. Dentro do derivado não se escreve estado</h2>
+
+<p>Um derivado existe para calcular. Se ele também mudar estado, vira uma conta que se alimenta de si mesma: o valor que ele escreve pode ser uma das dependências que fazem a conta rodar de novo. O Svelte bloqueia isso quando o projeto está em modo de desenvolvimento.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $derived.by(() =&gt; {
+    qtd = 3;
+    return qtd * 0.9;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 2.70&lt;/p&gt;</pre>
+
+<p>Na renderização do servidor isso passa e mostra 2,70. No navegador, rodando <code>npm run dev</code>, o componente nem aparece — o console registra:</p>
+
+<pre class="out">Svelte error: state_unsafe_mutation
+Updating state inside `$derived(...)`, `$inspect(...)` or a template expression is forbidden. If the value should not be reactive, declare it without `$state`
+https://svelte.dev/e/state_unsafe_mutation</pre>
+
+<p>Traduzindo: "atualizar estado dentro de <code>$derived(...)</code>, <code>$inspect(...)</code> ou de uma expressão do template é proibido. Se o valor não deve ser reativo, declare sem <code>$state</code>". A mensagem ainda dá a saída: se a variável intermediária é só conta, ela não precisa de runa nenhuma.</p>
+
+<p>Vale distinguir dois tipos de escrita que parecem a mesma coisa. Escrever numa variável local da função (<code>const bruto = …</code>, ou um acumulador com <code>let soma = 0</code> e <code>soma += item.preco</code>) é permitido e comum: nada ali é estado, é conta. O que o Svelte bloqueia é escrever numa variável <em>reativa</em> — <code>$state</code>, prop, campo de classe com runa. A diferença está em quem observa o valor: se alguém observa, a escrita vira dependência.</p><div class="warning">
+<strong>Derivado calcula; efeito faz</strong>
+<p>Se a sua ideia é "quando a quantidade mudar, manda o pedido para o servidor", isso não é derivado — é efeito, com <code>$effect</code>, que roda depois que a tela é desenhada e pode fazer coisas acontecer. Misturar os dois é o caminho mais curto para um componente que roda em círculo.</p>
+</div>
+
+<hr>
+
+<h2>9. Rodando no computador da Ana</h2>
+
+<p>No projeto dela, o componente da cesta usa <code>$derived.by</code> com a regra do desconto. O servidor de desenvolvimento mostra a página em <code>localhost</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 571 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Com dois pães, a tela mostra bruto de 1,80 e desconto de 0,00; com três, o desconto vira 0,18 e o bruto 2,70. Para conferir, basta clicar no botão que soma um pão — a função derivada roda de novo e os dois números se atualizam juntos.</p>
+
+<p>O build de produção não muda nada no comportamento:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CRKWAbz_.js  36.15 kB │ gzip: 13.95 kB
+✓ built in 1.37s</pre>
+
+<p>As verificações de desenvolvimento — como o bloqueio de escrever estado dentro do derivado — não vão para o build. É por isso que o erro de <code>state_unsafe_mutation</code> aparece no seu computador e não na versão publicada; ele é um aviso de obra, não uma regra do produto.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>Três erros de compilação colhidos do compilador de verdade, todos na mesma família: a runa <code>.by</code> com o argumento errado.</p>
+
+<div class="cenario">
+<p><strong>1. A runa sem parênteses.</strong> <code>$derived.by</code> também é uma chamada; sem os parênteses, não há função para rodar:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $derived.by;
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 14): Cannot use rune without parentheses</pre>
+<p>"Não posso usar a runa sem parênteses". A correção é <code>$derived.by(() =&gt; { … })</code> — a função sempre dentro dos parênteses.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. Duas funções.</strong> A runa aceita uma função; a segunda vira erro:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $derived.by(() =&gt; 1, () =&gt; 2);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 14): `$derived.by` must be called with exactly one argument</pre>
+<p>"<code>$derived.by</code> precisa ser chamado com exatamente um argumento". Para dois resultados, devolva um objeto — é o que a seção 7 fez.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. A runa no HTML.</strong> Calcular direto na marcação não é permitido:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {$derived.by(() =&gt; qtd * 0.9)}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 11): `$derived.by(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+<p>"<code>$derived.by(...)</code> só pode ser usado como valor inicial de uma declaração de variável…". A runa precisa de nome, no script. No HTML entra o nome dela.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que devolve</th></tr>
+<tr><td><code>let t = $derived.by(() =&gt; qtd * 0.9)</code></td><td>número, recalculado quando <code>qtd</code> muda</td></tr>
+<tr><td><code>let t = $derived.by(() =&gt; { … return x; })</code></td><td>o que o <code>return</code> entregar</td></tr>
+<tr><td><code>return { bruto, desconto }</code></td><td>objeto com vários valores derivados</td></tr>
+<tr><td><code>return [a, b]</code></td><td>lista derivada, lida por índice ou em <code>{#each}</code></td></tr>
+<tr><td><code>return items.filter(…)</code></td><td>lista filtrada, recalculada quando <code>items</code> muda</td></tr>
+<tr><td>sem <code>return</code></td><td><code>undefined</code> — a tela fica vazia</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que fazer</th></tr>
+<tr><td><code>Cannot use rune without parentheses</code></td><td>chamar: <code>$derived.by(função)</code></td></tr>
+<tr><td><code>must be called with exactly one argument</code></td><td>uma função por derivado; para dois valores, um objeto</td></tr>
+<tr><td><code>can only be used as a variable declaration initializer…</code></td><td>dar um nome ao derivado no script</td></tr>
+<tr><td><code>state_unsafe_mutation</code></td><td>tirar a escrita de estado de dentro do derivado</td></tr>
+</table>
+</div>
+
+<p>O critério final é o mesmo do <code>$derived</code>: um valor derivado é consequência, nunca fonte de verdade. Se a conta precisa de uma decisão sua no meio, ela continua sendo derivada — desde que a decisão seja só uma leitura (<code>if</code>, filtro, soma), e não uma escrita.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Quando vale a pena usar <code>$derived.by</code> em vez de <code>$derived</code>?</p>
+<label><input type="radio" name="q1"> sempre; o <code>$derived</code> simples está obsoleto</label>
+<label><input type="radio" name="q1"> quando a conta tem condições ou vários passos com nome</label>
+<label><input type="radio" name="q1"> quando o valor vem do servidor</label>
+<label><input type="radio" name="q1"> quando o valor precisa ser alterado por um botão</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. A função do <code>$derived.by</code> termina sem <code>return</code>. O que o derivado recebe?</p>
+<label><input type="radio" name="q1"> o último valor calculado dentro da função</label>
+<label><input type="radio" name="q1"> zero</label>
+<label><input type="radio" name="q1"> <code>undefined</code>, e a tela mostra vazio</label>
+<label><input type="radio" name="q1"> um erro de compilação</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que não escrever estado dentro de um derivado?</p>
+<label><input type="radio" name="q1"> porque o derivado roda de novo quando as dependências mudam, e a escrita pode recriar a dependência</label>
+<label><input type="radio" name="q1"> porque o derivado só aceita leitura de números</label>
+<label><input type="radio" name="q1"> porque o JavaScript não permite <code>=</code> dentro de funções</label>
+<label><input type="radio" name="q1"> porque isso deixa o build maior</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let qtd = $state(3);<br>let desconto = $derived.by(() =&gt; {<br>&nbsp;&nbsp;if (qtd &gt;= 3) <input data-answer="return 0.1;">;<br>&nbsp;&nbsp;return 0;<br>});<br><br>// três pães ou mais ganham dez por cento</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>$derived.by(função)</code> é a versão do derivado que aceita várias linhas.</li>
+  <li>Use quando a conta tem <code>if</code>, variáveis intermediárias ou devolve mais de um valor.</li>
+  <li>O valor do derivado é exatamente o que o <code>return</code> devolve; sem ele, é <code>undefined</code>.</li>
+  <li>Cada <code>return</code> encerra a função, então a regra do desconto dispensa <code>else</code>.</li>
+  <li>Devolver um objeto (<code>return { bruto, desconto }</code>) mantém os valores consistentes entre si.</li>
+  <li>As dependências são descobertas executando a função — não é preciso declarar uma lista.</li>
+  <li>Escrever estado dentro do derivado é proibido: em desenvolvimento o Svelte para com <code>state_unsafe_mutation</code>.</li>
+  <li>O compilador não avisa quando falta <code>return</code>; quem avisa é a tela vazia.</li>
+  <li>Erros desta aula: runa sem parênteses, dois argumentos e runa dentro do HTML.</li>
+  <li>Derivado é consequência, não fonte de verdade: se a regra precisa de decisão sua, ela é efeito.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
