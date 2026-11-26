@@ -1,0 +1,14 @@
+{
+  "svelte": "5.59.2",
+  "gerado": "2026-11-26",
+  "arquivos": {
+    "svelte-compiler.js": {
+      "sha256": "c32059aea4e94722",
+      "bytes": 851419
+    },
+    "svelte-motor.js": {
+      "sha256": "04f3a37fe9595a0f",
+      "bytes": 128769
+    }
+  }
+}
