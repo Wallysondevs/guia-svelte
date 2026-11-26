@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paginação — a lista grande em páginas pequenas | Guia Svelte</title>
+<meta name="description" content="Paginação em Svelte 5: slice, página como $state, total com Math.ceil, botões com disabled e o limite que impede a página vazia, com a saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Paginação</span></h1>
+
+<p class="intro">A Ana colou o quadro de preços inteiro numa folha só e o resultado ficou ilegível: quarenta linhas apertadas, letra pequena, ninguém acha nada. A vizinha dela, que faz crochê, tem um caderno de receitas com dez receitas por página e um índice no canto — é fácil de folhear e fácil de achar. Esta aula ensina a fazer o mesmo com uma lista na tela: mostrar um pedaço por vez, com um número de página, um botão para avançar e outro para voltar, sem que a última página fique vazia.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é paginar uma lista e por que isso ajuda quem lê.</li>
+  <li>Como cortar um pedaço da lista com <code>slice</code>.</li>
+  <li>Como transformar a página atual num estado com <code>$state</code>.</li>
+  <li>Como calcular quantas páginas existem com <code>Math.ceil</code>.</li>
+  <li>Como ligar os botões anterior e próxima ao número da página.</li>
+  <li>Como desabilitar um botão quando ele não tem para onde ir.</li>
+  <li>Como mostrar "mostrando 1–3 de 7" sem errar a conta no fim.</li>
+  <li>Como impedir que a página passe do limite e mostre uma tela vazia.</li>
+  <li>Como a paginação convive com a busca, que encurta a lista.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o caderno em páginas</h2>
+
+<p>Um caderno de receitas não mostra todas as receitas de uma vez. Mostra dez por página, numera as páginas e deixa você folhear. A receita continua a mesma; o que muda é quanto dela você vê de cada vez. Paginar uma lista é exatamente isso: os quarenta produtos continuam existindo na memória, mas a tela mostra três por vez.</p>
+
+<p>A vantagem não é economizar memória — quarenta produtos ocupam quase nada. A vantagem é para quem lê: uma tela com quarenta linhas não tem onde o olho descansar, e o dedo cansa de rolar. Três ou dez linhas por página cabem na tela inteira, e a pessoa sabe onde está porque o número da página está escrito.</p>
+
+<p>O custo é que paginar dá trabalho: alguém precisa decidir quantos itens por página, calcular quantas páginas existem, desenhar os botões e cuidar dos casos de borda — a primeira página, a última, a lista vazia. É esse trabalho que esta aula faz uma vez, para você repetir depois sem pensar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No caderno de receitas</th><th>No componente</th></tr>
+<tr><td>As receitas todas, na memória</td><td>a lista <code>nomes</code></td></tr>
+<tr><td>Dez receitas por folha</td><td><code>const POR_PAGINA = 10</code></td></tr>
+<tr><td>O número da folha aberta</td><td><code>let pagina = $state(1)</code></td></tr>
+<tr><td>Quais receitas aparecem nesta folha</td><td><code>nomes.slice(inicio, fim)</code></td></tr>
+<tr><td>Quantas folhas o caderno tem</td><td><code>Math.ceil(nomes.length / POR_PAGINA)</code></td></tr>
+<tr><td>Virar a folha</td><td><code>pagina++</code> no clique do botão</td></tr>
+<tr><td>A última folha, que não vira</td><td><code>disabled={pagina === total}</code></td></tr>
+</table>
+</div>
+
+<p>O vocabulário: <em>página</em> é o número que diz qual pedaço está na tela; <em>por página</em> é o tamanho do pedaço; <em>fatia</em> é o resultado do corte; e <em>limite</em> é a regra que impede a página de sair do intervalo que existe. Quatro palavras que voltam em toda tela com lista grande.</p>
+
+<hr>
+
+<h2>2. O primeiro corte: <code>slice</code></h2>
+
+<p>Quem corta lista em JavaScript é o <code>slice</code>, que quer dizer "fatia". Ele recebe dois números: onde a fatia começa e onde ela termina. O começo entra na fatia; o fim não entra. Essa regra de o fim ficar de fora assusta no começo e é justamente o que faz a conta da paginação fechar sem <code>+1</code> em todo lugar.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const nomes = [
+    'Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant',
+    'Sonho de creme', 'Torta de frango', 'Empada de palmito'
+  ];
+
+  let visiveis = $derived(nomes.slice(0, 3));
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each visiveis as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O pedido <code>slice(0, 3)</code> quer dizer "do item de posição 0 até antes do item de posição 3". Como a contagem começa em zero, isso são os três primeiros itens:</p>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Pão francês&lt;/li&gt;&lt;li&gt;Bolo de fubá&lt;/li&gt;&lt;li&gt;Broa de milho&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<dl class="anatomy">
+  <dt>nomes</dt><dd>a lista completa. Aqui ela é uma constante, porque o conteúdo do quadro não muda enquanto a página está aberta; se mudasse, seria <code>$state</code>.</dd>
+  <dt>.slice(0, 3)</dt><dd>do índice <strong>0</strong> até antes do <strong>3</strong>. Devolve uma lista nova com três itens; a original fica inteira.</dd>
+  <dt>0</dt><dd>o primeiro item tem índice zero. O décimo item tem índice nove. Isso vale para toda lista em JavaScript.</dd>
+  <dt>3</dt><dd>o fim <strong>não</strong> entra na fatia. Para três itens começando em zero, o fim é três.</dd>
+  <dt>$derived(…)</dt><dd>a fatia é calculada, não guardada: se a página mudar, a fatia se refaz sozinha.</dd>
+</dl>
+
+<p>Repare que a fatia é uma lista nova, do mesmo jeito que o <code>filter</code> da aula <a href="ordenar-filtrar.html">Ordenar e Filtrar</a> devolvia uma lista nova. Nada é apagado da lista original: o que sai da tela continua na memória, esperando a próxima página.</p>
+
+<div class="trysvelte" data-goal="out:Broa de milho, Croissant">
+<p class="try-task"><strong>Missão:</strong> o estado diz que estamos na página 2, mas a fatia está fixa no começo e mostra a página 1. Faça a página 2 mostrar <strong>Broa de milho</strong> e <strong>Croissant</strong> — dois itens por página.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const nomes = ['Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant', 'Sonho'];
+  let pagina = $state(2);
+  let visiveis = $derived(nomes.slice(0, 2));
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.join(', ')}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const nomes = ['Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant', 'Sonho'];
+  let pagina = $state(2);
+  let visiveis = $derived(nomes.slice((pagina - 1) * 2, pagina * 2));
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.join(', ')}&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>3. O número da página vira estado</h2>
+
+<p>Na caixa acima a conta apareceu: para a página 2, com dois itens por página, a fatia começa em <code>(2 - 1) * 2 = 2</code> e termina em <code>2 * 2 = 4</code>. A fórmula geral é <code>(pagina - 1) * POR_PAGINA</code> para o começo e <code>pagina * POR_PAGINA</code> para o fim. O <code>-1</code> existe porque a primeira página começa no índice zero, e a conta com números de página começa em um.</p>
+
+<p>Para a página mudar, ela precisa ser estado. Uma variável comum não avisa a tela; com <code>$state</code>, cada mudança redesenha a fatia e os botões.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const nomes = [
+    'Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant',
+    'Sonho de creme', 'Torta de frango', 'Empada de palmito'
+  ];
+  const POR_PAGINA = 3;
+
+  let pagina = $state(2);
+  let inicio = $derived((pagina - 1) * POR_PAGINA);
+  let visiveis = $derived(nomes.slice(inicio, inicio + POR_PAGINA));
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each visiveis as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Com <code>pagina = 2</code>, a fatia mostra do quarto ao sexto produto — e é isso que o compilador gera:</p>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Croissant&lt;/li&gt;&lt;li&gt;Sonho de creme&lt;/li&gt;&lt;li&gt;Torta de frango&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<dl class="anatomy">
+  <dt>const POR_PAGINA = 3</dt><dd>o tamanho da fatia, num lugar só. Mudar de três para dez é mudar uma linha, e não cinco contas espalhadas.</dd>
+  <dt>let pagina = $state(2)</dt><dd>o número da página aberta é <strong>estado</strong>: quando muda, tudo o que depende dele se redesenha.</dd>
+  <dt>(pagina - 1) * POR_PAGINA</dt><dd>o índice do primeiro item da página. Na página 2 com três por página: <code>(2 - 1) * 3 = 3</code>.</dd>
+  <dt>inicio + POR_PAGINA</dt><dd>o índice do fim. Na página 2: <code>3 + 3 = 6</code>, e o item de índice 6 já fica fora da fatia.</dd>
+  <dt>slice(inicio, fim)</dt><dd>a fatia da página atual. Se a lista acabar antes do fim, o <code>slice</code> devolve o que existir, sem erro.</dd>
+</dl>
+
+<p>Aquele último detalhe é uma tranquilidade grande: <code>slice</code> nunca reclama de pedir mais itens do que a lista tem. Pedir <code>slice(6, 9)</code> de uma lista de sete itens devolve um item só, calado. O problema da página vazia não vem daí; vem da conta do número da página, que é o assunto da seção 7.</p>
+
+<hr>
+
+<h2>4. Quantas páginas existem: <code>Math.ceil</code></h2>
+
+<p>Com sete produtos e três por página, a resposta certa é três páginas: 3 + 3 + 1. Dividir sete por três dá 2,33 — e uma página não pode ser um terço. Quem arredonda para cima é <code>Math.ceil</code> (de <em>ceiling</em>, teto): 2,33 vira 3. Arredondar para baixo deixaria o último produto sem página.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const nomes = [
+    'Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant',
+    'Sonho de creme', 'Torta de frango', 'Empada de palmito'
+  ];
+  const POR_PAGINA = 3;
+
+  let pagina = $state(1);
+  let total = $derived(Math.ceil(nomes.length / POR_PAGINA));
+  let fim = $derived(Math.min(pagina * POR_PAGINA, nomes.length));
+&lt;/script&gt;
+
+&lt;p&gt;Mostrando {(pagina - 1) * POR_PAGINA + 1}–{fim} de {nomes.length} produtos&lt;/p&gt;
+&lt;p&gt;Página {pagina} de {total}&lt;/p&gt;</pre>
+
+<p>O HTML gerado mostra a conta pronta e também o "de 7" que vem do tamanho da lista:</p>
+
+<pre class="out">&lt;p&gt;Mostrando 1–3 de 7 produtos&lt;/p&gt; &lt;p&gt;Página 1 de 3&lt;/p&gt;</pre>
+
+<p>A variável <code>fim</code> usa <code>Math.min</code> para o número final: na página 3, <code>3 * 3 = 9</code>, mas a lista só tem 7, então o fim mostrado é 7. Sem esse cuidado, a legenda diria "Mostrando 7–9 de 7 produtos", e a pessoa procuraria dois produtos que não existem.</p>
+
+<div class="trysvelte" data-goal="out:3 página(s)">
+<p class="try-task"><strong>Missão:</strong> o rodapé diz que existe uma página só. Calcule o total de verdade, com sete produtos e três por página, e mostre <strong>3 página(s)</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const nomes = ['Pão', 'Bolo', 'Broa', 'Croissant', 'Sonho', 'Torta', 'Empada'];
+  const POR_PAGINA = 3;
+  let total = 1;
+&lt;/script&gt;
+
+&lt;p&gt;{total} página(s)&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const nomes = ['Pão', 'Bolo', 'Broa', 'Croissant', 'Sonho', 'Torta', 'Empada'];
+  const POR_PAGINA = 3;
+  let total = Math.ceil(nomes.length / POR_PAGINA);
+&lt;/script&gt;
+
+&lt;p&gt;{total} página(s)&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que <code>total</code> não é <code>$state</code>: ele é calculado a partir de coisas que também não mudam. Guardar um número calculado como estado é uma fonte de erro conhecida — o estado fica velho quando a lista muda. Se a lista fosse <code>$state</code>, o total viraria <code>$derived</code>.</p>
+
+<hr>
+
+<h2>5. Os botões anterior e próxima</h2>
+
+<p>Um botão é uma tag <code>&lt;button&gt;</code> com um <code>onclick</code>. O trabalho dele aqui é mudar o estado da página: <code>pagina--</code> volta uma, <code>pagina++</code> avança uma. O atributo <code>disabled</code> recebe uma condição: quando ela é verdadeira, o botão fica apagado e não responde ao clique.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const nomes = [
+    'Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant',
+    'Sonho de creme', 'Torta de frango', 'Empada de palmito'
+  ];
+  const POR_PAGINA = 3;
+  const TOTAL = Math.ceil(nomes.length / POR_PAGINA);
+
+  let pagina = $state(1);
+  let visiveis = $derived(
+    nomes.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA)
+  );
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each visiveis as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;button onclick={() =&gt; pagina--} disabled={pagina === 1}&gt;anterior&lt;/button&gt;
+&lt;button onclick={() =&gt; pagina++} disabled={pagina === TOTAL}&gt;próxima&lt;/button&gt;</pre>
+
+<p>Na primeira página, o botão "anterior" já nasce desabilitado — e o HTML mostra o atributo:</p>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Pão francês&lt;/li&gt;&lt;li&gt;Bolo de fubá&lt;/li&gt;&lt;li&gt;Broa de milho&lt;/li&gt;&lt;/ul&gt; &lt;button disabled=""&gt;anterior&lt;/button&gt; &lt;button&gt;próxima&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>onclick={() =&gt; pagina--}</dt><dd>uma <strong>função</strong> que roda no clique. Sem as chaves e a seta, o valor seria o número do resultado do cálculo, e não uma função.</dd>
+  <dt>disabled={pagina === 1}</dt><dd>três sinais de igual comparam; um sinal atribui. Aqui queremos comparar: o botão desabilita quando a página é a primeira.</dd>
+  <dt>pagina === TOTAL</dt><dd>a mesma ideia no outro botão: na última página não há para onde avançar.</dd>
+  <dt>disabled=""</dt><dd>o HTML gerado. Atributo presente quer dizer desabilitado; ausente quer dizer habilitado.</dd>
+</dl>
+
+<p>Desabilitar é melhor do que esconder o botão. Um botão que desaparece faz o outro pular de lugar, e a pessoa perde o lugar do clique; um botão apagado continua ali, dizendo "existe, mas agora não dá". É a diferença entre uma porta trancada e uma parede.</p>
+
+<hr>
+
+<h2>6. "Mostrando 1–3 de 7"</h2>
+
+<p>O número da página sozinho não responde à pergunta que a pessoa realmente faz: "quantos produtos eu já vi?". A legenda "mostrando 1–3 de 7 produtos" responde. Ela junta três contas: o primeiro item da página, o último item da página e o tamanho total da lista.</p>
+
+<p>O primeiro é <code>(pagina - 1) * POR_PAGINA + 1</code>. O <code>+1</code> só existe porque a pessoa conta a partir de um, e o índice começa em zero. O último é <code>Math.min(pagina * POR_PAGINA, nomes.length)</code>, que já apareceu na seção 4. O total é <code>nomes.length</code>.</p>
+
+<p>Esse tipo de legenda é o que separa uma tela amadora de uma tela que a pessoa entende. Sem ela, quem chega na página 3 não sabe se a lista acabou, se quebrou ou se ainda tem mais. Com ela, sabe que viu sete de sete e pode ir embora tranquila.</p>
+
+<hr>
+
+<h2>7. A página fora do intervalo</h2>
+
+<p>Aqui está o erro que quase todo mundo comete: o botão "próxima" continua funcionando na última página se a condição do <code>disabled</code> estiver errada, ou se alguém chamar a função por outro caminho. A página vira 4, a fatia de uma lista de três páginas vem vazia, e a tela mostra só os botões — como se o produto tivesse sumido.</p>
+
+<p>A defesa mais confiável não é confiar no botão: é <strong>limitar a página</strong> na hora de calcular. Um <code>$derived</code> com <code>Math.min</code> transforma qualquer número absurdo na última página que existe. O estado pode ficar em 9; o que a tela mostra é a página 3.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const nomes = [
+    'Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant',
+    'Sonho de creme', 'Torta de frango', 'Empada de palmito'
+  ];
+  const POR_PAGINA = 3;
+  const TOTAL = Math.ceil(nomes.length / POR_PAGINA);
+
+  let pagina = $state(9);
+  let atual = $derived(Math.min(pagina, TOTAL));
+  let visiveis = $derived(
+    nomes.slice((atual - 1) * POR_PAGINA, atual * POR_PAGINA)
+  );
+&lt;/script&gt;
+
+&lt;p&gt;Página {atual} de {TOTAL}&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each visiveis as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Aqui o estado está em 9 de propósito, e o componente mostra a página 3, que é a última que tem produto:</p>
+
+<pre class="out">&lt;p&gt;Página 3 de 3&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Empada de palmito&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;clique:button;;clique:button;;out:Sonho próxima">
+<p class="try-task"><strong>Missão:</strong> clique em "próxima" quatro vezes e a tela fica vazia, porque a página passa de 3. Faça o botão parar na última página: depois dos quatro cliques, mostre <strong>Sonho</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const nomes = ['Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant', 'Sonho'];
+  const TOTAL = 3;
+  let pagina = $state(1);
+  let visiveis = $derived(nomes.slice((pagina - 1) * 2, pagina * 2));
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.join(', ')}&lt;/p&gt;
+&lt;button onclick={() =&gt; pagina++}&gt;próxima&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const nomes = ['Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant', 'Sonho'];
+  const TOTAL = 3;
+  let pagina = $state(1);
+  let visiveis = $derived(nomes.slice((pagina - 1) * 2, pagina * 2));
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.join(', ')}&lt;/p&gt;
+&lt;button onclick={() =&gt; (pagina = Math.min(pagina + 1, TOTAL))}&gt;próxima&lt;/button&gt;</pre>
+</div>
+
+<p>A solução usa <code>Math.min(pagina + 1, TOTAL)</code>: soma um, mas nunca passa do total. A mesma ideia funciona no botão de voltar com <code>Math.max(pagina - 1, 1)</code>, e no campo de número da seção 9. Uma conta em cada lugar, e a tela nunca fica vazia por acidente.</p>
+
+<hr>
+
+<h2>8. Paginação junto com a busca</h2>
+
+<p>Agora junte as duas aulas: a Ana digita "pão" e a lista cai de sete para um item. A paginação precisa acompanhar, senão a pessoa fica na página 3 de uma lista que agora tem uma página só — e vê a tela vazia mesmo tendo digitado um produto que existe.</p>
+
+<p>A ordem das contas importa. Primeiro filtra; depois conta quantas páginas a lista filtrada tem; depois limita a página a esse total; só então corta a fatia. Cada passo usa o resultado do anterior, e o <code>$derived</code> cuida de refazer a corrente quando a busca ou a página mudam.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const nomes = [
+    'Pão francês', 'Bolo de fubá', 'Broa de milho', 'Croissant',
+    'Sonho de creme', 'Torta de frango', 'Empada de palmito'
+  ];
+  const POR_PAGINA = 3;
+
+  let busca = $state('pão');
+  let pagina = $state(3);
+
+  let encontrados = $derived(
+    nomes.filter((n) =&gt; n.toLowerCase().includes(busca.toLowerCase()))
+  );
+  let total = $derived(Math.max(1, Math.ceil(encontrados.length / POR_PAGINA)));
+  let atual = $derived(Math.min(pagina, total));
+  let visiveis = $derived(
+    encontrados.slice((atual - 1) * POR_PAGINA, atual * POR_PAGINA)
+  );
+&lt;/script&gt;
+
+&lt;input bind:value={busca} placeholder="buscar" /&gt;
+&lt;p&gt;Página {atual} de {total}&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each visiveis as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O estado começa na página 3 e a busca começa em "pão". Como só um produto combina, o total cai para 1 e a página é limitada a 1 — sem tela vazia:</p>
+
+<pre class="out">&lt;input value="pão" placeholder="buscar"/&gt; &lt;p&gt;Página 1 de 1&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Pão francês&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Duas decisões tomadas nesse código merecem nome. A primeira é <code>Math.max(1, …)</code> no total: quando a busca não acha nada, <code>Math.ceil(0 / 3)</code> dá zero, e uma paginação com zero páginas não tem o que mostrar. Forçar o mínimo em 1 mantém a tela coerente, e a mensagem de "nenhum resultado" fica com o componente que desenha a lista. A segunda é limitar a página em vez de zerá-la: a pessoa volta a ver resultados quando apaga a busca, sem precisar clicar em nada.</p>
+
+<hr>
+
+<h2>9. Ir direto para uma página</h2>
+
+<p>Existe mais de um jeito de escolher a página, e cada um tem um custo. Botões são os mais simples de entender e os mais lentos para chegar longe; um campo de número é rápido e fácil de digitar errado; "carregar mais" não tem número de página e funciona bem em celular.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Como é feito</th><th>Quando serve</th></tr>
+<tr><td>Botões anterior/próxima</td><td><code>pagina++</code> e <code>pagina--</code></td><td>poucas páginas, leitura em sequência</td></tr>
+<tr><td>Botões numerados</td><td>um <code>{#each}</code> de 1 até o total</td><td>quando a pessoa quer pular para uma página conhecida</td></tr>
+<tr><td>Campo de número</td><td><code>&lt;input type="number" bind:value={pagina}&gt;</code></td><td>listas longas, uso no computador</td></tr>
+<tr><td>Carregar mais</td><td>juntar a próxima fatia à lista visível</td><td>celular e rolagem contínua</td></tr>
+</table>
+</div>
+
+<p>O campo de número é uma ligação de duas vias, como o campo de busca da outra aula: o que a pessoa digita vira o valor de <code>pagina</code>, e o valor de <code>pagina</code> aparece no campo.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pagina = $state(1);
+  let total = 3;
+&lt;/script&gt;
+
+&lt;label for="pagina"&gt;Ir para a página&lt;/label&gt;
+&lt;input id="pagina" type="number" bind:value={pagina} min="1" max={total} /&gt;
+&lt;p&gt;Página {pagina} de {total}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;label for="pagina"&gt;Ir para a página&lt;/label&gt; &lt;input id="pagina" type="number" value="1" min="1" max="3"/&gt; &lt;p&gt;Página 1 de 3&lt;/p&gt;</pre>
+
+<p>O <code>type="number"</code> pede ao navegador o teclado numérico no celular, e o <code>min</code> e o <code>max</code> mostram os limites para quem usa as setinhas. Nenhum dos dois impede alguém de digitar 99: os atributos do HTML são uma ajuda, não uma trava. A trava de verdade é o <code>Math.min</code> da seção 7, que roda de qualquer jeito.</p>
+
+<p>Para conferir o resultado na versão de produção, o comando de build gera os arquivos com hash e o <code>preview</code> serve a pasta por http:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CmGOzsTa.js  42.66 kB │ gzip: 16.48 kB
+✓ built in 1.01s</pre>
+
+<p>Depois do build, a pasta <code>dist/</code> tem os arquivos prontos. O <code>preview</code> serve essa pasta por http, para você conferir o resultado antes de publicar:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> loja@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Repare que a porta mudou: o servidor de desenvolvimento usa 5173, o preview usa 4173. São dois programas diferentes — um recompila a cada arquivo salvo, o outro só entrega o que já está em <code>dist/</code>. Abrir o <code>dist/index.html</code> clicando duas vezes no disco não funciona: os módulos precisam de um servidor http, e é por isso que o preview existe.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador e do renderizador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>onclick</code> com aspas</strong>
+<p>O atributo de evento aceita uma expressão JavaScript, e uma expressão não se escreve entre aspas. Entre aspas, o valor vira texto, e o compilador recusa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pagina = $state(1);
+&lt;/script&gt;
+
+&lt;button onclick="pagina++"&gt;próxima&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 8): Event attribute must be a JavaScript expression, not a string</pre>
+<p>A tradução: "o atributo de evento tem de ser uma expressão JavaScript, não uma string". O certo é <code>onclick={() =&gt; pagina++}</code>, com chaves e sem aspas.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>bind:value</code> no lugar errado</strong>
+<p>Ligação de duas vias só existe em campos de formulário: <code>input</code>, <code>textarea</code> e <code>select</code>. Numa <code>div</code> não há valor para ler nem para escrever.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pagina = $state(1);
+&lt;/script&gt;
+
+&lt;div bind:value={pagina}&gt;página atual&lt;/div&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 5): `bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</pre>
+<p>A mensagem lista os três elementos que aceitam a ligação. Se o objetivo era mostrar a página atual, o certo é <code>&lt;p&gt;{pagina}&lt;/p&gt;</code>, sem <code>bind</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — chamar <code>slice</code> no número</strong>
+<p>O número da página é número; quem tem <code>slice</code> é a lista. Trocar os dois de lugar compila e quebra na hora de desenhar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pagina = $state(1);
+&lt;/script&gt;
+
+&lt;p&gt;{pagina.slice(0, 4)}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: pagina.slice is not a function</pre>
+<p>"is not a function" quer dizer que o valor antes do ponto não tem essa função. A ordem certa é <code>nomes.slice(inicio, fim)</code>: a lista primeiro, a fatia depois.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escreva</th><th>Devolve</th><th>Detalhe</th></tr>
+<tr><td><code>lista.slice(i, f)</code></td><td>lista nova com os itens de <code>i</code> até antes de <code>f</code></td><td>o fim fica de fora</td></tr>
+<tr><td><code>Math.ceil(n / p)</code></td><td>o total de páginas</td><td>arredonda para cima</td></tr>
+<tr><td><code>Math.min(a, b)</code></td><td>o menor dos dois</td><td>trava o teto</td></tr>
+<tr><td><code>Math.max(a, b)</code></td><td>o maior dos dois</td><td>trava o piso</td></tr>
+<tr><td><code>disabled={condição}</code></td><td>o botão fica apagado quando a condição é verdadeira</td><td>atributo presente</td></tr>
+<tr><td><code>array.length</code></td><td>quantos itens a lista tem</td><td>zero é falso</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que aconteceu</th><th>Como resolver</th></tr>
+<tr><td>Event attribute must be a JavaScript expression, not a string</td><td><code>onclick</code> entre aspas</td><td><code>onclick={() =&gt; …}</code></td></tr>
+<tr><td><code>bind:value</code> can only be used with <code>&lt;input&gt;</code>…</td><td>ligação num elemento que não é campo</td><td>usar <code>input</code>, ou só mostrar o valor</td></tr>
+<tr><td>… is not a function</td><td>a função foi chamada no valor errado</td><td>conferir quem vem antes do ponto</td></tr>
+<tr><td>tela vazia na última página</td><td>a página passou do total</td><td><code>Math.min(pagina, total)</code></td></tr>
+<tr><td>legenda "7–9 de 7"</td><td>o fim não foi limitado</td><td><code>Math.min(fim, lista.length)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Com 10 itens e 4 por página, qual fatia mostra a página 3?</p>
+<label><input type="radio" name="q1"> <code>slice(3, 4)</code></label>
+<label><input type="radio" name="q1"> <code>slice(8, 12)</code></label>
+<label><input type="radio" name="q1"> <code>slice(4, 8)</code></label>
+<label><input type="radio" name="q1"> <code>slice(12, 16)</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que o total de páginas usa <code>Math.ceil</code>?</p>
+<label><input type="radio" name="q1"> porque ele arredonda para baixo e evita páginas extras</label>
+<label><input type="radio" name="q1"> porque ele soma um ao resultado da divisão</label>
+<label><input type="radio" name="q1"> porque a divisão raramente é exata e o resto precisa de uma página</label>
+<label><input type="radio" name="q1"> porque ele transforma o número em texto</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>disabled={pagina === 1}</code> faz no botão "anterior"?</p>
+<label><input type="radio" name="q1"> desabilita o botão quando a página é a primeira</label>
+<label><input type="radio" name="q1"> muda a página para 1 no clique</label>
+<label><input type="radio" name="q1"> esconde o botão quando a página é a primeira</label>
+<label><input type="radio" name="q1"> atribui 1 à página sempre que o botão é desenhado</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">const POR_PAGINA = 3;<br>let total = <input data-answer="Math.ceil(nomes.length / POR_PAGINA)|Math.ceil(nomes.length/POR_PAGINA)">;<br><br>// sete produtos, três por página: três páginas, e não 2,33</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Paginar é mostrar uma <strong>fatia</strong> da lista por vez, com um número que diz qual fatia está aberta.</li>
+  <li><code>slice(i, f)</code> devolve os itens de <code>i</code> até antes de <code>f</code>: o fim fica de fora.</li>
+  <li>A página é <code>$state</code>; a fatia é <code>$derived</code> e se refaz quando a página muda.</li>
+  <li>Começo da fatia: <code>(pagina - 1) * POR_PAGINA</code>; fim: <code>pagina * POR_PAGINA</code>.</li>
+  <li>Total de páginas: <code>Math.ceil(lista.length / POR_PAGINA)</code>, no mínimo 1.</li>
+  <li><code>disabled</code> apaga o botão na primeira e na última página em vez de escondê-lo.</li>
+  <li>Limite a página com <code>Math.min</code>; não confie só no botão desabilitado.</li>
+  <li>A busca encurta a lista: filtre, conte, limite e só então corte.</li>
+  <li>Campo de número é rápido e fácil de errar; o limite no cálculo resolve os dois casos.</li>
+  <li>Dev usa a porta 5173, preview usa 4173, e os dois números são verdadeiros.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

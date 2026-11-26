@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordenar e Filtrar — a lista que obedece à Ana | Guia Svelte</title>
+<meta name="description" content="Filtrar com filter, ordenar com sort e juntar os dois em $derived: a lista de produtos da Ana que responde à busca e ordena pelo preço, com a saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Ordenar e Filtrar</span></h1>
+
+<p class="intro">A Ana agora tem quarenta produtos no quadro de preços da padaria, e o quadro virou uma parede. Para achar o pão de queijo ela passa o dedo por três fileiras; para saber qual é o produto mais barato do dia, precisa ler todos. Ela quer duas coisas: digitar uma palavra e ver só os produtos com aquela palavra, e escolher se a lista aparece do mais barato para o mais caro ou ao contrário. Esta aula ensina <strong>filtrar</strong> e <strong>ordenar</strong>, e como juntar as duas operações.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é filtrar uma lista e o que é ordenar uma lista — são coisas diferentes.</li>
+  <li>Como usar <code>filter</code> para deixar só os produtos que combinam com uma busca.</li>
+  <li>Como usar <code>sort</code> com uma função que compara dois itens.</li>
+  <li>Por que <code>sort</code> embaralha a lista original e como evitar esse estrago.</li>
+  <li>A juntar filtro e ordenação numa única variável <code>$derived</code>.</li>
+  <li>Como ligar um campo de texto ao estado com <code>bind:value</code>.</li>
+  <li>Como ordenar texto com acento usando <code>localeCompare</code>.</li>
+  <li>Como mostrar preço em reais com <code>Intl.NumberFormat</code>.</li>
+  <li>O que fazer quando o filtro não encontra nada.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a lista de compras que se arruma sozinha</h2>
+
+<p>Filtrar e ordenar são operações antigas, feitas antes de existir computador. Quando a Ana vai ao mercado com a lista de compras, ela risca o que já colocou no carrinho — isso é filtrar: de todos os itens da lista, interessam só os que faltam comprar. E quando ela organiza a lista pela ordem dos corredores do mercado, para não voltar duas vezes ao mesmo lugar — isso é ordenar: os mesmos itens, em outra sequência.</p>
+
+<p>As duas operações mudam a lista de um jeito diferente. Filtrar tira itens: a lista fica menor, e a ordem dos que sobraram continua a mesma. Ordenar não tira ninguém: a lista fica do mesmo tamanho, em outra sequência. Guarde a distinção: <strong>filtro decide quem entra, ordenação decide quem vem primeiro</strong>.</p>
+
+<p>No componente, as duas operações são funções de JavaScript que recebem a lista e devolvem uma lista nova. O Svelte não inventa nada aqui: <code>filter</code> e <code>sort</code> são do JavaScript, e a única coisa que o Svelte acrescenta é o aviso de que a lista mudou, para o HTML se desenhar de novo. O trabalho de verdade acontece nas funções que você escreve.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A lista inteira de quarenta produtos</td><td>A variável <code>produtos</code>, criada com <code>$state</code></td></tr>
+<tr><td>Riscar o que já foi comprado</td><td><code>produtos.filter(...)</code> — devolve uma lista menor</td></tr>
+<tr><td>Reorganizar a lista pelo corredor</td><td><code>[...produtos].sort(...)</code> — devolve a mesma lista em outra ordem</td></tr>
+<tr><td>Trocar a régua de ordenação: preço, nome, validade</td><td>A função de comparação dentro de <code>sort</code></td></tr>
+<tr><td>Anotar o resultado num papel à parte</td><td>Guardar o resultado em <code>$derived</code></td></tr>
+<tr><td>Reler a lista quando algo muda</td><td>O <code>$derived</code> se recalcula sozinho</td></tr>
+</table>
+</div>
+
+<p>O vocabulário desta aula: <em>lista</em> é uma sequência de valores entre colchetes; <em>item</em> é um valor dessa sequência; <em>filtrar</em> é escolher itens por uma condição; <em>ordenar</em> é pôr os itens numa sequência decidida por você; e <em>derivado</em> é o valor que se calcula a partir de outro. Quatro palavras que você vai ver em todo código de tela com lista.</p>
+
+<hr>
+
+<h2>2. O ponto de partida: três produtos na tela</h2>
+
+<p>Comece com três produtos, para caber na cabeça. Se o <code>{#each}</code> ainda não é familiar, a aula <a href="primeiro-componente.html">Seu Primeiro Componente</a> mostra o começo dessa história. Cada produto é um objeto — um pacote com três informações: um número de identidade, o nome e o preço. A lista é a sequência desses pacotes, e o <code>{#each}</code> percorre um por um.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 1, nome: 'Pão francês', preco: 0.9 },
+    { id: 2, nome: 'Bolo de fubá', preco: 12.5 },
+    { id: 3, nome: 'Pão de queijo', preco: 4 }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as p (p.id)}
+    &lt;li&gt;{p.nome} — R$ {p.preco}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O compilador transforma esse arquivo no HTML abaixo. Note que as chaves desapareceram: cada item virou uma linha de verdade, com o nome e o preço no lugar.</p>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Pão francês — R$ 0.9&lt;/li&gt;&lt;li&gt;Bolo de fubá — R$ 12.5&lt;/li&gt;&lt;li&gt;Pão de queijo — R$ 4&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let produtos = $state([ ])</dt><dd>a lista guardada como <strong>estado</strong>: quando ela muda, a tela se redesenha. Os colchetes abrem a lista, e cada <code>{ ... }</code> dentro dela é um objeto.</dd>
+  <dt>{ id: 1, nome: '…', preco: 0.9 }</dt><dd>um <strong>objeto</strong>: um pacote com campos separados por vírgula. O <code>id</code> é o número que identifica o produto; serve para o Svelte reconhecer cada linha.</dd>
+  <dt>{#each produtos as p (p.id)}</dt><dd>para cada item de <code>produtos</code>, chame esse item de <code>p</code> e desenhe o que está entre as tags. O <code>(p.id)</code> é a chave: a identidade de cada linha.</dd>
+  <dt>{p.nome}</dt><dd>o campo <code>nome</code> do item atual. O ponto lê um campo de dentro do objeto: <code>p.preco</code> lê o preço.</dd>
+  <dt>{/each}</dt><dd>fecha o bloco repetido. Tudo o que está entre <code>{#each}</code> e <code>{/each}</code> se repete uma vez por item.</dd>
+</dl>
+
+<p>Essa é a lista crua, na ordem em que foi escrita. A ordem do arquivo é a ordem da tela: primeiro o pão francês, depois o bolo, depois o pão de queijo. Isso parece óbvio e é justamente o que vai mudar nas próximas seções.</p>
+
+<div class="tip">
+<strong>O preço não tem duas casas</strong>
+<p>O HTML saiu com <code>R$ 0.9</code> porque o valor guardado é o número <code>0.9</code>. Guardar número é certo; mostrar é outro assunto, e a seção 8 resolve isso com uma função de formatação.</p>
+</div>
+
+<hr>
+
+<h2>3. Filtrar: só entra quem combina</h2>
+
+<p>Filtrar é entregar à função <code>filter</code> uma <strong>condição</strong> — uma pergunta que se responde com sim ou não para cada item. O JavaScript pergunta item por item e monta uma lista nova só com os que responderam sim. A lista original fica intacta.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 1, nome: 'Pão francês', preco: 0.9 },
+    { id: 2, nome: 'Bolo de fubá', preco: 12.5 },
+    { id: 3, nome: 'Pão de queijo', preco: 4 }
+  ]);
+
+  let busca = $state('pão');
+  let visiveis = $derived(
+    produtos.filter((p) =&gt; p.nome.toLowerCase().includes(busca.toLowerCase()))
+  );
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.length} produto(s) encontrado(s)&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each visiveis as p (p.id)}
+    &lt;li&gt;{p.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O resultado são dois produtos, porque dois nomes contêm a palavra "pão":</p>
+
+<pre class="out">&lt;p&gt;2 produto(s) encontrado(s)&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Pão francês&lt;/li&gt;&lt;li&gt;Pão de queijo&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Leia a condição em voz alta: <code>p.nome.toLowerCase().includes(busca.toLowerCase())</code> quer dizer "o nome do produto, em minúsculas, contém a busca, também em minúsculas?". Sem o <code>toLowerCase()</code> dos dois lados, buscar "pão" não acharia "Pão francês": o <code>P</code> e o <code>p</code> são caracteres diferentes para o computador, e é por isso que busca de site não liga para maiúsculas.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que devolve</th><th>Muda a lista original?</th></tr>
+<tr><td><code>filter</code></td><td>lista nova só com os itens aprovados na condição</td><td>não</td></tr>
+<tr><td><code>map</code></td><td>lista nova do mesmo tamanho, com cada item transformado</td><td>não</td></tr>
+<tr><td><code>sort</code></td><td>a própria lista, em outra ordem</td><td><strong>sim</strong></td></tr>
+<tr><td><code>toSorted</code></td><td>lista nova ordenada (o <code>sort</code> que não estraga nada)</td><td>não</td></tr>
+<tr><td><code>includes</code></td><td>sim ou não (um valor <em>booleano</em>)</td><td>não</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="out:Pão francês, Pão de queijo">
+<p class="try-task"><strong>Missão:</strong> a busca está presa em "bolo" e só o bolo aparece. Faça a lista mostrar o <strong>pão francês</strong> e o <strong>pão de queijo</strong>, sem mexer na condição do filtro — só no valor da busca.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state(['Pão francês', 'Bolo de fubá', 'Pão de queijo']);
+  let busca = $state('bolo');
+  let encontrados = $derived(produtos.filter((p) =&gt; p.toLowerCase().includes(busca)));
+&lt;/script&gt;
+
+&lt;p&gt;{encontrados.join(', ')}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state(['Pão francês', 'Bolo de fubá', 'Pão de queijo']);
+  let busca = $state('pão');
+  let encontrados = $derived(produtos.filter((p) =&gt; p.toLowerCase().includes(busca)));
+&lt;/script&gt;
+
+&lt;p&gt;{encontrados.join(', ')}&lt;/p&gt;</pre>
+</div>
+
+<p>A caixa mostra um detalhe: <code>encontrados</code> não guarda a lista inteira, guarda o resultado do filtro. Quando <code>busca</code> muda, o <code>$derived</code> recalcula e a tela mostra outra lista, sem você escrever código para limpar a antiga.</p>
+
+<hr>
+
+<h2>4. Ordenar: quem vem primeiro</h2>
+
+<p>Ordenar é diferente de filtrar: ninguém sai da lista. O que muda é a sequência. O JavaScript tem uma função para isso, chamada <code>sort</code>, e ela aceita uma <strong>função de comparação</strong> — uma função que recebe dois itens e responde qual deles vem antes. A resposta é um número: negativo se o primeiro vem antes, positivo se vem depois, zero se tanto faz.</p>
+
+<p>Quando você chama <code>sort()</code> sem função nenhuma, o JavaScript compara os itens como se fossem texto. E aí aparece a pegadinha que trava todo mundo na primeira vez:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([12.5, 0.9, 4]);
+  let ordenados = $derived([...precos].sort());
+&lt;/script&gt;
+
+&lt;p&gt;{ordenados.join(' · ')}&lt;/p&gt;</pre>
+
+<p>Do mais barato para o mais caro, a resposta certa seria 0.9, 4, 12.5. Veja o que sai:</p>
+
+<pre class="out">&lt;p&gt;0.9 · 12.5 · 4&lt;/p&gt;</pre>
+
+<p>O 0.9 veio antes do 12.5 porque o texto "0.9" começa com a letra "0", que vem antes do "1" de "12.5". Comparando texto, "12.5" é menor que "4" pelo mesmo motivo: o primeiro caractere é "1", que vem antes do "4". A função fez exatamente o que prometeu — comparou texto —, e é isso que você não queria.</p>
+
+<p>A correção é dar a ela a régua numérica. A função <code>(a, b) =&gt; a - b</code> devolve a diferença entre os dois preços: se <code>a</code> for menor, a diferença é negativa e <code>a</code> vem antes; se for maior, positiva e ele vai para depois. Para inverter a ordem, troque a subtração: <code>b - a</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([12.5, 0.9, 4]);
+  let ordenados = $derived([...precos].sort((a, b) =&gt; a - b));
+&lt;/script&gt;
+
+&lt;p&gt;{ordenados.join(' · ')}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;0.9 · 4 · 12.5&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>[...precos]</dt><dd>os três pontos <strong>copiam</strong> a lista para uma lista nova. Sem isso, o <code>sort</code> mexe na lista original — e mexer no estado por baixo do pano é o que causa tela que não atualiza.</dd>
+  <dt>.sort(...)</dt><dd>ordena a lista que recebeu e <strong>devolve a mesma lista</strong>, agora na ordem nova. Não é uma cópia: é a lista de entrada, modificada.</dd>
+  <dt>(a, b) =&gt;</dt><dd>a <strong>função de comparação</strong>: recebe dois itens por vez. O Svelte não chama essa função; quem chama é o <code>sort</code>, quantas vezes precisar.</dd>
+  <dt>a - b</dt><dd>a régua: <strong>número negativo</strong> põe <code>a</code> antes, <strong>positivo</strong> põe depois, <strong>zero</strong> mantém. Para texto, use <code>localeCompare</code>, que vem na seção 7.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="out:0.9 · 4 · 12.5">
+<p class="try-task"><strong>Missão:</strong> a lista sai na ordem do texto ("0.9 · 12.5 · 4"). Faça sair do menor preço para o maior — <code>0.9 · 4 · 12.5</code> — mudando só a chamada do <code>sort</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([12.5, 0.9, 4]);
+  let ordenados = $derived([...precos].sort());
+&lt;/script&gt;
+
+&lt;p&gt;{ordenados.join(' · ')}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([12.5, 0.9, 4]);
+  let ordenados = $derived([...precos].sort((a, b) =&gt; a - b));
+&lt;/script&gt;
+
+&lt;p&gt;{ordenados.join(' · ')}&lt;/p&gt;</pre>
+</div>
+
+<div class="warning">
+<strong>Por que a cópia importa tanto</strong>
+<p>Se você escrever <code>produtos.sort(...)</code> dentro de um <code>$derived</code>, o <code>sort</code> reordena a própria lista que está no <code>$state</code>. Em modo de desenvolvimento o Svelte avisa que você está alterando estado durante um cálculo; em produção o código roda e a tela pode ficar com a ordem antiga na cabeça. A cópia custa uma lista nova na memória e economiza uma tarde de depuração.</p>
+</div>
+
+<hr>
+
+<h2>5. As duas coisas juntas, com <code>$derived</code></h2>
+
+<p>Na vida real a Ana quer as duas operações ao mesmo tempo: os produtos que contêm "pão", do mais barato para o mais caro. Isso é uma <strong>corrente</strong>: o filtro entrega uma lista menor, e o <code>sort</code> recebe essa lista menor. A ordem da corrente importa — filtrar antes de ordenar evita ordenar quarenta itens para mostrar dois.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 1, nome: 'Pão francês', preco: 0.9 },
+    { id: 2, nome: 'Bolo de fubá', preco: 12.5 },
+    { id: 3, nome: 'Pão de queijo', preco: 4 }
+  ]);
+
+  let busca = $state('pão');
+  let visiveis = $derived(
+    produtos
+      .filter((p) =&gt; p.nome.toLowerCase().includes(busca.toLowerCase()))
+      .sort((a, b) =&gt; a.preco - b.preco)
+  );
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each visiveis as p (p.id)}
+    &lt;li&gt;{p.nome} — R$ {p.preco.toFixed(2)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O resultado mostra os dois pães, o mais barato primeiro:</p>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Pão francês — R$ 0.90&lt;/li&gt;&lt;li&gt;Pão de queijo — R$ 4.00&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Repare numa coisa: aqui <code>sort</code> está sendo chamado direto no resultado do filtro, sem colchetes e sem três pontos. Isso é seguro porque o filtro já devolveu uma lista nova, que ninguém mais está usando — não existe estado original para estragar. A cópia só é necessária quando a lista que você ordena é a que está guardada no <code>$state</code>.</p>
+
+<dl class="anatomy">
+  <dt>let visiveis = $derived(…)</dt><dd>o valor é <strong>calculado</strong>, não guardado: sempre que <code>produtos</code> ou <code>busca</code> mudam, o Svelte recalcula e a tela acompanha.</dd>
+  <dt>produtos</dt><dd>o ponto de partida da corrente: a lista inteira, do jeito que está no estado.</dd>
+  <dt>.filter(…)</dt><dd>a primeira peneira: devolve uma lista nova, menor. O que não passar na condição não chega ao próximo passo.</dd>
+  <dt>.sort(…)</dt><dd>a segunda peneira não tira ninguém: reordena a lista que o filtro devolveu.</dd>
+  <dt>as quebras de linha</dt><dd>um ponto no começo da linha continua a expressão da linha anterior. Serve só para o olho ler a corrente em degraus.</dd>
+</dl>
+
+<p>Esse componente já é útil: se a busca mudar, a lista se refaz. Falta o campo onde a Ana digita, e o terminal abaixo mostra o servidor de desenvolvimento da padaria rodando.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1284 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Enquanto esse comando roda, cada <code>Ctrl+S</code> no <code>src/App.svelte</code> aparece no navegador em menos de um segundo. O endereço <code>localhost:5173</code> é a máquina da Ana falando com ela mesma.</p>
+
+<hr>
+
+<h2>6. O campo de busca: <code>bind:value</code></h2>
+
+<p>Até agora a busca estava escrita no código. Para a Ana digitar, o campo de texto precisa estar ligado à variável <code>busca</code> nos dois sentidos: o que ela digita vira o valor da variável e o valor da variável aparece no campo. No Svelte isso é a palavra <code>bind</code> depois de dois pontos.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 1, nome: 'Pão francês', preco: 0.9 },
+    { id: 2, nome: 'Bolo de fubá', preco: 12.5 },
+    { id: 3, nome: 'Pão de queijo', preco: 4 }
+  ]);
+
+  let busca = $state('pão');
+  let visiveis = $derived(
+    produtos.filter((p) =&gt; p.nome.toLowerCase().includes(busca.toLowerCase()))
+  );
+&lt;/script&gt;
+
+&lt;label for="busca"&gt;Buscar no balcão&lt;/label&gt;
+&lt;input id="busca" bind:value={busca} placeholder="pão" /&gt;
+
+&lt;p&gt;{visiveis.length} produto(s)&lt;/p&gt;</pre>
+
+<p>Na primeira renderização o campo já nasce com o valor que estava no estado:</p>
+
+<pre class="out">&lt;label for="busca"&gt;Buscar no balcão&lt;/label&gt; &lt;input id="busca" value="pão" placeholder="pão"/&gt; &lt;p&gt;2 produto(s)&lt;/p&gt;</pre>
+
+<p>O <code>value="pão"</code> no HTML gerado é a prova de que a ligação existe nos dois sentidos. Sem <code>bind</code>, você escreveria um <code>oninput</code> que lê <code>event.target.value</code> e atribui à variável: mais código para o mesmo resultado.</p>
+
+<p>Existe um custo, e ele vale para toda ligação de duas vias: o valor do campo passa a ser a fonte da verdade. Se você formatar o que a pessoa digita (tirar espaços, trocar vírgula por ponto), precisa fazer isso na leitura, não no valor guardado, senão o cursor pula para o fim a cada letra. Para busca isso raramente incomoda; para dinheiro, incomoda muito.</p>
+
+<hr>
+
+<h2>7. Texto com acento: <code>localeCompare</code></h2>
+
+<p>Ordenar nome de produto com <code>a - b</code> não funciona: subtrair texto dá <code>NaN</code>, que quer dizer "não é número", e a lista fica na ordem em que veio. Para texto existe <code>localeCompare</code>, uma função que sabe as regras do idioma — inclusive onde ficam as letras acentuadas.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nomes = $state(['Bolo de fubá', 'Água de coco', 'Pão francês']);
+  let ordenados = $derived([...nomes].sort((a, b) =&gt; a.localeCompare(b, 'pt-BR')));
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each ordenados as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>A lista sai em ordem alfabética portuguesa, com "Água" antes de "Bolo":</p>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Água de coco&lt;/li&gt;&lt;li&gt;Bolo de fubá&lt;/li&gt;&lt;li&gt;Pão francês&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O segundo argumento, <code>'pt-BR'</code>, escolhe as regras do português do Brasil. Sem ele, o navegador usa o idioma do sistema de quem abriu a página, e a mesma lista pode sair em ordem diferente no computador da Ana e no celular da cliente. Para quem programa no Brasil e escreve em português, dizer o idioma é uma linha de código que evita uma reclamação.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Pão Broa Bolo inverter">
+<p class="try-task"><strong>Missão:</strong> o botão "inverter" muda a variável <code>crescente</code>, mas a lista não muda de ordem. Faça o primeiro clique mostrar <strong>Pão, Broa, Bolo</strong> — a ordem alfabética de trás para a frente.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nomes = $state(['Pão', 'Bolo', 'Broa']);
+  let crescente = $state(true);
+  let ordenados = $derived([...nomes].sort((a, b) =&gt; a.localeCompare(b, 'pt-BR')));
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each ordenados as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;button onclick={() =&gt; (crescente = !crescente)}&gt;inverter&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nomes = $state(['Pão', 'Bolo', 'Broa']);
+  let crescente = $state(true);
+  let ordenados = $derived(
+    [...nomes].sort((a, b) =&gt; (crescente ? 1 : -1) * a.localeCompare(b, 'pt-BR'))
+  );
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each ordenados as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;button onclick={() =&gt; (crescente = !crescente)}&gt;inverter&lt;/button&gt;</pre>
+</div>
+
+<p>A solução multiplica o resultado da comparação por <code>1</code> ou por <code>-1</code>. Multiplicar por <code>-1</code> troca o sinal: o que era negativo vira positivo, e a ordem se inverte inteira. É o mesmo truque do <code>b - a</code> da seção 4, escrito de um jeito que serve tanto para número quanto para texto.</p>
+
+<hr>
+
+<h2>8. Mostrar dinheiro com <code>Intl.NumberFormat</code></h2>
+
+<p>O preço guardado é número; o preço na parede é dinheiro. O JavaScript tem um formatador pronto, que conhece o símbolo do real, a vírgula decimal e o ponto de milhar. Ele se chama <code>Intl.NumberFormat</code> e não precisa de biblioteca nenhuma.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = 0.9;
+  let reais = new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(preco);
+&lt;/script&gt;
+
+&lt;p&gt;{reais}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;R$ 0,90&lt;/p&gt;</pre>
+
+<p>Aquele <code>0,90</code> com vírgula é o formatador trabalhando: ele sabe que em português a casa decimal se separa por vírgula. O espaço entre <code>R$</code> e o número também vem dele.</p>
+
+<p>O custo é que a função é <em>verbosa</em>: quatro linhas de configuração para um preço. Com dez lugares mostrando dinheiro, ninguém quer repetir isso dez vezes. A saída é criar o formatador <strong>uma vez</strong> e guardar a função pronta:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Bolo de fubá', preco: 12.5 }
+  ]);
+
+  const reais = new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as p}
+    &lt;li&gt;{p.nome} — {reais.format(p.preco)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O HTML gerado é o mesmo de antes, porque o resultado é o mesmo — só o custo de criar o formatador caiu de uma vez por item para uma vez por página:</p>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Pão francês — R$ 0,90&lt;/li&gt;&lt;li&gt;Bolo de fubá — R$ 12,50&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Esse padrão — preparar a ferramenta uma vez, usar muitas — volta na aula <strong>Evitando Trabalho Repetido</strong>, onde ele aparece com um contador de chamadas na tela para você ver a diferença com os próprios olhos.</p>
+
+<hr>
+
+<h2>9. Quando o filtro não acha nada</h2>
+
+<p>Uma lista vazia é o caso mais comum de todos e o mais esquecido. A Ana digita "torta", não existe torta no quadro, e a tela mostra… nada. Um espaço em branco faz a pessoa achar que o site quebrou. O componente precisa dizer, com palavras, que a busca não encontrou nada.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 1, nome: 'Pão francês', preco: 0.9 },
+    { id: 2, nome: 'Bolo de fubá', preco: 12.5 }
+  ]);
+
+  let busca = $state('torta');
+  let visiveis = $derived(
+    produtos.filter((p) =&gt; p.nome.toLowerCase().includes(busca.toLowerCase()))
+  );
+&lt;/script&gt;
+
+{#if visiveis.length === 0}
+  &lt;p&gt;Nenhum produto com "{busca}".&lt;/p&gt;
+{:else}
+  &lt;ul&gt;
+    {#each visiveis as p (p.id)}
+      &lt;li&gt;{p.nome}&lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}</pre>
+
+<pre class="out">&lt;p&gt;Nenhum produto com "torta".&lt;/p&gt;</pre>
+
+<p>O <code>{#if}</code> olha o tamanho da lista: zero é falso, qualquer outro número é verdadeiro. Repare que a mensagem cita a busca — <code>"{busca}"</code> — para a pessoa ver o que ela digitou e corrigir o erro de digitação. Uma mensagem genérica ("nenhum resultado") obriga a pessoa a reler o campo; uma mensagem com o termo mostra o problema na hora.</p>
+
+<p>O mesmo cuidado vale para a lista que ainda está carregando: "carregando" e "nenhum resultado" são situações diferentes, e mostrar a segunda enquanto os dados vêm da rede faz a pessoa desistir de um produto que existe.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador e do renderizador desta versão, copiadas como estão. Cada uma representa um erro que aparece na primeira semana de quem começa a mexer com listas.</p>
+
+<div class="cenario">
+<strong>Erro 1 — parêntese que não fecha</strong>
+<p>A condição do filtro tem muitos parênteses: os da função, os da comparação, os da chamada. Faltando um, o compilador não consegue ler a expressão e aponta o último pedaço que entendeu.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([{ nome: 'Pão', preco: 0.9 }]);
+&lt;/script&gt;
+
+&lt;p&gt;{produtos.filter((p) =&gt; p.preco &gt; 0}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 38): Unexpected token</pre>
+<p>"Unexpected token" quer dizer "achei um pedaço de código que não encaixa aqui". A posição apontada é o fim da linha, não o parêntese que falta — por isso a dica é contar os pares: cada <code>(</code> aberto precisa de um <code>)</code> fechado, na mesma ordem.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — runa sem parênteses</strong>
+<p>Quem vem de outro framework tenta tratar <code>$derived</code> como uma palavra que se usa com sinal de igual. A runa é uma chamada de função: abre parêntese, recebe a expressão, fecha parêntese.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state(['Pão']);
+  let visiveis = $derived = produtos;
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.length}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 17): Cannot use rune without parentheses</pre>
+<p>A mensagem é direta: a runa precisa de parênteses. O certo é <code>let visiveis = $derived(produtos)</code>. Repare que o <code>=</code> continua ali, mas ele é a atribuição normal de uma variável — o que vai entre parênteses é o que a runa calcula.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — filtrar o que não é lista</strong>
+<p>Este compila: o erro só aparece na hora de desenhar a tela. Se <code>produtos</code> é um objeto com um produto só, ele não tem a função <code>filter</code>, e o navegador avisa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state({ nome: 'Pão' });
+&lt;/script&gt;
+
+&lt;p&gt;{produtos.filter((p) =&gt; p.preco &gt; 0).length}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: produtos.filter is not a function</pre>
+<p>"is not a function" é o recado de que o valor do lado esquerdo do ponto não é do tipo que você pensou. Neste caso, a lista virou um objeto: trocar os colchetes <code>[ ]</code> por chaves <code>{ }</code> é o bastante para o erro aparecer, e trocar de volta resolve.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>As funções desta aula, com o que cada uma devolve. A tabela serve para qualquer lista, não só para produtos de padaria.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escreva</th><th>Recebe</th><th>Devolve</th></tr>
+<tr><td><code>lista.filter(f)</code></td><td>função que devolve sim ou não</td><td>lista nova, menor</td></tr>
+<tr><td><code>[...lista].sort(f)</code></td><td>função que compara dois itens</td><td>lista nova, ordenada</td></tr>
+<tr><td><code>lista.toSorted(f)</code></td><td>a mesma função de comparação</td><td>lista nova, ordenada (sem os três pontos)</td></tr>
+<tr><td><code>lista.map(f)</code></td><td>função que transforma um item</td><td>lista nova, do mesmo tamanho</td></tr>
+<tr><td><code>lista.join(', ')</code></td><td>o separador</td><td>um texto com todos os itens</td></tr>
+<tr><td><code>a.localeCompare(b, 'pt-BR')</code></td><td>dois textos</td><td>negativo, zero ou positivo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que aconteceu</th><th>Como resolver</th></tr>
+<tr><td>Unexpected token</td><td>parêntese ou chave fora de lugar</td><td>contar os pares e olhar a coluna apontada</td></tr>
+<tr><td>Cannot use rune without parentheses</td><td><code>$derived</code> sem <code>( )</code></td><td><code>$derived(expressão)</code></td></tr>
+<tr><td>… is not a function</td><td>o valor não é do tipo esperado</td><td>conferir se a lista é lista</td></tr>
+<tr><td>saída em ordem alfabética de número</td><td><code>sort()</code> sem régua numérica</td><td><code>sort((a, b) =&gt; a - b)</code></td></tr>
+<tr><td>a tela não atualiza depois do <code>sort</code></td><td><code>sort</code> mexeu no <code>$state</code></td><td>copiar antes: <code>[...lista]</code></td></tr>
+</table>
+</div>
+
+<p>Para conferir o que o navegador está realmente recebendo, o comando de build mostra cada arquivo gerado e quanto ele pesa. Rode no projeto da Ana depois de salvar a busca:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-lE9QqbD1.js  40.91 kB │ gzip: 15.77 kB
+✓ built in 1.15s</pre>
+
+<p>Os <code>111 modules</code> são os arquivos que o Vite juntou, incluindo o componente com o filtro e o <code>sort</code>. O nome com hash muda quando o conteúdo muda: é o que permite guardar o arquivo em cache sem medo de mostrar código velho.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual é a diferença entre <code>filter</code> e <code>sort</code>?</p>
+<label><input type="radio" name="q1"> <code>filter</code> ordena e <code>sort</code> escolhe itens</label>
+<label><input type="radio" name="q1"> <code>filter</code> tira itens; <code>sort</code> mantém todos e muda a ordem</label>
+<label><input type="radio" name="q1"> os dois fazem a mesma coisa, com nomes diferentes</label>
+<label><input type="radio" name="q1"> <code>filter</code> só funciona com números</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que <code>[...produtos].sort(...)</code> é mais seguro que <code>produtos.sort(...)</code>?</p>
+<label><input type="radio" name="q1"> porque os três pontos deixam o código mais rápido</label>
+<label><input type="radio" name="q1"> porque o <code>sort</code> não aceita a lista do <code>$state</code></label>
+<label><input type="radio" name="q1"> porque os três pontos copiam a lista, e o <code>sort</code> não altera o estado original</label>
+<label><input type="radio" name="q1"> porque sem os três pontos o compilador recusa o arquivo</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>(a, b) =&gt; a - b</code> diz ao <code>sort</code>?</p>
+<label><input type="radio" name="q1"> que <code>a</code> vem antes de <code>b</code> quando o resultado é negativo</label>
+<label><input type="radio" name="q1"> que os dois itens devem ser somados</label>
+<label><input type="radio" name="q1"> que a lista deve ser filtrada antes</label>
+<label><input type="radio" name="q1"> que o <code>sort</code> deve comparar como texto</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let busca = $state('pão');<br>let visiveis = $derived(<br>&nbsp;&nbsp;produtos.<input data-answer="filter">((p) =&gt; p.nome.includes(busca))<br>);<br><br>// só os produtos cujo nome contém a busca entram na lista</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><strong>Filtrar</strong> escolhe quem entra na lista; <strong>ordenar</strong> decide quem vem primeiro. São operações independentes.</li>
+  <li><code>lista.filter((p) =&gt; condição)</code> devolve uma lista nova, menor, sem tocar na original.</li>
+  <li><code>lista.sort((a, b) =&gt; a - b)</code> ordena número; sem a régua, o JavaScript compara como texto e a ordem sai errada.</li>
+  <li><code>sort</code> altera a lista de entrada. Copie antes com <code>[...lista]</code> ou use <code>toSorted</code>.</li>
+  <li><code>$derived</code> recalcula a lista sozinho quando o estado de que ela depende muda.</li>
+  <li>Corrente de operações: filtrar primeiro e ordenar depois evita trabalho à toa.</li>
+  <li><code>bind:value</code> liga o campo de texto ao estado nos dois sentidos.</li>
+  <li><code>a.localeCompare(b, 'pt-BR')</code> ordena texto com acento nas regras do português.</li>
+  <li><code>Intl.NumberFormat</code> formata dinheiro; crie o formatador uma vez e reuse.</li>
+  <li>Lista vazia merece uma mensagem com o termo buscado, para a pessoa entender o que aconteceu.</li>
+  <li>A saída desta aula é a do compilador de verdade: mesmo código, mesmo HTML.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

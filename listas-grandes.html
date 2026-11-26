@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listas Grandes — desenhar aos poucos sem travar a tela | Guia Svelte</title>
+<meta name="description" content="Listas grandes em Svelte 5: desenhar por lotes, requestAnimationFrame, tick(), chaves no each e content-visibility, com a saída real do compilador e erros de verdade.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Listas Grandes</span></h1>
+
+<p class="intro">O mural de avisos da padaria virou o mural da rua inteira: cinco mil papéis, um por cliente. A Ana quer mostrar todos na tela, e o navegador dela começa a engasgar — a página demora a aparecer, o dedo rola e nada se move, o botão de fechar não responde. O problema não é ter cinco mil avisos guardados; é tentar <strong>desenhar</strong> os cinco mil de uma vez. Esta aula ensina a desenhar por partes, a esperar o desenho terminar e a deixar o navegador pular o que ninguém está olhando.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que uma lista grande trava a tela mesmo com o computador sobrando.</li>
+  <li>A diferença entre guardar cinco mil itens e desenhar cinco mil elementos.</li>
+  <li>Como desenhar por lotes com <code>slice</code> e um botão.</li>
+  <li>Como usar <code>requestAnimationFrame</code> para espalhar o trabalho em quadros.</li>
+  <li>Por que efeito não roda no servidor e o que isso muda na saída.</li>
+  <li>Como esperar o Svelte terminar de desenhar com <code>tick()</code>.</li>
+  <li>Por que a chave do <code>{#each}</code> importa quando a lista muda.</li>
+  <li>Como pedir ao navegador que pule o que está fora da tela com <code>content-visibility</code>.</li>
+  <li>Quando paginar, quando carregar aos poucos e quando só ignorar o problema.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o mural e o pincel</h2>
+
+<p>Imagine que a Ana precise pintar cinco mil plaquinhas de aviso. Ela tem tinta e tem tempo; o que ela não tem é cinco mil mãos ao mesmo tempo. Se ela pintar uma por uma, sem parar, o trabalho termina — mas ninguém consegue falar com ela enquanto isso, porque ela está ocupada. É exatamente o que acontece quando o navegador recebe a ordem de desenhar cinco mil elementos: ele desenha um atrás do outro e fica surdo para o resto, inclusive para o clique no botão de fechar.</p>
+
+<p>Guardar cinco mil avisos numa lista é barato: são cinco mil pedaços de texto na memória, e o computador nem sente. O caro é transformar cada um num elemento da página, com estilo, posição e evento. Cada elemento é uma caixinha que o navegador precisa calcular e pintar. Multiplique por cinco mil e o trabalho de um quadro de tela passa a levar mais de um segundo — e a pessoa vê a página travada.</p>
+
+<p>A solução tem três nomes, e todos querem dizer "faça menos trabalho de uma vez": desenhar por <strong>lotes</strong> (cem agora, cem no próximo quadro), deixar o navegador <strong>pular</strong> o que está fora da tela, e <strong>medir</strong> antes de otimizar, porque às vezes a lista nem é grande o bastante para o esforço.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No mural</th><th>No componente</th></tr>
+<tr><td>Os cinco mil papéis guardados na gaveta</td><td>a lista <code>avisos</code> na memória</td></tr>
+<tr><td>Os papéis pregados na parede</td><td>os elementos que o <code>{#each}</code> cria no DOM</td></tr>
+<tr><td>Pintar tudo de uma vez e sumir do balcão</td><td>desenhar cinco mil de uma vez e travar a página</td></tr>
+<tr><td>Pintar cem, atender o cliente, pintar mais cem</td><td>lotes com <code>requestAnimationFrame</code></td></tr>
+<tr><td>Deixar o papel de lado até alguém olhar</td><td><code>content-visibility: auto</code></td></tr>
+<tr><td>Contar quantos papéis cabem na parede</td><td>medir antes de otimizar</td></tr>
+</table>
+</div>
+
+<p>O vocabulário: <em>DOM</em> é a árvore de elementos que o navegador desenha; <em>quadro</em> é uma passada de desenho, umas sessenta por segundo num monitor comum; <em>lote</em> é um pedaço do trabalho; e <em>tick</em> é o aviso de que o Svelte terminou de aplicar as mudanças. Quatro palavras que separam "funciona" de "funciona sem travar".</p>
+
+<hr>
+
+<h2>2. O problema: cinco mil de uma vez</h2>
+
+<p>Comece com a lista inteira, do jeito mais direto. O componente abaixo cria cinco mil avisos com <code>Array.from</code> e desenha todos com um <code>{#each}</code>. Na tela não parece muito; no DOM, é uma parede de cinco mil elementos.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 5000 }, (_, i) =&gt; `Aviso ${i + 1}`);
+&lt;/script&gt;
+
+&lt;p&gt;O mural tem {avisos.length} avisos.&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each avisos.slice(0, 3) as aviso}
+    &lt;li&gt;{aviso}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Para não publicar cinco mil linhas de saída, este primeiro exemplo mostra só os três primeiros. O número no começo é o que importa:</p>
+
+<pre class="out">&lt;p&gt;O mural tem 5000 avisos.&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Aviso 1&lt;/li&gt;&lt;li&gt;Aviso 2&lt;/li&gt;&lt;li&gt;Aviso 3&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<dl class="anatomy">
+  <dt>Array.from({ length: 5000 })</dt><dd>cria uma lista de cinco mil posições. O segundo argumento, <code>(_, i) =&gt; …</code>, preenche cada posição; o <code>_</code> é o valor que não usamos e o <code>i</code> é o índice.</dd>
+  <dt>{avisos.length}</dt><dd>quantos itens existem. O número sai na tela e é a prova de que a lista está completa, mesmo quando o desenho é só de um pedaço.</dd>
+  <dt>avisos.slice(0, 3)</dt><dd>a fatia dos três primeiros. Fatiar aqui é uma escolha de quem escreve o exemplo: sem ela, o <code>{#each}</code> desenharia os cinco mil.</dd>
+  <dt>{#each avisos.slice(0, 3) as aviso}</dt><dd>um bloco repetido por item da fatia. Cada volta cria um <code>&lt;li&gt;</code> de verdade no DOM.</dd>
+  <dt>{aviso}</dt><dd>o texto do item atual. Um item de lista grande quase sempre é um objeto; aqui é texto para o exemplo caber na cabeça.</dd>
+</dl>
+
+<p>O custo aparece quando o <code>{#each}</code> recebe a lista inteira. Cada item vira um elemento, e cada elemento precisa ser criado, medido e pintado. O navegador faz isso num único quadro; enquanto ele está ocupado, o clique na tela espera na fila. Não é a memória que acaba — é o <strong>tempo</strong> do quadro que estoura.</p>
+
+<div class="warning">
+<strong>Cinco mil não é o número mágico</strong>
+<p>A conta muda com o tamanho de cada item e com a máquina da pessoa. Um celular simples começa a engasgar com algumas centenas de cartões com imagem; um notebook novo desenha alguns milhares sem reclamar. O número que importa é o que a <em>sua</em> tela mostra sem travar, e ele se descobre medindo, não adivinhando.</p>
+</div>
+
+<hr>
+
+<h2>3. Desenhar por lotes</h2>
+
+<p>A primeira defesa é simples: desenhe um lote e deixe o resto para depois. O estado guarda <em>quantos</em> itens já estão na tela, e o <code>{#each}</code> recebe uma fatia desse tamanho. O botão "mais 500" aumenta o número, e mais quinhentos elementos aparecem.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 5000 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  const LOTE = 500;
+
+  let quantos = $state(LOTE);
+  let visiveis = $derived(avisos.slice(0, quantos));
+&lt;/script&gt;
+
+&lt;p&gt;Desenhando {visiveis.length} de {avisos.length}&lt;/p&gt;
+&lt;p&gt;Último: {visiveis.at(-1)}&lt;/p&gt;
+
+&lt;button onclick={() =&gt; (quantos += LOTE)}&gt;mais {LOTE}&lt;/button&gt;</pre>
+
+<p>O HTML sai com o primeiro lote já desenhado, e o botão mostra o tamanho do próximo:</p>
+
+<pre class="out">&lt;p&gt;Desenhando 500 de 5000&lt;/p&gt; &lt;p&gt;Último: Aviso 500&lt;/p&gt; &lt;button&gt;mais 500&lt;/button&gt;</pre>
+
+<p>Repare no <code>visiveis.at(-1)</code>: ele devolve o último item da fatia, e é uma forma barata de mostrar na tela que o lote chegou até o fim. O <code>at(-1)</code> conta de trás para a frente — <code>-1</code> é o último, <code>-2</code> o penúltimo — e evita a conta <code>visiveis[visiveis.length - 1]</code>, que é a mesma coisa escrita com mais caracteres.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^150 de 300">
+<p class="try-task"><strong>Missão:</strong> o botão diz "mais 100" e soma 1. Faça ele somar um lote de 100 e chegar a <strong>150 de 300</strong> depois de um clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 300 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  const LOTE = 100;
+  let quantos = $state(50);
+&lt;/script&gt;
+
+&lt;p&gt;{quantos} de 300&lt;/p&gt;
+&lt;button onclick={() =&gt; (quantos += 1)}&gt;mais 100&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 300 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  const LOTE = 100;
+  let quantos = $state(50);
+&lt;/script&gt;
+
+&lt;p&gt;{quantos} de 300&lt;/p&gt;
+&lt;button onclick={() =&gt; (quantos += LOTE)}&gt;mais 100&lt;/button&gt;</pre>
+</div>
+
+<p>Essa solução resolve o travamento, mas tem um custo de paciência: para chegar ao fim de cinco mil itens, a pessoa precisa clicar dez vezes. É o mesmo trade-off da paginação, com uma diferença: ali a tela mostrava uma página por vez e o número era explícito; aqui a lista cresce e a rolagem continua de onde estava.</p>
+
+<hr>
+
+<h2>4. Espalhar o trabalho em quadros</h2>
+
+<p>Em vez de esperar o clique, o componente pode desenhar sozinho, um lote por quadro. Quem marca o próximo quadro é <code>requestAnimationFrame</code>: você entrega uma função e o navegador a chama antes de pintar o próximo quadro. Entre um quadro e outro, ele atende o clique, a rolagem e o que mais estiver esperando.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 5000 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  const LOTE = 500;
+
+  let quantos = $state(0);
+
+  $effect(() =&gt; {
+    function passo() {
+      quantos = Math.min(quantos + LOTE, avisos.length);
+      if (quantos &lt; avisos.length) requestAnimationFrame(passo);
+    }
+    requestAnimationFrame(passo);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{quantos} de {avisos.length} avisos desenhados&lt;/p&gt;
+
+&lt;ol&gt;
+  {#each avisos.slice(0, quantos) as aviso}
+    &lt;li&gt;{aviso}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+
+<p>Aqui a saída do compilador mostra zero, e isso não é defeito:</p>
+
+<pre class="out">&lt;p&gt;0 de 5000 avisos desenhados&lt;/p&gt; &lt;ol&gt;&lt;/ol&gt;</pre>
+
+<p>O <code>{#each}</code> recebeu uma fatia de zero itens porque o estado começa em zero e quem o aumenta é um <code>$effect</code>. Efeito é código que só existe no navegador: no servidor não há tela para atualizar, e o Svelte não executa efeitos durante a renderização do servidor. Por isso o HTML devolvido mostra o estado inicial e a lista vazia. No navegador, o primeiro quadro desenha 500, o segundo 1000, e assim por diante.</p>
+
+<p>Um cuidado que vale a pena registrar: um <code>$effect</code> que muda o estado que ele mesmo lê entra em laço, e o navegador interrompe com <code>https://svelte.dev/e/effect_update_depth_exceeded</code>. No exemplo acima o efeito escreve em <code>quantos</code> e não lê <code>quantos</code> fora da função <code>passo</code>, que roda por quadro — por isso ele para no fim da lista.</p>
+
+<p>Esse detalhe muda como você escreve componentes que vão rodar nos dois lugares. Se a lista precisa aparecer completa já no primeiro HTML — por causa de busca ou de leitor de tela —, o lote inicial não pode ser zero. Uma saída comum é começar com um lote pequeno, tipo 50, e deixar o efeito cuidar do resto.</p>
+
+<p>O servidor de desenvolvimento da Ana mostra o componente salvando e recarregando a cada mudança:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1158 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<div class="trysvelte" data-goal="clique:button;;depois:400;;outre:^5 lotes, 500 de 500">
+<p class="try-task"><strong>Missão:</strong> o botão desenha os 500 de uma vez e o contador de lotes fica em zero. Desenhe em 5 lotes de 100, um por quadro, e mostre <strong>5 lotes, 500 de 500</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 500 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  const LOTE = 100;
+  let quantos = $state(0);
+  let lotes = $state(0);
+
+  function tudo() {
+    quantos = avisos.length;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{lotes} lotes, {quantos} de 500&lt;/p&gt;
+&lt;button onclick={tudo}&gt;desenhar tudo&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each avisos.slice(0, quantos) as aviso}
+    &lt;li&gt;{aviso}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 500 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  const LOTE = 100;
+  let quantos = $state(0);
+  let lotes = $state(0);
+
+  function tudo() {
+    quantos = 0;
+    lotes = 0;
+    function passo() {
+      quantos += LOTE;
+      lotes += 1;
+      if (quantos &lt; avisos.length) requestAnimationFrame(passo);
+    }
+    passo();
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{lotes} lotes, {quantos} de 500&lt;/p&gt;
+&lt;button onclick={tudo}&gt;desenhar tudo&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each avisos.slice(0, quantos) as aviso}
+    &lt;li&gt;{aviso}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<hr>
+
+<h2>5. Esperar o desenho terminar: <code>tick()</code></h2>
+
+<p>Quando você muda um estado, o Svelte não redesenha na mesma linha: ele anota a mudança e desenha no fim do trabalho atual. Isso é ótimo para desempenho, porque dez mudanças seguidas viram um desenho só. E é uma armadilha quando você precisa <em>ler</em> o DOM logo depois de mudar o estado, porque o DOM ainda está velho.</p>
+
+<p>A função <code>tick()</code> devolve uma promessa que resolve quando as mudanças pendentes forem aplicadas. Ela vem do pacote <code>svelte</code> e é importada como qualquer outra função. Quem espera com <code>await</code> recebe o controle depois do desenho, com o DOM atualizado.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+
+  const avisos = Array.from({ length: 500 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  let quantos = $state(0);
+  let noDom = $state(0);
+
+  async function desenhar() {
+    quantos = avisos.length;
+    await tick();
+    noDom = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{noDom} itens no DOM&lt;/p&gt;
+&lt;button onclick={desenhar}&gt;desenhar&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each avisos.slice(0, quantos) as aviso}
+    &lt;li&gt;{aviso}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;p&gt;0 itens no DOM&lt;/p&gt; &lt;button&gt;desenhar&lt;/button&gt; &lt;ul&gt;&lt;/ul&gt;</pre>
+
+<p>Sem o <code>await tick()</code>, a conta sairia com o número antigo: a função mudou <code>quantos</code> para 500, mas o DOM ainda tinha zero elementos quando a medição rodou. Esse "zero" é o tipo de número que faz alguém desconfiar do Svelte quando o problema está na ordem em que o código roda.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^300 itens no DOM">
+<p class="try-task"><strong>Missão:</strong> o botão mede antes de o Svelte desenhar e mostra <strong>0 itens no DOM</strong>. Faça a medição acontecer depois do desenho e mostrar <code>300 itens no DOM</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+
+  const avisos = Array.from({ length: 300 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  let quantos = $state(0);
+  let noDom = $state(0);
+
+  function desenhar() {
+    quantos = avisos.length;
+    noDom = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{noDom} itens no DOM&lt;/p&gt;
+&lt;button onclick={desenhar}&gt;medir&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each avisos.slice(0, quantos) as aviso}
+    &lt;li&gt;{aviso}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+
+  const avisos = Array.from({ length: 300 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  let quantos = $state(0);
+  let noDom = $state(0);
+
+  async function desenhar() {
+    quantos = avisos.length;
+    await tick();
+    noDom = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{noDom} itens no DOM&lt;/p&gt;
+&lt;button onclick={desenhar}&gt;medir&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each avisos.slice(0, quantos) as aviso}
+    &lt;li&gt;{aviso}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Medir o DOM com <code>document.querySelectorAll</code> funciona dentro do componente, mas não é o jeito mais Svelte de fazer as coisas: o estado já sabe quantos itens existem. Use <code>tick()</code> quando precisar falar com uma biblioteca de fora — um gráfico, um mapa, um editor — que só aceita medidas do DOM pronto.</p>
+
+<hr>
+
+<h2>6. A chave de cada item</h2>
+
+<p>Quando a lista muda — um item entra, outro sai, a ordem troca —, o Svelte precisa saber qual elemento corresponde a qual item. A chave, aquele parêntese depois do <code>as</code>, responde isso. Sem chave, ele usa a posição; com chave, ele usa a identidade que você escolher.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let avisos = $state([
+    { id: 7, texto: 'Pão saindo do forno' },
+    { id: 8, texto: 'Bolo de fubá na promoção' }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each avisos as aviso (aviso.id)}
+    &lt;li&gt;{aviso.texto}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;button onclick={() =&gt; avisos.unshift({ id: 6, texto: 'Forno ligado' })}&gt;
+  chegar aviso novo
+&lt;/button&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Pão saindo do forno&lt;/li&gt;&lt;li&gt;Bolo de fubá na promoção&lt;/li&gt;&lt;/ul&gt; &lt;button&gt;chegar aviso novo&lt;/button&gt;</pre>
+
+<p>O botão coloca um aviso novo no começo da lista com <code>unshift</code>. Com a chave <code>(aviso.id)</code>, o Svelte reconhece os dois avisos antigos e move os elementos em vez de recriá-los; no navegador, o resultado é o mesmo, mas o custo é menor e o foco do teclado não se perde. Sem chave, ele recria os três, e qualquer coisa que estivesse dentro do elemento — um campo digitado, uma imagem carregada — se perde.</p>
+
+<p>A chave precisa ser <strong>única</strong> na lista e <strong>estável</strong> entre uma renderização e outra. O índice da posição é a pior chave possível: quando um item entra no começo, todos os índices mudam e o Svelte conclui que todos os itens são novos. Use o <code>id</code> que veio do banco ou um identificador criado na hora em que o item nasceu. Se duas linhas receberem a mesma chave, o navegador interrompe a montagem com <code>https://svelte.dev/e/each_key_duplicate</code> — o endereço é a própria mensagem, em produção.</p>
+
+<hr>
+
+<h2>7. Deixar o navegador pular o que não aparece</h2>
+
+<p>Existe uma ajuda que não muda nada no JavaScript: uma propriedade de CSS chamada <code>content-visibility</code>. Com o valor <code>auto</code>, o navegador pula o desenho dos elementos que estão fora da área visível e calcula só quando eles se aproximam da tela. Os cinco mil elementos continuam no DOM; o que muda é quanto trabalho de pintura eles custam.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 5000 }, (_, i) =&gt; `Aviso ${i + 1}`);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each avisos as aviso}
+    &lt;li class="cartao"&gt;{aviso}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;style&gt;
+  .cartao {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 40px;
+    padding: 4px 0;
+    border-bottom: 1px solid #ddd;
+  }
+&lt;/style&gt;</pre>
+
+<p>O CSS que o compilador gerou leva o selo do componente em cada seletor:</p>
+
+<pre class="out">.cartao.svelte-1n46o8q {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 40px;
+    padding: 4px 0;
+    border-bottom: 1px solid #ddd;
+  }</pre>
+
+<p>O <code>contain-intrinsic-size</code> é o par obrigatório dessa técnica: sem ele, o navegador não sabe a altura de um elemento que ainda não desenhou, e a barra de rolagem fica pulando. Declarar uma altura estimada — <code>auto 40px</code> quer dizer "quarenta pixels, ou a altura real se ela já for conhecida" — mantém a rolagem estável.</p>
+
+<p>O custo é que a técnica não ajuda a criar os elementos, só a pintá-los. Criar cinco mil nós ainda leva tempo; o ganho vem na rolagem e na memória de pintura. Para listas realmente grandes, o caminho é combinar: fatiar para criar menos e <code>content-visibility</code> para pintar menos.</p>
+
+<hr>
+
+<h2>8. Três jeitos de domar uma lista grande</h2>
+
+<p>Não existe uma resposta única. Cada técnica resolve um problema diferente, e a escolha depende do que a pessoa precisa fazer com a lista.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Técnica</th><th>O que resolve</th><th>Custo</th></tr>
+<tr><td>Paginar</td><td>poucos elementos no DOM e um número de página explícito</td><td>a pessoa não vê o todo; precisa clicar</td></tr>
+<tr><td>Lotes com botão</td><td>a lista cresce sem perder a posição da rolagem</td><td>dez cliques para chegar ao fim</td></tr>
+<tr><td>Lotes automáticos</td><td>a tela responde enquanto o resto chega</td><td>mais código e um estado a mais para cuidar</td></tr>
+<tr><td><code>content-visibility</code></td><td>pintura e rolagem de listas já criadas</td><td>não reduz a criação dos elementos</td></tr>
+<tr><td>Busca e filtro</td><td>mostrar menos itens porque a pessoa pediu menos</td><td>depende de a pessoa saber o que procura</td></tr>
+</table>
+</div>
+
+<p>A ordem em que eu tentaria: primeiro filtrar (a lista de cinco mil raramente precisa aparecer inteira), depois paginar ou lotear, e só então mexer em CSS. O ganho maior quase sempre vem de mostrar menos itens, não de desenhar os mesmos itens mais rápido.</p>
+
+<hr>
+
+<h2>9. Medir antes de otimizar</h2>
+
+<p>Otimizar sem medir é chutar. A pergunta "está lento?" tem uma resposta numérica: quantos elementos existem no DOM e quanto tempo o navegador leva para desenhar. As ferramentas do navegador mostram isso no painel de desempenho, e um contador na própria tela já resolve a dúvida do dia a dia. Para o exemplo caber nesta página, ele mostra só os números; o <code>{#each}</code> que desenha os itens é o mesmo da seção 3.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 5000 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  const LOTE = 500;
+
+  let quantos = $state(LOTE);
+  let restantes = $derived(avisos.length - quantos);
+&lt;/script&gt;
+
+&lt;p&gt;Desenhados: {quantos}&lt;/p&gt;
+&lt;p&gt;Faltando: {restantes}&lt;/p&gt;
+
+&lt;button onclick={() =&gt; (quantos += LOTE)}&gt;mais {LOTE}&lt;/button&gt;</pre>
+
+<p>O componente conta o que está desenhado e o que falta, em vez de esconder o número:</p>
+
+<pre class="out">&lt;p&gt;Desenhados: 500&lt;/p&gt; &lt;p&gt;Faltando: 4500&lt;/p&gt; &lt;button&gt;mais 500&lt;/button&gt;</pre>
+
+<p>Esse contador é a diferença entre "acho que ficou mais rápido" e "ficou mais rápido". Se o número de elementos não mudou, o ganho veio de outro lugar — do CSS, da memória, do cache. E se a lista tem trinta itens, o número vai dizer que não havia problema nenhum, o que também é uma informação útil.</p>
+
+<p>Depois de medir, o build confirma quanto código foi para o navegador. O comando abaixo é o mesmo da padaria, rodado com o componente de lotes salvo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-3W8hq9ON.js  41.56 kB │ gzip: 15.93 kB
+✓ built in 1.45s</pre>
+
+<p>O tamanho do arquivo não cresce com a lista: os cinco mil avisos são criados em tempo de execução, com <code>Array.from</code>, e não estão escritos no código. O que pesa no download é a lógica; o que pesa na tela é o DOM. São dois custos diferentes, medidos de formas diferentes.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador e do navegador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>requestAnimationFrame</code> no servidor</strong>
+<p>Este erro aparece quando o componente roda também no servidor. A função é do navegador e não existe lá.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let avisos = $state(['Aviso 1', 'Aviso 2']);
+  requestAnimationFrame(() =&gt; console.log('desenhei'));
+&lt;/script&gt;
+
+&lt;p&gt;{avisos.length} avisos&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: requestAnimationFrame is not defined</pre>
+<p>A tradução: "não conheço esse nome". A defesa é chamar o <code>requestAnimationFrame</code> dentro de um <code>$effect</code> ou de um <code>onMount</code>, que só rodam no navegador. Chamar no corpo do <code>&lt;script&gt;</code> executa no servidor também, e é aí que quebra.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — medir o DOM antes de ele existir</strong>
+<p>Aqui a medição está no corpo do <code>&lt;script&gt;</code>, que roda também no servidor, onde não existe <code>document</code>.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const avisos = Array.from({ length: 5000 }, (_, i) =&gt; `Aviso ${i + 1}`);
+  const total = document.querySelectorAll('li').length;
+&lt;/script&gt;
+
+&lt;p&gt;{total} itens no DOM&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: document is not defined</pre>
+<p><code>document is not defined</code> aparece para qualquer coisa do navegador usada no servidor: <code>document</code>, <code>window</code>, <code>localStorage</code>. A correção é a mesma do erro 1: mover a medição para um <code>$effect</code> ou para dentro de uma função chamada por um clique.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — fatiar o que não é lista</strong>
+<p>O nome <code>avisos</code> sugere lista, mas o valor é um número. O compilador aceita; o erro aparece na hora de desenhar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let avisos = $state(5000);
+  let visiveis = $derived(avisos.slice(0, 500));
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.length}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: avisos.slice is not a function</pre>
+<p>"is not a function" quer dizer que o valor antes do ponto não tem essa função. Cinco mil é um número, não uma lista: para gerar a lista, use <code>Array.from({ length: 5000 }, …)</code>, como na seção 2.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escreva</th><th>Para que serve</th></tr>
+<tr><td><code>Array.from({ length: n }, (_, i) =&gt; …)</code></td><td>criar uma lista de <code>n</code> itens</td></tr>
+<tr><td><code>lista.slice(0, quantos)</code></td><td>a fatia que está desenhada</td></tr>
+<tr><td><code>requestAnimationFrame(f)</code></td><td>rodar <code>f</code> antes do próximo quadro</td></tr>
+<tr><td><code>await tick()</code></td><td>esperar o Svelte aplicar as mudanças no DOM</td></tr>
+<tr><td><code>{#each lista as item (item.id)}</code></td><td>dizer qual é a identidade de cada item</td></tr>
+<tr><td><code>content-visibility: auto</code></td><td>o navegador pula a pintura do que está fora da tela</td></tr>
+<tr><td><code>contain-intrinsic-size</code></td><td>altura estimada para a rolagem não pular</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que aconteceu</th><th>Como resolver</th></tr>
+<tr><td>requestAnimationFrame is not defined</td><td>função do navegador chamada no servidor</td><td>mover para <code>$effect</code> ou <code>onMount</code></td></tr>
+<tr><td>effect_update_depth_exceeded</td><td>efeito que lê o que escreve</td><td>escrever em outro estado ou num handler</td></tr>
+<tr><td>each_key_duplicate</td><td>chave repetida</td><td>usar um <code>id</code> único e estável</td></tr>
+<tr><td>a tela engasga com muitos itens</td><td>DOM grande demais num quadro</td><td>lotes, paginação ou filtro</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que trava a página numa lista de cinco mil itens?</p>
+<label><input type="radio" name="q1"> guardar cinco mil textos na memória</label>
+<label><input type="radio" name="q1"> o tamanho do arquivo JavaScript</label>
+<label><input type="radio" name="q1"> criar e pintar cinco mil elementos de uma vez</label>
+<label><input type="radio" name="q1"> o número de propriedades do objeto</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Para que serve <code>await tick()</code>?</p>
+<label><input type="radio" name="q1"> para apagar o estado depois do desenho</label>
+<label><input type="radio" name="q1"> para esperar o Svelte aplicar as mudanças no DOM antes de medir</label>
+<label><input type="radio" name="q1"> para forçar o navegador a desenhar mais rápido</label>
+<label><input type="radio" name="q1"> para criar um quadro novo de animação</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>content-visibility: auto</code> faz?</p>
+<label><input type="radio" name="q1"> deixa o navegador pular a pintura do que está fora da tela</label>
+<label><input type="radio" name="q1"> remove os elementos invisíveis do DOM</label>
+<label><input type="radio" name="q1"> carrega imagens só quando a pessoa clica</label>
+<label><input type="radio" name="q1"> impede que a lista seja maior que a tela</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let visiveis = $derived(avisos.<input data-answer="slice">(0, quantos));<br><br>// só os primeiros "quantos" itens vão para a tela</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Guardar muitos itens é barato; <strong>desenhar</strong> muitos elementos de uma vez é caro.</li>
+  <li>Desenhe por lotes: o estado guarda quantos itens já estão na tela e o <code>{#each}</code> recebe a fatia.</li>
+  <li><code>requestAnimationFrame</code> espalha o trabalho em quadros e deixa a página responder no meio.</li>
+  <li>Efeitos não rodam no servidor: por isso o HTML do servidor pode mostrar a lista vazia.</li>
+  <li><code>await tick()</code> espera o DOM ficar pronto antes de medir.</li>
+  <li>A chave <code>(item.id)</code> precisa ser única e estável; o índice é a pior escolha.</li>
+  <li><code>content-visibility: auto</code> com <code>contain-intrinsic-size</code> alivia a pintura.</li>
+  <li>Filtrar costuma resolver mais que otimizar: mostrar menos é mais barato que desenhar rápido.</li>
+  <li>Meça antes: um contador de elementos na tela responde "está lento?" com número.</li>
+  <li>O tamanho do arquivo e o tamanho do DOM são custos diferentes, medidos de formas diferentes.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
