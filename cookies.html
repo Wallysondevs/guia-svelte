@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cookies e Sessão — o crachá que o servidor lê | Guia Svelte</title>
+<meta name="description" content="Cookies no SvelteKit: set, get e delete, as opções httpOnly, path, sameSite e maxAge, o cabeçalho set-cookie real e os erros de nome, tamanho e valor inválido.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Cookies e Sessão</span></h1>
+
+<p class="intro">A Ana conhece os clientes pelo nome, mas não pode decorar a lista. Ela dá um crachá: o cliente leva, e na volta ela lê o crachá em vez de perguntar tudo de novo. Na web, o crachá se chama <strong>cookie</strong>: um pedacinho de texto que o servidor manda e o navegador devolve em cada visita. Esta aula é sobre entregar, ler e apagar esse crachá no SvelteKit — e sobre o cuidado que faz a diferença entre um crachá e um vazamento.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um cookie e por que a web precisa dele.</li>
+  <li>Como gravar com <code>cookies.set</code> e ler com <code>cookies.get</code>.</li>
+  <li>O que significam <code>path</code>, <code>httpOnly</code>, <code>sameSite</code>, <code>maxAge</code> e <code>secure</code>.</li>
+  <li>Como ler o cabeçalho <code>set-cookie</code> real com <code>curl -i</code>.</li>
+  <li>Como apagar um cookie e por que <code>Max-Age=0</code> aparece.</li>
+  <li>Por que <code>httpOnly</code> impede o JavaScript de ler o crachá.</li>
+  <li>A diferença entre guardar o nome e guardar um id de sessão.</li>
+  <li>Como o <code>hooks.server.js</code> transforma cookie em <code>locals</code>.</li>
+  <li>Três erros reais de cookie, com a mensagem do servidor.</li>
+  <li>O que nunca deve entrar num cookie.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o crachá que volta na próxima visita</h2>
+
+<p>HTTP não tem memória. Cada requisição chega como se fosse a primeira: o servidor não sabe que você esteve ali dez segundos atrás. Sem algo a mais, o site pediria sua senha em cada clique. O cookie resolve isso do jeito mais simples possível: o servidor manda um texto na resposta, o navegador guarda, e devolve o mesmo texto em toda requisição seguinte para aquele endereço.</p>
+
+<p>É um crachá, com as mesmas vantagens e os mesmos riscos. Vantagem: você não precisa se identificar de novo a cada porta. Risco: quem pegar o crachá na sua mão pode se passar por você. Por isso o crachá de sessão de verdade não tem o seu nome — tem um número aleatório difícil de adivinhar, e o servidor é quem sabe a qual pessoa aquele número pertence.</p>
+
+<p>Outro detalhe importante: o cookie pertence a um <strong>domínio</strong>. O que o site da padaria guarda não é enviado para o site do banco. E existe um limite de tamanho — cerca de 4 KB por cookie — porque ele viaja em toda requisição, e crachá gigante atrasa a fila inteira.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>Na web</th></tr>
+<tr><td>O crachá com o número do cliente</td><td>O cookie de sessão</td></tr>
+<tr><td>O caderno que liga número a nome</td><td>O banco de sessões no servidor</td></tr>
+<tr><td>"Válido só nesta loja"</td><td><code>path=/loja</code> e o domínio do site</td></tr>
+<tr><td>"Vale até o fim do dia"</td><td><code>maxAge</code> em segundos</td></tr>
+<tr><td>Recolher o crachá na saída</td><td><code>cookies.delete</code>, que manda <code>Max-Age=0</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Gravar e ler com <code>cookies</code></h2>
+
+<p>No SvelteKit, <code>cookies</code> chega no evento do <code>+page.server.js</code> (e do <code>+server.js</code>, e do <code>hooks.server.js</code>). Gravar só faz sentido onde há resposta para anexar o cabeçalho: numa action ou num endpoint. Ler pode ser no <code>load</code>.</p>
+
+<pre class="file" data-file="src/routes/entrar/+page.server.js">import { redirect } from '@sveltejs/kit';
+
+export function load({ cookies }) {
+	const nome = cookies.get('cliente');
+	return { nome: nome ?? null };
+}
+
+export const actions = {
+	entrar: async ({ request, cookies }) =&gt; {
+		const dados = await request.formData();
+		const nome = dados.get('nome')?.trim();
+
+		cookies.set('cliente', nome ?? 'visitante', {
+			path: '/',
+			httpOnly: true,
+			sameSite: 'lax',
+			maxAge: 60 * 60 * 24
+		});
+
+		redirect(303, '/entrar');
+	},
+
+	sair: async ({ cookies }) =&gt; {
+		cookies.delete('cliente', { path: '/' });
+		redirect(303, '/entrar');
+	}
+};</pre>
+
+<dl class="anatomy">
+  <dt>cookies.get('cliente')</dt><dd>devolve o valor ou <code>undefined</code>. Nunca lança erro por cookie ausente — quem decide o que fazer é você.</dd>
+  <dt>cookies.set(nome, valor, opções)</dt><dd>grava. O valor tem de ser texto; número e objeto precisam de conversão.</dd>
+  <dt>path: '/'</dt><dd>em quais endereços o cookie vale. <code>'/'</code> é o site inteiro. O padrão já é esse.</dd>
+  <dt>httpOnly: true</dt><dd>o JavaScript do navegador não consegue ler. É o padrão do SvelteKit e você quase nunca deve mudar.</dd>
+  <dt>sameSite: 'lax'</dt><dd>o cookie só acompanha requisições do próprio site. Protege contra envio a partir de outro domínio.</dd>
+  <dt>maxAge: 86400</dt><dd>quantos segundos o navegador guarda. <code>60 * 60 * 24</code> é um dia. Sem isso, o cookie morre ao fechar o navegador.</dd>
+  <dt>cookies.delete('cliente', { path: '/' })</dt><dd>apaga. O <code>path</code> precisa ser o mesmo da gravação, senão o navegador não encontra o crachá.</dd>
+</dl>
+
+<pre class="file" data-file="src/routes/entrar/+page.svelte">&lt;script&gt;
+	let { data, form } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Área da Ana&lt;/h1&gt;
+
+{#if data.nome}
+	&lt;p&gt;Bem-vinda de volta, {data.nome}.&lt;/p&gt;
+	&lt;form method="POST" action="?/sair"&gt;
+		&lt;button&gt;sair&lt;/button&gt;
+	&lt;/form&gt;
+{:else}
+	&lt;p&gt;Você ainda não entrou.&lt;/p&gt;
+	&lt;form method="POST" action="?/entrar"&gt;
+		&lt;input name="nome" placeholder="seu nome" /&gt;
+		&lt;button&gt;entrar&lt;/button&gt;
+	&lt;/form&gt;
+{/if}</pre>
+
+<p>Repare que o componente não sabe que existe cookie: ele recebe <code>data.nome</code>, que pode ser <code>null</code>. Essa é a divisão de trabalho que vale a pena manter. O cookie é detalhe de transporte; o componente trabalha com dado limpo.</p>
+
+<hr>
+
+<h2>3. A saída real: o cabeçalho <code>set-cookie</code></h2>
+
+<p>Cookie não aparece no corpo da resposta. Ele vai num cabeçalho, e o <code>curl -i</code> mostra os dois. Primeiro, sem crachá:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/entrar | grep -o '&lt;p&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p&gt;Você ainda não entrou.&lt;/p&gt;</pre>
+
+<p>Agora o envio do formulário, com o cabeçalho de resposta filtrado:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i -X POST -H 'accept: text/html' -d 'nome=Ana' 'localhost:5173/entrar?/entrar' | grep -i '^HTTP/\|^location\|^set-cookie'
+HTTP/1.1 303 See Other
+location: /entrar
+set-cookie: cliente=Ana; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax</pre>
+
+<p>Três linhas que contam tudo. O <code>303</code> é o redirecionamento da action. O <code>set-cookie</code> é o crachá sendo entregue, com as opções que você escreveu: <code>Max-Age=86400</code> veio de <code>maxAge: 60 * 60 * 24</code>; <code>Path=/</code> de <code>path</code>; <code>HttpOnly</code> e <code>SameSite=Lax</code> das suas opções. O SvelteKit não inventa nada: ele escreve o cabeçalho padrão do HTTP.</p>
+
+<p>Com o crachá, a página já sabe quem é. O <code>-b</code> do <code>curl</code> manda cookies, como o navegador faria:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -b 'cliente=Ana' localhost:5173/entrar | grep -o '&lt;p&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p&gt;Bem-vinda de volta, Ana.&lt;/p&gt;</pre>
+
+<p>E o "sair" apaga. Note o valor vazio e o <code>Max-Age=0</code>: é assim que se apaga um cookie — o servidor manda o mesmo nome, com prazo no passado, e o navegador joga fora.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i -X POST -H 'accept: text/html' -d '' 'localhost:5173/entrar?/sair' | grep -i '^set-cookie'
+set-cookie: cliente=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax</pre>
+
+<p>O componente que desenha a saudação não precisa saber de onde veio o nome. Isolado, com o valor fixo no script, ele compila para um único parágrafo — e é essa a saída que o navegador recebe quando o cookie existe:</p>
+
+<pre class="file" data-file="src/lib/Cracha.svelte">&lt;script&gt;
+	const nome = 'Ana';
+&lt;/script&gt;
+
+&lt;p&gt;Bem-vinda de volta, {nome}.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Bem-vinda de volta, Ana.&lt;/p&gt;</pre>
+
+<div class="trysvelte" data-goal="out:Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> este é o cabeçalho de cookies que chegou na requisição. O crachá se chama <code>cliente</code>. Faça a saudação mostrar <strong>Olá, Ana</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const cabecalho = 'tema=escuro; cliente=Ana';
+
+	function ler(nome) {
+		const par = cabecalho.split('; ').find((p) =&gt; p.startsWith(nome + '='));
+		return par ? par.split('=')[1] : null;
+	}
+
+	let cliente = ler('client');
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {cliente ?? 'visitante'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const cabecalho = 'tema=escuro; cliente=Ana';
+
+	function ler(nome) {
+		const par = cabecalho.split('; ').find((p) =&gt; p.startsWith(nome + '='));
+		return par ? par.split('=')[1] : null;
+	}
+
+	let cliente = ler('cliente');
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {cliente ?? 'visitante'}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>??</code> é o operador de coalescência nula: usa o valor da direita quando o da esquerda é <code>null</code> ou <code>undefined</code>. Ele é o par natural de <code>cookies.get()</code>, que devolve <code>undefined</code> quando o crachá não veio. Nome de cookie é sensível a maiúscula e a espaço: <code>cliente</code> e <code>Client</code> são crachás diferentes.</p>
+
+<hr>
+
+<h2>4. <code>httpOnly</code>: o crachá que o JavaScript não vê</h2>
+
+<p>Aquela palavra no cabeçalho tem um efeito concreto: com <code>HttpOnly</code>, o cookie não aparece em <code>document.cookie</code>. O JavaScript do navegador simplesmente não o enxerga. Ele continua sendo enviado ao servidor em cada requisição, mas não pode ser lido nem copiado por um script.</p>
+
+<p>Por que isso importa? Porque um script malicioso injetado na sua página — o famoso XSS — roda com os poderes da sua página. Se ele pudesse ler o crachá de sessão, mandaria o crachá para o atacante, que passaria a agir como o visitante. Com <code>HttpOnly</code>, o script não tem o que roubar.</p>
+
+<p>O SvelteKit já liga <code>httpOnly</code> por padrão. Você só precisa desligar quando o JavaScript do navegador <em>realmente</em> tem de ler aquele cookie — um tema claro/escuro, por exemplo. E, nesse caso, guarde ali só o que não é segredo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Opção</th><th>Padrão do SvelteKit</th><th>Quando mudar</th></tr>
+<tr><td><code>httpOnly</code></td><td><code>true</code></td><td>só para preferência de tela que o JS precisa ler</td></tr>
+<tr><td><code>secure</code></td><td><code>true</code> fora do dev</td><td>nunca, em produção com HTTPS</td></tr>
+<tr><td><code>sameSite</code></td><td><code>'lax'</code></td><td><code>'strict'</code> para crachá de sessão; <code>'none'</code> exige <code>secure</code></td></tr>
+<tr><td><code>path</code></td><td><code>'/'</code></td><td>para limitar o crachá a uma parte do site</td></tr>
+<tr><td><code>maxAge</code></td><td>nenhum (cookie de sessão)</td><td>quando o crachá precisa durar dias</td></tr>
+</table>
+</div>
+
+<div class="warning">
+<strong>Em produção, <code>secure</code> é obrigatório</strong>
+<p>O SvelteKit desliga <code>secure</code> no desenvolvimento porque a sua máquina fala <code>http://localhost</code>, e o navegador recusaria um cookie <code>Secure</code> em HTTP. Em produção, com HTTPS, ele liga sozinho. Se você vir um cookie sem <code>Secure</code> no site publicado, alguma configuração está errada — e o crachá está viajando em texto claro.</p>
+</div>
+
+<hr>
+
+<h2>5. Sessão de verdade: um número, não o nome</h2>
+
+<p>Guardar <code>cliente=Ana</code> funciona para uma demonstração e é uma péssima ideia em produção. O valor do cookie é texto que o visitante pode editar à vontade — basta abrir as ferramentas do navegador. Se o site acredita no que está escrito ali, qualquer pessoa vira qualquer pessoa escrevendo <code>cliente=Admin</code>.</p>
+
+<p>A solução é não guardar o dado, e sim uma chave. O servidor cria um número aleatório, guarda num mapa (ou no banco) a ligação entre esse número e a pessoa, e manda só o número. Na volta, ele procura o número no mapa. Se não achar, é visitante; se achar, é a Ana. O crachá deixa de ser a identidade e passa a ser o número do armário.</p>
+
+<pre class="file" data-file="src/lib/sessoes.js">import { randomUUID } from 'node:crypto';
+
+const sessoes = new Map();
+
+export function abrir(nome) {
+	const id = randomUUID();
+	sessoes.set(id, { nome, desde: Date.now() });
+	return id;
+}
+
+export function buscar(id) {
+	return sessoes.get(id) ?? null;
+}
+
+export function fechar(id) {
+	sessoes.delete(id);
+}</pre>
+
+<p>Com esse módulo, a action grava o id e o <code>load</code> busca a pessoa:</p>
+
+<pre class="file" data-file="src/routes/entrar/+page.server.js">import { abrir, buscar } from '#lib/sessoes.js';
+
+export function load({ cookies }) {
+	const id = cookies.get('sessao');
+	const pessoa = id ? buscar(id) : null;
+	return { nome: pessoa?.nome ?? null };
+}
+
+export const actions = {
+	entrar: async ({ request, cookies }) =&gt; {
+		const dados = await request.formData();
+		const id = abrir(dados.get('nome')?.trim() ?? 'visitante');
+
+		cookies.set('sessao', id, {
+			path: '/',
+			httpOnly: true,
+			sameSite: 'strict',
+			maxAge: 60 * 60 * 24
+		});
+
+		redirect(303, '/entrar');
+	}
+};</pre>
+
+<p>O valor que aparece no cabeçalho agora é um <code>UUID</code>, algo como <code>d9f0c2a4-…</code>. Copiar esse número não ajuda o visitante a virar outra pessoa: ele só serve para aquela sessão que o servidor abriu, e você pode fechá-la a qualquer momento apagando a entrada do mapa.</p>
+
+<div class="trysvelte" data-goal="out:sessão expirada">
+<p class="try-task"><strong>Missão:</strong> este cookie tem <code>maxAge: 0</code>, que significa "apague agora". Faça a página dizer <strong>sessão expirada</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let cookies = $state([{ nome: 'cliente', valor: 'Ana', maxAge: 0 }]);
+	let ativo = $derived(cookies.find((c) =&gt; c.maxAge &gt;= 0));
+&lt;/script&gt;
+
+&lt;p&gt;{ativo ? 'sessão ativa: ' + ativo.valor : 'sessão expirada'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let cookies = $state([{ nome: 'cliente', valor: 'Ana', maxAge: 0 }]);
+	let ativo = $derived(cookies.find((c) =&gt; c.maxAge &gt; 0));
+&lt;/script&gt;
+
+&lt;p&gt;{ativo ? 'sessão ativa: ' + ativo.valor : 'sessão expirada'}&lt;/p&gt;</pre>
+</div>
+
+<p>A comparação com <code>&gt; 0</code> e não <code>&gt;= 0</code> é o detalhe: <code>maxAge: 0</code> é justamente o valor que manda apagar. Quem testa "maior ou igual a zero" trata o crachá cancelado como válido — e a sessão que deveria ter acabado continua de pé.</p>
+
+<hr>
+
+<h2>6. Do cookie ao <code>locals</code>, no <code>hooks.server.js</code></h2>
+
+<p>Ler o cookie em cada <code>load</code> funciona e repete código. O lugar certo para essa leitura é o <code>hooks.server.js</code>, que roda antes de qualquer rota e pode preencher <code>locals</code> uma vez para toda a requisição:</p>
+
+<pre class="file" data-file="src/hooks.server.js">import { buscar } from '#lib/sessoes.js';
+
+export async function handle({ event, resolve }) {
+	const id = event.cookies.get('sessao');
+	event.locals.pessoa = id ? buscar(id) : null;
+
+	return resolve(event);
+}</pre>
+
+<p>A partir daí, qualquer <code>load</code> ou action lê <code>locals.pessoa</code> sem tocar em cookie. O hook é também o lugar de redirecionar quem não está logado, de registrar a requisição no log e de responder antes mesmo de chegar à rota.</p>
+
+<pre class="file" data-file="src/routes/painel/+page.server.js">export function load({ locals }) {
+	const pedidos = listar();
+
+	return {
+		pessoa: locals.pessoa?.nome ?? 'visitante',
+		pedidos,
+		prontos: pedidos.filter((p) =&gt; p.pronto).length
+	};
+}</pre>
+
+<p>Cuidado com uma armadilha de iniciante: <code>locals</code> é do servidor e não vai para o navegador. Se a página precisa do nome, ele tem de sair no <code>return</code> do <code>load</code>, como acima. Colocar o objeto inteiro da pessoa em <code>locals</code> é seguro; colocar a senha em <code>data</code> não é.</p>
+
+<hr>
+
+<h2>7. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — nome de cookie inválido</strong>
+<p>O nome do cookie só aceita letras, números, hífen e sublinhado. Espaço não entra, e o erro é direto:</p>
+<pre class="file" data-file="src/routes/entrar/+page.server.js">entrar: async ({ cookies }) =&gt; {
+	cookies.set('nome do meio', 'Ana');
+	redirect(303, '/entrar');
+}</pre>
+<pre class="term">TypeError: cookie name is invalid: nome do meio
+500 POST /entrar?/entrar</pre>
+<p>Trocar por <code>nome_do_meio</code> resolve. A mensagem mostra o nome recusado, o que economiza tempo quando há vários cookies no projeto.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — cookie grande demais</strong>
+<p>O limite é de cerca de 4 KB. Um valor maior que isso é recusado pelo próprio servidor, antes de o navegador descartá-lo:</p>
+<pre class="file" data-file="src/routes/entrar/+page.server.js">entrar: async ({ cookies }) =&gt; {
+	cookies.set('grande', 'a'.repeat(5000));
+	redirect(303, '/entrar');
+}</pre>
+<pre class="term">SvelteKit error: cookie_too_large
+Cookie `grande` is too large, and will be discarded by the browser
+https://svelte.dev/e/kit/cookie_too_large
+    at entrar (src/routes/entrar/+page.server.js:5:11)
+500 POST /entrar?/entrar</pre>
+<p>A tradução: "o cookie é grande demais e o navegador vai descartá-lo". Se o dado é grande — uma lista, um carrinho cheio — ele não pertence ao crachá. Guarde um id pequeno e mantenha o conteúdo no servidor.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — valor inválido em <code>sameSite</code></strong>
+<p>As opções também são validadas. <code>'nenhum'</code> não existe; os valores são <code>'lax'</code>, <code>'strict'</code> e <code>'none'</code> — este último exigindo <code>secure</code>:</p>
+<pre class="file" data-file="src/routes/entrar/+page.server.js">entrar: async ({ cookies }) =&gt; {
+	cookies.set('cliente', 'Ana', { sameSite: 'nenhum' });
+	redirect(303, '/entrar');
+}</pre>
+<pre class="term">TypeError: cookie sameSite is invalid: nenhum
+500 POST /entrar?/entrar</pre>
+<p>O SvelteKit recusa a requisição inteira em vez de mandar um cabeçalho malformado. É melhor assim: falha no servidor, onde você pode ler a mensagem, do que no navegador, onde o cookie simplesmente não funciona e ninguém sabe por quê.</p>
+</div>
+
+<hr>
+
+<h2>8. Crachá de sessão e crachá de preferência</h2>
+
+<p>Nem todo cookie é igual, e misturar os dois tipos é fonte de bug e de susto. O crachá de sessão identifica a pessoa: ele é secreto, curto, <code>httpOnly</code>, e vale por horas. O crachá de preferência guarda uma escolha: tema escuro, idioma, tamanho da fonte. Ele não identifica ninguém, o JavaScript pode ler, e vale por meses.</p>
+
+<p>A regra prática sai daí: se o cookie responde "quem é você", trate como segredo; se responde "como você gosta", trate como configuração. O primeiro nunca aparece em <code>document.cookie</code>; o segundo pode, e deve, porque a página precisa aplicá-lo antes de desenhar — é o que o guia faz com o tema no topo de cada página.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Cookie de sessão</th><th>Cookie de preferência</th></tr>
+<tr><td>O que guarda</td><td>um id aleatório</td><td>um valor curto: <code>escuro</code></td></tr>
+<tr><td><code>httpOnly</code></td><td>sempre <code>true</code></td><td><code>false</code>, para o JS aplicar</td></tr>
+<tr><td><code>maxAge</code></td><td>horas</td><td>meses</td></tr>
+<tr><td>Quem pode editar</td><td>o servidor decide o que vale</td><td>o visitante, e está tudo bem</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Você ainda não entrou">
+<p class="try-task"><strong>Missão:</strong> o botão "sair" devia apagar a sessão, e a página continua dizendo que a Ana está dentro. Faça aparecer <strong>Você ainda não entrou.</strong> depois do clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let nome = $state('Ana');
+
+	function sair() {
+		nome = 'Ana';
+	}
+&lt;/script&gt;
+
+{#if nome}
+	&lt;p&gt;Bem-vinda de volta, {nome}.&lt;/p&gt;
+	&lt;button onclick={sair}&gt;sair&lt;/button&gt;
+{:else}
+	&lt;p&gt;Você ainda não entrou.&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let nome = $state('Ana');
+
+	function sair() {
+		nome = null;
+	}
+&lt;/script&gt;
+
+{#if nome}
+	&lt;p&gt;Bem-vinda de volta, {nome}.&lt;/p&gt;
+	&lt;button onclick={sair}&gt;sair&lt;/button&gt;
+{:else}
+	&lt;p&gt;Você ainda não entrou.&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>No projeto, "sair" faz duas coisas de uma vez: apaga o cookie com <code>cookies.delete</code> e fecha a sessão no mapa do servidor. Só a primeira deixaria o id válido para quem tivesse uma cópia; só a segunda deixaria o navegador mandando um crachá que não corresponde a ninguém.</p>
+
+<hr>
+
+<h2>9. O que nunca entra num cookie</h2>
+
+<p>O crachá viaja em toda requisição para aquele domínio, fica guardado no disco do visitante e é legível por quem tem acesso à máquina. Trate o conteúdo dele como público. Senha, chave de API, dado de cartão, CPF inteiro, histórico de compras: nada disso entra.</p>
+
+<p>Também não entra informação que você não quer expor no tráfego. Mesmo com HTTPS, o cookie aparece nas ferramentas de desenvolvedor do visitante. Se a informação é sensível, ela fica no servidor e o cookie carrega apenas a chave de acesso — o mesmo princípio do id de sessão.</p>
+
+<div class="tip">
+<strong>Sempre apague no logout</strong>
+<p>Apagar o cookie é o passo que fecha a porta. No servidor, apague também a sessão do mapa, senão o id continua válido para quem tiver uma cópia. Fazer os dois é o mínimo: <code>cookies.delete('sessao', { path: '/' })</code> e <code>fechar(id)</code>. Só o primeiro deixa o crachá cancelado mas a fechadura aberta.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>O que faz</th></tr>
+<tr><td><code>cookies.get('nome')</code></td><td>lê o valor ou devolve <code>undefined</code></td></tr>
+<tr><td><code>cookies.getAll()</code></td><td>lista todos os cookies da requisição</td></tr>
+<tr><td><code>cookies.set(nome, valor, opções)</code></td><td>grava; valor sempre texto</td></tr>
+<tr><td><code>cookies.delete(nome, { path })</code></td><td>apaga com <code>Max-Age=0</code></td></tr>
+<tr><td><code>event.locals</code></td><td>o que o <code>hooks.server.js</code> guardou para esta requisição</td></tr>
+<tr><td><code>randomUUID()</code></td><td>id aleatório para a sessão, de <code>node:crypto</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Opção</th><th>Para que serve</th></tr>
+<tr><td><code>path</code></td><td>em quais endereços o cookie vale</td></tr>
+<tr><td><code>httpOnly</code></td><td>esconde o cookie do JavaScript</td></tr>
+<tr><td><code>secure</code></td><td>só viaja em HTTPS</td></tr>
+<tr><td><code>sameSite</code></td><td><code>lax</code>, <code>strict</code> ou <code>none</code></td></tr>
+<tr><td><code>maxAge</code></td><td>validade em segundos; <code>0</code> apaga</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Onde é possível gravar um cookie no SvelteKit?</p>
+<label><input type="radio" name="q1"> no <code>+page.js</code></label>
+<label><input type="radio" name="q1"> numa action, num endpoint ou num hook: lugares com resposta para anexar o cabeçalho</label>
+<label><input type="radio" name="q1"> em qualquer componente, dentro do <code>onclick</code></label>
+<label><input type="radio" name="q1"> só no <code>app.html</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>httpOnly</code> faz?</p>
+<label><input type="radio" name="q1"> impede que o cookie seja enviado ao servidor</label>
+<label><input type="radio" name="q1"> apaga o cookie ao fechar o navegador</label>
+<label><input type="radio" name="q1"> esconde o cookie do JavaScript do navegador</label>
+<label><input type="radio" name="q1"> criptografa o valor do cookie</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o cookie de sessão guarda um id e não o nome?</p>
+<label><input type="radio" name="q1"> porque o valor do cookie pode ser editado pelo visitante</label>
+<label><input type="radio" name="q1"> porque nome tem acento e quebra o cabeçalho</label>
+<label><input type="radio" name="q1"> porque ids ocupam menos espaço que nomes</label>
+<label><input type="radio" name="q1"> porque o navegador só aceita números</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">export const actions = {<br>&nbsp;&nbsp;entrar: async ({ cookies }) =&gt; {<br>&nbsp;&nbsp;&nbsp;&nbsp;cookies.<input data-answer="set">('sessao', id, {<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path: '/',<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input data-answer="httpOnly">: true,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;maxAge: 60 * 60 * 24<br>&nbsp;&nbsp;&nbsp;&nbsp;});<br>&nbsp;&nbsp;&nbsp;&nbsp;redirect(303, '/entrar');<br>&nbsp;&nbsp;}<br>};</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Cookie é um texto que o servidor manda e o navegador devolve em cada requisição ao mesmo domínio.</li>
+  <li><code>cookies.get</code> lê; <code>cookies.set</code> grava; <code>cookies.delete</code> apaga com <code>Max-Age=0</code>.</li>
+  <li>Gravar só funciona onde há resposta: action, endpoint ou <code>hooks.server.js</code>.</li>
+  <li>O cabeçalho real é <code>set-cookie: cliente=Ana; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax</code>.</li>
+  <li><code>httpOnly</code> é o padrão e esconde o cookie do JavaScript: é a defesa contra roubo por script.</li>
+  <li><code>secure</code> só é desligado no desenvolvimento, porque lá o endereço é <code>http://localhost</code>.</li>
+  <li>O valor do cookie pode ser editado pelo visitante: nunca confie nele para decidir quem é quem.</li>
+  <li>Sessão de verdade guarda um id aleatório e mantém os dados no servidor.</li>
+  <li><code>hooks.server.js</code> lê o cookie uma vez e preenche <code>locals</code> para todas as rotas.</li>
+  <li>Os erros desta aula: nome inválido, valor grande demais e <code>sameSite</code> inexistente.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

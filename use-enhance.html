@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>use:enhance — o formulário sem recarregar | Guia Svelte</title>
+<meta name="description" content="A diretiva use:enhance do SvelteKit: o formulário que envia em segundo plano, o JSON da action, deserialize, update() e o estado de enviando, com saídas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">use:enhance</span></h1>
+
+<p class="intro">A Ana não gosta de ver o cliente sair da fila para preencher a ficha de novo. No site é igual: o envio de formulário clássico recarrega a página inteira, o que apaga o que a pessoa estava vendo e faz a tela piscar. O <code>use:enhance</code> existe para isso — uma palavra colada no formulário que faz o envio acontecer em segundo plano, com a mesma action do servidor e sem recarregar nada. E, se o JavaScript falhar, o formulário continua funcionando do jeito antigo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que a diretiva <code>use:enhance</code> faz e de onde ela vem.</li>
+  <li>O que muda no envio: requisição em segundo plano, sem recarregar.</li>
+  <li>Por que o servidor responde JSON em vez de HTML nesse caminho.</li>
+  <li>O que é o <code>data</code> codificado e por que existe <code>deserialize</code>.</li>
+  <li>Como usar o callback com <code>result</code>, <code>update</code> e <code>formData</code>.</li>
+  <li>Como mostrar o estado "enviando…" sem travar o botão.</li>
+  <li>Como redirecionar e como aplicar o resultado à mão.</li>
+  <li>Por que o formulário continua funcionando sem JavaScript.</li>
+  <li>Três erros reais: 415, 404 e 405.</li>
+  <li>Como testar o caminho do enhance com <code>curl</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: entregar a ficha sem sair da fila</h2>
+
+<p>O envio clássico de formulário é uma viagem inteira: o navegador manda os campos, espera, recebe uma página nova e a desenha do zero. Funciona sempre e é a base de tudo. O problema é o "do zero": a posição da rolagem volta ao topo, o campo perde o foco, a imagem recarrega, e a pessoa tem a sensação de que saiu do lugar onde estava.</p>
+
+<p>Com JavaScript, dá para fazer melhor: interceptar o envio, mandar os campos em segundo plano, receber só o resultado e trocar apenas o pedaço que mudou. É o que o <code>use:enhance</code> faz — sem que você escreva o <code>fetch</code>, sem que você trate a resposta, sem que você redesenhe nada à mão.</p>
+
+<p>A parte boa é que ele não substitui o formulário: ele <strong>melhora</strong> o formulário que já existe. O HTML continua <code>&lt;form method="POST"&gt;</code>, a action continua a mesma, a validação continua no servidor. Se o script não carregar, o envio clássico acontece e ninguém fica sem enviar. Isso tem nome — <em>aprimoramento progressivo</em> — e é a razão de o SvelteKit ter escolhido esse desenho.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sem <code>use:enhance</code></th><th>Com <code>use:enhance</code></th></tr>
+<tr><td>a página inteira recarrega</td><td>só o que mudou é atualizado</td></tr>
+<tr><td>o servidor responde HTML</td><td>o servidor responde JSON com o resultado</td></tr>
+<tr><td>estado de "enviando" é invisível</td><td>dá para mostrar e desabilitar o botão</td></tr>
+<tr><td>funciona sem JavaScript</td><td>funciona sem JavaScript também</td></tr>
+<tr><td>zero código extra</td><td>uma importação e uma diretiva</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. A diretiva no formulário</h2>
+
+<p>O formulário da Ana na rota <code>/enhance</code> tem a mesma action da aula anterior. O que muda é a importação e o atributo <code>use:enhance</code>:</p>
+
+<pre class="file" data-file="src/routes/enhance/+page.svelte">&lt;script&gt;
+	import { enhance } from '$app/forms';
+
+	let { data, form } = $props();
+
+	let enviando = $state(false);
+&lt;/script&gt;
+
+&lt;h1&gt;Pedido com use:enhance&lt;/h1&gt;
+
+{#if form?.ok}
+	&lt;p class="ok"&gt;Anotado para {form.cliente}.&lt;/p&gt;
+{:else if form?.falta}
+	&lt;p class="erro"&gt;{form.falta}&lt;/p&gt;
+{/if}
+
+&lt;form
+	method="POST"
+	use:enhance={() =&gt; {
+		enviando = true;
+		return async ({ update }) =&gt; {
+			await update();
+			enviando = false;
+		};
+	}}
+&gt;
+	&lt;input name="cliente" placeholder="quem pediu" /&gt;
+	&lt;button disabled={enviando}&gt;{enviando ? 'enviando…' : 'anotar'}&lt;/button&gt;
+&lt;/form&gt;
+
+&lt;p&gt;Na fila: {data.pedidos.length}&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>import { enhance } from '$app/forms'</dt><dd>o módulo do SvelteKit que só existe no navegador. É por isso que ele não pode ser usado no <code>+page.server.js</code>.</dd>
+  <dt>use:enhance</dt><dd>uma <strong>ação de elemento</strong>: quando o formulário entra na tela, o Svelte chama a função e ela liga o comportamento extra.</dd>
+  <dt>() =&gt; { enviando = true; … }</dt><dd>a função que roda <strong>antes</strong> de enviar. É onde você desabilita o botão e mostra o aviso.</dd>
+  <dt>return async ({ update }) =&gt; {}</dt><dd>a função que roda <strong>depois</strong>. Recebe o resultado do servidor e a função que aplica esse resultado à página.</dd>
+  <dt>await update()</dt><dd>aplica o resultado: atualiza <code>form</code> e <code>data</code>, redesenha o que mudou. É uma promessa; espere antes de dizer que terminou.</dd>
+</dl>
+
+<p>Um detalhe de sintaxe que confunde: <code>use:enhance={funcao}</code> recebe uma função que <em>devolve</em> outra função. A primeira prepara (liga o "enviando"), a segunda conclui (desliga). Se você devolver <code>undefined</code> na primeira, o SvelteKit usa o comportamento padrão — que já atualiza tudo sozinho.</p>
+
+<div class="trysvelte" data-goal="clique:button;;depois:400;;outre:Anotado para Caio\.">
+<p class="try-task"><strong>Missão:</strong> depois do clique, o botão fica travado em "enviando…" para sempre. Faça a mensagem final aparecer: <strong>Anotado para Caio.</strong></p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let cliente = $state('Caio');
+	let enviando = $state(false);
+	let aviso = $state('');
+
+	async function enviar(evento) {
+		evento.preventDefault();
+		enviando = true;
+
+		await new Promise((ok) =&gt; setTimeout(ok, 200));
+
+		aviso = 'Anotado para ' + cliente + '.';
+	}
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+	&lt;input bind:value={cliente} /&gt;
+	&lt;button disabled={enviando}&gt;{enviando ? 'enviando…' : 'anotar'}&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;{enviando ? '' : aviso}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let cliente = $state('Caio');
+	let enviando = $state(false);
+	let aviso = $state('');
+
+	async function enviar(evento) {
+		evento.preventDefault();
+		enviando = true;
+
+		await new Promise((ok) =&gt; setTimeout(ok, 200));
+
+		aviso = 'Anotado para ' + cliente + '.';
+		enviando = false;
+	}
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+	&lt;input bind:value={cliente} /&gt;
+	&lt;button disabled={enviando}&gt;{enviando ? 'enviando…' : 'anotar'}&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;{enviando ? '' : aviso}&lt;/p&gt;</pre>
+</div>
+
+<p>Esse é o defeito mais comum de quem usa enhance pela primeira vez: ligar o "enviando" e esquecer de desligar. O botão fica desabilitado para sempre e a página parece travada. Com <code>use:enhance</code>, o lugar de desligar é o fim do segundo callback, depois do <code>await update()</code>.</p>
+
+<hr>
+
+<h2>3. A saída real: o que o servidor responde nesse caminho</h2>
+
+<p>Aqui está a parte que surpreende. O mesmo <code>POST</code> que devolve uma página inteira para o navegador devolve JSON quando o cliente pede assim. O SvelteKit decide pelo cabeçalho <code>accept</code> e por um cabeçalho próprio, o <code>x-sveltekit-action</code>, que o enhance manda:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST -H 'x-sveltekit-action: true' -d 'cliente=Caio&amp;sabor=frango' localhost:5173/enhance -w '\n%{http_code}\n'
+{"type":"success","status":200,"location":"/enhance","data":"[{\"ok\":1,\"cliente\":2},true,\"Caio\"]"}
+200</pre>
+
+<p>Leia com calma. <code>type: "success"</code> diz que a action devolveu dados. <code>status: 200</code> é o status HTTP. <code>location</code> é o endereço da página. E <code>data</code> é o objeto que a action retornou — mas <strong>codificado como texto</strong>, e com um formato estranho: <code>[{"ok":1,"cliente":2},true,"Caio"]</code>.</p>
+
+<p>Esse formato é do <code>devalue</code>, a biblioteca que o SvelteKit usa para levar valores que o JSON comum não leva: <code>Date</code>, <code>BigInt</code>, <code>Map</code>, <code>undefined</code>, e referências repetidas — daí o <code>1</code> e o <code>2</code> apontando para as posições da lista. Não é JSON de propósito; é um superconjunto. Quem transforma esse texto em objeto é a função <code>deserialize</code>.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST -H 'x-sveltekit-action: true' -d 'cliente=' localhost:5173/enhance -w '\n%{http_code}\n'
+{"type":"failure","status":400,"location":"/enhance","data":"[{\"cliente\":1,\"falta\":2},\"\",\"escreva o nome de quem pediu\"]"}
+400</pre>
+
+<p>Agora <code>type: "failure"</code> e status 400: foi o <code>fail()</code> da action. O <code>data</code> traz os campos que você mandou — <code>cliente</code> vazio e <code>falta</code> com a mensagem. É esse conteúdo que o enhance entrega ao seu callback em <code>result.data</code>, já decodificado.</p>
+
+<p>E o mesmo <code>POST</code> feito por um navegador sem o cabeçalho?</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST -H 'accept: text/html' -d 'cliente=Caio&amp;sabor=frango' localhost:5173/enhance | grep -o '&lt;p class="ok"&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p class="ok"&gt;Anotado para Caio.&lt;/p&gt;</pre>
+
+<p>HTML completo, com a mensagem dentro. É a mesma action respondendo a dois clientes diferentes. Nada no seu <code>+page.server.js</code> muda por causa disso — a diferença está só no formato da resposta.</p>
+
+<hr>
+
+<h2>4. O callback: <code>result</code>, <code>update</code> e companhia</h2>
+
+<p>O segundo callback recebe um objeto com tudo o que aconteceu. Os três campos que você vai usar de verdade são <code>result</code>, <code>update</code> e <code>formData</code>:</p>
+
+<pre class="file" data-file="src/routes/enhance/+page.svelte">&lt;script&gt;
+	import { enhance } from '$app/forms';
+
+	let { form } = $props();
+
+	let enviando = $state(false);
+	let mensagem = $state('');
+&lt;/script&gt;
+
+&lt;form
+	method="POST"
+	use:enhance={() =&gt; {
+		enviando = true;
+
+		return async ({ result, update }) =&gt; {
+			if (result.type === 'failure') {
+				mensagem = result.data.falta;
+			} else if (result.type === 'success') {
+				mensagem = 'anotado para ' + result.data.cliente;
+			}
+
+			await update();
+			enviando = false;
+		};
+	}}
+&gt;
+	&lt;input name="cliente" placeholder="quem pediu" /&gt;
+	&lt;button disabled={enviando}&gt;{enviando ? 'enviando…' : 'anotar'}&lt;/button&gt;
+&lt;/form&gt;
+
+&lt;p&gt;{mensagem}&lt;/p&gt;</pre>
+
+<p><code>result.type</code> pode ser <code>'success'</code>, <code>'failure'</code>, <code>'redirect'</code> ou <code>'error'</code>. Essa distinção evita um monte de <code>if</code> sobre status: um redirect não é falha, e um erro de rede não tem página nova para onde ir. Trate cada tipo com o que faz sentido para o seu formulário.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo do callback</th><th>Para que serve</th></tr>
+<tr><td><code>result</code></td><td>o que o servidor respondeu: <code>type</code>, <code>status</code>, <code>data</code> ou <code>location</code></td></tr>
+<tr><td><code>update()</code></td><td>aplica o resultado: atualiza os props <code>form</code> e <code>data</code> e redesenha</td></tr>
+<tr><td><code>formData</code></td><td>o que a pessoa digitou, já pronto para reenviar ou inspecionar</td></tr>
+<tr><td><code>formElement</code></td><td>o formulário no DOM, útil para resetar campos</td></tr>
+<tr><td><code>cancel()</code></td><td>desiste do envio antes de ele sair</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="outre:falta o nome">
+<p class="try-task"><strong>Missão:</strong> simule a resposta da action: o <code>result.type</code> foi <code>'failure'</code> e o <code>data.falta</code> tem a mensagem. Faça aparecer <strong>falta o nome</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const result = { type: 'failure', status: 400, data: { falta: 'falta o nome' } };
+	let mensagem = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;{result.type === 'success' ? result.data.falta : ''}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const result = { type: 'failure', status: 400, data: { falta: 'falta o nome' } };
+	let mensagem = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;{result.type === 'failure' ? result.data.falta : ''}&lt;/p&gt;</pre>
+</div>
+
+<p>Comparar com <code>'success'</code> quando o resultado é <code>'failure'</code> é o erro de digitação que passa nos testes rápidos: a página não quebra, só não mostra a mensagem. Em formulário, mensagem que não aparece é pior que erro vermelho, porque ninguém sabe que precisa corrigir algo.</p>
+
+<hr>
+
+<h2>5. Redirecionar com enhance</h2>
+
+<p>Quando a action chama <code>redirect(303, '/encomenda')</code>, o resultado chega ao callback com <code>type: 'redirect'</code> e o endereço em <code>location</code>. O comportamento padrão do enhance é navegar para lá — sem recarregar a página, como um link interno. Você quase nunca precisa fazer nada.</p>
+
+<p>Precisa quando quer algo antes ou depois. Um exemplo: avisar que o pedido foi criado e só então sair. Ou bloquear o redirecionamento para mostrar um resumo. Nesse caso você trata o tipo e chama <code>update()</code> apenas quando fizer sentido:</p>
+
+<pre class="file" data-file="src/routes/enhance/+page.svelte">use:enhance={() =&gt; {
+	return async ({ result, update }) =&gt; {
+		if (result.type === 'redirect') {
+			mensagem = 'pedido criado, indo para ' + result.location;
+		}
+
+		await update();
+	};
+}}</pre>
+
+<p>O <code>update()</code> é quem executa a navegação no caso de redirect. Sem ele, a tela fica parada e o usuário não vê o resultado. Com ele, o SvelteKit faz a troca de rota do jeito dele, mantendo o histórico e a rolagem.</p>
+
+<div class="tip">
+<strong>O botão que volta sozinho</strong>
+<p>Desabilitar o botão durante o envio é bom; esquecer de reabilitar é ruim. Uma proteção extra: no <code>finally</code> do callback, sempre desligue o <code>enviando</code>. Se o <code>update()</code> estourar — rede caiu no meio — o <code>finally</code> roda do mesmo jeito e a pessoa pode tentar de novo.</p>
+</div>
+
+<hr>
+
+<h2>6. O que acontece quando o JavaScript não carrega</h2>
+
+<p>Este é o teste que separa aprimoramento de dependência. Desligue o JavaScript no navegador e envie o formulário: o navegador faz o envio clássico, o servidor responde HTML, a página recarrega com a mensagem. Tudo funciona — só sem a fluidez.</p>
+
+<p>O <code>curl</code> mostra exatamente esse caminho, porque ele nunca executa JavaScript. Quando você manda o <code>POST</code> com <code>accept: text/html</code> e sem o cabeçalho do enhance, recebe uma página inteira. É a prova de que a action não depende da diretiva.</p>
+
+<pre class="file" data-file="src/lib/Pendente.svelte">&lt;script&gt;
+	const enviando = true;
+&lt;/script&gt;
+
+&lt;button disabled={enviando}&gt;{enviando ? 'enviando…' : 'anotar'}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button disabled=""&gt;enviando…&lt;/button&gt;</pre>
+
+<p>O pedacinho acima é o botão no estado de envio, compilado de verdade. Duas coisas acontecem: o atributo <code>disabled</code> aparece vazio (presença é o que conta em HTML) e o texto muda para "enviando…". É esse par que dá a sensação de que o clique foi registrado.</p>
+
+<hr>
+
+<h2>7. <code>applyAction</code> e <code>deserialize</code></h2>
+
+<p>Em quase todo formulário, o enhance resolve. Existem dois casos em que você precisa das peças que ele usa por dentro. O primeiro é quando o resultado chega de outro lugar que não um envio de formulário — um <code>fetch</code> feito à mão. O segundo é quando você guardou o <code>data</code> codificado e precisa lê-lo depois.</p>
+
+<p><code>applyAction(result)</code> faz o que o <code>update()</code> faz: pega um resultado de action e aplica na página, atualizando <code>form</code> e <code>data</code>. A diferença é que ele não envia nada — você já tem o resultado em mãos. Serve para reaproveitar um envio feito em outro momento, ou para tratar uma resposta que veio de um serviço externo no mesmo formato.</p>
+
+<pre class="file" data-file="src/lib/Reenviar.svelte">&lt;script&gt;
+	import { applyAction, deserialize } from '$app/forms';
+
+	async function reaplicar(texto) {
+		const resultado = {
+			type: 'success',
+			status: 200,
+			location: '/enhance',
+			data: deserialize(texto)
+		};
+
+		await applyAction(resultado);
+	}
+&lt;/script&gt;</pre>
+
+<p><code>deserialize(texto)</code> transforma aquele <code>[{"ok":1,"cliente":2},true,"Caio"]</code> de volta em objeto. Você só precisa disso quando o texto chega por fora — por exemplo, guardado no <code>localStorage</code> ou vindo de outro servidor. No caminho normal do enhance, o resultado já vem decodificado e você usa <code>result.data</code> direto.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Quando usar</th></tr>
+<tr><td><code>update()</code></td><td>dentro do callback do enhance, com o resultado que ele entregou</td></tr>
+<tr><td><code>applyAction(result)</code></td><td>quando o resultado veio de outro lugar e você quer aplicá-lo à página</td></tr>
+<tr><td><code>deserialize(texto)</code></td><td>quando o <code>data</code> chegou como texto codificado e você precisa do objeto</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>8. O custo: clique duplo e botão travado</h2>
+
+<p>Envio em segundo plano tem um risco que o envio clássico não tinha. No clássico, a página sai da tela e o segundo clique cai no vazio. No enhance, a página continua ali, viva, e um clique duplo manda dois <code>POST</code> — dois pedidos, dois e-mails, duas cobranças.</p>
+
+<p>É para isso que existe o <code>enviando</code>. Desabilitar o botão no primeiro callback resolve o clique duplo de propósito. Para o clique duplo acidental, vale também trocar o rótulo: quando o botão diz "enviando…", ninguém tenta de novo. E, no servidor, a defesa final é a action ser idempotente ou recusar pedido repetido — porque o botão é do navegador, e o navegador não é seu.</p>
+
+<div class="warning">
+<strong>Não use enhance onde não precisa</strong>
+<p>Formulário de uma pergunta, com resposta rara, funciona bem do jeito clássico. O enhance brilha em formulário que a pessoa usa muitas vezes e onde perder o foco do campo irrita — busca, filtro, anotação rápida. Adicionar a diretiva em tudo troca simplicidade por um recurso que ninguém pediu.</p>
+</div>
+
+<div class="trysvelte" data-goal="clique:button;;depois:400;;outre:1 envio\(s\)">
+<p class="try-task"><strong>Missão:</strong> o envio termina, mas o contador não sobe. Faça aparecer <strong>1 envio(s)</strong> depois do clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let enviando = $state(false);
+	let vezes = $state(0);
+
+	async function enviar(evento) {
+		evento.preventDefault();
+		enviando = true;
+		await new Promise((ok) =&gt; setTimeout(ok, 200));
+		enviando = false;
+	}
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+	&lt;button disabled={enviando}&gt;{enviando ? 'enviando…' : 'anotar'}&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;{vezes} envio(s)&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let enviando = $state(false);
+	let vezes = $state(0);
+
+	async function enviar(evento) {
+		evento.preventDefault();
+		enviando = true;
+		await new Promise((ok) =&gt; setTimeout(ok, 200));
+		vezes = vezes + 1;
+		enviando = false;
+	}
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+	&lt;button disabled={enviando}&gt;{enviando ? 'enviando…' : 'anotar'}&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;{vezes} envio(s)&lt;/p&gt;</pre>
+</div>
+
+<p>A contagem sobe só quando o envio termina, e não no clique. Essa ordem é a mesma do <code>update()</code>: primeiro o resultado chega, depois você atualiza a tela. Contar antes seria mentir para o leitor se o envio falhasse.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — <code>POST</code> sem <code>content-type</code></strong>
+<p>O enhance sempre manda o cabeçalho; um teste com <code>curl</code> pode esquecer. O SvelteKit recusa antes de chamar a sua action:</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST localhost:5173/enhance -w '\n%{http_code}\n'
+{"type":"error","location":"/enhance","error":{"status":415,"message":"Unsupported Media Type"}}
+415</pre>
+<p>É o mesmo 415 da aula anterior, agora no formato JSON do enhance. Note o <code>type: "error"</code>: não é falha de validação, é requisição malformada. O seu callback receberia esse resultado e <code>result.data</code> não existiria.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — action que não existe</strong>
+<p>O formulário aponta para <code>?/apagar</code> e a action não está no arquivo. O enhance recebe um resultado de erro com status 404 — e não uma falha com campos:</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -X POST -H 'x-sveltekit-action: true' -d 'cliente=Ana' 'localhost:5173/enhance?/apagar' -w '\n%{http_code}\n'
+{"type":"error","location":"/enhance","error":{"status":404,"message":"Not Found"}}
+404</pre>
+<p>Se o seu código trata só <code>failure</code>, esse caso passa batido e a página não avisa nada. Trate <code>error</code> também, mesmo que seja com uma mensagem genérica de "não foi possível enviar, tente de novo".</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — formulário numa página sem action</strong>
+<p>Colocar um <code>&lt;form method="POST"&gt;</code> numa rota que não exporta <code>actions</code> dá 405. A página aceita <code>GET</code>, e só.</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -i -X POST -H 'accept: text/html' -d '' localhost:5173/painel | head -3
+HTTP/1.1 405 Method Not Allowed
+Vary: Origin
+allow: GET</pre>
+<p>O <code>allow: GET</code> é a resposta: neste endereço, só se busca. Ou você cria a action no <code>+page.server.js</code> daquela rota, ou o formulário aponta para a rota que tem a action — o que costuma ser o certo, porque um formulário pertence a uma página específica.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th></tr>
+<tr><td><code>import { enhance } from '$app/forms'</code></td><td>traz a diretiva; só funciona no navegador</td></tr>
+<tr><td><code>use:enhance</code></td><td>liga o envio em segundo plano com o comportamento padrão</td></tr>
+<tr><td><code>use:enhance={() =&gt; …}</code></td><td>roda antes do envio; devolve o callback de depois</td></tr>
+<tr><td><code>return async ({ result, update }) =&gt; {}</code></td><td>trata o resultado e aplica com <code>update()</code></td></tr>
+<tr><td><code>deserialize(texto)</code></td><td>decodifica o <code>data</code> do resultado quando você o tem como texto</td></tr>
+<tr><td><code>applyAction(result)</code></td><td>aplica um resultado sem passar pelo formulário</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th><code>result.type</code></th><th>Quando acontece</th></tr>
+<tr><td><code>success</code></td><td>a action devolveu dados</td></tr>
+<tr><td><code>failure</code></td><td>a action chamou <code>fail()</code></td></tr>
+<tr><td><code>redirect</code></td><td>a action chamou <code>redirect()</code>; o endereço está em <code>location</code></td></tr>
+<tr><td><code>error</code></td><td><code>error()</code>, 404, 415 ou falha de rede</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="1"><p class="mc-q">1. De onde vem a diretiva <code>enhance</code>?</p>
+<label><input type="radio" name="q1"> de <code>$app/forms</code></label>
+<label><input type="radio" name="q1"> de <code>@sveltejs/kit</code></label>
+<label><input type="radio" name="q1"> de <code>svelte</code></label>
+<label><input type="radio" name="q1"> do próprio HTML, é um atributo nativo</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Para que serve o <code>update()</code> no callback?</p>
+<label><input type="radio" name="q1"> para reenviar o formulário</label>
+<label><input type="radio" name="q1"> para limpar os campos</label>
+<label><input type="radio" name="q1"> para aplicar o resultado à página, atualizando <code>form</code> e <code>data</code></label>
+<label><input type="radio" name="q1"> para desligar o enhance</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. O que acontece com o formulário sem JavaScript?</p>
+<label><input type="radio" name="q1"> ele para de funcionar, porque depende do enhance</label>
+<label><input type="radio" name="q1"> ele envia do jeito clássico e a página recarrega com a resposta</label>
+<label><input type="radio" name="q1"> ele envia, mas a action não roda</label>
+<label><input type="radio" name="q1"> ele vira um link comum</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;import { <input data-answer="enhance"> } from '$app/forms';<br>&nbsp;&nbsp;let enviando = $state(false);<br>&lt;/script&gt;<br><br>&lt;form method="POST" <input data-answer="use:enhance">={() =&gt; {<br>&nbsp;&nbsp;enviando = true;<br>&nbsp;&nbsp;return async ({ update }) =&gt; { await update(); enviando = false; };<br>}}&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>use:enhance</code> vem de <code>$app/forms</code> e liga o envio do formulário em segundo plano.</li>
+  <li>Nesse caminho o servidor responde JSON com <code>type</code>, <code>status</code>, <code>location</code> e <code>data</code>.</li>
+  <li>O <code>data</code> é codificado por <code>devalue</code>; quem decodifica é <code>deserialize</code>.</li>
+  <li>O primeiro callback roda antes do envio; o segundo recebe <code>result</code> e <code>update</code>.</li>
+  <li><code>await update()</code> aplica o resultado e atualiza <code>form</code> e <code>data</code>.</li>
+  <li><code>result.type</code> pode ser <code>success</code>, <code>failure</code>, <code>redirect</code> ou <code>error</code>.</li>
+  <li>Ligue e desligue o estado "enviando" — no <code>finally</code>, para não deixar o botão travado.</li>
+  <li>Sem JavaScript o formulário continua funcionando do jeito clássico: aprimoramento, não dependência.</li>
+  <li>415, 404 e 405 aparecem como <code>type: "error"</code>, com o status dentro de <code>error</code>.</li>
+  <li><code>curl</code> com <code>x-sveltekit-action: true</code> reproduz o caminho do enhance sem navegador.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
