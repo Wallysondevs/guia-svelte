@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eventos de Componente — como o filho avisa o pai | Guia Svelte</title>
+<meta name="description" content="Eventos de componente no Svelte 5 sem API antiga: propriedades de função, aoPedir com $props, nomes de handler e as mensagens reais do compilador quando dá errado.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Eventos de Componente</span></h1>
+
+<p class="intro">A Ana tem duas pessoas atrás do balcão: a que atende e a que assa. Quando o cliente pede um pão, quem atende não pode ir até o forno — ela avisa. Esse aviso é o <strong>evento de componente</strong>: o filho não decide o que fazer com o pedido, ele só conta que o pedido aconteceu. No Svelte 5, a forma de avisar é entregar uma função ao filho, e o pai escolhe o que fazer quando ela for chamada.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que o filho não deve mexer no estado do pai.</li>
+  <li>Como passar uma função como propriedade e chamar no filho.</li>
+  <li>Como declarar essa propriedade com <code>$props()</code> e valor padrão.</li>
+  <li>Nomes de handler que não confundem: <code>aoPedir</code>, <code>onPedir</code>.</li>
+  <li>Como funcionam os atributos de evento escritos no HTML.</li>
+  <li>Como o pai reage e atualiza a própria tela.</li>
+  <li>O que fazer quando o pai não passa função nenhuma.</li>
+  <li>Os três erros reais desta aula, com a mensagem copiada do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o aviso que sobe</h2>
+
+<p>Estado desce, evento sobe. Essa frase resume a arquitetura de componentes: o pai entrega dados ao filho por propriedades, e o filho devolve avisos por eventos. Se o filho escrevesse direto na variável do pai, a tela ficaria imprevisível — qualquer componente poderia mudar qualquer coisa, e descobrir quem mudou viraria caça ao culpado.</p>
+
+<p>A analogia da padaria ajuda. A atendente (filho) sabe o sabor do pedido, mas não sabe quantos pães ainda há no estoque nem se o cliente é fiado. Quem sabe é o dono (pai). Então ela grita "saiu um pão de queijo" e continua atendendo. O dono ouve e decide: anota no caderno, avisa a cozinha, dá desconto. O grito não contém a decisão, só o fato.</p>
+
+<p>No Svelte 5, esse grito é uma função. O pai passa uma função para o filho, o filho chama quando o fato acontece, e o pai executa o que quiser. A função é uma propriedade como qualquer outra: entra pelo <code>$props()</code>, tem nome, pode ter valor padrão e pode não existir.</p>
+
+<p>Existe uma razão prática para essa direção única, e ela aparece no primeiro projeto de verdade. Se o filho pudesse escrever no estado do pai, cada tela teria várias fontes de mudança, e o bug clássico seria "quem apagou meu pedido?". Com o aviso explícito, existe um único lugar que muda a lista — o handler do pai — e todo o resto só pede. Depurar passa a ser ler um arquivo em vez de adivinhar entre cinco.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O sabor que o cliente pediu</td><td>propriedade que desce, <code>sabor</code></td></tr>
+<tr><td>O grito "saiu um pão"</td><td>a função que o filho chama</td></tr>
+<tr><td>O dono ouvindo e anotando</td><td>o handler do pai, <code>aoPedir</code></td></tr>
+<tr><td>O caderno do dono atualizado</td><td>o estado do pai, alterado no handler</td></tr>
+<tr><td>Gritar sem ninguém por perto</td><td>chamar uma função que veio vazia</td></tr>
+</table>
+</div>
+
+<h2>2. O filho que avisa</h2>
+
+<p>Comece pelo filho. Ele recebe duas coisas: o sabor (dado) e a função de aviso (evento). O clique monta o grito.</p>
+
+<pre class="file" data-file="src/Filho.svelte">&lt;script&gt;
+  let { aoPedir } = $props();
+  let sabor = $state('pão');
+
+  function pedir() {
+    aoPedir?.(sabor);
+  }
+&lt;/script&gt;
+
+&lt;button onclick={pedir}&gt;pedir {sabor}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;pedir pão&lt;/button&gt;</pre>
+
+<p>O HTML gerado mostra só o botão. Nada de "evento" no HTML: no Svelte 5, evento de componente é JavaScript puro — uma função guardada numa propriedade. Quem gera o `<button>` não sabe nem se importa com quem vai ouvir.</p>
+
+<h3>A anatomia do aviso</h3>
+
+<dl class="anatomy">
+  <dt>let { aoPedir } = $props()</dt><dd>declara a propriedade <code>aoPedir</code>. Quem usa <code>&lt;Filho /&gt;</code> passa esse nome como atributo: <code>&lt;Filho aoPedir={…} /&gt;</code>.</dd>
+  <dt>aoPedir?.(sabor)</dt><dd>chama a função <em>se ela existir</em>. O ponto de interrogação antes dos parênteses evita o erro quando o pai não passa nada. É a forma curta de <code>if (aoPedir) aoPedir(sabor)</code>.</dd>
+  <dt>sabor</dt><dd>o dado que sobe junto com o aviso. O filho manda o fato, não a decisão: quem decide o que fazer é o pai.</dd>
+  <dt>function pedir()</dt><dd>a função do clique. Ela poderia chamar <code>aoPedir</code> direto no <code>onclick</code>, mas um nome próprio deixa espaço para validar antes de avisar.</dd>
+</dl>
+
+<p>Repare no que o filho <strong>não</strong> faz: ele não guarda a lista de pedidos, não decide preço, não sabe se o pedido foi aceito. Essa ignorância é uma virtude — é o que permite reaproveitar o mesmo <code>Filho.svelte</code> em outra tela, com outro pai decidindo outra coisa.</p>
+
+<div class="tip">
+<strong>Uma propriedade, um nome</strong>
+<p>O nome da propriedade aparece em dois arquivos: no <code>$props()</code> do filho e no atributo do pai. Se você renomear num lugar só, nada quebra na compilação e o aviso silenciosamente para de funcionar. É o tipo de erro que só aparece no clique — motivo de sobra para testar depois de renomear.</p>
+</div>
+
+<h2>3. O pai que ouve</h2>
+
+<p>Do outro lado, o pai importa o filho, cria o estado dos pedidos e passa a função que atualiza esse estado.</p>
+
+<pre class="file" data-file="src/Pai.svelte">&lt;script&gt;
+  import Filho from './Filho.svelte';
+
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;Filho aoPedir={(sabor) =&gt; (pedidos = [...pedidos, sabor])} /&gt;
+
+{#each pedidos as p}
+  &lt;p&gt;{p}&lt;/p&gt;
+{:else}
+  &lt;p&gt;nenhum pedido&lt;/p&gt;
+{/each}</pre>
+
+<p>Vale notar o que o pai <em>não</em> precisa saber: como o filho desenha o botão, se ele tem estilo próprio, se o clique vem de um botão ou de um item de lista. O contrato entre os dois é só o nome da propriedade e o formato do argumento. Essa fronteira estreita é o que permite trocar o visual do filho sem tocar no pai — e é o assunto da aula de composição com snippets.</p>
+
+<p>Ao renderizar o pai, a saída é a do filho mais a lista vazia: um botão escrito "pedir pão" e o aviso "nenhum pedido". No clique, o filho chama a função do pai com <code>'pão'</code>, o pai acrescenta à lista e a própria tela se atualiza — o filho não mudou nada além de chamar.</p>
+
+<p>A função do pai é uma <em>arrow function</em> de uma expressão: recebe <code>sabor</code> e devolve a lista nova. Funciona, e é curta. Quando o handler cresce, vale trocar por uma função nomeada no script — fica mais fácil de ler, de testar e de depurar:</p>
+
+<pre class="file" data-file="src/PaiNomeado.svelte">&lt;script&gt;
+  import Filho from './Filho.svelte';
+
+  let pedidos = $state([]);
+
+  function anotar(sabor) {
+    pedidos = [...pedidos, sabor];
+  }
+&lt;/script&gt;
+
+&lt;Filho aoPedir={anotar} /&gt;
+
+&lt;p&gt;{pedidos.length} pedido(s)&lt;/p&gt;</pre>
+
+<p>As duas formas são equivalentes. A segunda deixa claro o que acontece no aviso e permite acrescentar validação sem transformar o atributo num emaranhado.</p>
+
+<h2>4. Nomes que não confundem</h2>
+
+<p>Existem três convenções circulando. Escolher uma e manter é mais importante que escolher a "certa".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome</th><th>De onde vem a ideia</th><th>Cuidado</th></tr>
+<tr><td><code>aoPedir</code></td><td>português, "ao acontecer o pedido"</td><td>combina com o resto do guia</td></tr>
+<tr><td><code>onPedir</code></td><td>inglês, padrão de bibliotecas</td><td>parecido com <code>on:pedir</code> antigo e com atributos do DOM</td></tr>
+<tr><td><code>pedir</code></td><td>verbo direto</td><td>confunde com a função do clique dentro do filho</td></tr>
+</table>
+</div>
+
+<p>O guia usa <code>ao...</code> para handlers que sobem e <code>onclick</code> para eventos do DOM. A separação ajuda justamente nos casos de dois níveis: o <code>onclick</code> é do navegador; o <code>aoPedir</code> é do componente.</p>
+
+<p>Um detalhe importante do Svelte 5: escrever <code>onclick</code> numa tag do HTML é evento do DOM, mas escrever <code>onclick</code> num <em>componente</em> não vira evento — vira uma propriedade chamada <code>onclick</code>, que o filho precisa declarar se quiser usar. Não existe encaminhamento automático. Se você quer que o filho avise, declare a propriedade e chame.</p>
+
+<p>Uma pergunta que sempre aparece: e se o pai precisar responder ao filho, como "pedido aceito" ou "sem estoque"? A resposta é a mesma do começo — propriedade desce. O pai guarda a resposta num estado e passa de volta como propriedade; o filho lê e mostra. Não existe canal de volta separado: os dois canais são um só, em direções opostas.</p>
+
+<h2>5. Experimente: quando o pai não passa nada</h2>
+
+<p>A caixa mostra um filho cuja propriedade <code>aoPedir</code> não veio. O clique quebra porque o código chama algo que não é função. Sua missão é fazer o aviso ser opcional.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^pedir registro: pão$">
+<p class="try-task"><strong>Missão:</strong> sem pai, <code>aoPedir</code> é <code>undefined</code> e o clique quebra. Faça o componente registrar o pedido mesmo sem ninguém ouvindo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { aoPedir } = $props();
+  let registro = $state([]);
+
+  function pedir(sabor) {
+    aoPedir(sabor);
+    registro = [...registro, sabor];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; pedir('pão')}&gt;pedir&lt;/button&gt;
+&lt;p&gt;registro: {registro.join(', ') || 'vazio'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { aoPedir } = $props();
+  let registro = $state([]);
+
+  function pedir(sabor) {
+    aoPedir?.(sabor);
+    registro = [...registro, sabor];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; pedir('pão')}&gt;pedir&lt;/button&gt;
+&lt;p&gt;registro: {registro.join(', ') || 'vazio'}&lt;/p&gt;</pre>
+</div>
+
+<p>Duas letras resolvem — <code>?.</code> — e o componente passa a funcionar com e sem pai. A alternativa é dar um valor padrão na desestruturação: <code>let { aoPedir = () =&gt; {} } = $props()</code>. As duas funcionam; a primeira deixa o "talvez não exista" visível em cada chamada, a segunda centraliza a decisão no topo do arquivo.</p>
+
+<h2>6. Experimente: o evento em vez do dado</h2>
+
+<p>O erro clássico de quem vem do DOM: passar o objeto do evento no lugar do valor. O pai recebe um <code>PointerEvent</code> e a lista fica com um texto estranho.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^pedir pão recebido: pão$">
+<p class="try-task"><strong>Missão:</strong> o pai recebe o evento inteiro em vez do sabor. Faça o aviso levar o texto <code>pão</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let registro = $state([]);
+  let { aoPedir = (sabor) =&gt; (registro = [...registro, sabor]) } = $props();
+&lt;/script&gt;
+
+&lt;button onclick={(evento) =&gt; aoPedir(evento)}&gt;pedir pão&lt;/button&gt;
+&lt;p&gt;recebido: {registro.join(', ') || 'nada'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let registro = $state([]);
+  let { aoPedir = (sabor) =&gt; (registro = [...registro, sabor]) } = $props();
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; aoPedir('pão')}&gt;pedir pão&lt;/button&gt;
+&lt;p&gt;recebido: {registro.join(', ') || 'nada'}&lt;/p&gt;</pre>
+</div>
+
+<p>Aqui a caixa usa o valor padrão da propriedade para simular o pai: quando ninguém passa <code>aoPedir</code>, vale a função que anota na lista. É um truque de teste, e também um recurso de projeto — um componente com handler padrão funciona sozinho em demonstrações.</p>
+
+<h2>7. Experimente: o dado e o contexto</h2>
+
+<p>Às vezes o pai precisa de dois pedaços de informação: o sabor e o que estava acontecendo na tela. O filho pode mandar os dois, na ordem que fizer sentido.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^pedir registro: pão/click$">
+<p class="try-task"><strong>Missão:</strong> o registro mostra <code>pão/?</code>. Passe o evento do clique como segundo argumento e registre o tipo dele: <code>pão/click</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let registro = $state([]);
+  let { aoPedir = (sabor) =&gt; (registro = [...registro, `${sabor}/?`]) } = $props();
+&lt;/script&gt;
+
+&lt;button onclick={(evento) =&gt; aoPedir('pão', evento)}&gt;pedir&lt;/button&gt;
+&lt;p&gt;registro: {registro.join(', ') || 'vazio'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let registro = $state([]);
+  let { aoPedir = (sabor, evento) =&gt; (registro = [...registro, `${sabor}/${evento.type}`]) } = $props();
+&lt;/script&gt;
+
+&lt;button onclick={(evento) =&gt; aoPedir('pão', evento)}&gt;pedir&lt;/button&gt;
+&lt;p&gt;registro: {registro.join(', ') || 'vazio'}&lt;/p&gt;</pre>
+</div>
+
+<p>Há ainda uma terceira informação que costuma subir junto: o identificador do item. Numa lista de pedidos, o handler precisa saber <em>qual</em> pedido foi cancelado, e não só que houve um cancelamento. O filho recebe o item como propriedade e devolve o identificador no aviso. O pai procura na lista e faz o que for preciso — o filho continua sem saber como a lista é guardada.</p>
+
+<p>Mandar o evento cru é uma decisão de projeto. O objeto do DOM não é serializável e carrega referências que sobrevivem na memória; para um componente que precisa apenas saber "foi clique", mandar <code>evento.type</code> é mais limpo. A regra: mande o mínimo que o pai precisa para decidir.</p>
+
+<h2>8. Eventos do DOM dentro do filho</h2>
+
+<p>Dentro do filho, os eventos do navegador continuam sendo atributos normais. O que muda é que você pode traduzir um evento do DOM num aviso do componente — e é exatamente isso que a função <code>pedir</code> faz.</p>
+
+<pre class="file" data-file="src/Contador.svelte">&lt;script&gt;
+  let { aoMudar } = $props();
+  let total = $state(0);
+
+  function somar(evento) {
+    total++;
+    aoMudar?.({ total, origem: evento.type });
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;{total}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;0&lt;/button&gt;</pre>
+
+<p>Esse é o ponto em que muita gente tenta "repassar" o evento do DOM para o pai com <code>onclick</code> no componente e descobre que não funciona: no Svelte 5 não existe encaminhamento automático de eventos de componente. O atributo até é aceito, mas vira uma propriedade que o filho precisa declarar e chamar. Se você escrever <code>&lt;Filho onclick={fn} /&gt;</code> sem declarar <code>onclick</code> no <code>$props()</code> do filho, nada acontece — e nenhuma mensagem aparece.</p>
+
+<p>O aviso leva um objeto com dois campos: o total e de onde veio. O pai recebe um pacote com nome e não precisa adivinhar a ordem dos argumentos. Esse formato — um objeto por aviso — envelhece melhor que uma lista de parâmetros, porque acrescentar um campo não quebra quem já escutava.</p>
+
+<h2>9. Conferindo no projeto da Ana</h2>
+
+<p>Com dois arquivos, o dev server mostra a dupla funcionando: o botão do filho e a lista do pai.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 506 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-0CQ4i6KU.js  41.23 kB │ gzip: 15.85 kB
+✓ built in 4.30s</pre>
+
+<p>Um exercício útil no projeto da Ana: abra dois filhos na mesma tela, cada um com seu handler, e veja que eles não compartilham estado. Cada instância tem o próprio <code>sabor</code>, e o pai acumula os dois avisos no mesmo lugar. É a prova de que propriedade e estado de instância são coisas diferentes — o mesmo arquivo pode virar dez componentes independentes.</p>
+
+<p>Repare em "112 modules transformed": um a mais que nos componentes de um arquivo só. O filho é um módulo separado, e o empacotador o junta ao pai. O peso total praticamente não muda — a divisão em arquivos é organização, não custo.</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram da execução real dos componentes quebrados.</p>
+
+<div class="cenario">
+<strong>Erro 1 — handler escrito como texto</strong>
+<p>Quem vem do HTML puro escreve o código do handler entre aspas. No Svelte, o valor do atributo é uma expressão, não uma string.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let n = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick="n++"&gt;{n}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 8): Event attribute must be a JavaScript expression, not a string</pre>
+<p>"Must be a JavaScript expression, not a string" é literal: troque as aspas por chaves e passe a função, <code>onclick={() =&gt; n++}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — misturar as duas sintaxes</strong>
+<p>O Svelte 5 aceita <code>on:click</code> antigo, mas reclama. O que ele não aceita é os dois no mesmo arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let n = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; n++} on:click={() =&gt; n++}&gt;{n}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 28): Mixing old (on:click) and new syntaxes for event handling is not allowed. Use only the onclick syntax</pre>
+<p>A mensagem diz o que fazer: escolha uma sintaxe. No guia, a escolhida é <code>onclick</code>, sem dois-pontos.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — chamar a propriedade durante o desenho</strong>
+<p>Chamar o handler no corpo do script é chamar antes de o pai existir. O componente compila e quebra ao renderizar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { aoPedir } = $props();
+  const aviso = aoPedir('pão');
+&lt;/script&gt;
+
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: aoPedir is not a function</pre>
+<p>A correção é chamar dentro de um evento ou de um efeito, e proteger com <code>?.</code>. O aviso ao pai é consequência de uma ação, nunca parte do desenho.</p>
+</div>
+
+<p>Antes de seguir, um resumo em três frases que vale reler depois de cada erro desta aula. O filho recebe uma função e chama quando o fato acontece. O pai escreve a função e é o único que muda o estado. Nenhum dos dois conhece o interior do outro.</p>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No filho</th><th>No pai</th><th>Resultado</th></tr>
+<tr><td><code>let { aoPedir } = $props()</code></td><td><code>&lt;Filho aoPedir={fn} /&gt;</code></td><td>o filho chama, o pai executa</td></tr>
+<tr><td><code>aoPedir?.(sabor)</code></td><td>atributo ausente</td><td>nada acontece, sem erro</td></tr>
+<tr><td><code>aoPedir?.({ total })</code></td><td>handler lê <code>pacote.total</code></td><td>vários campos num aviso só</td></tr>
+<tr><td><code>onclick={fn}</code></td><td>—</td><td>evento do DOM, não do componente</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td>o clique não faz nada no pai</td><td>nome da propriedade diferente nos dois arquivos</td><td>conferir <code>$props()</code> e o atributo</td></tr>
+<tr><td><code>is not a function</code></td><td>o pai não passou o handler</td><td><code>?.</code> ou valor padrão</td></tr>
+<tr><td>a lista mostra <code>[object PointerEvent]</code></td><td>passou o evento em vez do valor</td><td>passar <code>sabor</code></td></tr>
+<tr><td>erro de sintaxe no atributo</td><td>handler entre aspas</td><td>usar chaves</td></tr>
+</table>
+</div>
+
+<p>Um último detalhe de nomenclatura que evita confusão: chame de <em>handler</em> a função que escuta e de <em>aviso</em> o momento em que o filho chama. "Evento" fica reservado para o que vem do navegador. Com esse vocabulário, a frase "o filho dispara o evento e o pai executa o handler" vira "o filho faz o aviso e o pai executa o handler" — e ninguém mais precisa adivinhar de que lado da fronteira a frase está falando.</p>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Como o filho avisa o pai no Svelte 5?</p>
+<label><input type="radio" name="q1"> escrevendo direto na variável do pai</label>
+<label><input type="radio" name="q1"> chamando a função que recebeu como propriedade</label>
+<label><input type="radio" name="q1"> usando <code>on:pedir</code> no botão</label>
+<label><input type="radio" name="q1"> alterando o <code>localStorage</code> e esperando</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>aoPedir?.(sabor)</code> faz quando <code>aoPedir</code> não foi passado?</p>
+<label><input type="radio" name="q1"> lança um erro explicando que falta o handler</label>
+<label><input type="radio" name="q1"> chama uma função vazia padrão do Svelte</label>
+<label><input type="radio" name="q1"> não chama nada e segue em frente, sem erro</label>
+<label><input type="radio" name="q1"> impede o clique de acontecer</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que passar o objeto do evento inteiro costuma ser má ideia?</p>
+<label><input type="radio" name="q1"> porque ele carrega referências do DOM e o pai quase sempre precisa só de um dado simples</label>
+<label><input type="radio" name="q1"> porque o Svelte apaga o evento depois do clique</label>
+<label><input type="radio" name="q1"> porque eventos não podem atravessar componentes</label>
+<label><input type="radio" name="q1"> porque o evento é sempre nulo em componentes filhos</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let { aoPedir } = $props();<br><br>function pedir(sabor) {<br>&nbsp; <input data-answer="aoPedir?.(sabor);|aoPedir?.(sabor)">&nbsp;<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Estado desce por propriedades; aviso sobe por função.</li>
+  <li>No Svelte 5, evento de componente é uma propriedade de função declarada com <code>$props()</code>.</li>
+  <li>O filho chama a função; quem decide o que fazer é o pai.</li>
+  <li><code>?.</code> ou valor padrão tornam o aviso opcional e evitam <code>is not a function</code>.</li>
+  <li>Mande o dado, não o objeto do evento, a menos que o pai realmente precise dele.</li>
+  <li>Um objeto por aviso envelhece melhor que vários parâmetros posicionais.</li>
+  <li><code>onclick="código"</code> é erro: o valor do atributo é expressão.</li>
+  <li>Misturar <code>on:click</code> com <code>onclick</code> no mesmo arquivo é erro de compilação.</li>
+  <li>Dois arquivos viram dois módulos no build; a organização não custa peso.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

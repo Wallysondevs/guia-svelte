@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>createEventDispatcher — o interfone da cozinha | Guia Svelte</title>
+<meta name="description" content="createEventDispatcher no Svelte 5: como o filho dispara um evento, como o pai escuta com on:pedir, o que é evento.detail e por que funções são o caminho novo.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">createEventDispatcher</span></h1>
+
+<p class="intro">A padaria da Ana ganhou um interfone. Quando o pão sai do forno, a cozinha aperta o botão e o balcão ouve o recado — sem que ninguém precise atravessar a loja. No Svelte, esse interfone tem nome: <strong>createEventDispatcher</strong>. É a API clássica de eventos de componente, ainda funcionando no Svelte 5, e é o que você vai encontrar em todo projeto escrito antes das runas. Esta aula mostra como ela funciona, o que ela carrega e por que o caminho novo passa por funções.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como criar o dispatcher no filho e disparar um evento.</li>
+  <li>Como o pai escuta com <code>on:pedir</code>.</li>
+  <li>O que é <code>evento.detail</code> e o que ele carrega.</li>
+  <li>Por que o dispatcher precisa ser criado na inicialização do componente.</li>
+  <li>A diferença entre evento de componente e evento do DOM.</li>
+  <li>Por que o Svelte 5 recomenda propriedades de função no lugar do dispatcher.</li>
+  <li>Como migrar um componente antigo sem quebrar nada.</li>
+  <li>Os três erros reais desta aula, com a mensagem copiada do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o interfone da cozinha</h2>
+
+<p>O interfone tem três peças. O aparelho do lado de dentro, que a cozinha instala uma vez. O botão, que dispara um recado com um nome — "saiu pão". E o aparelho do balcão, que escuta aquele nome. Se o balcão não tiver aparelho, o recado sai e ninguém ouve; nada quebra, nada acontece.</p>
+
+<p>O dispatcher é o aparelho de dentro. Ele é criado com <code>createEventDispatcher()</code> e devolve uma função, que costuma se chamar <code>dispatch</code>. Você chama essa função com o nome do evento e, opcionalmente, um dado para levar. O pai escuta pelo nome do evento e recebe um objeto comum do navegador — um <code>CustomEvent</code> — com o dado dentro da propriedade <code>detail</code>.</p>
+
+<p>Há uma diferença importante entre evento de componente e evento do DOM, e ela confunde no começo. O evento do DOM já existe: o navegador dispara <code>click</code> quando alguém clica, e o componente só escuta. O evento de componente é inventado por você: o navegador não sabe o que é "pedir", e ninguém dispara nada se o seu código não chamar <code>dispatch</code>. Por isso o dispatcher precisa ser criado e usado de propósito, enquanto o <code>onclick</code> funciona sozinho.</p>
+
+<p>Repare que o nome do evento é texto. Isso significa que ele não é verificado pelo compilador: se o filho dispara <code>'pedir'</code> e o pai escuta <code>'pedido'</code>, o recado sai e ninguém ouve, sem uma única mensagem. É a fragilidade central dessa API, e uma das razões pelas quais o Svelte 5 prefere funções, que pelo menos erram na hora.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Instalar o aparelho na cozinha</td><td><code>const dispatch = createEventDispatcher()</code></td></tr>
+<tr><td>Apertar o botão "saiu pão"</td><td><code>dispatch('pedir', sabor)</code></td></tr>
+<tr><td>O recado levar o sabor junto</td><td>o segundo argumento vira <code>detail</code></td></tr>
+<tr><td>O balcão com o aparelho ligado</td><td><code>&lt;Filho on:pedir={…} /&gt;</code></td></tr>
+<tr><td>Recado sem aparelho ligado</td><td>disparar sem ninguém escutando: nada acontece</td></tr>
+</table>
+</div>
+
+<h2>2. O filho que dispara</h2>
+
+<p>O componente abaixo é o filho da padaria, agora com dispatcher. Ele cria o aparelho no topo do script e dispara no clique.</p>
+
+<pre class="file" data-file="src/Filho.svelte">&lt;script&gt;
+  import { createEventDispatcher } from 'svelte';
+
+  const dispatch = createEventDispatcher();
+  let sabor = $state('pão');
+
+  function pedir() {
+    dispatch('pedir', sabor);
+  }
+&lt;/script&gt;
+
+&lt;button onclick={pedir}&gt;pedir {sabor}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;pedir pão&lt;/button&gt;</pre>
+
+<p>O HTML não tem vestígio de evento: o dispatcher não escreve nada na marcação. Ele só cria um canal em memória que o pai, se estiver montado em volta, pode ligar. Quem olha o HTML vê apenas um botão.</p>
+
+<h3>A anatomia do dispatcher</h3>
+
+<dl class="anatomy">
+  <dt>import { createEventDispatcher } from 'svelte'</dt><dd>vem da biblioteca. No Svelte 5 é uma API mantida por compatibilidade, e continua no módulo principal.</dd>
+  <dt>const dispatch = createEventDispatcher()</dt><dd>cria a função de disparo. Precisa acontecer durante a inicialização do componente: chamar depois, dentro de um clique, é erro.</dd>
+  <dt>dispatch('pedir', sabor)</dt><dd>o primeiro argumento é o nome do evento; o segundo é o dado, que chega ao pai em <code>evento.detail</code>. O terceiro, opcional, aceita <code>{ cancelable: true }</code>.</dd>
+  <dt>return true</dt><dd>o retorno de <code>dispatch</code> é <code>false</code> se algum ouvinte chamou <code>preventDefault</code>. Serve para o filho saber que o pedido foi recusado.</dd>
+</dl>
+
+<p>O segundo argumento é uma escolha de projeto, e não um detalhe. Disparar <code>dispatch('pedir', sabor)</code> manda uma string; disparar <code>dispatch('pedir', { sabor, quantidade })</code> manda um pacote. O pai lê <code>evento.detail.sabor</code>. Como no caso das funções, o pacote envelhece melhor: acrescentar um campo não obriga a mudar quem escuta.</p>
+
+<h2>3. O pai que escuta</h2>
+
+<p>Do lado de fora, a escuta usa a sintaxe antiga com dois-pontos, que o Svelte 5 ainda aceita para componentes:</p>
+
+<pre class="file" data-file="src/Pai.svelte">&lt;script&gt;
+  import Filho from './Filho.svelte';
+
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;Filho on:pedir={(evento) =&gt; (pedidos = [...pedidos, evento.detail])} /&gt;
+
+{#each pedidos as p}
+  &lt;p&gt;{p}&lt;/p&gt;
+{:else}
+  &lt;p&gt;nenhum pedido&lt;/p&gt;
+{/each}</pre>
+
+<p>O handler recebe um <code>CustomEvent</code>, e o dado está em <code>evento.detail</code>. A lista começa vazia e cresce a cada clique no botão do filho — o filho não sabe que existe lista, e o pai não sabe que existe botão.</p>
+
+<p>Uma descoberta real, que surpreende quem espera uma mensagem de aviso: neste compilador, <code>on:pedir</code> num componente <strong>não gera aviso nenhum</strong>. O arquivo compila em silêncio e funciona. Já <code>on:click</code> num elemento do DOM emite o aviso <code>event_directive_deprecated</code>, recomendando o atributo <code>onclick</code>. Ou seja: a API antiga de componente não avisa que está antiga — mais um motivo para conhecer as duas e escolher com consciência.</p>
+
+<h2>4. Dispatcher ou função?</h2>
+
+<p>O Svelte 5 tem duas formas de o filho avisar o pai. As duas funcionam; uma é a recomendada hoje.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Aspecto</th><th><code>createEventDispatcher</code></th><th>propriedade de função</th></tr>
+<tr><td>Nome do evento</td><td>texto, sem verificação</td><td>nome da propriedade, verificado</td></tr>
+<tr><td>O que o pai recebe</td><td><code>evento.detail</code></td><td>os argumentos diretos</td></tr>
+<tr><td>Erro se o nome não bater</td><td>silêncio</td><td>o pai vê um valor não usado</td></tr>
+<tr><td>Escuta no pai</td><td><code>on:pedir</code></td><td><code>aoPedir={fn}</code></td></tr>
+<tr><td>Peso no pacote</td><td>leva o caminho de eventos</td><td>nada além da função</td></tr>
+<tr><td>Recomendação do Svelte 5</td><td>compatibilidade</td><td><strong>preferida</strong></td></tr>
+</table>
+</div>
+
+<p>Outro ponto que só aparece em projeto grande: o dispatcher não deixa rastro de quem escuta. Ao ler o filho, você não tem como saber se algum pai usa aquele evento, nem com que dado. Com propriedades de função, o contrato está escrito na desestruturação do <code>$props()</code>, e uma busca pelo nome acha todos os usos. Manutenção é, na maior parte, leitura de código alheio.</p>
+
+<p>A vantagem decisiva da função é o erro na hora certa. Com dispatcher, um nome trocado produz silêncio; com propriedade, o componente que chama uma função inexistente quebra imediatamente e mostra a linha. Erro cedo custa menos que erro silencioso.</p>
+
+<p>Há um caso em que o dispatcher ainda ganha: quando o componente é usado por código que não é Svelte, ou quando o projeto inteiro usa a API antiga e a consistência vale mais que a novidade. Num projeto novo, escrito com runas, o guia recomenda funções.</p>
+
+<h2>5. Experimente: o dispatcher que não existe</h2>
+
+<p>A caixa mostra o clique chamando <code>dispatch</code> sem que ninguém o tenha criado. O componente quebra e a lista não registra nada.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^pedir registro: pão$">
+<p class="try-task"><strong>Missão:</strong> crie o dispatcher no topo do script com <code>createEventDispatcher()</code> para o clique conseguir disparar e registrar o pedido.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let registro = $state([]);
+  let sabor = $state('pão');
+
+  function pedir() {
+    dispatch('pedir', sabor);
+    registro = [...registro, sabor];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={pedir}&gt;pedir&lt;/button&gt;
+&lt;p&gt;registro: {registro.join(', ') || 'vazio'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { createEventDispatcher } from 'svelte';
+
+  const dispatch = createEventDispatcher();
+  let registro = $state([]);
+  let sabor = $state('pão');
+
+  function pedir() {
+    dispatch('pedir', sabor);
+    registro = [...registro, sabor];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={pedir}&gt;pedir&lt;/button&gt;
+&lt;p&gt;registro: {registro.join(', ') || 'vazio'}&lt;/p&gt;</pre>
+</div>
+
+<p>Se você quiser ver o recado sendo ouvido de verdade, o caminho tem dois arquivos: um filho com o dispatcher e um pai com <code>on:pedir</code>. Este guia não coloca esse par numa caixa porque a caixa compila um arquivo por vez. No projeto real, os dois convivem na mesma pasta e o build junta tudo, como o terminal da seção 10 mostra.</p>
+
+<p>A caixa roda um arquivo só, então não há pai escutando: o recado sai e ninguém ouve. O que você vê é o registro interno, que prova que a função existia e foi chamada sem erro. É o suficiente para aprender a peça que costuma faltar.</p>
+
+<h2>6. O que chega ao pai: <code>detail</code></h2>
+
+<p>O handler do pai sempre recebe um objeto de evento, mesmo quando o filho não manda dado nenhum. Confundir o evento com o dado é o tropeço mais frequente — e o sintoma é uma lista cheia de <code>[object CustomEvent]</code>.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^simular último: pão$">
+<p class="try-task"><strong>Missão:</strong> o handler guarda o evento inteiro. Faça ele guardar o dado que o filho mandou, em <code>evento.detail</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let ultimo = $state('—');
+
+  function aoPedir(evento) {
+    ultimo = String(evento);
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; aoPedir(new CustomEvent('pedir', { detail: 'pão' }))}&gt;simular&lt;/button&gt;
+&lt;p&gt;último: {ultimo}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let ultimo = $state('—');
+
+  function aoPedir(evento) {
+    ultimo = evento.detail;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; aoPedir(new CustomEvent('pedir', { detail: 'pão' }))}&gt;simular&lt;/button&gt;
+&lt;p&gt;último: {ultimo}&lt;/p&gt;</pre>
+</div>
+
+<p>O botão cria um <code>CustomEvent</code> à mão, com <code>detail: 'pão'</code> — exatamente o que o dispatcher faria. Assim você testa o handler sem precisar de um componente pai. É um bom hábito: handlers que recebem evento podem ser exercitados com eventos fabricados.</p>
+
+<h2>7. O dispatcher nasce na inicialização</h2>
+
+<p>O <code>createEventDispatcher</code> depende do contexto do componente, que só existe enquanto ele está sendo criado. Chamar dentro de um clique é chamar depois que esse contexto se foi.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^pedir registro: pão$">
+<p class="try-task"><strong>Missão:</strong> o dispatcher está sendo criado dentro do clique e estoura. Crie-o no topo do script, uma vez, e use a mesma função no clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  import { createEventDispatcher } from 'svelte';
+  let registro = $state([]);
+
+  function pedir() {
+    const dispatch = createEventDispatcher();
+    dispatch('pedir', 'pão');
+    registro = [...registro, 'pão'];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={pedir}&gt;pedir&lt;/button&gt;
+&lt;p&gt;registro: {registro.join(', ') || 'vazio'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { createEventDispatcher } from 'svelte';
+  const dispatch = createEventDispatcher();
+  let registro = $state([]);
+
+  function pedir() {
+    dispatch('pedir', 'pão');
+    registro = [...registro, 'pão'];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={pedir}&gt;pedir&lt;/button&gt;
+&lt;p&gt;registro: {registro.join(', ') || 'vazio'}&lt;/p&gt;</pre>
+</div>
+
+<p>Existe uma terceira armadilha, mais sutil: disparar dentro de um <code>$effect</code> que reage ao próprio estado. O efeito roda, dispara, o pai muda uma propriedade, o filho reage e dispara de novo — e o ciclo só termina quando alguém para. Se o disparo depender de uma mudança de estado, proteja com uma comparação do valor anterior ou mova o disparo para o evento que causou a mudança.</p>
+
+<p>Vale entender o porquê, e não só a regra. O dispatcher guarda uma referência ao componente que o criou, porque precisa saber quais ouvintes procurar. Durante um clique, o componente já está montado e a criação terminou — não há a quem associar o aparelho. Criar uma vez, no topo, é a única forma que faz sentido.</p>
+
+<h2>8. Migrando sem quebrar</h2>
+
+<p>Se o projeto da Ana já usa dispatcher e você quer adotar funções, o caminho seguro é aceitar as duas formas por um tempo: o filho declara a propriedade de função e, se ela não vier, dispara o evento antigo.</p>
+
+<pre class="file" data-file="src/Misto.svelte">&lt;script&gt;
+  import { createEventDispatcher } from 'svelte';
+
+  const dispatch = createEventDispatcher();
+  let { aoPedir } = $props();
+  let sabor = $state('pão');
+
+  function pedir() {
+    if (aoPedir) {
+      aoPedir(sabor);
+    } else {
+      dispatch('pedir', sabor);
+    }
+  }
+&lt;/script&gt;
+
+&lt;button onclick={pedir}&gt;pedir {sabor}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;pedir pão&lt;/button&gt;</pre>
+
+<p>O pai novo passa <code>aoPedir</code>; o pai antigo continua com <code>on:pedir</code>. Quando todos os pais migrarem, você apaga o dispatcher e a importação. Essa transição em duas etapas é mais segura que trocar tudo de uma vez num projeto com muitas telas.</p>
+
+<h2>9. Escolhendo o que sobe</h2>
+
+<p>Nem toda mudança interna merece virar aviso. O filho que muda o próprio texto de um campo não precisa contar ao pai a cada letra digitada; o pai só quer saber quando o formulário foi enviado. A regra é a do interfone: só se aperta o botão quando o recado interessa a alguém do outro lado.</p>
+
+<p>Na prática, isso significa escolher poucos eventos e com nomes de fato — <code>pedir</code>, <code>cancelar</code>, <code>finalizar</code>. Nomes vagos como <code>mudou</code> ou <code>atualizou</code> obrigam o pai a inspecionar <code>detail</code> para descobrir o que aconteceu, e voltam a acoplar os dois componentes.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação no filho</th><th>Vira evento?</th><th>Por quê</th></tr>
+<tr><td>o usuário digitou uma letra</td><td>não</td><td>estado interno; o pai lê no envio</td></tr>
+<tr><td>o usuário confirmou o pedido</td><td>sim</td><td>fato que interessa ao pai</td></tr>
+<tr><td>o componente terminou de carregar</td><td>às vezes</td><td>só se o pai precisa medir ou focar</td></tr>
+<tr><td>uma animação terminou</td><td>às vezes</td><td>quando o próximo passo é do pai</td></tr>
+<tr><td>o componente foi montado</td><td>não</td><td>o pai controla a montagem</td></tr>
+</table>
+</div>
+
+<p>Quando o aviso carrega vários campos, o pacote de <code>detail</code> deve ser pequeno e previsível: identificadores e valores simples, sem objetos do DOM. Um <code>CustomEvent</code> que carrega o elemento clicado é difícil de testar e mantém referências vivas na memória. Mande o que o pai precisa para decidir, e nada mais.</p>
+
+<h2>10. Conferindo no projeto da Ana</h2>
+
+<p>Com filho e pai no projeto, o dev server mostra o botão do filho e a lista do pai:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1284 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DKi4Vk66.js  41.65 kB │ gzip: 16.00 kB
+✓ built in 1.24s</pre>
+
+<p>Uma nota sobre o tempo de vida do aparelho: o dispatcher criado no topo do script pertence àquela instância do componente. Dois filhos montados na mesma tela têm dois aparelhos independentes, e o pai pode escutar o mesmo nome nos dois, recebendo recados separados. Não existe um canal global — o que existe é um aparelho por instância, ligado na hora da montagem e desligado quando o componente sai.</p>
+
+<p>O build não distingue dispatcher de função: os dois viram JavaScript comum. O tamanho muda pouco, mas o caminho de eventos do runtime continua no pacote enquanto houver um componente usando dispatcher.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram da execução real dos componentes quebrados.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>$on</code>, a API que saiu do Svelte</strong>
+<p>Quem lê código antigo encontra <code>$on</code> para escutar eventos. No Svelte 5, o cifrão seguido de <code>on</code> é tratado como runa, e o compilador recusa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { createEventDispatcher } from 'svelte';
+  const dispatch = createEventDispatcher();
+  const parar = $on('pedir', () =&gt; {});
+&lt;/script&gt;
+
+&lt;p&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 16): `$on` is an illegal variable name. To reference a global variable called `$on`, use `globalThis.$on`</pre>
+<p>A mensagem é técnica, mas o diagnóstico é simples: não existe <code>$on</code> no Svelte 5. Escutar evento de componente é trabalho do pai, com <code>on:pedir</code> ou com uma propriedade de função.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>createEventDispatcher</code> sem import</strong>
+<p>A função não é global: precisa vir de <code>'svelte'</code>. Sem a linha de importação, o componente compila e falha ao executar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const dispatch = createEventDispatcher();
+  let sabor = $state('pão');
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; dispatch('pedir', sabor)}&gt;pedir&lt;/button&gt;</pre>
+<pre class="out">Erro ao renderizar: createEventDispatcher is not defined</pre>
+<p>Como sempre, o nome citado na mensagem é a pista: falta <code>import { createEventDispatcher } from 'svelte'</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — disparar sem criar o dispatcher</strong>
+<p>Aqui o nome <code>dispatch</code> aparece solto no código. Compila, porque o JavaScript aceita um nome livre no script, e quebra na hora de renderizar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let sabor = $state('pão');
+
+  dispatch('pedir', sabor);
+&lt;/script&gt;
+
+&lt;p&gt;pedido: {sabor}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: dispatch is not defined</pre>
+<p>A correção é criar a função antes de usá-la: <code>const dispatch = createEventDispatcher()</code>. E, se o disparo estiver no corpo do script, mover para um evento — disparar durante o desenho não é aviso, é parte da renderização.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No filho</th><th>No pai</th><th>O que acontece</th></tr>
+<tr><td><code>createEventDispatcher()</code></td><td>—</td><td>cria o canal, uma vez, na inicialização</td></tr>
+<tr><td><code>dispatch('pedir', sabor)</code></td><td><code>on:pedir={fn}</code></td><td><code>fn</code> recebe <code>evento.detail</code></td></tr>
+<tr><td><code>dispatch('pedir')</code></td><td><code>on:pedir={fn}</code></td><td><code>detail</code> é <code>null</code></td></tr>
+<tr><td><code>dispatch('pedir', s, { cancelable: true })</code></td><td><code>evento.preventDefault()</code></td><td><code>dispatch</code> devolve <code>false</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td>o pai não reage ao clique</td><td>nome do evento diferente nos dois lados</td><td>conferir a string nos dois arquivos</td></tr>
+<tr><td><code>[object CustomEvent]</code> na lista</td><td>guardou o evento em vez de <code>detail</code></td><td>usar <code>evento.detail</code></td></tr>
+<tr><td>erro ao criar o dispatcher no clique</td><td>criado fora da inicialização</td><td>mover para o topo do script</td></tr>
+<tr><td><code>createEventDispatcher is not defined</code></td><td>import ausente</td><td><code>import { … } from 'svelte'</code></td></tr>
+</table>
+</div>
+
+<p>Um teste que vale a pena fazer no projeto da Ana: troque o nome do evento só no filho, de <code>'pedir'</code> para <code>'pedido'</code>, e recarregue. Nada acontece no clique, nenhuma mensagem aparece, e o componente continua compilando. Depois troque de volta e veja funcionar. Viver essa experiência uma vez ensina mais sobre a fragilidade dos nomes em texto do que qualquer parágrafo.</p>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Onde o dispatcher deve ser criado?</p>
+<label><input type="radio" name="q1"> dentro de cada handler de clique</label>
+<label><input type="radio" name="q1"> uma vez, na inicialização do componente</label>
+<label><input type="radio" name="q1"> no componente pai, antes de importar o filho</label>
+<label><input type="radio" name="q1"> dentro do bloco <code>&lt;style&gt;</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Onde o pai encontra o dado enviado por <code>dispatch('pedir', sabor)</code>?</p>
+<label><input type="radio" name="q1"> no primeiro argumento do handler</label>
+<label><input type="radio" name="q1"> em <code>evento.value</code></label>
+<label><input type="radio" name="q1"> em <code>evento.detail</code></label>
+<label><input type="radio" name="q1"> numa variável global chamada <code>pedir</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o Svelte 5 recomenda propriedades de função em vez de dispatcher?</p>
+<label><input type="radio" name="q1"> porque o nome da propriedade é verificado, enquanto o nome do evento é texto livre e falha em silêncio</label>
+<label><input type="radio" name="q1"> porque o dispatcher não funciona mais</label>
+<label><input type="radio" name="q1"> porque funções são assíncronas e eventos não</label>
+<label><input type="radio" name="q1"> porque o dispatcher só funciona no servidor</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { createEventDispatcher } from 'svelte';<br><input data-answer="const dispatch = createEventDispatcher();|const dispatch = createEventDispatcher()">&nbsp;<br><br>function pedir() {<br>&nbsp; dispatch('pedir', 'pão');<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>createEventDispatcher()</code> cria a função de disparo e deve rodar na inicialização.</li>
+  <li><code>dispatch('nome', dado)</code> envia o dado em <code>evento.detail</code>.</li>
+  <li>O pai escuta com <code>on:pedir={fn}</code>, a sintaxe antiga ainda aceita.</li>
+  <li>Sem ouvinte, o disparo não faz nada e não gera erro.</li>
+  <li>O nome do evento é texto: trocar uma letra quebra em silêncio.</li>
+  <li><code>on:pedir</code> em componente não emite aviso de depreciação; <code>on:click</code> em elemento emite.</li>
+  <li>A forma recomendada no Svelte 5 é passar uma função como propriedade.</li>
+  <li>A migração segura aceita as duas formas por um tempo.</li>
+  <li>Os erros desta aula: <code>$on</code> inexistente, import ausente e <code>dispatch</code> não criado.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
