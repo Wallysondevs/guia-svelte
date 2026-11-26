@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grupos de Rotas — pastas com parênteses que não viram URL | Guia Svelte</title>
+<meta name="description" content="Grupos de rotas do SvelteKit: a pasta (painel) organiza arquivos e layouts sem aparecer no endereço. Inclui os conflitos reais de rota e o prefixo do grupo.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Grupos de Rotas</span></h1>
+
+<p class="intro">A Ana queria uma moldura diferente para o painel restrito e outra para a loja, mas não queria que o endereço virasse <code>/painel/admin</code>: o cliente digitaria duas vezes para chegar no óbvio. O sobrinho dela mostrou uma pasta com o nome entre parênteses, <code>(painel)</code>: o SvelteKit usa a pasta para organizar arquivos e layouts, e depois a <strong>joga fora</strong> na hora de montar o endereço. Nesta aula você vai ver o grupo funcionando, o endereço saindo limpo, e as três brigas de rota que o compilador acusa quando dois grupos reivindicam o mesmo caminho.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que os parênteses no nome da pasta fazem.</li>
+  <li>Por que o grupo organiza sem aparecer na URL.</li>
+  <li>Como dar um layout próprio a uma área do site sem sujar o endereço.</li>
+  <li>Que dentro do grupo a URL continua sendo a soma das pastas <em>sem</em> parênteses.</li>
+  <li>Como dois grupos podem conviver no mesmo projeto.</li>
+  <li>Que grupos podem ter o próprio <code>+error.svelte</code> e o próprio <code>load</code>.</li>
+  <li>Como o grupo se aplica a tudo o que está abaixo dele.</li>
+  <li>Os três conflitos reais de rota, com a mensagem do build.</li>
+  <li>Quando o grupo é exagero e a pasta comum resolve.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a gaveta com etiqueta interna</h2>
+
+<p>Na padaria, a Ana separa as encomendas em três caixas de papelão: "balcão", "encomenda", "entrega". As caixas têm nome, mas o cliente não vê esse nome: ele pede "um pão" e recebe. A etiqueta da caixa é um assunto interno, de organização, e não faz parte do produto. Um grupo de rotas no SvelteKit é isso: uma pasta que existe para organizar arquivos e compartilhar um layout, mas que não entra no endereço.</p>
+
+<p>No sistema de arquivos, a pasta se chama <code>(painel)</code>, entre parênteses. Na URL, ela desaparece. A rota <code>src/routes/(painel)/admin/+page.svelte</code> responde em <code>/admin</code>, e não em <code>/(painel)/admin</code>. Se você já entendeu que o caminho do arquivo vira endereço (aula <a href="rotas.html">Rotas por Arquivo</a>), aqui está a única exceção: o pedaço entre parênteses é descartado.</p>
+
+<p>O motivo de existir é o layout. Você quer que <code>/admin</code> tenha uma moldura diferente da loja, mas não quer criar um nível de URL só para isso. Sem o grupo, o layout teria que morar em <code>src/routes/admin/+layout.svelte</code> — o que funciona para uma pasta só, mas não junta <code>/admin</code> e <code>/estoque</code> debaixo da mesma moldura. Com um grupo, você pode ter <code>(painel)/admin/</code> e <code>(painel)/estoque/</code> compartilhando o mesmo <code>+layout.svelte</code>, e nenhum dos dois endereços ganha um pedaço a mais.</p>
+
+<h2>2. No dia a dia × no SvelteKit</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>A caixa com etiqueta interna</td><td>A pasta <code>(painel)</code></td></tr>
+<tr><td>O cliente pedindo "um pão"</td><td>O endereço <code>/admin</code></td></tr>
+<tr><td>A etiqueta que ninguém de fora vê</td><td>O nome do grupo, fora da URL</td></tr>
+<tr><td>Uma caixa só para encomendas</td><td>Um <code>+layout.svelte</code> dentro do grupo</td></tr>
+<tr><td>Duas caixas com a mesma etiqueta</td><td>Dois grupos disputando o mesmo endereço: erro</td></tr>
+<tr><td>Caixa dentro de caixa</td><td>Grupo dentro de grupo</td></tr>
+</table>
+</div>
+
+<p>Guarde a diferença em relação à aula de layouts: um <code>+layout.svelte</code> em <code>src/routes/admin/</code> também vale só para aquela pasta. O grupo não é a única forma de dar moldura a uma área. Ele é a forma de dar <em>a mesma</em> moldura a <em>várias</em> pastas de primeiro nível, sem inventar um pedaço de URL para elas. Se a sua área é uma pasta só, você não precisa de grupo.</p>
+
+<h2>3. Parênteses no nome da pasta</h2>
+
+<p>Este é o projeto da Ana visto de cima de novo:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ ls src/routes
+(painel)
++error.svelte
++layout.svelte
++page.svelte
+contato
+paes
+sobre</pre>
+
+<p>A pasta <code>(painel)</code> aparece na listagem, mas não nos endereços. Dentro dela há um <code>+layout.svelte</code> (a moldura da área restrita) e uma pasta <code>admin</code> com o <code>+page.svelte</code> da página. O endereço final é <code>/admin</code>: a soma de <code>admin</code> mais nada.</p>
+
+<dl class="anatomy">
+  <dt>(painel)</dt><dd>o nome do grupo. Os parênteses são a marca; o texto de dentro é livre e serve só para você se achar.</dd>
+  <dt>+layout.svelte</dt><dd>a moldura que vale para tudo o que está no grupo. Sem ele, o grupo só organizaria arquivos.</dd>
+  <dt>admin/</dt><dd>uma pasta normal dentro do grupo. Esta, sim, entra na URL.</dd>
+  <dt>+page.svelte</dt><dd>a página de <code>/admin</code>. O <code>+page.svelte</code> não entra na URL, como em qualquer rota.</dd>
+</dl>
+
+<p>O nome do grupo não precisa ser único no projeto inteiro; ele precisa ser único na pasta onde está. Como ele não entra na URL, dois grupos com nomes diferentes podem existir lado a lado sem problema — desde que não disputem o mesmo endereço. É exatamente aí que o build reclama, e você vai ver as mensagens na seção de erros.</p>
+
+<h2>4. O layout do grupo em ação</h2>
+
+<p>O arquivo do grupo é um layout comum, com a mesma dupla <code>children</code> e <code>{@render}</code> da aula <a href="layout.html">+layout.svelte</a>:</p>
+
+<pre class="file" data-file="src/routes/(painel)/+layout.svelte">&lt;script&gt;
+	/** @type {{children: import('svelte').Snippet}} */
+	let { children } = $props();
+&lt;/script&gt;
+
+&lt;aside&gt;Área restrita&lt;/aside&gt;
+{@render children()}</pre>
+
+<p>O HTML servido mostra o encaixe: o layout raiz desenha o <code>nav</code>, o <code>main</code> e o <code>footer</code>; dentro do <code>main</code> entra o layout do grupo, com o <code>aside</code>; e dentro dele entra a página <code>/admin</code>.</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/admin | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;main.*&lt;/main&gt;'
+&lt;main&gt;&lt;aside&gt;Área restrita&lt;/aside&gt; &lt;h1&gt;Painel&lt;/h1&gt; &lt;p&gt;Só a Ana entra aqui.&lt;/p&gt;&lt;/main&gt;</pre>
+
+<p>Duas molduras, uma dentro da outra, e nenhuma delas aparece no endereço. Se você acrescentar <code>(painel)/estoque/+page.svelte</code>, a página nova entra na mesma moldura e responde em <code>/estoque</code> — o grupo faz o papel de "pasta compartilhada" sem custo na URL.</p>
+
+<h2>5. O grupo não cria endereço</h2>
+
+<p>Vale testar a afirmação em vez de acreditar nela. O endereço <code>/admin</code> existe; o endereço <code>/painel</code>, que é o nome do grupo, não:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ for u in /admin /painel; do printf '%-10s %s\n' "$u" "$(curl -s -o /dev/null -w '%{http_code}' localhost:4173$u)"; done
+/admin     200
+/painel    404</pre>
+
+<p>É a prova de que o parênteses é descartado na montagem da URL, e não apenas "escondido". Se o grupo entrasse na URL, <code>/painel</code> existiria (ou pelo menos <code>/painel/admin</code>). Nenhum dos dois existe.</p>
+
+<p>Um detalhe que confunde no começo: o grupo aparece nos <em>logs</em> e nas ferramentas. O SvelteKit chama a rota de <code>/(painel)/admin</code> internamente, e é esse nome que aparece nas mensagens de erro. Quando você vir <code>/(painel)/admin</code> numa mensagem, leia como "a página <code>/admin</code>, que mora no grupo <code>(painel)</code>".</p>
+
+<h2>6. Dois grupos, duas áreas</h2>
+
+<p>Com o grupo entendido, a Ana separou o site em duas áreas com molduras diferentes. A tabela abaixo é o mapa: a coluna "arquivo" é o caminho no disco, a coluna "endereço" é o que o cliente digita.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo no disco</th><th>Endereço</th><th>Moldura</th></tr>
+<tr><td><code>+layout.svelte</code></td><td>todas as rotas</td><td>menu e rodapé do site</td></tr>
+<tr><td><code>paes/+page.svelte</code></td><td><code>/paes</code></td><td>a do site</td></tr>
+<tr><td><code>(loja)/contato/+page.svelte</code></td><td><code>/contato</code></td><td>site + grupo loja</td></tr>
+<tr><td><code>(painel)/admin/+page.svelte</code></td><td><code>/admin</code></td><td>site + grupo painel</td></tr>
+<tr><td><code>(painel)/estoque/+page.svelte</code></td><td><code>/estoque</code></td><td>site + grupo painel</td></tr>
+</table>
+</div>
+
+<p>Repare que <code>/contato</code> e <code>/admin</code> têm a mesma profundidade na URL e molduras diferentes. É isso que o grupo resolve e uma pasta comum não resolveria sem repetir o layout em duas pastas. O custo é que a árvore de arquivos fica um pouco mais estranha de ler — parênteses no meio do caminho — e que a relação entre pasta e endereço deixa de ser óbvia para quem abre o projeto pela primeira vez.</p>
+
+<div class="trysvelte" data-goal="outre:Encomendas">
+<p class="try-task"><strong>Missão:</strong> a área é <code>painel</code>, mas o menu público é que aparece. Faça o menu da área restrita aparecer quando <code>area</code> for <code>painel</code>.</p>
+<pre class="script" data-file="Area.svelte">&lt;script&gt;
+  let area = $state('painel');
+&lt;/script&gt;
+
+{#if area === 'loja'}
+  &lt;nav&gt;Encomendas · Estoque&lt;/nav&gt;
+{:else}
+  &lt;nav&gt;Início · Pães · Sobre&lt;/nav&gt;
+{/if}
+
+&lt;h1&gt;Painel&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="Area.svelte">&lt;script&gt;
+  let area = $state('painel');
+&lt;/script&gt;
+
+{#if area === 'painel'}
+  &lt;nav&gt;Encomendas · Estoque&lt;/nav&gt;
+{:else}
+  &lt;nav&gt;Início · Pães · Sobre&lt;/nav&gt;
+{/if}
+
+&lt;h1&gt;Painel&lt;/h1&gt;</pre>
+</div>
+
+<p>A caixa exagera de propósito: no projeto de verdade você não escreveria esse <code>{#if}</code>. Ele representa a escolha que o roteador faz sozinho — qual layout se aplica a este endereço. O grupo é a resposta: cada área tem o seu <code>+layout.svelte</code>, e o SvelteKit monta a pilha na hora.</p>
+
+<h2>7. O grupo some da URL, mas os pedaços de dentro ficam</h2>
+
+<p>Uma confusão comum é achar que <em>tudo</em> dentro do grupo some do endereço. Não é isso: só o nome do grupo é descartado. As pastas normais continuam entrando, na ordem, e os colchetes continuam capturando parâmetros.</p>
+
+<p>Veja o caso de um grupo com uma rota de parâmetro dentro: <code>src/routes/(painel)/pedidos/[id]/+page.svelte</code>. O endereço é <code>/pedidos/123</code> — o <code>(painel)</code> some, o <code>pedidos</code> fica e o <code>[id]</code> captura. O parâmetro continua chegando em <code>page.params.id</code>, como na aula <a href="parametros.html">Parâmetros de Rota</a>.</p>
+
+<div class="trysvelte" data-goal="out:/admin">
+<p class="try-task"><strong>Missão:</strong> a função monta o endereço a partir do arquivo, mas está deixando o nome do grupo na URL. Faça <code>(painel)/admin/+page.svelte</code> virar <code>/admin</code>.</p>
+<pre class="script" data-file="Endereco.svelte">&lt;script&gt;
+  let arquivo = $state('(painel)/admin/+page.svelte');
+
+  function endereco(arq) {
+    return '/' + arq.replace('/+page.svelte', '').replace('+page.svelte', '');
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;{endereco(arquivo)}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="Endereco.svelte">&lt;script&gt;
+  let arquivo = $state('(painel)/admin/+page.svelte');
+
+  function endereco(arq) {
+    return '/' + arq
+      .replace('/+page.svelte', '')
+      .replace('+page.svelte', '')
+      .replace(/\([^)]*\)\//g, '');
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;{endereco(arquivo)}&lt;/h1&gt;</pre>
+</div>
+
+<p>A expressão regular <code>/\([^)]*\)\//g</code> lê-se "um parêntese de abertura, qualquer coisa que não seja parêntese, um parêntese de fechamento e uma barra", repetido em todos os lugares (<code>g</code>). O <code>\</code> antes do parêntese é necessário porque parêntese tem significado em expressão regular. Essa linha é a versão em código da regra que o SvelteKit aplica: grupo sai, resto fica.</p>
+
+<h2>8. Grupo dentro de grupo e o alcance da moldura</h2>
+
+<p>Grupos podem ser aninhados, e o efeito é o de sempre: cada nível acrescenta uma moldura. A regra de alcance é a mesma dos layouts — <strong>um grupo vale para tudo o que está abaixo dele</strong>. Um <code>(painel)/+layout.svelte</code> alcança <code>(painel)/admin</code>, <code>(painel)/admin/pedidos</code> e qualquer outro descendente.</p>
+
+<p>É isso que permite uma área restrita inteira compartilhar o aviso "Área restrita", a checagem de sessão e o <code>+error.svelte</code> próprio. E é também a origem de um erro comum: colocar uma página na raiz de um grupo que já tem uma página na raiz do site. Os dois caminhos viram <code>/</code>, e o build não sabe qual escolher.</p>
+
+<div class="trysvelte" data-goal="outre:Área restrita">
+<p class="try-task"><strong>Missão:</strong> o <code>aside</code> só aparece no endereço exato <code>/admin</code>. Faça ele aparecer em qualquer endereço da área restrita, inclusive <code>/admin/pedidos</code>, comparando o começo do caminho.</p>
+<pre class="script" data-file="Restrito.svelte">&lt;script&gt;
+  let caminho = $state('/admin/pedidos');
+  let rotasDoGrupo = ['/admin', '/admin/pedidos'];
+&lt;/script&gt;
+
+&lt;nav&gt;Início · Pães&lt;/nav&gt;
+{#if caminho === '/admin'}
+  &lt;aside&gt;Área restrita&lt;/aside&gt;
+{/if}
+&lt;main&gt;&lt;h1&gt;Pedidos&lt;/h1&gt;&lt;/main&gt;</pre>
+<pre class="solucao" data-file="Restrito.svelte">&lt;script&gt;
+  let caminho = $state('/admin/pedidos');
+  let rotasDoGrupo = ['/admin', '/admin/pedidos'];
+
+  let naArea = $derived(rotasDoGrupo.some((r) =&gt; caminho === r || caminho.startsWith(r + '/')));
+&lt;/script&gt;
+
+&lt;nav&gt;Início · Pães&lt;/nav&gt;
+{#if naArea}
+  &lt;aside&gt;Área restrita&lt;/aside&gt;
+{/if}
+&lt;main&gt;&lt;h1&gt;Pedidos&lt;/h1&gt;&lt;/main&gt;</pre>
+</div>
+
+<p><code>some</code> devolve <code>true</code> se algum item da lista passar no teste; <code>startsWith</code> compara o começo do texto. O <code>+ '/'</code> evita o clássico falso positivo: <code>/admin-promocao</code> começa com <code>/admin</code>, mas não é filho de <code>/admin</code>. É o mesmo cuidado que o roteador do SvelteKit toma ao casar segmentos.</p>
+
+<h2>9. Grupo × pasta comum: quando cada um</h2>
+
+<p>Com duas ferramentas que fazem quase a mesma coisa, a decisão vira critério. A pasta comum é a mais simples: ela entra na URL, e o layout dentro dela vale para aquela pasta e para as subpastas. O grupo é mais esperto e mais caro de ler: ele não entra na URL e consegue abrigar várias pastas de primeiro nível debaixo do mesmo layout. A tabela compara os dois no que importa.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Critério</th><th><code>admin/</code> (pasta comum)</th><th><code>(painel)/</code> (grupo)</th></tr>
+<tr><td>Entra na URL</td><td>sim: <code>/admin/…</code></td><td>não</td></tr>
+<tr><td>Layout próprio</td><td>sim</td><td>sim</td></tr>
+<tr><td>Junta várias pastas</td><td>não: cada pasta precisa do seu layout</td><td>sim: <code>(painel)/admin</code> e <code>(painel)/estoque</code></td></tr>
+<tr><td>Legibilidade do projeto</td><td>alta: pasta = endereço</td><td>menor: parênteses quebram a regra</td></tr>
+<tr><td>Risco de conflito</td><td>baixo</td><td>maior, porque o nome não aparece na URL</td></tr>
+</table>
+</div>
+
+<p>O critério prático que a Ana adotou: se a área tem <em>um</em> endereço, pasta comum; se tem <em>vários</em> endereços que precisam da mesma moldura, grupo. O painel dela tem <code>/admin</code> e <code>/estoque</code>, então o grupo se justifica. A loja tem <code>/paes</code>, <code>/sobre</code> e <code>/contato</code> — três pastas que compartilham apenas o layout raiz, que já vale para todas. Criar um grupo <code>(loja)</code> só para dizer "estas três são da loja" não muda nada no comportamento: seria organização sem efeito, e organização sem efeito envelhece mal.</p>
+
+<p>Há um terceiro caso, menos comum e mais útil do que parece: renomear uma área sem mudar a URL. Se a Ana quiser que o código diga <code>(restrito)</code> em vez de <code>(painel)</code>, ela renomeia a pasta e nenhum link do site quebra — porque o nome do grupo nunca esteve na URL. O mesmo não vale para pasta comum: renomear <code>admin</code> para <code>gestao</code> quebra todos os links, e cada um deles passa a responder <code>404</code>.</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>Grupo é organização, e organização errada briga. As três mensagens abaixo saíram do <code>npm run build</code> do projeto da Ana; todas são o mesmo erro, <code>route_conflict</code>, com nomes de rota diferentes. Onde a saída original traz o caminho completo do projeto, o recorte ficou com o nome do arquivo ou da rota.</p>
+
+<div class="cenario">
+<strong>Erro 1 — dois grupos com o mesmo endereço</strong>
+<p>A Ana criou <code>(loja)/sobre/+page.svelte</code> e, sem apagar a antiga, também <code>(blog)/sobre/+page.svelte</code>. As duas respondem em <code>/sobre</code>.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+
+&gt; kit@0.0.1 build
+&gt; vite build
+
+error during build:
+SvelteKit error: route_conflict
+The `/(blog)/sobre` and `/(loja)/sobre` routes conflict with each other
+https://svelte.dev/e/kit/route_conflict</pre>
+<p>O SvelteKit mostra as duas rotas em ordem alfabética, com o grupo no nome. A decisão é sua: escolher um grupo e apagar o outro arquivo. Dois grupos podem conviver no projeto; dois arquivos para o mesmo endereço, não.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — página na raiz do grupo</strong>
+<p>Um <code>+page.svelte</code> colocado direto em <code>(painel)/</code> casa com <code>/</code> — o mesmo endereço da página inicial do site. O build acusa:</p>
+<pre class="term">error during build:
+SvelteKit error: route_conflict
+The `/` and `/(painel)` routes conflict with each other
+https://svelte.dev/e/kit/route_conflict</pre>
+<p>Repare no formato: quando a página está na raiz do grupo, a rota aparece só como <code>/(painel)</code>. O conserto mais comum é mover essa página para dentro de uma pasta com nome, como <code>(painel)/painel/+page.svelte</code>, que responde em <code>/painel</code> — ou aceitar que a página inicial é uma só e viver sem o grupo na raiz.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — a mesma rota dentro e fora do grupo</strong>
+<p>Aqui o conflito é mais sutil, porque os arquivos estão em lugares diferentes e ambos parecem certos: <code>(painel)/admin/+page.svelte</code> e <code>admin/+page.svelte</code>.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+error during build:
+SvelteKit error: route_conflict
+The `/(painel)/admin` and `/admin` routes conflict with each other
+https://svelte.dev/e/kit/route_conflict</pre>
+<p>Como o grupo não entra na URL, os dois viram <code>/admin</code>. A mensagem mostra a diferença entre eles justamente no parênteses: um está no grupo, o outro não. Ao migrar uma área para um grupo, mova os arquivos — não copie.</p>
+</div>
+
+<h2>11. Grupos e o resto do SvelteKit</h2>
+
+<p>Dentro de um grupo você pode ter os mesmos arquivos <code>+</code> de qualquer pasta. A diferença é que eles passam a valer só para a área. A tabela lista os que fazem sentido juntos:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo no grupo</th><th>Efeito</th></tr>
+<tr><td><code>+layout.svelte</code></td><td>moldura compartilhada pelas rotas do grupo</td></tr>
+<tr><td><code>+layout.js</code></td><td><code>load</code> que roda para as rotas do grupo (dá para checar sessão aqui)</td></tr>
+<tr><td><code>+layout.server.js</code></td><td>o mesmo, só no servidor, com acesso a cookies</td></tr>
+<tr><td><code>+error.svelte</code></td><td>cartaz de erro só da área</td></tr>
+</table>
+</div>
+
+<p>Um cuidado que vale ouro: o grupo <em>não</em> protege nada sozinho. Ele organiza. Colocar uma página dentro de <code>(painel)</code> não impede ninguém de abrir <code>/admin</code> — a checagem de quem pode entrar é código, no <code>+layout.server.js</code> ou no <code>hooks.server.js</code>. Grupo é gaveta, não cadeado.</p>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pasta</th><th>Endereço gerado</th></tr>
+<tr><td><code>(painel)/admin/</code></td><td><code>/admin</code></td></tr>
+<tr><td><code>(painel)/pedidos/[id]/</code></td><td><code>/pedidos/123</code></td></tr>
+<tr><td><code>(loja)/(ofertas)/promo/</code></td><td><code>/promo</code> (grupos aninhados, ambos descartados)</td></tr>
+<tr><td><code>painel/admin/</code></td><td><code>/painel/admin</code> (sem parênteses, entra na URL)</td></tr>
+</table>
+</div>
+
+<p>Um resumo de decisões: use grupo quando duas ou mais pastas de primeiro nível precisam da mesma moldura sem ganhar um pedaço de URL; use pasta comum quando só uma pasta precisa de layout próprio; não use grupo para "esconder" uma área, porque esconder não é proteger. E se dois grupos disputarem o mesmo endereço, o build avisa antes de qualquer pessoa ver o site.</p>
+
+<h2>13. O caminho até aqui</h2>
+
+<p>O site da Ana tem agora duas áreas: a loja, com o menu público, e o painel, com o aviso de área restrita. Ambas compartilham o layout raiz e o rodapé. Os endereços continuam limpos, e cada área pode ter o próprio cartaz de erro e o próprio <code>load</code>.</p>
+
+<p>Se o seu próximo passo é buscar dados para essas áreas, o assunto é <a href="parametros.html">Parâmetros de Rota</a> e, mais adiante no guia, os arquivos <code>+page.js</code> e <code>+page.server.js</code>. Se você quer rever como a pasta vira endereço, <a href="rotas.html">Rotas por Arquivo</a>. E se a dúvida é o que aparece quando nada casa, <a href="pagina-de-erro.html">+error.svelte</a>.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O arquivo <code>src/routes/(painel)/admin/+page.svelte</code> responde em qual endereço?</p>
+<label><input type="radio" name="r2"> <code>/(painel)/admin</code></label>
+<label><input type="radio" name="r2"> <code>/admin</code></label>
+<label><input type="radio" name="r2"> <code>/painel/admin</code></label>
+<label><input type="radio" name="r2"> <code>/painel</code></label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">2. Para que serve um grupo de rotas?</p>
+<label><input type="radio" name="r2"> para proteger uma área com senha automaticamente</label>
+<label><input type="radio" name="r2"> para deixar a URL mais curta apagando pastas</label>
+<label><input type="radio" name="r2"> para compartilhar um layout entre pastas sem mudar a URL</label>
+<label><input type="radio" name="r2"> para criar um endereço novo com o nome entre parênteses</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que o build faz quando dois grupos disputam o mesmo endereço?</p>
+<label><input type="radio" name="r2"> para com <code>route_conflict</code>, mostrando as duas rotas</label>
+<label><input type="radio" name="r2"> escolhe o grupo em ordem alfabética e segue</label>
+<label><input type="radio" name="r2"> transforma um dos endereços em 404</label>
+<label><input type="radio" name="r2"> junta as duas páginas numa só</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">Uma moldura só para o grupo, sem aparecer na URL:<br><br>src/routes/<input data-answer="(painel)|(admin)|(area)">/+layout.svelte<br><br>// os parênteses marcam o grupo; o endereço das páginas de dentro não ganha esse pedaço</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Pasta com parênteses é um <strong>grupo de rotas</strong>: organiza arquivos e layouts.</li>
+  <li>O nome do grupo <strong>não entra</strong> na URL: <code>(painel)/admin</code> responde em <code>/admin</code>.</li>
+  <li>O que está dentro do grupo continua entrando: pastas normais e colchetes viram endereço.</li>
+  <li>O grupo serve para compartilhar um <code>+layout.svelte</code> entre áreas distintas.</li>
+  <li>Grupos podem ser aninhados; cada nível acrescenta uma moldura.</li>
+  <li>Grupo não é cadeado: proteger exige código no <code>load</code> ou no <code>hooks.server.js</code>.</li>
+  <li>Dois grupos (ou um grupo e uma pasta) com o mesmo endereço derrubam o build com <code>route_conflict</code>.</li>
+  <li>Página na raiz do grupo disputa o endereço <code>/</code> com a página inicial do site.</li>
+  <li>Nas mensagens, a rota aparece como <code>/(painel)/admin</code>, mesmo que a URL seja <code>/admin</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

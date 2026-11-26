@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>+error.svelte — a página que aparece quando algo falha | Guia Svelte</title>
+<meta name="description" content="A página de erro do SvelteKit: page.status, page.error, error(404) no load, o 500 que ninguém escreveu e as mensagens reais do terminal quando o erro quebra.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">+error.svelte</span></h1>
+
+<p class="intro">A Ana colou um cartaz na porta da padaria: "se o pão acabou, avise com educação". Não é um cartaz sobre pão — é um cartaz sobre o que fazer quando não tem pão. Toda aplicação precisa disso, e é fácil de esquecer: o caminho feliz é divertido de programar, o caminho triste não. O <code>+error.svelte</code> é o cartaz do SvelteKit. Ele aparece quando um endereço não existe, quando o <code>load</code> diz que o item sumiu e quando o código estoura no meio do caminho — e nesta aula você vai ver os três casos com os números e as mensagens reais.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é o <code>+error.svelte</code> e onde ele mora.</li>
+  <li>De onde vêm <code>page.status</code> e <code>page.error</code>.</li>
+  <li>Por que o 404 já funciona antes de você escrever qualquer coisa.</li>
+  <li>Como responder um erro com mensagem própria usando <code>error(...)</code>.</li>
+  <li>A diferença entre erro esperado (404) e erro inesperado (500).</li>
+  <li>Por que a mensagem do 500 é sempre "Internal Error" na tela.</li>
+  <li>Como o layout continua aparecendo na página de erro.</li>
+  <li>O padrão <code>error?.message ?? 'algo deu errado'</code> e por que ele existe.</li>
+  <li>O que acontece quando a própria página de erro quebra.</li>
+  <li>As três falhas reais desta aula, com a saída do terminal.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o cartaz de "hoje não temos"</h2>
+
+<p>Numa padaria, o cartaz de "hoje não temos pão de queijo" não é um fracasso: é informação. Quem chega sabe o que aconteceu e o que fazer — pedir outra coisa, voltar amanhã, perguntar o horário. O que estraga a experiência é a porta fechada sem aviso: a pessoa empurra, não entende, vai embora achando que a padaria fechou.</p>
+
+<p>Na web é igual, com uma diferença de vocabulário. "Hoje não temos" é o <strong>404</strong>: o endereço não existe ou o item não está mais lá. "A cozinha pegou fogo" é o <strong>500</strong>: o endereço existe, mas o código quebrou. São situações diferentes, merecem páginas diferentes e — detalhe importante — merecem <em>números</em> diferentes na resposta HTTP, porque robôs de busca e programas leem o número, não o texto.</p>
+
+<p>O SvelteKit entrega os dois casos prontos, com uma página padrão feia mas funcional. O <code>+error.svelte</code> existe para você trocar essa página padrão por uma que fale a língua da padaria, sem perder os números. É um arquivo só, e ele serve para o site inteiro — ou para uma parte do site, se você colocar dentro de uma pasta.</p>
+
+<h2>2. No dia a dia × no SvelteKit</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>"Hoje não temos pão de queijo"</td><td><code>error(404, 'O pão de queijo acabou')</code></td></tr>
+<tr><td>"A cozinha pegou fogo, já estamos resolvendo"</td><td>Exceção no código: resposta <code>500</code></td></tr>
+<tr><td>O cartaz na porta</td><td><code>src/routes/+error.svelte</code></td></tr>
+<tr><td>O número do aviso colado no cartaz</td><td><code>page.status</code></td></tr>
+<tr><td>A frase escrita no cartaz</td><td><code>page.error.message</code></td></tr>
+<tr><td>O cartaz menor da parede dos fundos</td><td><code>+error.svelte</code> dentro de uma pasta</td></tr>
+</table>
+</div>
+
+<p>Repare que o desenho da tabela separa duas coisas que costumam andar juntas: o <em>fato</em> (não tem pão) e o <em>aviso</em> (o cartaz). No código, o fato acontece no <code>load</code>, com <code>error(404, …)</code>; o aviso é o componente que desenha. Você pode mudar o aviso sem tocar no fato, e é isso que permite ter um cartaz bonito sem espalhar texto de erro por vinte arquivos.</p>
+
+<h2>3. Onde mora a página de erro</h2>
+
+<p>O arquivo é <code>src/routes/+error.svelte</code>. Este é o da Ana:</p>
+
+<pre class="file" data-file="src/routes/+error.svelte">&lt;script&gt;
+	import { page } from '$app/state';
+&lt;/script&gt;
+
+&lt;h1&gt;{page.status}&lt;/h1&gt;
+&lt;p&gt;{page.error?.message}&lt;/p&gt;
+&lt;a href="/"&gt;voltar para o início&lt;/a&gt;</pre>
+
+<dl class="anatomy">
+  <dt>+error.svelte</dt><dd>o nome fixo. O <code>+</code> diz que é arquivo especial do SvelteKit; <code>error</code> diz qual é o papel dele.</dd>
+  <dt>page</dt><dd>o objeto da página atual, importado de <code>$app/state</code>. Nele estão <code>status</code>, <code>error</code>, <code>url</code> e <code>params</code>.</dd>
+  <dt>page.status</dt><dd>o número HTTP que o servidor vai responder: <code>404</code>, <code>500</code>, ou o que o seu <code>error()</code> mandou.</dd>
+  <dt>page.error?.message</dt><dd>o texto do erro. O <code>?.</code> protege o caso de <code>page.error</code> ser nulo, que acontece em páginas normais.</dd>
+  <dt>&lt;a href="/"&gt;</dt><dd>a saída. Uma página de erro sem caminho de volta é um beco sem saída.</dd>
+</dl>
+
+<p>Se você comparar com o que o SvelteKit gera quando não existe <code>+error.svelte</code>, a diferença é só de acabamento: a página padrão tem o mesmo <code>&lt;h1&gt;404&lt;/h1&gt;</code> e o mesmo <code>&lt;p&gt;Not Found&lt;/p&gt;</code>, sem menu e sem link de volta. O <code>+error.svelte</code> não cria o comportamento do erro — ele veste o comportamento que já existe.</p>
+
+<h2>4. De onde vêm <code>status</code> e <code>error</code></h2>
+
+<p>Quando uma requisição falha, o SvelteKit monta um objeto de erro com duas informações — número e mensagem — e o coloca em <code>page.error</code>. O número também aparece sozinho em <code>page.status</code>, porque é ele que vai no cabeçalho da resposta HTTP. A tabela abaixo mostra o que você pode ler:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Campo</th><th>Tipo</th><th>Quando tem valor</th></tr>
+<tr><td><code>page.status</code></td><td>número</td><td>sempre na página de erro (<code>404</code>, <code>500</code>, …)</td></tr>
+<tr><td><code>page.error</code></td><td>objeto ou <code>null</code></td><td>na página de erro, com <code>message</code>; <code>null</code> em página normal</td></tr>
+<tr><td><code>page.url</code></td><td>URL</td><td>sempre: serve para mostrar qual endereço falhou</td></tr>
+<tr><td><code>page.params</code></td><td>objeto</td><td>quando a rota tem colchetes</td></tr>
+</table>
+</div>
+
+<p>O <code>page.error</code> ser nulo em página normal não é detalhe teórico: é a causa do erro mais comum desta aula. Se você escrever <code>page.error.message</code> numa página comum, o JavaScript tenta ler <code>message</code> de <code>null</code> e o componente estoura. O <code>?.</code> resolve: "se o da esquerda existir, leia; se não, devolva <code>undefined</code>".</p>
+
+<h2>5. O 404 que você não escreveu</h2>
+
+<p>Antes de qualquer código seu, o SvelteKit já responde 404 para endereços que não existem. A Ana conferiu com o <code>curl</code>, olhando os cabeçalhos:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s -i localhost:4173/nao-existe | head -4
+HTTP/1.1 404 Not Found
+Vary: Origin
+content-length: 4371
+content-type: text/html</pre>
+
+<p>A primeira linha é o que importa: <code>404 Not Found</code>. E o corpo dessa resposta é a página de erro da Ana <em>dentro</em> do layout do site. O comando abaixo tira os comentários internos do Svelte e recorta o miolo:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/nao-existe | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;nav.*&lt;/footer&gt;'
+&lt;nav class="svelte-12qhfyh"&gt;&lt;a href="/" class="svelte-12qhfyh"&gt;Início&lt;/a&gt; &lt;a href="/paes" class="svelte-12qhfyh"&gt;Pães&lt;/a&gt; &lt;a href="/sobre" class="svelte-12qhfyh"&gt;Sobre&lt;/a&gt; &lt;a href="/contato" class="svelte-12qhfyh"&gt;Contato&lt;/a&gt;&lt;/nav&gt; &lt;main&gt;&lt;h1&gt;404&lt;/h1&gt; &lt;p&gt;Not Found&lt;/p&gt; &lt;a href="/"&gt;voltar para o início&lt;/a&gt;&lt;/main&gt; &lt;footer class="svelte-12qhfyh"&gt;Padaria da Ana&lt;/footer&gt;</pre>
+
+<p>Leia com calma, porque tem muita informação boa aí. O <code>nav</code> e o <code>footer</code> vieram do <code>+layout.svelte</code>; dentro do <code>main</code> está o <code>&lt;h1&gt;404&lt;/h1&gt;</code> do <code>+error.svelte</code>; e o <code>&lt;p&gt;Not Found&lt;/p&gt;</code> é a mensagem que o SvelteKit usa quando ninguém escreveu outra. Ou seja: o erro não foge da moldura. Quem se perde no site continua com o menu à mão.</p>
+
+<h2>6. Responder um erro com mensagem própria</h2>
+
+<p>A mensagem "Not Found" serve, mas não ajuda. A Ana queria dizer <em>o que</em> acabou. Para isso existe a função <code>error</code>, importada de <code>@sveltejs/kit</code>, usada dentro de um <code>load</code>:</p>
+
+<pre class="file" data-file="src/routes/paes/[slug]/+page.js">import { error } from '@sveltejs/kit';
+
+export function load({ params }) {
+	if (params.slug === 'queijo') {
+		error(404, 'O pão de queijo acabou');
+	}
+	return { slug: params.slug };
+}</pre>
+
+<p>O primeiro argumento é o status HTTP; o segundo é a mensagem que aparece na tela. A partir do momento em que <code>error</code> é chamada, o SvelteKit abandona o resto do <code>load</code>, não chama o componente da página e monta a página de erro. O terminal mostra as duas rotas, uma com erro e outra sem:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/paes/queijo | grep -o '&lt;h1&gt;.*&lt;/a&gt;'
+&lt;h1&gt;404&lt;/h1&gt; &lt;p&gt;O pão de queijo acabou&lt;/p&gt; &lt;a href="/"&gt;voltar para o início&lt;/a&gt;
+ana@notebook:~/loja/kit$ curl -s localhost:4173/paes/forma | grep -o '&lt;h1&gt;.*&lt;/a&gt;'
+&lt;h1&gt;forma&lt;/h1&gt; &lt;p&gt;Você pediu o pão forma.&lt;/p&gt; &lt;a href="/paes"&gt;voltar&lt;/a&gt;</pre>
+
+<p>A primeira resposta tem o status <code>404</code> e a mensagem da Ana; a segunda seguiu o caminho normal. Repare que a página de erro usou <code>page.error?.message</code> e mostrou exatamente o texto que veio do <code>load</code> — sem tratamento, sem tradução. É por isso que a mensagem precisa ser escrita para humanos e sem informação interna.</p>
+
+<div class="trysvelte" data-goal="out:404 página não encontrada">
+<p class="try-task"><strong>Missão:</strong> o componente mostra o número, mas não a explicação. Acrescente um parágrafo com a mensagem, para a tela mostrar <code>404 página não encontrada</code>.</p>
+<pre class="script" data-file="Erro.svelte">&lt;script&gt;
+  let status = $state(404);
+  let mensagem = $state('página não encontrada');
+&lt;/script&gt;
+
+&lt;h1&gt;{status}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="Erro.svelte">&lt;script&gt;
+  let status = $state(404);
+  let mensagem = $state('página não encontrada');
+&lt;/script&gt;
+
+&lt;h1&gt;{status}&lt;/h1&gt;
+&lt;p&gt;{mensagem}&lt;/p&gt;</pre>
+</div>
+
+<p>Número e mensagem são coisas diferentes e aparecem em lugares diferentes: o número é para a máquina (o cabeçalho HTTP, o robô de busca), a mensagem é para a pessoa. A página de erro é o único lugar em que você escreve os dois juntos, e por isso ela costuma ser mais útil do que parece.</p>
+
+<h2>7. Erro esperado × erro inesperado</h2>
+
+<p>Existe uma diferença de fundo entre os dois números. <code>error(404, …)</code> é um erro <strong>esperado</strong>: você previu a situação e decidiu responder com ela. Já o <code>500</code> é <strong>inesperado</strong>: ninguém escreveu aquele erro, ele aconteceu porque uma linha de código tentou ler algo que não existia. A Ana provocou um de propósito, numa página comum:</p>
+
+<pre class="file" data-file="src/routes/sobre/+page.svelte">&lt;script&gt;
+	import { page } from '$app/state';
+&lt;/script&gt;
+
+&lt;h1&gt;{page.error.message}&lt;/h1&gt;</pre>
+
+<p>Vai parecer inofensivo, e é justamente aí que mora o perigo: em uma página normal, <code>page.error</code> é <code>null</code>. O servidor tentou desenhar a página, quebrou, e o SvelteKit respondeu com o status <code>500</code> e a página de erro:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s -o /dev/null -w '%{http_code}\n' localhost:5183/sobre
+500
+ana@notebook:~/loja/kit$ curl -s localhost:5183/sobre | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;main.*&lt;/main&gt;'
+&lt;main class="svelte-12qhfyh"&gt;&lt;h1&gt;500&lt;/h1&gt; &lt;p&gt;Internal Error&lt;/p&gt; &lt;a href="/"&gt;voltar para o início&lt;/a&gt;&lt;/main&gt;</pre>
+
+<p>Na tela, o texto é sempre "Internal Error", nunca o motivo. O motivo fica no terminal, e é ali que você vai procurar:</p>
+
+<pre class="term">TypeError: Cannot read properties of null (reading 'message')
+    at eval (src/routes/sobre/+page.svelte:5:17)
+    at eval (node_modules/svelte/src/internal/server/renderer.js:416:11)
+    at Renderer.child (node_modules/svelte/src/internal/server/renderer.js:305:18)
+    at Renderer.component (node_modules/svelte/src/internal/server/renderer.js:414:8)
+    at _page (src/routes/sobre/+page.svelte:2:2)
+500 GET /sobre</pre>
+
+<p>Três informações para guardar. A primeira: a mensagem do erro diz <code>null</code>, não <code>undefined</code> — foi <code>page.error</code> que era nulo. A segunda: a posição <code>5:17</code> aponta para a coluna exata onde o <code>.message</code> foi lido. A terceira: a última linha do log, <code>500 GET /sobre</code>, é o resumo do pedido que falhou. Procurar essa linha no terminal é o primeiro passo de qualquer investigação.</p>
+
+<div class="trysvelte" data-goal="out:sem erro">
+<p class="try-task"><strong>Missão:</strong> numa página normal o erro chega nulo e o componente quebra ao ler <code>error.message</code>. Faça a tela mostrar <code>sem erro</code> quando não houver erro nenhum.</p>
+<pre class="script" data-file="Aviso.svelte">&lt;script&gt;
+  // na página de erro este objeto vem preenchido; numa página comum vem null
+  let { error = null } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{error.message}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Aviso.svelte">&lt;script&gt;
+  // na página de erro este objeto vem preenchido; numa página comum vem null
+  let { error = null } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{error?.message ?? 'sem erro'}&lt;/p&gt;</pre>
+</div>
+
+<p>Enquanto você editar, a caixa vai mostrar o erro de verdade do navegador no primeiro caso — é a mesma classe de falha que a Ana viu no terminal. Depois da correção, aparece o texto de reserva. O <code>??</code> só entra quando o da esquerda é <code>null</code> ou <code>undefined</code>; uma mensagem vazia (<code>''</code>) passaria por ele, e isso é o comportamento correto: vazio é diferente de ausente.</p>
+
+<h2>8. A moldura continua no erro</h2>
+
+<p>Um detalhe que separa um site cuidado de um site amador: a página de erro também tem menu. Isso acontece porque o <code>+error.svelte</code> da raiz é desenhado <em>dentro</em> do <code>+layout.svelte</code> da raiz. O layout não sabe que houve erro, e nem precisa saber — ele só desenha o buraco.</p>
+
+<p>Isso tem uma consequência prática: se o seu layout depende de um dado que só existe em páginas normais, ele vai quebrar justamente na hora do erro. O layout precisa ser capaz de desenhar sem dados. No projeto da Ana, o layout só tem menu e rodapé, então funciona nos dois mundos.</p>
+
+<div class="trysvelte" data-goal="out:500 tente de novo em alguns minutos">
+<p class="try-task"><strong>Missão:</strong> para <code>404</code> a página oferece o caminho de volta, mas para <code>500</code> ela fica sem nada. Acrescente o <code>{:else}</code> com o texto <code>tente de novo em alguns minutos</code>.</p>
+<pre class="script" data-file="Erro.svelte">&lt;script&gt;
+  let { status = 500 } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{status}&lt;/h1&gt;
+{#if status === 404}
+  &lt;a href="/"&gt;voltar para o início&lt;/a&gt;
+{/if}</pre>
+<pre class="solucao" data-file="Erro.svelte">&lt;script&gt;
+  let { status = 500 } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{status}&lt;/h1&gt;
+{#if status === 404}
+  &lt;a href="/"&gt;voltar para o início&lt;/a&gt;
+{:else}
+  &lt;p&gt;tente de novo em alguns minutos&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Tratar cada número com uma ação diferente é o padrão em sites grandes: <code>404</code> pede um caminho de volta, <code>500</code> pede paciência, <code>403</code> pede login. A condição é uma só e o componente continua pequeno. Se as mensagens ficarem grandes, é hora de separar um componente de aviso e chamá-lo com props — mas isso é refino, não obrigação.</p>
+
+<h2>9. Onde colocar um <code>+error.svelte</code> por pasta</h2>
+
+<p>Como todo arquivo <code>+</code>, o <code>+error.svelte</code> vale para a pasta onde está e para as subpastas. Isso permite um cartaz diferente em cada área: o site público com um tom, o painel restrito com outro. A tabela mostra a escolha e o custo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde o arquivo está</th><th>Aparece quando falha</th><th>Custo</th></tr>
+<tr><td><code>src/routes/+error.svelte</code></td><td>qualquer rota</td><td>um texto para todo mundo</td></tr>
+<tr><td><code>src/routes/admin/+error.svelte</code></td><td><code>/admin</code> e abaixo</td><td>mais um arquivo para manter</td></tr>
+<tr><td><code>src/routes/(painel)/+error.svelte</code></td><td>as rotas do grupo</td><td>o grupo não aparece na URL</td></tr>
+</table>
+</div>
+
+<p>Um aviso que economiza horas: o <code>+error.svelte</code> mais próximo <em>não</em> captura erros que acontecem no <code>load</code> do próprio layout. Se o <code>+layout.js</code> da pasta estoura, o SvelteKit usa a página de erro do nível acima. Erro no layout é resolvido pelo pai, não pelo filho — porque o filho nem chegou a ser desenhado.</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>Os três casos abaixo saíram do terminal do projeto da Ana. O primeiro é o que você já viu na seção 7, resumido; os outros dois mostram o que acontece quando é a própria página de erro que falha.</p>
+
+<div class="cenario">
+<strong>Caso 1 — ler <code>page.error.message</code> em página comum</strong>
+<p>O código está na seção 7. O componente não compila mal: ele quebra na hora de desenhar, porque <code>page.error</code> é <code>null</code>. A resposta vira <code>500</code> e a página de erro aparece no lugar da página <code>/sobre</code>.</p>
+<pre class="term">TypeError: Cannot read properties of null (reading 'message')
+    at eval (src/routes/sobre/+page.svelte:5:17)
+500 GET /sobre</pre>
+<p>O conserto é o <code>?.</code>: <code>page.error?.message</code>. Em página comum o valor vira <code>undefined</code> e o Svelte desenha vazio, sem quebrar. Na página de erro, o mesmo código mostra a mensagem. Um caractere de diferença entre uma página que funciona e um 500.</p>
+</div>
+
+<div class="cenario">
+<strong>Caso 2 — a página de erro também quebra</strong>
+<p>A Ana digitou <code>page.erro.message</code>, com um "o" a menos. Como esse código está dentro do <code>+error.svelte</code>, o erro acontece enquanto a página de erro é desenhada. O SvelteKit não tem para onde fugir: usa a página de emergência, sem layout e sem menu.</p>
+<pre class="term">TypeError: Cannot read properties of undefined (reading 'message')
+    at eval (src/routes/+error.svelte:6:15)
+    at _error (src/routes/+error.svelte:2:2)
+500 GET /nao-existe</pre>
+<p>E o corpo da resposta, nesse caso, é só isto:</p>
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:5183/nao-existe | grep -o '&lt;h1[^&gt;]*&gt;[^&lt;]*&lt;/h1&gt;'
+&lt;h1&gt;Internal Error&lt;/h1&gt;</pre>
+<p>Repare no detalhe cruel: o endereço pedido era um 404, e a resposta final foi <code>500</code>. Quando a página de erro falha, o número do erro original se perde. É a única página do site em que um erro de digitação custa tão caro — vale testar o <code>+error.svelte</code> abrindo um endereço inexistente de propósito.</p>
+</div>
+
+<div class="cenario">
+<strong>Caso 3 — sem <code>+error.svelte</code></strong>
+<p>Para ver o que o SvelteKit faz sozinho, a Ana renomeou o arquivo e pediu um endereço inexistente. A resposta veio <code>404</code>, com a página padrão:</p>
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:5183/nao-existe | grep -oE '(&lt;h1[^&gt;]*&gt;[^&lt;]*&lt;/h1&gt;|&lt;p[^&gt;]*&gt;[^&lt;]{0,40}&lt;/p&gt;)'
+&lt;h1&gt;404&lt;/h1&gt;
+&lt;p&gt;Not Found&lt;/p&gt;</pre>
+<p>Funciona, e é feio: sem menu, sem link de volta, sem a voz da padaria. A página padrão não é um erro — é o mínimo. Ter o <code>+error.svelte</code> é o que transforma o beco sem saída em caminho de volta.</p>
+</div>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Escreva</th></tr>
+<tr><td>responder 404 com mensagem sua</td><td><code>error(404, 'mensagem')</code> no <code>load</code></td></tr>
+<tr><td>mostrar o número na página de erro</td><td><code>{page.status}</code></td></tr>
+<tr><td>mostrar a mensagem com segurança</td><td><code>{page.error?.message}</code></td></tr>
+<tr><td>dar um texto quando não houver mensagem</td><td><code>{page.error?.message ?? 'algo deu errado'}</code></td></tr>
+<tr><td>mostrar o endereço que falhou</td><td><code>{page.url.pathname}</code></td></tr>
+<tr><td>uma ação diferente por status</td><td><code>{#if page.status === 404} … {:else} … {/if}</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Status</th><th>Significado</th><th>Quem decide</th></tr>
+<tr><td><code>404</code></td><td>não existe / não está mais lá</td><td>o roteador ou o seu <code>error(404, …)</code></td></tr>
+<tr><td><code>403</code></td><td>existe, mas você não pode ver</td><td>o seu <code>error(403, …)</code></td></tr>
+<tr><td><code>500</code></td><td>o código quebrou</td><td>ninguém: acontece</td></tr>
+</table>
+</div>
+
+<h2>12. Uma frase sobre segurança</h2>
+
+<p>A mensagem do erro é pública. Ela aparece na tela, no HTML, no cache do navegador e no histórico de quem visitou. Nunca escreva ali o nome da tabela do banco, o caminho de um arquivo do servidor, o token de uma API ou o e-mail de um cliente. "O pão de queijo acabou" é uma boa mensagem; "SELECT falhou em paes_estoque linha 4" é um presente para quem procura brechas.</p>
+
+<p>Para o caso do <code>500</code>, o SvelteKit já resolve metade do problema: a tela mostra sempre "Internal Error", e o detalhe fica no terminal do servidor, onde só você lê. Se você precisa guardar esse detalhe em algum lugar (um arquivo de log, um serviço de monitoramento), existe o gancho <code>handleError</code>, no arquivo <code>hooks.server.js</code>, que aparece mais adiante no guia.</p>
+
+<h2>13. O caminho até aqui</h2>
+
+<p>O site da Ana agora tem um cartaz à altura da padaria: número grande, mensagem em português, caminho de volta e o menu do site em volta. O 404 existe para endereço errado e para pão que acabou; o 500 existe para quando o código escorrega; e a diferença entre os dois está no número, não no texto.</p>
+
+<p>Ficou de fora uma pergunta que aparece rápido: e quando o erro não é para mostrar cartaz, e sim para <em>levar a pessoa para outro lugar</em> — depois de um login, por exemplo? Essa é a função do <code>redirect</code>, que aparece junto com <a href="navegar.html">Navegando com goto</a>. E se o assunto é agrupar rotas para um cartaz só valer numa área do site, o caminho é <a href="grupos.html">Grupos de Rotas</a>.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>page.status</code> contém numa página de erro?</p>
+<label><input type="radio" name="e1"> o texto da mensagem de erro</label>
+<label><input type="radio" name="e1"> o número HTTP que será respondido, como <code>404</code> ou <code>500</code></label>
+<label><input type="radio" name="e1"> o endereço que falhou</label>
+<label><input type="radio" name="e1"> <code>null</code> em todos os casos</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual é a forma segura de mostrar a mensagem do erro no <code>+error.svelte</code>?</p>
+<label><input type="radio" name="e1"> <code>{page.error.message}</code></label>
+<label><input type="radio" name="e1"> <code>{error}</code></label>
+<label><input type="radio" name="e1"> <code>{page.error?.message}</code></label>
+<label><input type="radio" name="e1"> <code>{page.message}</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Você quer responder "não temos esse pão" com status 404 a partir do <code>load</code>. O que escreve?</p>
+<label><input type="radio" name="e1"> <code>error(404, 'não temos esse pão')</code></label>
+<label><input type="radio" name="e1"> <code>throw 'não temos esse pão'</code></label>
+<label><input type="radio" name="e1"> <code>return { status: 404 }</code></label>
+<label><input type="radio" name="e1"> <code>page.status = 404</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;import { page } from '$app/state';<br>&lt;/script&gt;<br><br>&lt;h1&gt;{<input data-answer="page.status">}&lt;/h1&gt;<br>&lt;p&gt;{page.error?.<input data-answer="message">}&lt;/p&gt;<br><br>// o número vem do status; o texto vem da mensagem do erro</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>src/routes/+error.svelte</code> é a página que aparece quando algo falha.</li>
+  <li>O 404 já funciona sem você escrever nada; o arquivo só troca o acabamento.</li>
+  <li><code>page.status</code> traz o número; <code>page.error?.message</code> traz o texto.</li>
+  <li><code>page.error</code> é <code>null</code> em página comum: sem <code>?.</code>, o componente quebra e vira <code>500</code>.</li>
+  <li><code>error(status, mensagem)</code> de <code>@sveltejs/kit</code> responde um erro esperado dentro do <code>load</code>.</li>
+  <li><code>500</code> é erro inesperado: a tela mostra "Internal Error" e o motivo fica no terminal.</li>
+  <li>O <code>+error.svelte</code> é desenhado dentro do layout, então o menu continua à mão.</li>
+  <li>Se a própria página de erro quebra, o SvelteKit usa a página de emergência e o status original se perde.</li>
+  <li><code>+error.svelte</code> dentro de uma pasta vale só para aquela parte do site.</li>
+  <li>Mensagem de erro é pública: nada de nome de tabela, caminho de arquivo ou token.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navegando com goto — trocar de página sem recarregar | Guia Svelte</title>
+<meta name="description" content="goto do $app/navigation no SvelteKit: navegar por código, replace, query string, redirect no load e as mensagens reais quando o goto é chamado no lugar errado.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Navegando com goto</span></h1>
+
+<p class="intro">A Ana tem um botão "ver os pães" no fim da página de contato. Um cliente clicou, a tela piscou branca, o menu sumiu por meio segundo e voltou — porque o navegador tinha jogado tudo fora para buscar a próxima página no servidor. No SvelteKit isso não precisa acontecer: o clique pode trocar só o miolo, mantendo o menu e o estado. Nesta aula você vai ver o link que já faz isso sozinho, o <code>goto</code> que faz o mesmo por código, e as três formas de errar que o terminal mostra com todas as letras.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é navegação no cliente e por que ela parece instantânea.</li>
+  <li>Que um <code>&lt;a href&gt;</code> comum já navega sem recarregar.</li>
+  <li>Como chamar <code>goto</code> de <code>$app/navigation</code> para navegar por código.</li>
+  <li>Por que o <code>goto</code> só pode rodar no navegador, nunca durante o desenho no servidor.</li>
+  <li>A diferença entre <code>goto('/x')</code> e <code>goto('/x', { replace: true })</code>.</li>
+  <li>Quando usar parâmetro de rota e quando usar query string.</li>
+  <li>O <code>redirect</code>, que é o irmão do <code>goto</code> no servidor.</li>
+  <li>O que mais existe em <code>$app/navigation</code>: <code>invalidate</code>, <code>preloadData</code>, <code>beforeNavigate</code>.</li>
+  <li>As três falhas reais desta aula, com o texto do terminal.</li>
+  <li>Boas práticas: link para navegar, botão para agir.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: trocar a gaveta sem sair do balcão</h2>
+
+<p>Quando você clica num link comum, o navegador começa tudo de novo: joga fora a página atual, pede o documento ao servidor, espera, monta o HTML, carrega o CSS, carrega o JavaScript, e só então mostra algo. É como sair da padaria, atravessar a rua, entrar de novo e pedir outro pão — a cada troca de gaveta.</p>
+
+<p>Navegação no cliente é outra coisa: o JavaScript que já está na página percebe o clique, pede ao servidor apenas os dados da próxima página e troca o conteúdo na tela. O menu não é redesenhado, o CSS não é recarregado, o estado que estava na memória continua lá. É como o atendente girar o balcão: você não sai do lugar.</p>
+
+<p>No SvelteKit, isso já vem pronto para links internos. O que a aula acrescenta é o controle: <code>goto</code> permite trocar de página <em>sem</em> um link — depois de um formulário, ao terminar um pedido, quando o usuário escolhe uma opção num menu. E o custo dessa facilidade é uma regra que você precisa respeitar: o <code>goto</code> é uma função de navegador, e o seu código também roda no servidor. Chamá-lo na hora errada é o erro mais comum da aula.</p>
+
+<h2>2. No dia a dia × no SvelteKit</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>Andar até a outra gaveta</td><td>Recarregar a página inteira (link quebrado, F5)</td></tr>
+<tr><td>Girar o balcão</td><td>Navegação no cliente: só o miolo troca</td></tr>
+<tr><td>O cartaz "pães → ali"</td><td><code>&lt;a href="/paes"&gt;</code></td></tr>
+<tr><td>O atendente que leva você</td><td><code>goto('/paes')</code></td></tr>
+<tr><td>Trocar a placa sem deixar rastro no caderno</td><td><code>goto('/', { replace: true })</code></td></tr>
+<tr><td>O aviso do gerente: "vá para o caixa"</td><td><code>redirect(303, '/caixa')</code> no <code>load</code></td></tr>
+</table>
+</div>
+
+<p>Uma distinção que vale desde já: <strong>link</strong> é para navegar; <strong>botão</strong> é para agir. Se o resultado do clique é "ir para outra página", o elemento certo é <code>&lt;a href&gt;</code> — ele funciona com o botão do meio do mouse, abre em nova aba, é lido em voz alta por leitores de tela e o robô de busca o encontra. O <code>goto</code> é para quando não existe link: um envio de formulário, um redirecionamento condicional, uma navegação depois de uma limpeza de dados.</p>
+
+<h2>3. O link que já navega sozinho</h2>
+
+<p>Este é o botão que a Ana tinha na página de contato, e o jeito como ele ficou depois de virar link:</p>
+
+<pre class="file" data-file="src/routes/contato/+page.svelte">&lt;h1&gt;Contato&lt;/h1&gt;
+&lt;p&gt;Pedido pronto? Então já pode ir.&lt;/p&gt;
+&lt;a href="/paes"&gt;ver os pães&lt;/a&gt;</pre>
+
+<p>Nenhum JavaScript no arquivo. O SvelteKit instala um ouvinte de cliques no documento e, quando o clique é num link interno, impede o comportamento padrão do navegador e faz a troca pelo caminho rápido. O HTML que o servidor manda mostra que o link é um link de verdade:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/contato | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;main.*&lt;/main&gt;'
+&lt;main&gt;&lt;h1&gt;Contato&lt;/h1&gt; &lt;p&gt;Pedido pronto? Então já pode ir.&lt;/p&gt; &lt;a href="/paes"&gt;ver os pães&lt;/a&gt;&lt;/main&gt;</pre>
+
+<p>Esse detalhe é o que faz a página funcionar mesmo antes do JavaScript carregar: o link existe no HTML. Se o JavaScript falhar, o clique ainda leva para <code>/paes</code> — só que do jeito lento. É a chamada "melhoria progressiva", e o SvelteKit entrega isso sem você pedir.</p>
+
+<p>A rapidez extra vem do <code>src/app.html</code>, o molde que envolve o site. Ele traz, na tag <code>&lt;body&gt;</code>, o atributo <code>data-sveltekit-preload-data="hover"</code>: quando o mouse passa por cima de um link, o SvelteKit já começa a buscar os dados daquela página. Até o clique chegar, metade do trabalho está feito.</p>
+
+<h2>4. <code>goto</code>: navegar por código</h2>
+
+<p>Quando não existe link para clicar, entra o <code>goto</code>, importado de <code>$app/navigation</code>:</p>
+
+<pre class="file" data-file="src/routes/contato/+page.svelte">&lt;script&gt;
+	import { goto } from '$app/navigation';
+&lt;/script&gt;
+
+&lt;h1&gt;Contato&lt;/h1&gt;
+&lt;p&gt;Pedido pronto? Então já pode ir.&lt;/p&gt;
+&lt;button onclick={() =&gt; goto('/paes')}&gt;ver os pães&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>$app/navigation</dt><dd>um módulo do SvelteKit com as funções de navegação. Não é um arquivo do projeto: o import é resolvido pela ferramenta.</dd>
+  <dt>goto</dt><dd>a função que troca de página. Devolve uma promessa, que resolve quando a navegação termina.</dd>
+  <dt>'/paes'</dt><dd>o destino, começando pela barra. Pode ser um endereço com query string: <code>'/paes?tamanho=grande'</code>.</dd>
+  <dt>onclick={() =&gt; goto(…)}</dt><dd>a chamada dentro do evento. O <code>goto</code> precisa rodar no navegador, e o clique é o lugar em que isso acontece.</dd>
+</dl>
+
+<p>O HTML que o servidor manda é igual ao do link, com uma diferença que importa: o clique não funciona sem JavaScript, porque a navegação está no <code>onclick</code>. Em troca, você ganha a possibilidade de decidir na hora: só navegar se o campo estiver preenchido, navegar para um endereço montado com o que a pessoa digitou, navegar depois de esperar uma resposta do servidor.</p>
+
+<p>Para saber se o clique realmente troca de página sem recarregar, o guia automatizou o teste num navegador de verdade: abriu <code>/contato</code>, deixou uma marca no objeto <code>window</code>, clicou no botão e esperou a URL virar <code>/paes</code>. Resultado: caminho <code>/paes</code>, título <code>Pães</code> e a marca ainda lá. Se a página tivesse recarregado, a marca teria desaparecido.</p>
+
+<h2>5. <code>goto</code> só existe no navegador</h2>
+
+<p>Aqui está a pedra no caminho. O mesmo componente é executado duas vezes: uma no servidor, para gerar o HTML, e outra no navegador, para continuar a partir dele. Se você chamar <code>goto</code> na parte de cima do <code>&lt;script&gt;</code>, ela roda também no servidor — e lá não existe navegador para navegar. O terminal do servidor de desenvolvimento mostra:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run dev -- --port 5183
+
+&gt; kit@0.0.1 dev
+&gt; vite dev --port 5183
+
+SvelteKit error: server_api_unavailable
+Cannot call `goto(...)` on the server
+https://svelte.dev/e/kit/server_api_unavailable
+    at eval (src/routes/sobre/+page.svelte:3:2)
+    at eval (node_modules/svelte/src/internal/server/renderer.js:416:11)
+    at Renderer.child (node_modules/svelte/src/internal/server/renderer.js:305:18)
+    at Renderer.component (node_modules/svelte/src/internal/server/renderer.js:414:8)
+    at _page (src/routes/sobre/+page.svelte:2:2)
+500 GET /sobre</pre>
+
+<p>Leia a mensagem como um aviso de contexto: "não dá para chamar <code>goto(...)</code> no servidor". A posição <code>3:2</code> é a linha exata da chamada. A resposta foi <code>500</code>, e a página de erro apareceu no lugar da página que você queria ver. O conserto é sempre o mesmo: mover a chamada para dentro de um evento (<code>onclick</code>, <code>onsubmit</code>) ou para dentro de um <code>$effect</code>, que só roda depois que a página está no navegador.</p>
+
+<p>Existe uma função do Svelte, <code>onMount</code>, feita exatamente para o código que só pode rodar no navegador; ela aparece na aula <a href="onmount.html">onMount</a>. Para navegação, o evento costuma ser suficiente.</p>
+
+<div class="trysvelte" data-goal="digitar:input=queijo;;clique:button;;outre:/paes/queijo">
+<p class="try-task"><strong>Missão:</strong> o campo e o botão existem, mas clicar não leva a lugar nenhum. Faça o botão navegar para <code>/paes/</code> mais o texto digitado: ao escrever <code>queijo</code> e clicar, a tela deve mostrar <code>/paes/queijo</code>.</p>
+<pre class="script" data-file="Ir.svelte">&lt;script&gt;
+  let destino = $state('/paes');
+  let slug = $state('');
+&lt;/script&gt;
+
+&lt;input placeholder="qual pão?" oninput={(e) =&gt; (slug = e.currentTarget.value)} /&gt;
+&lt;button&gt;ir&lt;/button&gt;
+&lt;p&gt;{destino}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Ir.svelte">&lt;script&gt;
+  let destino = $state('/paes');
+  let slug = $state('');
+&lt;/script&gt;
+
+&lt;input placeholder="qual pão?" oninput={(e) =&gt; (slug = e.currentTarget.value)} /&gt;
+&lt;button onclick={() =&gt; (destino = '/paes/' + slug)}&gt;ir&lt;/button&gt;
+&lt;p&gt;{destino}&lt;/p&gt;</pre>
+</div>
+
+<p>No projeto de verdade, <code>destino</code> não seria uma variável: a última linha seria <code>goto('/paes/' + slug)</code>. A caixa usa uma variável para você ver o valor que seria passado ao <code>goto</code> — o mesmo texto, sem o servidor no meio.</p>
+
+<h2>6. <code>replace</code>: quando voltar não deve voltar para cá</h2>
+
+<p>Cada navegação nova entra na história do navegador. O botão "voltar" desempilha uma por uma. Isso é o que a pessoa espera — menos em alguns casos: uma tela de confirmação que já foi concluída, um endereço que só serve para redirecionar, uma busca que não deve reaparecer ao voltar.</p>
+
+<p>Para esses casos existe a opção <code>replace</code>, que troca a entrada atual em vez de empilhar uma nova:</p>
+
+<pre class="file" data-file="src/routes/pedido/+page.svelte">&lt;script&gt;
+	import { goto } from '$app/navigation';
+&lt;/script&gt;
+
+&lt;h1&gt;Pedido confirmado&lt;/h1&gt;
+&lt;button onclick={() =&gt; goto('/paes', { replace: true })}&gt;voltar ao balcão&lt;/button&gt;</pre>
+
+<p>Com <code>replace: true</code>, quem clicar em "voltar" depois vai para a página anterior a <code>/pedido</code>, não para <code>/pedido</code> de novo. Sem a opção, o navegador guarda mais uma entrada e o botão "voltar" fica parecendo quebrado. A tabela resume quando usar cada forma:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>O que acontece na história do navegador</th><th>Quando usar</th></tr>
+<tr><td><code>goto('/paes')</code></td><td>empilha uma entrada nova</td><td>navegação normal, escolhida pela pessoa</td></tr>
+<tr><td><code>goto('/paes', { replace: true })</code></td><td>troca a entrada atual</td><td>depois de concluir algo que não deve voltar</td></tr>
+<tr><td><code>&lt;a href="/paes"&gt;</code></td><td>empilha uma entrada nova</td><td>sempre que existir link</td></tr>
+</table>
+</div>
+
+<h2>7. Parâmetro de rota × query string</h2>
+
+<p>Existem duas maneiras de levar informação no endereço, e elas não competem. O caminho <code>/paes/queijo</code> usa o parâmetro de rota <code>[slug]</code> — o valor faz parte da identidade do recurso. Já <code>/paes?tamanho=grande</code> usa a <strong>query string</strong>: o que vem depois do <code>?</code> é opcional, não muda qual página responde e serve para filtros, ordenação e preferências.</p>
+
+<pre class="file" data-file="src/routes/paes/+page.svelte">&lt;script&gt;
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+
+	let tamanho = $state('grande');
+&lt;/script&gt;
+
+&lt;h1&gt;Pães&lt;/h1&gt;
+&lt;p&gt;filtro: {page.url.searchParams.get('tamanho') ?? 'todos'}&lt;/p&gt;
+&lt;button onclick={() =&gt; goto('/paes?tamanho=' + tamanho)}&gt;aplicar&lt;/button&gt;</pre>
+
+<p>A leitura é feita com <code>page.url.searchParams.get('tamanho')</code>, que devolve <code>null</code> quando o parâmetro não está na URL — daí o <code>??</code> com o texto de reserva. O <code>goto</code> aceita a string completa, com o <code>?</code> e os pares <code>chave=valor</code> separados por <code>&amp;</code> quando há mais de um.</p>
+
+<div class="trysvelte" data-goal="digitar:select=pequeno;;clique:button;;outre:tamanho=pequeno">
+<p class="try-task"><strong>Missão:</strong> o botão aplica o filtro sem o tamanho escolhido. Monte o endereço com a query string: ao escolher <code>pequeno</code> e clicar, a tela deve mostrar <code>/paes?tamanho=pequeno</code>.</p>
+<pre class="script" data-file="Filtro.svelte">&lt;script&gt;
+  let tamanho = $state('grande');
+  let caminho = $state('/paes');
+&lt;/script&gt;
+
+&lt;select onchange={(e) =&gt; (tamanho = e.currentTarget.value)}&gt;
+  &lt;option value="grande"&gt;grande&lt;/option&gt;
+  &lt;option value="pequeno"&gt;pequeno&lt;/option&gt;
+&lt;/select&gt;
+&lt;button onclick={() =&gt; (caminho = '/paes')}&gt;aplicar&lt;/button&gt;
+&lt;p&gt;{caminho}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Filtro.svelte">&lt;script&gt;
+  let tamanho = $state('grande');
+  let caminho = $state('/paes');
+&lt;/script&gt;
+
+&lt;select onchange={(e) =&gt; (tamanho = e.currentTarget.value)}&gt;
+  &lt;option value="grande"&gt;grande&lt;/option&gt;
+  &lt;option value="pequeno"&gt;pequeno&lt;/option&gt;
+&lt;/select&gt;
+&lt;button onclick={() =&gt; (caminho = '/paes?tamanho=' + tamanho)}&gt;aplicar&lt;/button&gt;
+&lt;p&gt;{caminho}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>select</code> dispara <code>change</code> quando a escolha muda, e a caixa aproveita o mesmo evento para guardar o valor. Repare que a URL não muda enquanto o botão não é clicado: escolher no campo é estado do componente; aplicar é navegação. Separar as duas coisas deixa o comportamento previsível — e o botão "voltar" do navegador continua fazendo sentido.</p>
+
+<h2>8. <code>redirect</code>: o irmão do <code>goto</code> no servidor</h2>
+
+<p>O <code>goto</code> só funciona no navegador porque só lá existe história para empilhar. No servidor, o equivalente é o <code>redirect</code>, de <code>@sveltejs/kit</code>: ele responde ao navegador com um status <code>3xx</code> e um endereço novo, e o navegador refaz o pedido sozinho. O primeiro argumento é o status, que precisa estar entre <code>300</code> e <code>308</code>.</p>
+
+<pre class="file" data-file="src/routes/pedido/+page.server.js">import { redirect } from '@sveltejs/kit';
+
+export function load({ cookies }) {
+	if (!cookies.get('cliente')) {
+		redirect(303, '/entrar');
+	}
+	return {};
+}</pre>
+
+<p>O <code>303</code> quer dizer "olhe em outro lugar, e use o método GET". O <code>307</code> preserva o método original — útil quando um formulário precisa ser reenviado para outro endereço. Para quem começa, <code>303</code> resolve a maioria dos casos de "leve a pessoa para a página de login".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde você está</th><th>Ferramenta</th><th>Efeito</th></tr>
+<tr><td>Navegador, dentro de um evento</td><td><code>goto('/x')</code></td><td>troca a página sem recarregar</td></tr>
+<tr><td>Navegador, sem querer empilhar</td><td><code>goto('/x', { replace: true })</code></td><td>troca a entrada atual da história</td></tr>
+<tr><td>Servidor, dentro de <code>load</code></td><td><code>redirect(303, '/x')</code></td><td>responde <code>3xx</code> e o navegador refaz o pedido</td></tr>
+<tr><td>Link na marcação</td><td><code>&lt;a href="/x"&gt;</code></td><td>navega (rápido se o JS carregou)</td></tr>
+</table>
+</div>
+
+<p>Um aviso que evita um bug silencioso: não capture o erro do <code>redirect</code>. Ele funciona lançando um objeto especial que o SvelteKit intercepta. Um <code>try/catch</code> em volta engole o redirecionamento e a pessoa fica parada na página. Se precisar tratar erros, trate só os seus.</p>
+
+<h2>9. O resto de <code>$app/navigation</code></h2>
+
+<p><code>goto</code> é a função mais usada do módulo, mas não é a única. As outras aparecem quando o site cresce; reconhecer os nomes economiza pesquisa.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Para que serve</th></tr>
+<tr><td><code>beforeNavigate(fn)</code></td><td>roda antes de sair da página: dá para cancelar (por exemplo, com dados não salvos)</td></tr>
+<tr><td><code>afterNavigate(fn)</code></td><td>roda depois que a nova página apareceu</td></tr>
+<tr><td><code>invalidate(url)</code></td><td>manda o <code>load</code> que depende daquela URL rodar de novo</td></tr>
+<tr><td><code>refreshAll()</code></td><td>manda todos os <code>load</code> rodarem de novo</td></tr>
+<tr><td><code>preloadData(url)</code></td><td>busca os dados de uma página antes do clique</td></tr>
+<tr><td><code>pushState(url, estado)</code></td><td>muda a URL e o <code>page.state</code> sem rodar <code>load</code></td></tr>
+</table>
+</div>
+
+<p>Repare no par <code>invalidate</code> e <code>refreshAll</code>: eles existem porque o SvelteKit guarda o resultado dos <code>load</code> para não pedir de novo a cada navegação. Quando você sabe que o dado mudou — salvou um pedido, por exemplo — pedir a atualização é sua responsabilidade. Sem isso, a pessoa vê o dado velho e acha que o site está quebrado.</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três saídas abaixo são do projeto da Ana. A primeira é do build, a segunda do terminal do servidor de desenvolvimento e a terceira mostra um erro que só aparece na hora do pedido.</p>
+
+<div class="cenario">
+<strong>Erro 1 — nome do módulo com uma letra a mais</strong>
+<p>A Ana escreveu <code>$app/navigations</code>, no plural. O módulo não existe, e o build para antes de gerar qualquer coisa:</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 144 modules transformed.
+✗ Build failed in 424ms
+error during build:
+Build failed with 1 error:
+[UNLOADABLE_DEPENDENCY] Could not load node_modules/@sveltejs/kit/src/runtime/app/navigations
+   ╭─[ src/routes/sobre/+page.svelte:2:22 ]
+   │
+ 2 │ import { goto } from '$app/navigations';
+   │                      ─────────┬────────
+   │                               ╰────────── No such file or directory (os error 2)
+───╯</pre>
+<p>O desenho embaixo do import marca exatamente o texto errado. "No such file or directory" é literal: o SvelteKit transforma <code>$app/algo</code> num caminho de arquivo dentro do próprio pacote, e esse arquivo não existe. Os módulos que existem são <code>$app/state</code>, <code>$app/navigation</code>, <code>$app/forms</code>, <code>$app/environment</code> e <code>$app/paths</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>goto</code> no topo do script</strong>
+<p>Este é o erro da seção 5, na versão completa. O componente compila, o build passa e o erro só aparece quando alguém pede a página:</p>
+<pre class="term">SvelteKit error: server_api_unavailable
+Cannot call `goto(...)` on the server
+https://svelte.dev/e/kit/server_api_unavailable
+    at eval (src/routes/sobre/+page.svelte:3:2)
+500 GET /sobre</pre>
+<p>A pista está no nome: <code>server_api_unavailable</code>, "API de servidor indisponível". A função existe, mas foi desligada do lado do servidor de propósito — não há navegador ali. Para testar durante o desenvolvimento, abra a página: o erro aparece no terminal a cada requisição, e a página de erro na tela.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>goto</code> dentro do <code>+error.svelte</code></strong>
+<p>Parece razoável: se a página de erro aparecer, redirecione para o início. Só que a página de erro também é desenhada no servidor, e o <code>goto</code> roda de novo no lugar errado. O resultado é cruel: um 404 vira 500.</p>
+<pre class="term">ana@notebook:~/loja/kit$ curl -s -o /dev/null -w '%{http_code}\n' localhost:5183/nao-existe
+500
+SvelteKit error: server_api_unavailable
+Cannot call `goto(...)` on the server
+    at eval (src/routes/+error.svelte:4:27)
+500 GET /nao-existe</pre>
+<p>Para redirecionar de verdade a partir de um erro, o lugar é o <code>load</code>, com <code>redirect(303, '/')</code>. No componente, navegação só dentro de um evento — e uma página de erro raramente precisa de navegação automática: um link de volta resolve melhor.</p>
+</div>
+
+<h2>11. Experimente: não navegar quando falta informação</h2>
+
+<p>Um dos motivos para usar <code>goto</code> em vez de link é poder decidir antes de sair. A caixa abaixo tem um campo e um botão; a missão é impedir a navegação quando o campo está vazio e avisar a pessoa.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:informe o pão">
+<p class="try-task"><strong>Missão:</strong> com o campo vazio, o botão navega para <code>/paes/</code> e não avisa nada. Faça ele <strong>não</strong> navegar nesse caso e mostrar <code>informe o pão</code>.</p>
+<pre class="script" data-file="Ir.svelte">&lt;script&gt;
+  let slug = $state('');
+  let destino = $state('/paes');
+  let aviso = $state('');
+
+  function ir() {
+    destino = '/paes/' + slug;
+  }
+&lt;/script&gt;
+
+&lt;input placeholder="qual pão?" oninput={(e) =&gt; (slug = e.currentTarget.value)} /&gt;
+&lt;button onclick={ir}&gt;ir&lt;/button&gt;
+&lt;p&gt;{destino}&lt;/p&gt;
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Ir.svelte">&lt;script&gt;
+  let slug = $state('');
+  let destino = $state('/paes');
+  let aviso = $state('');
+
+  function ir() {
+    if (slug === '') {
+      aviso = 'informe o pão';
+      return;
+    }
+    destino = '/paes/' + slug;
+  }
+&lt;/script&gt;
+
+&lt;input placeholder="qual pão?" oninput={(e) =&gt; (slug = e.currentTarget.value)} /&gt;
+&lt;button onclick={ir}&gt;ir&lt;/button&gt;
+&lt;p&gt;{destino}&lt;/p&gt;
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>return</code> cedo é a peça central: ele sai da função antes de mexer no destino. Esse padrão tem nome — <em>guard clause</em>, cláusula de guarda — e vale para qualquer função que precise recusar uma entrada inválida. No projeto real, a linha do <code>destino</code> seria o <code>goto('/paes/' + slug)</code>, e o resto ficaria igual.</p>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Escreva</th><th>Onde</th></tr>
+<tr><td>levar a pessoa a outra página</td><td><code>&lt;a href="/x"&gt;</code></td><td>na marcação</td></tr>
+<tr><td>navegar depois de uma ação</td><td><code>goto('/x')</code></td><td>em <code>onclick</code>/<code>onsubmit</code></td></tr>
+<tr><td>navegar sem sujar a história</td><td><code>goto('/x', { replace: true })</code></td><td>em <code>onclick</code></td></tr>
+<tr><td>redirecionar na chegada ao servidor</td><td><code>redirect(303, '/x')</code></td><td>no <code>load</code></td></tr>
+<tr><td>atualizar os dados da página</td><td><code>invalidate('/x')</code></td><td>em <code>onclick</code></td></tr>
+<tr><td>cancelar a saída com dados não salvos</td><td><code>beforeNavigate(...)</code></td><td>em <code>$effect</code>/<code>onMount</code></td></tr>
+</table>
+</div>
+
+<p>Duas regras que resolvem a maioria dos casos: se existe um endereço para ir, use link; se a navegação depende de algo que só o navegador sabe, use <code>goto</code> dentro de um evento. E se o código precisa rodar uma vez só, no navegador, procure <code>onMount</code> — o <code>goto</code> no corpo do componente é sempre suspeito.</p>
+
+<h2>13. O caminho até aqui</h2>
+
+<p>O site da Ana agora troca de página sem piscar. O menu continua onde estava, o rodapé nem se mexe, e o clique parece instantâneo por causa do <code>preloadData</code> que o <code>app.html</code> já traz. O botão de contato virou link; o envio de pedido usa <code>goto</code>; o redirecionamento de quem não entrou ficou no <code>load</code>, com <code>redirect</code>.</p>
+
+<p>Ficou faltando juntar rotas que compartilham um comportamento sem que a pasta apareça na URL — o caso do painel restrito. É o assunto de <a href="grupos.html">Grupos de Rotas</a>. E se você quiser rever como o endereço se liga ao arquivo, <a href="rotas.html">Rotas por Arquivo</a> tem o mapa; para o valor que vem na URL, <a href="parametros.html">Parâmetros de Rota</a>.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. De onde vem a função <code>goto</code>?</p>
+<label><input type="radio" name="g1"> de <code>@sveltejs/kit</code></label>
+<label><input type="radio" name="g1"> de <code>svelte</code></label>
+<label><input type="radio" name="g1"> de <code>$app/navigation</code></label>
+<label><input type="radio" name="g1"> de <code>$app/state</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. Onde a chamada <code>goto('/paes')</code> pode ficar?</p>
+<label><input type="radio" name="g1"> dentro de um <code>onclick</code> ou de um <code>$effect</code>, no navegador</label>
+<label><input type="radio" name="g1"> no topo do <code>&lt;script&gt;</code>, antes do HTML</label>
+<label><input type="radio" name="g1"> dentro de um <code>load</code> no servidor</label>
+<label><input type="radio" name="g1"> dentro do <code>&lt;style&gt;</code></label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. O que <code>goto('/paes', { replace: true })</code> faz de diferente?</p>
+<label><input type="radio" name="g1"> recarrega a página inteira</label>
+<label><input type="radio" name="g1"> impede que o <code>load</code> rode</label>
+<label><input type="radio" name="g1"> apaga a página de erro</label>
+<label><input type="radio" name="g1"> troca a entrada atual da história em vez de empilhar outra</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;import { goto } from '<input data-answer="$app/navigation">';<br>&lt;/script&gt;<br><br>&lt;button onclick={() =&gt; <input data-answer="goto('/paes')|goto(&quot;/paes&quot;)|goto('/paes');">}&gt;ver os pães&lt;/button&gt;<br><br>// a navegação acontece no clique, dentro do navegador</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Navegação no cliente troca só o miolo: o menu e o estado continuam.</li>
+  <li><code>&lt;a href&gt;</code> já navega rápido no SvelteKit, e continua funcionando sem JavaScript.</li>
+  <li>O <code>app.html</code> traz <code>data-sveltekit-preload-data="hover"</code>, que busca os dados antes do clique.</li>
+  <li><code>goto</code> vem de <code>$app/navigation</code> e serve para navegar por código.</li>
+  <li><code>goto</code> só roda no navegador: no topo do script dá <code>server_api_unavailable</code>.</li>
+  <li><code>{ replace: true }</code> troca a entrada atual da história em vez de empilhar.</li>
+  <li>Parâmetro de rota identifica o recurso; query string filtra, com <code>page.url.searchParams</code>.</li>
+  <li>No servidor, quem redireciona é <code>redirect(303, '/x')</code>, de <code>@sveltejs/kit</code>.</li>
+  <li><code>invalidate</code> e <code>refreshAll</code> existem porque o <code>load</code> é guardado em cache.</li>
+  <li>Link para navegar, botão para agir; guarda com <code>return</code> antes de navegar.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
