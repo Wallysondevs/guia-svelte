@@ -371,7 +371,7 @@ https://svelte.dev/e/legacy_export_invalid
 <p>Este apareceu no projeto sem quebrar nada: uma tabela com <code>&lt;tr&gt;</code> solto, sem <code>&lt;tbody&gt;</code> em volta. O navegador reorganiza o HTML por conta própria e o Svelte avisa que a hidratação pode desencontrar.</p>
 <pre class="term">5:25:01 PM [vite-plugin-svelte] src/routes/encomendas/+page.svelte:11:2 `&lt;tr&gt;` cannot be a child of `&lt;table&gt;`. `&lt;table&gt;` only allows these children: `&lt;caption&gt;`, `&lt;colgroup&gt;`, `&lt;tbody&gt;`, `&lt;thead&gt;`, `&lt;tfoot&gt;`, `&lt;style&gt;`, `&lt;script&gt;`, `&lt;template&gt;`. When rendering this component on the server, the resulting HTML will be modified by the browser (by moving, removing, or inserting elements), likely resulting in a `hydration_mismatch` warning
 https://svelte.dev/e/node_invalid_placement_ssr</pre>
-<p>A correção é envolver as linhas em <code>&lt;tbody&gt;</code>. Vale tratar aviso assim como erro: ele quase sempre aponta um HTML que o navegador vai "consertar" sozinho, e o conserto dele nem sempre é o que você queria.</p>
+<p>O aviso tem código próprio, <code>node_invalid_placement_ssr</code>, e a frase que resume o problema: <code>When rendering this component on the server, the resulting HTML will be modified by the browser</code>. A correção é envolver as linhas em <code>&lt;tbody&gt;</code>. Vale tratar aviso assim como erro: ele quase sempre aponta um HTML que o navegador vai "consertar" sozinho, e o conserto dele nem sempre é o que você queria.</p>
 </div>
 
 <hr>

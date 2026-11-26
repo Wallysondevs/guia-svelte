@@ -153,7 +153,10 @@
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose</pre>
 
-<p>O endereço <code>http://localhost:5173/</code> é a sua máquina falando com ela mesma. A porta 5173 é o padrão do Vite; se estiver ocupada por outro projeto, ele avisa e escolhe a próxima. Com o servidor no ar, peça a rota do cardápio e filtre só o que interessa:</p>
+<p>O endereço <code>http://localhost:5173/</code> é a sua máquina falando com ela mesma — nada foi para a internet. O número da porta vem do terminal, não do código: 5173 é o padrão do Vite. Se ela estiver ocupada por outro projeto, o Vite escreve <code>Port 5173 is in use, trying another one…</code> e escolhe a próxima livre; use sempre o endereço que o seu terminal mostrar. Com o servidor no ar, peça a rota do cardápio e filtre só o que interessa:</p>
+
+<div class="note"><strong>Nível 3 é outro projeto</strong>
+<p>Nas aulas de Svelte puro, o projeto da Ana em <code>~/loja</code> usava o Vite 7.3.8. Aqui a pasta foi recriada com SvelteKit, e o modelo atual do SvelteKit traz Vite 8.4.0 e Svelte 5.59.2 — é o que aparece no banner acima. O SvelteKit em si é o 3.4.1. Repare também que este projeto não tem <code>svelte.config.js</code>: no SvelteKit 3 o plugin e o adaptador ficam no <code>vite.config.js</code>.</p></div>
 
 <pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/cardapio | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;'
 &lt;h1&gt;Cardápio de hoje&lt;/h1&gt;
