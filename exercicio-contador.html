@@ -271,7 +271,7 @@
 
 <pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;ul&gt;&lt;/ul&gt; &lt;button&gt;+1&lt;/button&gt;</pre>
 
-<p>Com a lista vazia, o bloco não gera item nenhum e o <code>&lt;ul&gt;</code> sai com espaços entre as tags. No navegador, cada clique acrescenta um <code>&lt;li&gt;</code>. Para listas que mudam de ordem, vale dar uma chave a cada item com <code>{#each historico as numero (numero)}</code>; para um histórico que só cresce, o índice já basta.</p>
+<p>Com a <a href="lista-vazia.html">lista vazia</a>, o bloco não gera item nenhum e o <code>&lt;ul&gt;</code> sai com espaços entre as tags. No navegador, cada clique acrescenta um <code>&lt;li&gt;</code>. Para listas que mudam de ordem, vale dar uma chave a cada item com <code>{#each historico as numero (numero)}</code>; para um histórico que só cresce, o índice já basta.</p>
 
 <p>A chave entre parênteses precisa ser única. No histórico do contador, os números não se repetem, então o próprio número serve. Se dois cliques pudessem gerar o mesmo valor — num contador que volta ao zero, por exemplo —, use o índice: <code>{#each historico as numero, i (i)}</code>. O Svelte recusa a lista com chave repetida e mostra o código <code>each_key_duplicate</code>. Vale saber o nome para reconhecer no console.</p>
 

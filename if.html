@@ -150,7 +150,7 @@
 
 <p>Em português, "verdadeiro" é uma palavra só. Em JavaScript, qualquer valor pode ocupar o lugar da condição, e o Svelte aproveita a regra da linguagem: alguns valores contam como falsos e todo o resto conta como verdadeiro. A lista dos falsos é curta e vale memorizar: <code>false</code>, <code>0</code>, <code>''</code> (texto vazio), <code>null</code>, <code>undefined</code> e <code>NaN</code> (o resultado de uma conta impossível).</p>
 
-<p>Isso cria armadilhas gostosas de descobrir. Um texto com um zero dentro (<code>'0'</code>) é verdadeiro, porque é um texto com conteúdo. Uma lista vazia (<code>[]</code>) também é verdadeira, porque é um objeto — o JavaScript não olha para dentro dela para decidir. Veja os quatro casos no mesmo componente:</p>
+<p>Isso cria armadilhas gostosas de descobrir. Um texto com um zero dentro (<code>'0'</code>) é verdadeiro, porque é um texto com conteúdo. Uma <a href="lista-vazia.html">lista vazia</a> (<code>[]</code>) também é verdadeira, porque é um objeto — o JavaScript não olha para dentro dela para decidir. Veja os quatro casos no mesmo componente:</p>
 <pre class="file" data-file="src/App.svelte">&lt;script&gt;
   let texto = $state('');
   let zero = $state(0);

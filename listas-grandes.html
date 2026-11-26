@@ -178,7 +178,7 @@
 
 <pre class="out">&lt;p&gt;0 de 5000 avisos desenhados&lt;/p&gt; &lt;ol&gt;&lt;/ol&gt;</pre>
 
-<p>O <code>{#each}</code> recebeu uma fatia de zero itens porque o estado começa em zero e quem o aumenta é um <code>$effect</code>. Efeito é código que só existe no navegador: no servidor não há tela para atualizar, e o Svelte não executa efeitos durante a renderização do servidor. Por isso o HTML devolvido mostra o estado inicial e a lista vazia. No navegador, o primeiro quadro desenha 500, o segundo 1000, e assim por diante.</p>
+<p>O <code>{#each}</code> recebeu uma fatia de zero itens porque o estado começa em zero e quem o aumenta é um <code>$effect</code>. Efeito é código que só existe no navegador: no servidor não há tela para atualizar, e o Svelte não executa efeitos durante a renderização do servidor. Por isso o HTML devolvido mostra o estado inicial e a <a href="lista-vazia.html">lista vazia</a>. No navegador, o primeiro quadro desenha 500, o segundo 1000, e assim por diante.</p>
 
 <p>Um cuidado que vale a pena registrar: um <code>$effect</code> que muda o estado que ele mesmo lê entra em laço, e o navegador interrompe com <code>https://svelte.dev/e/effect_update_depth_exceeded</code>. No exemplo acima o efeito escreve em <code>quantos</code> e não lê <code>quantos</code> fora da função <code>passo</code>, que roda por quadro — por isso ele para no fim da lista.</p>
 

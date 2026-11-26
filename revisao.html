@@ -146,7 +146,7 @@
 
 <p>A solução tem duas partes que se explicam sozinhas. <code>toLowerCase()</code> nas duas pontas faz a busca ignorar maiúscula. <code>includes</code> pergunta se o nome contém o texto, em vez de exigir igualdade — buscar “Son” encontra “Sonho”.</p>
 
-<p>Vale reparar no que o derivado não faz: ele não guarda o resultado, não dispara efeito nenhum e não muda a lista original. Ele apenas descreve uma conta que o Svelte refaz quando a busca muda — e só quando a busca muda. É esse detalhe que faz o filtro parecer instantâneo mesmo em listas grandes.</p>
+<p>Vale reparar no que o derivado não faz: ele não guarda o resultado, não dispara efeito nenhum e não muda a lista original. Ele apenas descreve uma conta que o Svelte refaz quando a busca muda — e só quando a busca muda. É esse detalhe que faz o filtro parecer instantâneo mesmo em <a href="listas-grandes.html">listas grandes</a>.</p>
 
 <p>Repare que <code>produtos</code> continua com os dois itens: o filtro não apaga dado, só escolhe o que desenhar. Essa separação é a razão de existir um derivado separado — a lista original precisa continuar inteira para quando a busca ficar vazia.</p>
 
