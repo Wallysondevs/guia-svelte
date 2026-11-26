@@ -123,7 +123,7 @@ Passos da meta, na ordem, separados por `;;`:
 | `html:<html>` | o HTML gerado é exatamente este |
 | `erro:<trecho>` | o compilador recusa o código com mensagem que contém o trecho |
 | `clique:<seletor>` | clica no elemento (dentro do componente) |
-| `digitar:<seletor>=<valor>` | escreve no campo e dispara `input` |
+| `digitar:<seletor>=<valor>` | escreve no campo e dispara `input` (use `seletor\|valor` quando o seletor tem `=`, ex.: `digitar:input[type=number]\|42`) |
 | `depois:<ms>` | espera (promessas, transições) |
 
 Exemplos reais:

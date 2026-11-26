@@ -131,7 +131,7 @@ const PASSOS = [
   { nome: "html", exige: true, dica: "HTML gerado" },
   { nome: "erro", exige: true, dica: "trecho da mensagem do compilador" },
   { nome: "clique", exige: true, dica: "seletor CSS do elemento a clicar" },
-  { nome: "digitar", exige: true, dica: "seletor CSS do campo = valor" },
+  { nome: "digitar", exige: true, dica: "seletor CSS do campo = valor (ou seletor|valor, quando o seletor tem =)" },
   { nome: "depois", exige: false, dica: "milissegundos de espera" }
 ];
 

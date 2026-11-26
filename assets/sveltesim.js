@@ -67,7 +67,7 @@
     alvo.innerHTML = "";
     var iframe = document.createElement("iframe");
     iframe.setAttribute("title", "resultado do componente");
-    iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+    iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
     iframe.style.width = "100%";
     iframe.style.border = "0";
     iframe.style.display = "block";
@@ -236,9 +236,10 @@
         await esperar(60);
       } else if (p.indexOf("digitar:") === 0) {
         var resto = p.slice(8);
-        var igual = resto.indexOf("=");
-        var s2 = igual === -1 ? resto : resto.slice(0, igual);
-        var valor = igual === -1 ? "" : resto.slice(igual + 1);
+        var corte = resto.indexOf("|");
+        if (corte === -1) corte = resto.indexOf("=");
+        var s2 = corte === -1 ? resto : resto.slice(0, corte);
+        var valor = corte === -1 ? "" : resto.slice(corte + 1);
         var campo = resultado.doc.querySelector(s2);
         if (!campo) return "não achei o campo \"" + s2 + "\"";
         campo.focus();
