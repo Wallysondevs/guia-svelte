@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Pasta static no SvelteKit — arquivos prontos e rotas | Guia Svelte</title>
+<meta name="description" content="Logo, robots.txt e PDF da Ana: o que vai na pasta static do SvelteKit, como o servidor entrega esses arquivos, quem ganha quando existe uma rota igual e os 404 reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">A Pasta static</span></h1>
+
+<p class="intro">Na porta da padaria a Ana tem um quadro de cortiça. Ali ficam coisas prontas: o cartaz do preço do pão, o aviso de que o banheiro é só para clientes, o cartão do eletricista. Ninguém escreve esses papeis de novo a cada cliente que passa. O <code>static</code> do SvelteKit é esse quadro: uma pasta de arquivos que saem exatamente como entraram, sem passar por componente, sem <code>load</code>, sem cálculo. Esta aula mostra o que vale a pena pregar ali — e o que acontece quando um arquivo e uma rota querem o mesmo endereço.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é a pasta <code>static</code> e por que ela existe separada de <code>src</code>.</li>
+  <li>Quais arquivos ganham com isso: <code>robots.txt</code>, favicon, PDF, imagem de divulgação.</li>
+  <li>Como o servidor entrega esses arquivos e quais cabeçalhos ele manda.</li>
+  <li>Quem ganha quando existe uma rota e um arquivo com o mesmo endereço.</li>
+  <li>Por que esses arquivos não passam pelo <code>hooks.server.js</code>.</li>
+  <li>O que acontece com um arquivo que não existe: o 404 de verdade.</li>
+  <li>A diferença entre arquivo em <code>static/</code> e arquivo importado de <code>src/lib/assets</code>.</li>
+  <li>Como o build copia a pasta e o que muda no pacote final.</li>
+  <li>Os três tropeços reais: importar de <code>static</code>, perder para uma rota e linkar arquivo que não existe.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o quadro de cortiça na porta</h2>
+
+<p>Uma padaria tem dois tipos de papel. O primeiro é o que muda com o cliente: a comanda do pedido, o troco, a nota. O segundo é o que já está pronto e serve para todos: o horário de funcionamento, a lista de preços impressa, o alvará. O primeiro precisa ser escrito na hora; o segundo pode ser impresso uma vez e pregado na parede.</p>
+
+<p>No SvelteKit a divisão é a mesma. Tudo que precisa ser montado — HTML com dados do banco, página com login, formulário — mora em <code>src/routes</code> e passa pelo seu código. Tudo que já está pronto — imagem, PDF, arquivo de texto — mora em <code>static</code> e é entregue cru. A pasta fica na raiz do projeto, ao lado de <code>src</code>, e o nome do arquivo dentro dela é o endereço na web: <code>static/logo.svg</code> vira <code>https://sualoja.com/logo.svg</code>.</p>
+
+<p>Esse “cru” tem consequência boa e ruim. Boa: é rápido e barato, porque não há código entre o pedido e o arquivo. Ruim: nada nele pode ser dinâmico. Se o preço do pão mudar, o PDF antigo continua no ar com o preço antigo até alguém trocar o arquivo e publicar de novo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No quadro de cortiça</th><th>Na pasta <code>static</code></th></tr>
+<tr><td>O cartaz impresso do horário</td><td><code>static/horario.pdf</code></td></tr>
+<tr><td>O aviso para os robôs de busca</td><td><code>static/robots.txt</code></td></tr>
+<tr><td>O logotipo pintado na fachada</td><td><code>static/logo.svg</code></td></tr>
+<tr><td>Um papel com o preço de ontem</td><td>arquivo antigo que ninguém trocou</td></tr>
+</table>
+</div>
+
+<h2>2. O que entra e o que não entra</h2>
+
+<p>A regra prática é uma pergunta: este arquivo é igual para todo mundo e não precisa de cálculo? Se sim, é candidato à pasta <code>static</code>. Se depende de quem pediu — nome do cliente, preço do dia, pedido do dia —, ele pertence a uma rota.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Vai em <code>static</code>?</th><th>Por quê</th></tr>
+<tr><td><code>robots.txt</code></td><td>sim</td><td>texto fixo que os buscadores leem</td></tr>
+<tr><td><code>favicon.svg</code></td><td>sim</td><td>todo visitante vê o mesmo ícone</td></tr>
+<tr><td>cardápio em PDF</td><td>sim</td><td>arquivo pronto para baixar</td></tr>
+<tr><td>foto do pão do dia</td><td>depende</td><td>se troca todo dia, o arquivo muda a cada publicação</td></tr>
+<tr><td>lista de pedidos do cliente</td><td>não</td><td>depende de quem está logado</td></tr>
+<tr><td>preço calculado com imposto</td><td>não</td><td>precisa rodar código no pedido</td></tr>
+</table>
+</div>
+
+<p>Não existe penalidade por colocar arquivo demais em <code>static</code>: eles só ocupam espaço no pacote final. O problema é o contrário — colocar lá algo que deveria ser calculado e descobrir tarde que o dado congelou. O build copia a pasta uma vez; o que está dentro não muda até o próximo build.</p>
+
+<h2>3. O primeiro arquivo: <code>robots.txt</code></h2>
+
+<p>O projeto criado pelo <code>sv create</code> já vem com um arquivo em <code>static</code>, e ele é um bom primeiro exemplo. A função dele é conversar com os robôs dos buscadores: dizer o que pode ser visitado. O conteúdo é texto puro, sem HTML:</p>
+
+<pre class="file" data-file="static/robots.txt"># allow crawling everything by default
+User-agent: *
+Disallow:</pre>
+
+<dl class="anatomy">
+  <dt># allow crawling…</dt><dd>linha de comentário. O <code>#</code> faz o robô ignorar o resto da linha; serve para quem lê o arquivo depois.</dd>
+  <dt>User-agent: *</dt><dd>“vale para todos os robôs”. O asterisco é o curinga; um nome específico limitaria a regra àquele robô.</dd>
+  <dt>Disallow:</dt><dd>vazio de propósito: nada está proibido. Se você escrevesse <code>Disallow: /conta</code>, o robô deixaria de visitar a área logada.</dd>
+</dl>
+
+<p>O arquivo é servido na raiz do site, sem pasta: <code>/robots.txt</code>. Não é <code>/static/robots.txt</code> — o nome da pasta não aparece na URL. Essa é a parte que mais confunde no começo: <code>static</code> é o nome no disco, não o nome no endereço.</p>
+
+<p>A pasta da Ana, depois de algum tempo, tem esta cara:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls static
+aviso.txt  logo.svg  produtos  robots.txt  sobre.html</pre>
+
+<p>Note dois detalhes. <code>produtos</code> é uma pasta com <code>index.html</code> dentro; <code>sobre.html</code> é um arquivo com extensão no nome. Os dois são servidos, mas em endereços diferentes, e isso vai importar na seção 6.</p>
+
+<h2>4. Como o servidor entrega esses arquivos</h2>
+
+<p>Para ver o que acontece de verdade, nada melhor do que pedir os arquivos ao servidor de desenvolvimento e olhar a resposta. O comando abaixo pede só o cabeçalho de cada endereço:</p>
+
+<pre class="term">ana@notebook:~/loja$ for u in /logo.svg /aviso.txt /naoexiste.svg; do printf '%s -> ' "$u"; curl -s -o /dev/null -w '%{http_code}\n' "http://localhost:5173$u"; done
+/logo.svg -> 200
+/aviso.txt -> 200
+/naoexiste.svg -> 404</pre>
+
+<p>Os dois primeiros saíram do disco. O terceiro não existe, e o servidor respondeu 404 — mas não com um texto seco: respondeu com a página de erro do SvelteKit, porque o pedido caiu no roteador do app depois que o arquivo não foi encontrado. A resposta completa mostra os cabeçalhos de um arquivo estático:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -D - -o /dev/null http://localhost:5173/logo.svg
+HTTP/1.1 200 OK
+Vary: Origin
+Content-Length: 221
+Content-Type: image/svg+xml
+Last-Modified: Thu, 26 Nov 2026 17:00:35 GMT
+ETag: W/"221-1795712435396"
+Cache-Control: no-cache
+Date: Thu, 26 Nov 2026 17:19:40 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5</pre>
+
+<p>O <code>Content-Type</code> vem da extensão: <code>.svg</code> é imagem vetorial, <code>.txt</code> é texto, <code>.pdf</code> é PDF. Errar a extensão é o erro clássico: um arquivo chamado <code>logo</code> sem extensão é servido como binário genérico, e o navegador não mostra a imagem. O <code>ETag</code> e o <code>Last-Modified</code> permitem que o navegador pergunte “mudou?” em vez de baixar de novo. O <code>Cache-Control: no-cache</code> é do servidor de desenvolvimento; em produção quem manda é o adaptador e as regras da plataforma.</p>
+
+<h2>5. Caixa 1: montando o endereço</h2>
+
+<p>Todo arquivo em <code>static</code> ganha um endereço começando com barra. Montar esse endereço à mão é onde nasce o link quebrado, então vale treinar. A caixa abaixo escreve o nome do arquivo sem a barra inicial.</p>
+
+<div class="trysvelte" data-goal="digitar:input=logo.svg;;out:URL: /logo.svg">
+<p class="try-task"><strong>Missão:</strong> digite <code>logo.svg</code> no campo e o texto deve virar <code>URL: /logo.svg</code>. Cuide para não duplicar a barra se alguém digitar <code>/logo.svg</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let arquivo = $state('logo.svg');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (arquivo = e.currentTarget.value)} /&gt;
+&lt;p&gt;URL: {arquivo}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let arquivo = $state('logo.svg');
+	let url = $derived('/' + arquivo.replace(/^\//, ''));
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (arquivo = e.currentTarget.value)} /&gt;
+&lt;p&gt;URL: {url}&lt;/p&gt;</pre>
+</div>
+
+<p>A expressão <code>/^\//</code> procura uma barra no começo do texto, e o <code>replace</code> troca por nada. Assim, tanto <code>logo.svg</code> quanto <code>/logo.svg</code> produzem <code>/logo.svg</code>. Esse cuidado pequeno evita o endereço com duas barras, que o servidor trata como outro caminho e devolve 404.</p>
+
+<p>A mesma conta, dentro de um componente que recebe o nome do arquivo por propriedade, fica assim:</p>
+
+<pre class="file" data-file="src/lib/Endereco.svelte">&lt;script&gt;
+	let { arquivo = 'logo.svg' } = $props();
+
+	const url = $derived('/' + arquivo.replace(/^\//, ''));
+&lt;/script&gt;
+
+&lt;p&gt;URL: {url}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;URL: /logo.svg&lt;/p&gt;</pre>
+
+<p>O valor padrão da propriedade é <code>logo.svg</code>, então o componente já mostra algo útil mesmo antes de alguém passar um nome. É a mesma ideia do valor padrão numa função: quem chama pode omitir, e o componente não quebra.</p>
+
+<h2>6. Rota e arquivo com o mesmo nome</h2>
+
+<p>Aqui está o ponto que mais surpreende. A Ana colocou <code>static/produtos/index.html</code> com um cardápio bonito e também tem uma rota <code>/produtos</code> que lista os produtos do banco. Quem responde quando alguém pede <code>/produtos</code>? O teste abaixo mostra a resposta:</p>
+
+<pre class="term">ana@notebook:~/loja$ for u in /produtos /produtos/ /produtos/index.html /sobre /sobre.html; do printf '%s -> ' "$u"; curl -s -o /dev/null -w '%{http_code}\n' "http://localhost:5173$u"; done
+/produtos -> 200
+/produtos/ -> 308
+/produtos/index.html -> 200
+/sobre -> 200
+/sobre.html -> 200</pre>
+
+<p>O <code>/produtos</code> devolveu 200, mas não é o arquivo: é a rota. O SvelteKit procura primeiro nas rotas, e só entrega o arquivo estático quando nenhuma rota casa. Para ver a diferença, o conteúdo do <code>h1</code> resolve:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s http://localhost:5173/produtos | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;'
+&lt;h1&gt;Produtos&lt;/h1&gt;
+ana@notebook:~/loja$ curl -s http://localhost:5173/produtos/index.html | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;'
+&lt;h1&gt;cardapio estatico&lt;/h1&gt;</pre>
+
+<p>Mesma pasta, dois endereços, dois conteúdos. O arquivo só aparece quando o nome dele está na URL, com <code>index.html</code> no fim. E o <code>/produtos/</code> com barra no fim recebeu <strong>308</strong>: um redirecionamento permanente para o endereço sem barra, decidido pela configuração de <code>trailingSlash</code>. O navegador refaz o pedido sozinho e o cliente não percebe.</p>
+
+<p>Com <code>static/sobre.html</code> acontece o mesmo, e o resultado é mais sutil: <code>/sobre</code> mostra a rota do SvelteKit e <code>/sobre.html</code> mostra o arquivo. Dois endereços vivos para o mesmo assunto — e o buscador pode indexar os dois. Quando isso não for intencional, o certo é escolher um.</p>
+
+<h2>7. Caixa 2: rota ou arquivo?</h2>
+
+<p>Saber quem responde por um endereço é o que evita passar meia hora procurando um texto que não aparece. A caixa abaixo tem a lista de rotas do projeto e um campo para o caminho; ela diz “arquivo” sempre.</p>
+
+<div class="trysvelte" data-goal="digitar:input=/produtos;;out:/produtos: rota;;digitar:input=/logo.svg;;out:/logo.svg: arquivo">
+<p class="try-task"><strong>Missão:</strong> se o caminho estiver na lista de rotas, mostre <code>rota</code>; senão, <code>arquivo</code>. Teste <code>/produtos</code> e <code>/logo.svg</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const rotas = ['/produtos', '/conta'];
+	let caminho = $state('/produtos');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (caminho = e.currentTarget.value)} /&gt;
+&lt;p&gt;{caminho}: arquivo&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const rotas = ['/produtos', '/conta'];
+	let caminho = $state('/produtos');
+	let ehRota = $derived(rotas.includes(caminho));
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (caminho = e.currentTarget.value)} /&gt;
+&lt;p&gt;{caminho}: {ehRota ? 'rota' : 'arquivo'}&lt;/p&gt;</pre>
+</div>
+
+<p><code>includes</code> é a função de lista que responde “este item está aqui?”. Funciona para texto e para número, e é o mesmo teste que o SvelteKit faz internamente ao escolher entre rota e arquivo — só que ele tem uma tabela de rotas de verdade, montada a partir dos arquivos de <code>src/routes</code>.</p>
+
+<h2>8. Arquivos que não passam pelo <code>hooks.server.js</code></h2>
+
+<p>Esta é uma descoberta que economiza depuração. O <code>hooks.server.js</code> roda a cada requisição ao app — mas não roda para arquivo estático. A prova está no terminal: o servidor da Ana registra cada pedido, e o <code>/logo.svg</code> não aparece no registro.</p>
+
+<pre class="term">GET / → 200 (92 ms)
+200 GET /
+[erro 404] GET /naoexiste.svg: Not Found
+GET /naoexiste.svg → 404 (20 ms)
+404 GET /naoexiste.svg</pre>
+
+<p>Três pedidos foram feitos nessa sessão: a página inicial, o logotipo e um arquivo inventado. O registro mostra dois. O <code>/logo.svg</code> foi entregue antes de o app ser chamado, então não passou pelo hook. Já o <code>/naoexiste.svg</code> não achou arquivo, caiu no app, passou pelo hook e virou página de erro 404.</p>
+
+<p>Isso tem duas consequências práticas. A primeira: contagem de acesso por hook subestima o tráfego, porque imagem e PDF não entram na conta. A segunda: proteção por hook não alcança arquivo estático — se o PDF confidencial está em <code>static</code>, ele está público, mesmo que você tenha escrito uma regra de login no <code>handle</code>. Arquivo que precisa de permissão não mora em <code>static</code>.</p>
+
+<h2>9. Arquivo em <code>static</code> ou importado de <code>src</code>?</h2>
+
+<p>Existem dois jeitos de usar uma imagem no projeto, e eles não são equivalentes. O primeiro é o que esta aula mostra: o arquivo em <code>static</code> e o endereço escrito à mão no HTML.</p>
+
+<pre class="file" data-file="src/routes/static/+page.svelte">&lt;h1&gt;Arquivos da pasta static&lt;/h1&gt;
+&lt;img src="/logo.svg" alt="Logo da padaria" width="80" height="80" /&gt;
+&lt;p&gt;&lt;a href="/robots.txt"&gt;robots.txt&lt;/a&gt; e &lt;a href="/logo.svg"&gt;logo.svg&lt;/a&gt; vêm da pasta static.&lt;/p&gt;</pre>
+
+<p>O segundo é importar o arquivo do código, como o projeto faz com o favicon no <code>+layout.svelte</code>: <code>import favicon from '#lib/assets/favicon.svg'</code>. Nesse caso o Vite processa a imagem, dá um nome com hash e devolve o endereço pronto. Se a imagem for pequena, ele pode até embutir o conteúdo direto no JavaScript para economizar um pedido.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>static/logo.svg</code></th><th>importado de <code>src/lib/assets</code></th></tr>
+<tr><td>Endereço</td><td>fixo: <code>/logo.svg</code></td><td>gerado, com hash no nome</td></tr>
+<tr><td>Passa pelo Vite</td><td>não</td><td>sim, com otimização</td></tr>
+<tr><td>Cache do navegador</td><td>depende dos cabeçalhos</td><td>pode ser eterno: nome novo, arquivo novo</td></tr>
+<tr><td>Erro de caminho errado</td><td>404 só na hora do acesso</td><td>falha no build</td></tr>
+<tr><td>Bom para</td><td><code>robots.txt</code>, PDF, download direto</td><td>imagens usadas por componentes</td></tr>
+</table>
+</div>
+
+<p>A diferença que mais importa no dia a dia é a última linha da tabela. Caminho importado errado quebra o build, com mensagem e linha. Caminho em <code>static</code> errado não quebra nada: vira um 404 silencioso, que você só descobre clicando. Por isso o hábito de conferir os links antes de publicar vale tanto.</p>
+
+<h2>10. Caixa 3: links que não existem</h2>
+
+<p>Um link quebrado numa página de padaria é um cliente que desiste. A caixa abaixo tem três links, sendo um deles para um arquivo que ninguém colocou na pasta, e diz “ok” para todos.</p>
+
+<div class="trysvelte" data-goal="outre:cardapio.pdf faltando">
+<p class="try-task"><strong>Missão:</strong> mostre <code>ok</code> só para os arquivos que existem. O <code>/cardapio.pdf</code> tem <code>existe: false</code> e precisa aparecer como <code>faltando</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const links = [
+		{ href: '/logo.svg', existe: true },
+		{ href: '/aviso.txt', existe: true },
+		{ href: '/cardapio.pdf', existe: false }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each links as l}
+		&lt;li&gt;{l.href} ok&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const links = [
+		{ href: '/logo.svg', existe: true },
+		{ href: '/aviso.txt', existe: true },
+		{ href: '/cardapio.pdf', existe: false }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each links as l}
+		&lt;li&gt;{l.href} {l.existe ? 'ok' : 'faltando'}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>O condicional dentro de <code>{ }</code> decide o texto de cada linha. Numa aplicação de verdade essa marcação costuma virar uma classe CSS — <code>class:falta={!l.existe}</code> — para o link faltando ficar vermelho e chamar atenção. O importante é que a informação “não existe” esteja no dado, não na sua memória.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Os três casos abaixo são de execuções reais: dois saíram do build e um saiu do servidor. Nenhuma mensagem foi reescrita.</p>
+
+<div class="cenario">
+<strong>Erro 1 — importar arquivo de dentro de <code>static</code></strong>
+<p>A pasta <code>static</code> não é uma pasta de módulos: o Vite não a processa como origem de importação. Quem tenta importar recebe um erro de resolução.</p>
+<pre class="file" data-file="src/routes/importa/+page.svelte">&lt;script&gt;
+	import logo from '../../static/logo.svg';
+&lt;/script&gt;
+
+&lt;img src={logo} alt="logo" /&gt;</pre>
+<pre class="term">transforming...
+✓ 202 modules transformed.
+✗ Build failed in 322ms
+error during build:
+Build failed with 1 error:
+
+[UNRESOLVED_IMPORT] Could not resolve '../../static/logo.svg' in src/routes/importa/+page.svelte
+   ╭─[ src/routes/importa/+page.svelte:2:18 ]
+   │
+ 2 │ import logo from '../../static/logo.svg';
+   │                  ───────────┬───────────  
+   │                             ╰───────────── Module not found.
+───╯</pre>
+<p>A saída é uma das duas: escrever <code>&lt;img src="/logo.svg"&gt;</code> e deixar o arquivo onde está, ou mover a imagem para <code>src/lib/assets</code> e importar de lá. O erro <code>Module not found</code> é literal: naquele caminho não há módulo, só um arquivo parado.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — o arquivo existe, mas a rota responde no lugar dele</strong>
+<p>Não há mensagem de erro neste caso, e é por isso que ele é perigoso. A Ana colocou o cardápio em <code>static/produtos/index.html</code> e pediu <code>/produtos</code>. A resposta veio 200, mas o conteúdo era o da rota.</p>
+<pre class="term">ana@notebook:~/loja$ curl -s http://localhost:5173/produtos | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;'
+&lt;h1&gt;Produtos&lt;/h1&gt;
+ana@notebook:~/loja$ curl -s http://localhost:5173/produtos/index.html | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;'
+&lt;h1&gt;cardapio estatico&lt;/h1&gt;</pre>
+<p>A rota venceu, e o arquivo ficou acessível só no endereço com <code>index.html</code>. Se a intenção era o arquivo, o nome dele precisa ser outro — <code>cardapio.html</code>, por exemplo — ou a rota precisa sair do caminho. Dois donos para o mesmo endereço nunca dá certo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — o arquivo que ninguém colocou</strong>
+<p>Um pedido a um arquivo inexistente não fica sem resposta: ele cai no app e vira a página de erro 404. O cabeçalho mostra o status e o tipo de conteúdo, e a mensagem aparece no terminal por causa do hook de erro.</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -i http://localhost:5173/naoexiste.svg | head -4
+HTTP/1.1 404 Not Found
+Vary: Origin
+content-length: 1462
+content-type: text/html</pre>
+<p>Repare no <code>content-type: text/html</code>: o pedido era de uma imagem vetorial e a resposta foi uma página HTML. Navegador nenhum desenha isso como imagem, então o que aparece é o ícone de imagem quebrada. No terminal do servidor, a linha <code>[erro 404] GET /naoexiste.svg: Not Found</code> registra o mesmo fato.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo em <code>static</code></th><th>Endereço</th><th>Observação</th></tr>
+<tr><td><code>robots.txt</code></td><td><code>/robots.txt</code></td><td>texto puro, sem HTML</td></tr>
+<tr><td><code>logo.svg</code></td><td><code>/logo.svg</code></td><td>tipo vem da extensão</td></tr>
+<tr><td><code>produtos/index.html</code></td><td><code>/produtos/index.html</code></td><td>não responde em <code>/produtos</code> se houver rota</td></tr>
+<tr><td><code>sobre.html</code></td><td><code>/sobre.html</code></td><td>convive com a rota <code>/sobre</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Quem responde</th><th>Status</th></tr>
+<tr><td>rota existe e arquivo existe</td><td>a rota</td><td>200</td></tr>
+<tr><td>só o arquivo existe, com o caminho exato</td><td>o arquivo</td><td>200</td></tr>
+<tr><td>caminho com barra no fim e rota sem barra</td><td>redirecionamento</td><td>308</td></tr>
+<tr><td>nada existe</td><td>página de erro do app</td><td>404</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O arquivo <code>static/cardapio.pdf</code> fica em qual endereço?</p>
+<label><input type="radio" name="q-st"> <code>/static/cardapio.pdf</code></label>
+<label><input type="radio" name="q-st"> <code>/cardapio.pdf</code></label>
+<label><input type="radio" name="q-st"> <code>src/static/cardapio.pdf</code></label>
+<label><input type="radio" name="q-st"> <code>/assets/cardapio.pdf</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Existe a rota <code>/produtos</code> e o arquivo <code>static/produtos/index.html</code>. O que <code>/produtos</code> devolve?</p>
+<label><input type="radio" name="q-st"> o arquivo, porque ele é mais rápido</label>
+<label><input type="radio" name="q-st"> os dois, em sequência</label>
+<label><input type="radio" name="q-st"> a rota, porque as rotas são procuradas primeiro</label>
+<label><input type="radio" name="q-st"> um erro de configuração</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o <code>/logo.svg</code> não aparece no registro do <code>hooks.server.js</code>?</p>
+<label><input type="radio" name="q-st"> porque arquivo estático é entregue antes de o app ser chamado</label>
+<label><input type="radio" name="q-st"> porque o hook só registra pedidos de página</label>
+<label><input type="radio" name="q-st"> porque o arquivo é pequeno demais</label>
+<label><input type="radio" name="q-st"> porque o log está desligado em desenvolvimento</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;!-- src/routes/static/+page.svelte --&gt;<br>&lt;img src="<input data-answer="/logo.svg|logo.svg">" alt="Logo da padaria" /&gt;<br><br>// o arquivo mora em static/logo.svg, na raiz do projeto</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>static</code> é a pasta de arquivos prontos: sai daqui exatamente o que entrou, sem componente e sem <code>load</code>.</li>
+  <li>O nome do arquivo vira endereço na raiz do site: <code>static/logo.svg</code> responde em <code>/logo.svg</code>.</li>
+  <li><code>robots.txt</code>, favicon, PDF e imagens de divulgação são os moradores naturais da pasta.</li>
+  <li>O <code>Content-Type</code> vem da extensão; arquivo sem extensão é servido como binário genérico.</li>
+  <li>Rota e arquivo no mesmo endereço: a rota vence, e o arquivo só responde com o caminho completo.</li>
+  <li><code>/produtos/</code> com barra no fim responde 308, um redirecionamento permanente para o endereço sem barra.</li>
+  <li>Arquivo estático não passa pelo <code>hooks.server.js</code>; arquivo que não existe passa, e vira 404.</li>
+  <li>Importar de dentro de <code>static</code> não funciona: o erro é <code>UNRESOLVED_IMPORT</code> com <code>Module not found</code>.</li>
+  <li>Importar de <code>src/lib/assets</code> gera nome com hash e quebra o build quando o caminho está errado.</li>
+  <li>O build copia a pasta uma vez; o conteúdo não muda até a próxima publicação.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

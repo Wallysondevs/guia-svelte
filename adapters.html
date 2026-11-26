@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adaptadores no SvelteKit — adapter-auto, node e static | Guia Svelte</title>
+<meta name="description" content="O pão é o mesmo, a tomada muda: como o SvelteKit 3 escolhe o adaptador no vite.config.js, o que o adapter-node gera e por que o adapter-static recusa rotas dinâmicas.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Adaptadores</span></h1>
+
+<p class="intro">A Ana aprendeu a assar o pão e agora quer vender em três lugares: na porta da padaria, numa feira e pela internet. O pão é o mesmo; o que muda é a tomada de cada lugar. Com o site dela acontece igual: o código é um só, mas o Netlify, o Vercel e um servidor alugado esperam formatos diferentes de arquivo. Quem faz essa tradução é o <strong>adaptador</strong> — e é ele que decide se o seu projeto vira um site de arquivos parados ou um programa de verdade rodando num servidor.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um adaptador e qual é o trabalho dele no build.</li>
+  <li>Onde o adaptador é configurado no SvelteKit 3 e por que não é mais no <code>svelte.config.js</code>.</li>
+  <li>O que o <code>adapter-auto</code> faz e qual aviso ele imprime quando não reconhece o lugar.</li>
+  <li>Como trocar para o <code>adapter-node</code> e como ler a saída do build.</li>
+  <li>O que existe dentro da pasta <code>build/</code> gerada.</li>
+  <li>Quando o <code>adapter-static</code> serve e por que ele recusa rotas dinâmicas.</li>
+  <li>O que significa uma rota “prerenderizável” na hora de escolher o adaptador.</li>
+  <li>Os três avisos e erros reais desta configuração, com a mensagem copiada.</li>
+  <li>O custo de cada adaptador em manutenção e em dinheiro.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o pão e a tomada</h2>
+
+<p>Um adaptador de tomada não muda a eletricidade: ele muda o encaixe. Você leva o mesmo aparelho para a Europa e ele funciona, desde que o encaixe seja o certo. No SvelteKit, o adaptador não muda o seu código: ele pega o resultado do build — HTML, JavaScript, CSS e as funções de servidor — e escreve esse resultado no formato que a plataforma de destino entende.</p>
+
+<p>O motivo de existir é simples. Um site pode rodar de duas maneiras muito diferentes. Na primeira, alguém gera arquivos e os coloca num servidor que só entrega arquivos: nada é calculado na hora do pedido, o banco é consultado durante o build. Na segunda, existe um programa sempre ligado que recebe cada pedido, consulta o banco e monta a resposta na hora. Cada plataforma oferece uma dessas formas — às vezes as duas — e cada uma espera um formato próprio de entrada.</p>
+
+<p>Sem adaptador, você escreveria esse formato à mão, e cada troca de plataforma seria um projeto novo. Com adaptador, a troca é uma linha. O preço é que essa linha muda o que o seu site <em>consegue</em> fazer: escolher errado faz o build falhar, ou pior, faz uma página que precisava de servidor virar arquivo parado.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na mudança de casa</th><th>No SvelteKit</th></tr>
+<tr><td>O aparelho que você leva</td><td>o código em <code>src/</code></td></tr>
+<tr><td>O encaixe da parede nova</td><td>a plataforma onde o site vai rodar</td></tr>
+<tr><td>O adaptador que você compra</td><td>o pacote <code>@sveltejs/adapter-…</code></td></tr>
+<tr><td>Testar o aparelho antes de viajar</td><td><code>npm run build</code></td></tr>
+<tr><td>Descobrir na hora que o encaixe é outro</td><td>o build falhar com <code>Encountered dynamic routes</code></td></tr>
+</table>
+</div>
+
+<h2>2. O que é um adaptador, em uma frase</h2>
+
+<p>Adaptador é um pacote que roda no fim do build e responde a uma pergunta: <em>como o meu site é servido neste lugar?</em> A resposta vira uma pasta de saída. No <code>adapter-node</code> é a pasta <code>build/</code>, com um servidor Node pronto. No <code>adapter-static</code> é a pasta <code>build/</code> com arquivos <code>.html</code> e nada mais. No <code>adapter-netlify</code> são funções no formato do Netlify; no <code>adapter-vercel</code>, no formato do Vercel.</p>
+
+<p>Repare que o nome do pacote sempre começa com <code>@sveltejs/adapter-</code>. Isso não é decoração: é a convenção que o instalador usa para saber o que procurar. Os adaptadores oficiais cobrem os destinos mais comuns; para um destino esquisito existe a API de adaptadores, que é assunto de quem escreve pacote, não de quem publica padaria.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Adaptador</th><th>Serve para</th><th>Precisa de servidor?</th></tr>
+<tr><td><code>adapter-auto</code></td><td>descobrir a plataforma sozinho</td><td>depende do destino</td></tr>
+<tr><td><code>adapter-node</code></td><td>VPS, Docker, máquina própria</td><td>sim</td></tr>
+<tr><td><code>adapter-static</code></td><td>site de arquivos parados</td><td>não</td></tr>
+<tr><td><code>adapter-netlify</code></td><td>Netlify</td><td>a plataforma cuida</td></tr>
+<tr><td><code>adapter-vercel</code></td><td>Vercel</td><td>a plataforma cuida</td></tr>
+</table>
+</div>
+
+<h2>3. Onde o adaptador é configurado</h2>
+
+<p>Esta é a mudança que mais confunde quem vem de tutorial antigo. No SvelteKit 2 o adaptador ficava no <code>svelte.config.js</code>. No SvelteKit 3 esse arquivo não é mais lido, e a configuração passou para o plugin dentro do <code>vite.config.js</code>:</p>
+
+<pre class="file" data-file="vite.config.js">import adapter from '@sveltejs/adapter-node';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+	plugins: [
+		sveltekit({
+			adapter: adapter()
+		})
+	]
+});</pre>
+
+<dl class="anatomy">
+  <dt>import adapter</dt><dd>o pacote do adaptador escolhido. Trocar de destino começa aqui: outro pacote, outro nome.</dd>
+  <dt>sveltekit({ … })</dt><dd>o plugin que liga o SvelteKit ao Vite. É dentro dele que a configuração do Kit mora agora.</dd>
+  <dt>adapter: adapter()</dt><dd>a chamada que cria o adaptador. Os parênteses existem porque alguns adaptadores recebem opções: <code>adapter({ out: 'dist' })</code>.</dd>
+  <dt>plugins: [ … ]</dt><dd>a lista de plugins do Vite. O SvelteKit precisa ser um deles, e o adaptador vai junto com ele.</dd>
+  <dt>defineConfig</dt><dd>a função que só existe para o editor ajudar com os nomes das opções. Não muda o comportamento.</dd>
+</dl>
+
+<p>O projeto criado pelo <code>sv create</code> já vem com o <code>adapter-auto</code> configurado e com as dependências no <code>package.json</code>. O trecho abaixo é o do projeto da Ana, copiado do arquivo:</p>
+
+<pre class="file" data-file="package.json">	"devDependencies": {
+		"@sveltejs/adapter-auto": "^8.0.1",
+		"@sveltejs/adapter-node": "^6.0.6",
+		"@sveltejs/adapter-static": "^4.0.1",
+		"@sveltejs/kit": "^3.2.0",
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
+		"svelte": "^5.57.3",
+		"vite": "^8.3.8"
+	}</pre>
+
+<p>Três adaptadores instalados ao mesmo tempo não é problema: só o que está importado no <code>vite.config.js</code> é usado. Os outros ficam parados, ocupando alguns quilobytes no disco de desenvolvimento — nada vão para o site publicado.</p>
+
+<h2>4. O adaptador padrão e o aviso real</h2>
+
+<p>O <code>adapter-auto</code> é o detetive. Durante o build ele olha as variáveis de ambiente que as plataformas costumam deixar — <code>NETLIFY</code>, <code>VERCEL</code>, <code>CF_PAGES</code> e outras — e, se reconhecer uma, usa o adaptador certo para ela. Se não reconhecer nenhuma, ele não inventa: avisa e termina. Este é o fim da sessão de build na máquina da Ana, sem nenhuma dessas variáveis:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 161 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 453ms
+Prerendering
+GET /seo → 200 (30 ms)
+GET /sobre → 200 (5 ms)
+GET / → 204 (0 ms)
+GET /produtos → 204 (0 ms)
+GET /entrar → 204 (0 ms)
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app to run on the platform of your choosing
+✔ done</pre>
+
+<p>Leia as duas últimas linhas com atenção. “Could not detect a supported production environment” quer dizer “não reconheci o lugar onde você vai publicar”. O build termina com sucesso — o <code>✔ done</code> está lá — mas o resultado não serve para publicar em lugar nenhum. É um build de desenvolvimento sofisticado: bom para conferir, inútil para entregar.</p>
+
+<p>Há também uma lição escondida no meio da sessão. As linhas <code>GET /seo → 200</code> e <code>GET / → 204</code> são o SvelteKit rodando o seu app para gerar as páginas que têm <code>prerender = true</code>. Os <code>204</code> aparecem nas rotas que foram apenas visitadas pelo rastreador de links e não geraram arquivo. O adaptador só entra depois disso: primeiro o app roda, depois o formato é escolhido.</p>
+
+<h2>5. Caixa 1: qual adaptador para cada destino</h2>
+
+<p>A escolha do adaptador é uma tabela mental simples, e vale treinar antes de mexer no arquivo. A caixa abaixo responde sempre <code>adapter-auto</code>, mesmo quando o destino é conhecido. A missão é usar o mapa que já está no código.</p>
+
+<div class="trysvelte" data-goal="digitar:input=netlify;;out:netlify → adapter-netlify">
+<p class="try-task"><strong>Missão:</strong> digite <code>netlify</code> no campo e o texto deve virar <code>netlify → adapter-netlify</code>. Use o objeto <code>mapa</code> que está no componente; destino desconhecido continua caindo em <code>adapter-auto</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const mapa = {
+		netlify: 'adapter-netlify',
+		vercel: 'adapter-vercel',
+		node: 'adapter-node',
+		estatico: 'adapter-static'
+	};
+
+	let destino = $state('');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (destino = e.currentTarget.value)} placeholder="destino" /&gt;
+&lt;p&gt;{destino} → adapter-auto&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const mapa = {
+		netlify: 'adapter-netlify',
+		vercel: 'adapter-vercel',
+		node: 'adapter-node',
+		estatico: 'adapter-static'
+	};
+
+	let destino = $state('');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (destino = e.currentTarget.value)} placeholder="destino" /&gt;
+&lt;p&gt;{destino} → {mapa[destino] ?? 'adapter-auto'}&lt;/p&gt;</pre>
+</div>
+
+<p>O operador <code>??</code> é o “se não houver nada”. Ele devolve o valor da esquerda quando ela existe e o da direita quando ela é <code>undefined</code>. Diferente de <code>||</code>, que também troca por zero e por texto vazio; para escolher padrão de configuração, <code>??</code> é o operador certo.</p>
+
+<h2>6. Trocando para o <code>adapter-node</code></h2>
+
+<p>O destino da Ana é uma VPS: uma máquina Linux comum, com Node instalado, sem plataforma mágica em volta. Para esse caso o adaptador é o <code>@sveltejs/adapter-node</code>. A instalação é um comando, e ele registra o pacote no <code>package.json</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm i -D @sveltejs/adapter-node
+
+added 4 packages, removed 1 package, and audited 53 packages in 7s
+
+11 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities</pre>
+
+<p>O <code>-D</code> instala como dependência de desenvolvimento. Faz sentido: o adaptador trabalha no build, não em tempo de execução. O programa final que ele gera é Node puro, sem depender do pacote do adaptador.</p>
+
+<p>Depois vem a troca no <code>vite.config.js</code>, que é a única mudança no código do site: uma linha de import e uma de uso. O build seguinte já mostra outro final:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+✓ built in 376ms
+Prerendering
+GET /seo → 200 (12 ms)
+GET /sobre → 200 (2 ms)
+GET / → 204 (0 ms)
+GET /produtos → 204 (0 ms)
+GET /entrar → 204 (0 ms)
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-node
+Copying assets
+Compressing and hashing assets
+✔ done</pre>
+
+<p>Comparado com o build anterior, o aviso sumiu e três linhas novas apareceram. “Using @sveltejs/adapter-node” é o adaptador se apresentando. “Copying assets” é a cópia dos arquivos que já existiam prontos — as imagens, o <code>robots.txt</code>, tudo o que veio da pasta <code>static</code>. “Compressing and hashing assets” é a geração das versões <code>.gz</code> e <code>.br</code> e do hash no nome de cada arquivo, do mesmo jeito que o Vite faz no projeto sem Kit.</p>
+
+<h2>7. O que sai na pasta <code>build/</code></h2>
+
+<p>O adaptador-node escreve uma pasta que é um programa completo. Listar o conteúdo é a forma mais rápida de entender o que ele fez:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls build
+adapter-node.js
+client
+handler.js
+index.js
+prerendered
+server</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Dentro de <code>build/</code></th><th>O que é</th></tr>
+<tr><td><code>index.js</code></td><td>o ponto de entrada: é ele que o <code>node build</code> executa</td></tr>
+<tr><td><code>handler.js</code></td><td>o pedaço que recebe as requisições e chama o app</td></tr>
+<tr><td><code>client/</code></td><td>o JavaScript e o CSS que vão para o navegador</td></tr>
+<tr><td><code>server/</code></td><td>o código do servidor: suas rotas, seus <code>load</code></td></tr>
+<tr><td><code>prerendered/</code></td><td>as páginas que viraram HTML no build</td></tr>
+<tr><td><code>adapter-node.js</code></td><td>a cola entre o adaptador e o servidor gerado</td></tr>
+</table>
+</div>
+
+<p>Essa pasta é o que você copia para a VPS. Ela não precisa do seu código-fonte, nem da pasta <code>node_modules</code> de desenvolvimento, nem do Vite. Precisa de Node instalado e das dependências de produção — no caso da Ana, nenhuma além do próprio Node. Menos coisa para dar errado na máquina de produção.</p>
+
+<p>E a pasta <code>prerendered/</code> merece uma olhada antes de publicar, porque o que está lá não muda mais. No projeto da Ana ela trouxe <code>seo.html</code>, <code>sobre.html</code> e também um <code>conta.html</code> que ninguém pediu: o rastreador seguiu o link do menu e congelou uma página que dependia de login. O arquivo é um redirecionamento de 112 bytes, mas o susto é real. Cache e pré-render têm aula própria; aqui o que importa é saber que a pasta existe e que você deve abri-la.</p>
+
+<h2>8. Caixa 2: o que precisa de servidor</h2>
+
+<p>Escolher adaptador é escolher o que o site consegue fazer. Uma página que só mostra texto igual para todo mundo pode virar arquivo. Uma página com formulário que grava pedido precisa de alguém rodando para receber o POST. Numa lista de rotas, esse teste vira um componente pequeno:</p>
+
+<pre class="file" data-file="src/lib/Rota.svelte">&lt;script&gt;
+	let { nome = 'entrar', actions = true } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {actions ? 'precisa de servidor' : 'pode ser estática'}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;entrar: precisa de servidor&lt;/p&gt;</pre>
+
+<p>Com os valores padrão do exemplo, o componente já responde sozinho. A caixa abaixo usa a mesma ideia numa lista de duas páginas, mas diz “estática” para as duas.</p>
+
+<div class="trysvelte" data-goal="outre:entrar: precisa de servidor">
+<p class="try-task"><strong>Missão:</strong> a página <code>entrar</code> tem <code>actions</code>, então depende de servidor. Faça a lista mostrar <code>precisa de servidor</code> quando <code>p.actions</code> for verdadeiro e <code>pode ser estática</code> quando for falso.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const paginas = [
+		{ nome: 'sobre', actions: false },
+		{ nome: 'entrar', actions: true }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each paginas as p}
+		&lt;li&gt;{p.nome}: estática&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const paginas = [
+		{ nome: 'sobre', actions: false },
+		{ nome: 'entrar', actions: true }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each paginas as p}
+		&lt;li&gt;{p.nome}: {p.actions ? 'precisa de servidor' : 'pode ser estática'}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Esse teste é o mesmo que o <code>adapter-static</code> faz no build, só que em escala: ele percorre todas as rotas e verifica se alguma depende de servidor. Se a resposta for sim, o build para. Não é teimosia do pacote: um site estático não tem onde rodar um <code>load</code> que lê cookie.</p>
+
+<h2>9. <code>adapter-static</code>: quando serve</h2>
+
+<p>Um site de arquivos parados tem vantagens concretas: pode ser servido de graça, responde rápido, não tem servidor para cair. É a escolha certa para a página de divulgação da padaria, o cardápio do dia e o blog de receitas. Para o painel de pedidos, que muda a cada pedido, não serve.</p>
+
+<p>O adaptador aceita três saídas possíveis quando alguma rota é dinâmica. A primeira é congelar tudo: <code>export const prerender = true</code> no <code>+layout.js</code> raiz, o que tenta pré-renderizar todas as páginas. A segunda é apontar um <code>fallback</code>, um arquivo que o servidor estático devolve quando não acha a rota, transformando o site numa SPA. A terceira é <code>strict: false</code>, que manda o adaptador ignorar as rotas dinâmicas — útil só quando você tem certeza de que elas não são necessárias no pacote final.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Adaptador indicado</th><th>Por quê</th></tr>
+<tr><td>cardápio que muda uma vez por dia</td><td><code>adapter-static</code></td><td>nada é calculado no pedido</td></tr>
+<tr><td>painel de pedidos com login</td><td><code>adapter-node</code></td><td>precisa ler cookie e gravar no banco</td></tr>
+<tr><td>publicar no Netlify</td><td><code>adapter-netlify</code></td><td>o formato das funções é do Netlify</td></tr>
+<tr><td>não sei ainda onde publicar</td><td><code>adapter-auto</code></td><td>ele tenta descobrir no build</td></tr>
+</table>
+</div>
+
+<h2>10. Caixa 3: contando o que o build gerou</h2>
+
+<p>Ler a pasta de saída é uma habilidade, e contar arquivos é o primeiro passo. A caixa abaixo lista cinco itens da pasta <code>build/</code> e escreve “6” no texto. A missão é deixar a conta com o próprio código.</p>
+
+<div class="trysvelte" data-goal="out:Arquivos no build: 5">
+<p class="try-task"><strong>Missão:</strong> o número está escrito à mão e está errado. Use o tamanho da lista para mostrar <code>Arquivos no build: 5</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const arquivos = ['client', 'server', 'prerendered', 'index.js', 'handler.js'];
+&lt;/script&gt;
+
+&lt;p&gt;Arquivos no build: 6&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const arquivos = ['client', 'server', 'prerendered', 'index.js', 'handler.js'];
+&lt;/script&gt;
+
+&lt;p&gt;Arquivos no build: {arquivos.length}&lt;/p&gt;</pre>
+</div>
+
+<p><code>arquivos.length</code> é a propriedade de lista que devolve a quantidade de itens. Contar com o código em vez de digitar o número é o que impede o texto de mentir quando alguém acrescenta um arquivo à lista. A mesma ideia vale para o total de produtos da padaria, de itens no carrinho e de pedidos do dia.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são do build de verdade, com SvelteKit 3.4.1. A primeira é a mais comum em quem vem de tutorial antigo.</p>
+
+<div class="cenario">
+<strong>Erro 1 — configuração no arquivo que não é mais lido</strong>
+<p>Você cria um <code>svelte.config.js</code> com <code>kit.adapter</code>, como fazia no SvelteKit 2. O build nem começa: ele para na leitura da configuração.</p>
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+error during build:
+SvelteKit error: config_file_unsupported
+`svelte.config.js` is no longer used. Please pass configuration via the `sveltekit(...)` plugin in your Vite config.
+https://svelte.dev/e/kit/config_file_unsupported
+  plugin: 'vite-plugin-sveltekit-resolve-root',
+  hook: 'config'
+}</pre>
+<p>A mensagem diz o que fazer e onde: dentro do <code>sveltekit(…)</code>, no <code>vite.config.js</code>. O erro é bom porque aparece antes de qualquer trabalho: apagar o arquivo e mover a opção resolve.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — rotas dinâmicas num site estático</strong>
+<p>Você troca para o <code>adapter-static</code> e o build termina, mas o adaptador recusa o pacote. Ele lista cada rota que não conseguiu congelar e mostra as saídas possíveis.</p>
+<pre class="term">&gt; Using @sveltejs/adapter-static
+
+@sveltejs/adapter-static: all routes must be fully prerenderable, but found the following routes that are dynamic:
+  - src/routes/
+  - src/routes/api/produtos
+  - src/routes/cache
+  - src/routes/conta
+  - src/routes/entrar
+  - src/routes/env
+  - src/routes/erro
+  - src/routes/produtos
+  - src/routes/static
+
+You have the following options:
+  - set the `fallback` option — see https://svelte.dev/docs/kit/single-page-apps#usage for more info.
+  - add `export const prerender = true` to your root `+layout.js/.ts` or `+layout.server.js/.ts` file. This will try to prerender all pages.
+  - add `export const prerender = true` to any `+server.js/ts` files that are not fetched by page `load` functions.
+  - pass `strict: false` to `adapter-static` to ignore this error. Only do this if you are sure you don't need the routes in question in your final app, as they will be unavailable. See https://github.com/sveltejs/kit/tree/main/packages/adapter-static#strict for more info.
+
+If this doesn't help, you may need to use a different adapter. @sveltejs/adapter-static can only be used for sites that don't need a server for dynamic rendering, and can run on just a static file server.
+
+See https://svelte.dev/docs/kit/page-options#prerender for more details
+
+error during build:
+[Error: Encountered dynamic routes] {
+  plugin: 'vite-plugin-sveltekit-adapter',
+  hook: 'buildApp'
+}</pre>
+<p>O erro final é curto — <code>Encountered dynamic routes</code> — e a explicação está em cima. A leitura útil é a lista: cada linha é uma pasta de <code>src/routes/</code> que não pôde virar arquivo. Se a lista tem só páginas que você não precisa, <code>strict: false</code> resolve. Se tem a página de login, o adaptador certo é outro.</p>
+</div>
+
+<div class="cenario">
+<strong>Aviso 3 — o adaptador não reconheceu a plataforma</strong>
+<p>Este não é um erro: o build termina com <code>✔ done</code>. Mas o pacote gerado não serve para publicar. O texto é o mesmo do <code>adapter-auto</code>, e vale reconhecer de longe.</p>
+<pre class="term">&gt; Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app to run on the platform of your choosing
+✔ done</pre>
+<p>A leitura é direta: “não reconheci o ambiente de produção”. A correção é trocar por um adaptador explícito — <code>node</code>, <code>static</code>, <code>netlify</code> — em vez de esperar que o detetive adivinhe. Em plataformas conhecidas o aviso some sozinho, porque a variável de ambiente que o adaptador procura existe.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th></tr>
+<tr><td><code>npm i -D @sveltejs/adapter-node</code></td><td>instala o adaptador de servidor Node</td></tr>
+<tr><td><code>npm run build</code></td><td>roda o app, gera as páginas estáticas e entrega ao adaptador</td></tr>
+<tr><td><code>ls build</code></td><td>mostra o que o adaptador escreveu</td></tr>
+<tr><td><code>node build</code></td><td>sobe o servidor gerado pelo adapter-node</td></tr>
+<tr><td><code>npm run preview</code></td><td>confere o build pelo servidor do Vite, sem adaptador</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro ou aviso</th><th>Quer dizer</th><th>Saída</th></tr>
+<tr><td><code>config_file_unsupported</code></td><td><code>svelte.config.js</code> não é mais lido</td><td>configurar dentro do <code>sveltekit(…)</code></td></tr>
+<tr><td><code>Encountered dynamic routes</code></td><td>rota precisa de servidor</td><td>trocar de adaptador ou pré-renderizar</td></tr>
+<tr><td><code>Could not detect a supported production environment</code></td><td>o <code>adapter-auto</code> não reconheceu o destino</td><td>usar um adaptador explícito</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Onde o adaptador é configurado no SvelteKit 3?</p>
+<label><input type="radio" name="q-ad"> no <code>svelte.config.js</code>, como sempre foi</label>
+<label><input type="radio" name="q-ad"> dentro do <code>package.json</code></label>
+<label><input type="radio" name="q-ad"> dentro do <code>sveltekit({ adapter: … })</code>, no <code>vite.config.js</code></label>
+<label><input type="radio" name="q-ad"> no <code>+layout.svelte</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. O build terminou com <code>Could not detect a supported production environment</code>. O que aconteceu?</p>
+<label><input type="radio" name="q-ad"> o <code>adapter-auto</code> não reconheceu a plataforma de destino</label>
+<label><input type="radio" name="q-ad"> a senha do banco está errada</label>
+<label><input type="radio" name="q-ad"> o código tem um erro de sintaxe</label>
+<label><input type="radio" name="q-ad"> o Node não está instalado</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. Por que o <code>adapter-static</code> recusa uma rota com form actions?</p>
+<label><input type="radio" name="q-ad"> porque actions só funcionam em TypeScript</label>
+<label><input type="radio" name="q-ad"> porque um site de arquivos parados não tem servidor para receber o POST</label>
+<label><input type="radio" name="q-ad"> porque o adaptador não foi instalado com <code>-D</code></label>
+<label><input type="radio" name="q-ad"> porque a rota tem nome composto</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">// vite.config.js<br>import adapter from '<input data-answer="@sveltejs/adapter-node">';<br>import { sveltekit } from '@sveltejs/kit/vite';<br>import { defineConfig } from 'vite';<br><br>export default defineConfig({<br>&nbsp;&nbsp;plugins: [sveltekit({ adapter: adapter() })]<br>});<br><br>// o destino é uma VPS comum, com Node instalado</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Adaptador é o pacote que traduz o resultado do build para o formato da plataforma de destino.</li>
+  <li>No SvelteKit 3 ele é configurado dentro de <code>sveltekit({ adapter })</code>, no <code>vite.config.js</code>; o <code>svelte.config.js</code> não é mais lido.</li>
+  <li><code>adapter-auto</code> tenta descobrir a plataforma; sem reconhecer, avisa e gera um pacote que não serve para publicar.</li>
+  <li><code>adapter-node</code> gera a pasta <code>build/</code> com <code>index.js</code>, <code>handler.js</code>, <code>client/</code>, <code>server/</code> e <code>prerendered/</code>.</li>
+  <li><code>adapter-static</code> só aceita rotas que possam virar arquivo; rotas com <code>load</code> que lê cookie ou com actions são recusadas.</li>
+  <li>As saídas para uma rota dinâmica são <code>prerender = true</code>, <code>fallback</code> ou <code>strict: false</code>.</li>
+  <li>O build primeiro roda o app e pré-renderiza; só depois o adaptador escreve o pacote.</li>
+  <li>Três adaptadores instalados não atrapalham: só o importado no <code>vite.config.js</code> vale.</li>
+  <li>Antes de publicar, abra a pasta <code>prerendered/</code>: o rastreador congela até páginas que você não pediu.</li>
+  <li>Erro 1 desta aula: <code>config_file_unsupported</code>. Erro 2: <code>Encountered dynamic routes</code>. Aviso 3: plataforma não reconhecida.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
