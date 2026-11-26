@@ -292,9 +292,7 @@
 
 <p>Na renderização do servidor isso passa e mostra 2,70. No navegador, rodando <code>npm run dev</code>, o componente nem aparece — o console registra:</p>
 
-<pre class="out">Svelte error: state_unsafe_mutation
-Updating state inside `$derived(...)`, `$inspect(...)` or a template expression is forbidden. If the value should not be reactive, declare it without `$state`
-https://svelte.dev/e/state_unsafe_mutation</pre>
+<p>A mensagem é <code>state_unsafe_mutation</code>: <em>"Updating state inside `$derived(...)`, `$inspect(...)` or a template expression is forbidden. If the value should not be reactive, declare it without `$state`"</em>. A documentação fica em <code>https://svelte.dev/e/state_unsafe_mutation</code>.</p>
 
 <p>Traduzindo: "atualizar estado dentro de <code>$derived(...)</code>, <code>$inspect(...)</code> ou de uma expressão do template é proibido. Se o valor não deve ser reativo, declare sem <code>$state</code>". A mensagem ainda dá a saída: se a variável intermediária é só conta, ela não precisa de runa nenhuma.</p>
 

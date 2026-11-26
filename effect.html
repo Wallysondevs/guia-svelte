@@ -285,9 +285,7 @@
 
 <p>O efeito lê <code>n</code> e escreve <code>n</code>. Cada escrita muda a dependência, o que agenda outra execução, que escreve de novo. Em desenvolvimento, o Svelte interrompe o laço com uma mensagem clara no console:</p>
 
-<pre class="out">Svelte error: effect_update_depth_exceeded
-Maximum update depth exceeded. This typically indicates that an effect reads and writes the same piece of state
-https://svelte.dev/e/effect_update_depth_exceeded</pre>
+<p>A mensagem é <code>effect_update_depth_exceeded</code>: <em>"Maximum update depth exceeded. This typically indicates that an effect reads and writes the same piece of state"</em>. A documentação fica em <code>https://svelte.dev/e/effect_update_depth_exceeded</code>.</p>
 
 <p>"Profundidade de atualização excedida: isso normalmente indica que um efeito lê e escreve o mesmo pedaço de estado." Quando o que você quer é o valor calculado, a runa é <code>$derived</code>; quando é fazer algo no mundo, a runa é <code>$effect</code>. Um efeito que só muda estado para a tela mostrar quase sempre deveria ser um derivado.</p>
 
@@ -338,9 +336,7 @@ dist/assets/index-DtDhhfRU.js  36.51 kB │ gzip: 14.04 kB
 
 <p>As três mensagens abaixo são de compilação. Existe ainda um erro de execução, <code>effect_orphan</code>, que aparece quando um efeito é criado fora da inicialização do componente:</p>
 
-<pre class="out">Svelte error: effect_orphan
-`$effect` can only be used inside an effect (e.g. during component initialisation)
-https://svelte.dev/e/effect_orphan</pre>
+<p>A mensagem é <code>effect_orphan</code>: <em>"`$effect` can only be used inside an effect (e.g. during component initialisation)"</em>. A documentação fica em <code>https://svelte.dev/e/effect_orphan</code>.</p>
 
 <p>Ele acontece, por exemplo, quando você chama <code>$effect</code> dentro de uma função que só roda no clique. O efeito precisa de um componente vivo para pertencer; criado depois, não tem onde se pendurar.</p>
 

@@ -201,9 +201,19 @@
 
 <p><strong>1. Desmontar o objeto numa variável.</strong> <code>let { paes } = cesta</code> copia o valor do campo para uma variável nova. A variável tem o número <code>2</code>, e esse número não acompanha mais o objeto. Para continuar ligado, leia o caminho no HTML: <code>{cesta.paes}</code>.</p>
 
-<p><strong>2. Copiar o objeto com <code>let apelido = cesta</code>.</strong> Aqui não há cópia — há <em>dois nomes para o mesmo objeto</em>. Mudar <code>cesta.paes</code> também muda <code>apelido.paes</code>, porque são a mesma coisa. O perigo é o oposto: você acha que está mexendo numa cópia e está mexendo no original.</p>
+<p><strong>2. Copiar o objeto com <code>let apelido = cesta</code>.</strong> Aqui não há cópia — há <em>dois nomes para o mesmo objeto</em>. O perigo é o oposto do que parece: você acha que está mexendo numa cópia e está mexendo no original.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cesta = $state({ paes: 2 });
+  let apelido = cesta;
+  cesta.paes = 3;
+&lt;/script&gt;
+
+&lt;p&gt;Original: {cesta.paes} · Apelido: {apelido.paes}&lt;/p&gt;</pre>
 
 <pre class="out">&lt;p&gt;Original: 3 · Apelido: 3&lt;/p&gt;</pre>
+
+<p>Os dois nomes apontam para o mesmo objeto, então os dois mostram 3. Se você quisesse mesmo uma cópia independente, precisaria criar outro objeto — com <code>{ ...cesta }</code> ou com <code>$state.snapshot</code>.</p>
 
 <p><strong>3. Usar o objeto em <code>$state.raw</code>.</strong> Como você viu, o <code>raw</code> não vigia o conteúdo. Ele é para listas grandes que são trocadas inteiras, não para o caderno que muda item por item.</p>
 

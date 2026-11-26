@@ -86,9 +86,7 @@
 
 <p>O Svelte protege você desse caso com uma mensagem específica, que aparece no console do navegador quando um componente importa estado de um arquivo sem o sufixo:</p>
 
-<pre class="out">Svelte error: rune_outside_svelte
-The `$state` rune is only available inside `.svelte` and `.svelte.js/ts` files
-https://svelte.dev/e/rune_outside_svelte</pre>
+<p>A mensagem é <code>rune_outside_svelte</code>: <em>"The `$state` rune is only available inside `.svelte` and `.svelte.js/ts` files"</em>. A documentação fica em <code>https://svelte.dev/e/rune_outside_svelte</code>.</p>
 
 <p>"A runa <code>$state</code> só está disponível dentro de arquivos <code>.svelte</code> e <code>.svelte.js/ts</code>". O módulo que causou o erro era este:</p>
 
@@ -221,11 +219,7 @@ export function somar() {
 
 <p>É por isso que <code>export let</code> e <code>$:</code> dão erro num componente que já usa <code>$state</code>. Eles pertencem ao modo antigo, e o compilador prefere recusar a mistura a adivinhar a intenção:</p>
 
-<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
-
-<p>"Não posso usar <code>export let</code> no modo runas — use <code>$props()</code> em vez disso". A mensagem entrega a solução. O mesmo acontece com a reatividade antiga:</p>
-
-<pre class="out">Erro de compilação (linha 3, coluna 2): `$:` is not allowed in runes mode, use `$derived` or `$effect` instead</pre>
+<p>A mensagem é <code>Cannot use `export let` in runes mode — use `$props()` instead</code>, com a linha e a coluna onde o <code>export let</code> está. "Não posso usar <code>export let</code> no modo runas — use <code>$props()</code> em vez disso": a mensagem entrega a solução. O mesmo acontece com a reatividade antiga, que responde <code>`$:` is not allowed in runes mode, use `$derived` or `$effect` instead</code>.</p>
 
 <p>"<code>$:</code> não é permitido no modo runas; use <code>$derived</code> ou <code>$effect</code>". Note que a mensagem te dá a escolha: se a linha calculava um valor, é <code>$derived</code>; se ela fazia algo, é <code>$effect</code>.</p>
 

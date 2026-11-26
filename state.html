@@ -77,9 +77,7 @@
 
 <pre class="out">&lt;p&gt;Pães na cesta: 0&lt;/p&gt; &lt;button&gt;mais um pão&lt;/button&gt;</pre>
 
-<p>E o texto que aparece na tela, que é o que a Ana vê, é este:</p>
-
-<pre class="out">Pães na cesta: 0 mais um pão</pre>
+<p>E o texto que aparece na tela, que é o que a Ana vê, é <code>Pães na cesta: 0 mais um pão</code> — o parágrafo e o rótulo do botão, na ordem.</p>
 
 <p>Nada de surpresa até aqui: o botão mostra o que está escrito nele, o parágrafo mostra o valor inicial <code>0</code>. A diferença entre papel e lousa aparece no clique, e é por isso que ela engana tanto. Clique no botão deste componente na caixa lá embaixo e veja o número subir sem que ninguém tenha pedido para a página se atualizar.</p>
 
@@ -120,8 +118,7 @@
 
 <p>Quem denuncia é o compilador, com um aviso que vale ouro:</p>
 
-<pre class="out">aviso: non_reactive_update (linha 2): `cafes` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates
-https://svelte.dev/e/non_reactive_update</pre>
+<p>O compilador avisa, na linha 2: <code>non_reactive_update</code> — <em>"`cafes` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates"</em>. A segunda linha do aviso é o endereço da documentação: <code>https://svelte.dev/e/non_reactive_update</code>.</p>
 
 <p>Leia devagar: "<code>cafes</code> é atualizado, mas não foi declarado com <code>$state(...)</code>; mudar o valor não vai disparar as atualizações corretamente". É o combinado que faltou. Quando o componente usa pelo menos uma runa, ele entra no <strong>modo runas</strong> — e nesse modo só o que nasceu com <code>$state</code> avisa a tela. O <code>vendas</code> sobe no clique; o <code>cafes</code> muda por dentro e a lousa fica no zero.</p>
 
@@ -251,8 +248,7 @@ https://svelte.dev/e/non_reactive_update</pre>
 
 <p>E o compilador avisa que tem algo estranho ali:</p>
 
-<pre class="out">aviso: state_referenced_locally (linha 3): This reference only captures the initial value of `preco`. Did you mean to reference it inside a closure instead?
-https://svelte.dev/e/state_referenced_locally</pre>
+<p>O compilador avisa, na linha 3: <code>state_referenced_locally</code> — <em>"This reference only captures the initial value of `preco`. Did you mean to reference it inside a closure instead?"</em> (a documentação fica em <code>https://svelte.dev/e/state_referenced_locally</code>).</p>
 
 <p>Traduzindo o aviso: "esta referência só captura o valor inicial de <code>preco</code>". A linha <code>let mensagem = 'O pão custa ' + preco</code> roda uma vez, na montagem do componente, e o que fica guardado é um texto pronto — <code>"O pão custa 0.9"</code>. Se o preço mudar depois, a mensagem continua a antiga, porque ela é uma fotografia, não uma ligação.</p>
 

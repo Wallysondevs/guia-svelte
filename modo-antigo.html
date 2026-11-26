@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>let e o Modo Antigo — como o Svelte era antes | Guia Svelte</title>
+<meta name="description" content="O modo antigo do Svelte explicado: let reativo por atribuição, $:, export let, slot, on:click, svelte:options runes e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">let e o Modo Antigo</span></h1>
+
+<p class="intro">A Ana encontrou um caderno de receitas escrito pela avó: mesmas ideias, outra caligrafia. Com código acontece igual. Antes das runas, o Svelte já fazia tela reativa — com <code>let</code>, <code>$:</code>, <code>export let</code> e <code>on:click</code>. Esta aula mostra o mundo antigo com as regras dele, para você reconhecer o que encontra por aí e saber traduzir para o modo novo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é o <strong>modo antigo</strong> e por que ele ainda existe.</li>
+  <li>Como um componente <code>let x = 0</code> já era reativo.</li>
+  <li>O que <code>$:</code> fazia e o que usar no lugar.</li>
+  <li>Como eram as props com <code>export let</code>.</li>
+  <li>Como eram os eventos com <code>on:click</code>.</li>
+  <li>O que era <code>&lt;slot /&gt;</code> e o que usar hoje.</li>
+  <li>Como forçar o modo antigo com <code>&lt;svelte:options runes={false} /&gt;</code>.</li>
+  <li>Por que misturar os dois modos dá erro.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como o projeto da Ana compila um componente no modo antigo.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: dois mundos no mesmo compilador</h2>
+
+<p>O Svelte 5 nasceu com runas, mas não jogou fora o que existia. Um componente escrito sem nenhuma runa continua sendo compilado do jeito antigo, e tudo o que ele fazia em 2023 continua funcionando. Isso permitiu que projetos grandes migrassem aos poucos, arquivo por arquivo.</p>
+
+<p>O modo antigo tem uma regra central diferente: <strong>atribuição é o sinal de mudança</strong>. Quando você escreve <code>paes = 3</code> dentro de um componente antigo, o compilador entende que aquele valor mudou e marca a tela para atualizar. Não é preciso embrulhar nada em <code>$state</code> — o próprio ato de atribuir avisa.</p>
+
+<p>O modo novo trocou essa regra por outra: só o que nasceu com <code>$state</code> avisa. É mais explícito, e por isso mais previsível em código grande. Saber os dois é útil por dois motivos: você entende projetos antigos e entende as mensagens de erro que aparecem quando os dois mundos se cruzam.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Modo antigo</th><th>Modo runas</th></tr>
+<tr><td><code>let paes = 0</code></td><td><code>let paes = $state(0)</code></td></tr>
+<tr><td><code>$: total = qtd * 0.9</code></td><td><code>let total = $derived(qtd * 0.9)</code></td></tr>
+<tr><td><code>export let nome</code></td><td><code>let { nome } = $props()</code></td></tr>
+<tr><td><code>on:click={…}</code></td><td><code>onclick={…}</code></td></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td></tr>
+</table>
+</div>
+
+<p>O guia inteiro ensina o modo novo, e é o que você deve usar em código novo. Esta aula é uma ponte — não um convite para voltar.</p>
+
+<hr>
+
+<h2>2. O componente antigo da Ana</h2>
+
+<p>Este é o mesmo contador de pães, escrito do jeito antigo. Repare que não há runa nenhuma:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let paes = 0;
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {paes}&lt;/p&gt;
+&lt;button on:click={() =&gt; paes++}&gt;mais um&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pães: 0&lt;/p&gt; &lt;button&gt;mais um&lt;/button&gt;</pre>
+
+<p>No navegador, esse componente funciona: o clique soma um e a tela mostra o número novo. O compilador antigo transforma a atribuição <code>paes++</code> numa chamada que invalida o valor. Você não vê, mas cada <code>=</code> no script vira um aviso para a tela.</p>
+
+<h3>A anatomia do modo antigo</h3>
+
+<dl class="anatomy">
+  <dt>let paes = 0</dt><dd>uma variável comum que o compilador <strong>observa</strong>. Toda atribuição a ela invalida o valor.</dd>
+  <dt>paes++</dt><dd>a <strong>atribuição que avisa</strong>. Sem atribuição, nada acontece — mutações em objetos e listas precisam de reatribuição.</dd>
+  <dt>on:click</dt><dd>o <strong>evento com dois-pontos</strong>. O nome do evento vem depois de <code>on:</code>, sem <code>on</code> na frente.</dd>
+  <dt>sem runas</dt><dd>a <strong>ausência de runa</strong> é o que coloca o arquivo neste modo. Uma única runa muda tudo.</dd>
+</dl>
+
+<p>Repare numa limitação que o modo novo resolveu: no modo antigo, <code>itens.push('pão')</code> não atualizava a tela, porque não havia atribuição. Era preciso escrever <code>itens = [...itens, 'pão']</code>. No modo runas, com <code>$state</code>, o <code>push</code> funciona — você viu isso na aula de objetos e listas.</p>
+
+<hr>
+
+<h2>3. <code>$:</code> — a reatividade com rótulo</h2>
+
+<p>No modo antigo, cálculo derivado se escrevia com um rótulo de dólar e dois-pontos. O compilador observava as variáveis lidas à direita e reexecutava a linha quando alguma mudava:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = 1;
+  let unitario = 0.9;
+  $: total = qtd * unitario;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 0.90&lt;/p&gt;</pre>
+
+<p>A linha <code>$: total = qtd * unitario</code> lê <code>qtd</code> e <code>unitario</code>; quando qualquer um dos dois muda, ela roda de novo e <code>total</code> recebe o resultado. É a mesma ideia do <code>$derived</code>, com outra roupa e algumas pegadinhas: o rótulo também servia para blocos de efeito (<code>$: { … }</code>), e a ordem das linhas importava mais.</p>
+
+<div class="trysvelte" data-goal="outre:^Total: R\$ 0\.90;;clique:button;;outre:^Total: R\$ 1\.80">
+<p class="try-task"><strong>Missão:</strong> este componente está no modo antigo e o total nunca é calculado. Faça a conta reagir à quantidade, do jeito antigo, para mostrar <strong>0.90</strong> e depois <strong>1.80</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let qtd = 1;
+  let total = 0;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let qtd = 1;
+  $: total = qtd * 0.9;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um&lt;/button&gt;</pre>
+</div>
+
+<p>Repare que a solução usa <code>onclick</code> (o modo novo de evento) dentro de um componente antigo. Isso é permitido: atributo de evento não é runa, então não muda o modo do arquivo. O que não pode é usar uma runa — aí o componente inteiro passa para o modo novo e o <code>$:</code> vira erro.</p>
+
+<hr>
+
+<h2>4. <code>export let</code> — as props antigas</h2>
+
+<p>No modo antigo, declarar prop era exportar uma variável. O pai passava o valor como atributo, e o filho recebia na variável exportada:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let nome = 'pão francês';
+  export let preco = 0.9;
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;pão francês: R$ 0.90&lt;/p&gt;</pre>
+
+<p>Aqui o pai não passou nada, então os valores padrão aparecem. Quando passa, o valor do pai entra no lugar do padrão. A sintaxe é mais curta que a do <code>$props()</code>, e é por isso que ela aparece tanto em código de tutorial antigo.</p>
+
+<p>O custo aparece quando o componente tem muitos valores. Cada prop vira uma linha de <code>export let</code>, e não existe um lugar único onde ver a lista do que o componente aceita. O <code>$props()</code> junta tudo numa desmontagem só, e ainda permite separar o que sobra com <code>...resto</code>.</p>
+
+<hr>
+
+<h2>5. <code>on:click</code> e <code>&lt;slot /&gt;</code></h2>
+
+<p>Duas marcas do mundo antigo ainda aparecem muito em exemplos na internet: o evento com dois-pontos e o slot para conteúdo do pai.</p>
+
+<p>O evento antigo escreve o nome depois de <code>on:</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let paes = 0;
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {paes}&lt;/p&gt;
+&lt;button on:click={() =&gt; paes++}&gt;mais um&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pães: 0&lt;/p&gt; &lt;button&gt;mais um&lt;/button&gt;</pre>
+
+<p>No modo novo, o mesmo botão se escreve com <code>onclick</code> — o nome do evento colado ao <code>on</code>, em minúsculas, como um atributo comum do HTML. Misturar os dois no mesmo elemento é erro de compilação, com uma mensagem específica sobre misturar sintaxes.</p>
+
+<p>O slot fazia o papel de "buraco para o conteúdo do pai". O componente filho escrevia <code>&lt;slot /&gt;</code> e o pai preenchia com o que colocasse entre as tags. No modo novo, esse buraco é uma prop especial chamada <code>children</code>, renderizada com <code>{@render children()}</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No modo antigo</th><th>No modo runas</th><th>Observação</th></tr>
+<tr><td><code>on:click={…}</code></td><td><code>onclick={…}</code></td><td>não misture os dois no mesmo elemento</td></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td><td><code>children</code> vem do <code>$props()</code></td></tr>
+<tr><td><code>&lt;slot name="rodape"&gt;</code></td><td>snippet passado como prop</td><td>aula de snippets</td></tr>
+<tr><td><code>createEventDispatcher</code></td><td>função passada como prop (<em>callback</em>)</td><td>aula de eventos de componente</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>6. Forçar o modo antigo: <code>runes={false}</code></h2>
+
+<p>Existe uma opção de componente que diz ao compilador para tratar o arquivo como antigo, mesmo que ele tenha cara de novo. É útil durante uma migração, para deixar um arquivo no mundo antigo enquanto o resto do projeto avança:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;svelte:options runes={false} /&gt;
+
+&lt;script&gt;
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {paes}&lt;/p&gt;</pre>
+
+<p>Aqui está o perigo. No modo antigo, <code>$state</code> não é runa: o compilador lê o cifrão como leitura de store. A página quebra na hora de desenhar:</p>
+
+<pre class="out">Erro ao renderizar: state is not defined</pre>
+
+<p>O compilador não avisa antes porque, para ele, aquilo é sintaxe válida — só que significa outra coisa. O resultado é uma variável chamada <code>state</code> que ninguém declarou.</p>
+
+<div class="trysvelte" data-goal="out:Pães: 0">
+<p class="try-task"><strong>Missão:</strong> a opção <code>runes={false}</code> desliga as runas e o componente quebra. Faça a tela mostrar <strong>Pães: 0</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;svelte:options runes={false} /&gt;
+
+&lt;script&gt;
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {paes}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {paes}&lt;/p&gt;</pre>
+</div>
+
+<p>A solução mais direta é apagar a linha da opção. A outra — válida se o arquivo precisar mesmo ficar no modo antigo — é escrever <code>let paes = 0</code>, sem runa nenhuma, e cuidar para que nenhum outro trecho use runas.</p>
+
+<hr>
+
+<h2>7. Misturar os dois mundos</h2>
+
+<p>A regra é dura e vale a pena repetir: <strong>um componente é de um mundo só</strong>. A primeira runa que aparece coloca o arquivo no modo novo, e a partir dali toda a sintaxe antiga vira erro de compilação. Veja o caso mais comum, um arquivo que ganhou <code>$state</code> e manteve <code>export let</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let nome = 'Ana';
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {paes} pães&lt;/p&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+
+<p>E o mesmo com a reatividade antiga, num arquivo que também tem uma runa:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let a = $state(1);
+  $: b = a * 2;
+&lt;/script&gt;
+
+&lt;p&gt;{b}&lt;/p&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 3, coluna 2): `$:` is not allowed in runes mode, use `$derived` or `$effect` instead</pre>
+
+<div class="trysvelte" data-goal="out:Ana: 0 pães">
+<p class="try-task"><strong>Missão:</strong> o componente tem uma runa e uma prop antiga, e por isso não compila. Faça a tela mostrar <strong>Ana: 0 pães</strong> no modo novo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  export let nome = 'Ana';
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {paes} pães&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'Ana' } = $props();
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {paes} pães&lt;/p&gt;</pre>
+</div>
+
+<p>Como decidir qual mundo escolher num arquivo que você abriu? Se ele já tem runas, fique no modo novo e traduza o que sobrar. Se não tem nenhuma, o arquivo está no modo antigo e continua funcionando — não é urgente mexer. Migrar sem pressa, um arquivo por vez, é mais seguro do que reescrever o projeto inteiro num fim de semana.</p>
+
+<hr>
+
+<h2>8. Rodando no computador da Ana</h2>
+
+<p>O componente antigo da padaria roda normalmente no servidor de desenvolvimento:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 571 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Na tela, o preço por unidade é fixo e a quantidade sobe no clique. O <code>$:</code> refaz a conta a cada mudança, e o botão com <code>on:click</code> funciona como sempre funcionou.</p>
+
+<p>O build compila o componente antigo sem cerimônia:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html               0.25 kB │ gzip:  0.19 kB
+dist/assets/index-B9uVAhc8.js  38.38 kB │ gzip: 14.87 kB
+✓ built in 2.12s</pre>
+
+<p>O pacote fica um pouco maior do que a versão com runas (38,38 kB contra 36,21 kB de um componente equivalente): o modo antigo precisa carregar o código que invalida variáveis por atribuição. Não é um abismo, mas é uma pista de por que o modo novo existe.</p>
+
+<hr>
+
+<h2>9. Um plano de migração em cinco passos</h2>
+
+<p>Migrar um componente antigo não é reescrever do zero. É traduzir linha por linha, conferindo a tela a cada passo. A ordem abaixo evita o efeito colateral mais comum: mexer em cinco coisas de uma vez e não saber qual delas quebrou a página.</p>
+
+<ol>
+  <li><strong>Troque as props primeiro.</strong> Cada <code>export let</code> vira um campo da desmontagem de <code>$props()</code>. Rode a página: os valores que o pai passa têm de continuar aparecendo.</li>
+  <li><strong>Depois o estado.</strong> Cada <code>let</code> que aparece no HTML vira <code>$state</code>. Valores que nunca mudam podem ficar como <code>const</code>.</li>
+  <li><strong>Por último a reatividade.</strong> Cada <code>$:</code> vira <code>$derived</code> (se calcula) ou <code>$effect</code> (se faz algo).</li>
+  <li><strong>Eventos e conteúdo.</strong> <code>on:click</code> vira <code>onclick</code>; <code>&lt;slot /&gt;</code> vira <code>{@render children()}</code>.</li>
+  <li><strong>Rode de novo.</strong> Se a página funcionar, o arquivo está no modo novo. Se algo parou, a mensagem do compilador aponta a linha que ainda está no mundo antigo.</li>
+</ol>
+
+<p>A ordem importa porque a primeira runa que você introduz já muda o modo do arquivo — e a partir dali todo o resto que era antigo vira erro. Se você começar pelo estado, o <code>export let</code> que sobrou vai reclamar; se começar pelas props, o arquivo continua antigo até a primeira runa de estado entrar. Não existe mágica: é uma escada, um degrau por vez.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Passo</th><th>Antes</th><th>Depois</th><th>Como saber se deu certo</th></tr>
+<tr><td>1</td><td><code>export let preco</code></td><td><code>let { preco } = $props()</code></td><td>os valores do pai aparecem</td></tr>
+<tr><td>2</td><td><code>let qtd = 1</code></td><td><code>let qtd = $state(1)</code></td><td>o clique muda a tela</td></tr>
+<tr><td>3</td><td><code>$: total = qtd * 0.9</code></td><td><code>let total = $derived(qtd * 0.9)</code></td><td>o total acompanha</td></tr>
+<tr><td>4</td><td><code>on:click={…}</code></td><td><code>onclick={…}</code></td><td>o clique continua funcionando</td></tr>
+<tr><td>5</td><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td><td>o conteúdo do pai aparece</td></tr>
+</table>
+</div>
+
+<p>Uma dica prática: faça a migração com o servidor de desenvolvimento aberto ao lado. Cada salvamento mostra o resultado em menos de um segundo, e o erro — quando aparece — vem com linha e coluna. Migrar às cegas, num arquivo de duzentas linhas, é o caminho mais longo.</p>
+
+<hr>
+
+<h2>10. O que mais sobrou do mundo antigo</h2>
+
+<p>Além das cinco marcas principais, o modo antigo tem vizinhos que você vai encontrar em projetos reais. Nenhum deles é runa, e todos têm equivalente no mundo novo:</p>
+
+<p><strong>Stores.</strong> Antes das runas, estado compartilhado entre componentes se fazia com <em>stores</em>: objetos com <code>subscribe</code>, lidos no HTML com o cifrão. Hoje, um módulo <code>.svelte.js</code> com <code>$state</code> resolve o mesmo problema com menos cerimônia. Stores continuam existindo e funcionando — e são a razão de o cifrão ser reservado.</p>
+
+<p><strong><code>$$props</code> e <code>$$restProps</code>.</strong> No modo antigo, essas duas variáveis especiais davam acesso a todas as props recebidas. No modo novo, o mesmo papel é do objeto devolvido por <code>$props()</code> e do resto com <code>...resto</code>.</p>
+
+<p><strong><code>createEventDispatcher</code>.</strong> Era a forma de o filho avisar o pai. Hoje, o caminho mais direto é passar uma função como prop (um <em>callback</em>): o filho chama, o pai decide o que fazer.</p>
+
+<p><strong><code>slot</code> com <code>let:</code>.</strong> Passava dados do filho para o conteúdo do pai. Hoje isso se faz com snippets recebidos como prop — um recurso que parece complicado no começo e simplifica muito depois.</p>
+
+<p>Reconhecer essas peças é o que permite ler um tutorial de 2022 sem se perder. A ideia por trás é sempre a mesma: um valor que muda, uma tela que acompanha. O que mudou foi a forma de escrever — e a forma nova é a que este guia ensina.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo resumem os tropeços de quem mistura os dois mundos. As duas primeiras param a compilação; a terceira só aparece na tela.</p>
+
+<div class="cenario">
+<p><strong>1. Prop antiga num componente novo.</strong> Basta uma runa para o <code>export let</code> virar erro:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let nome = 'Ana';
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {paes} pães&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+<p>Troque a linha por <code>let { nome = 'Ana' } = $props()</code>. Se preferir manter <code>export let</code>, tire todas as runas do arquivo — mas aí você está no modo antigo de propósito.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. Reatividade antiga num componente novo.</strong> O <code>$:</code> também é recusado:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let a = $state(1);
+  $: b = a * 2;
+&lt;/script&gt;
+
+&lt;p&gt;{b}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 2): `$:` is not allowed in runes mode, use `$derived` or `$effect` instead</pre>
+<p>O substituto depende do que a linha faz: cálculo vira <code>$derived</code>; ação vira <code>$effect</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. Runas desligadas por opção.</strong> O compilador aceita e a página quebra ao desenhar:</p>
+<pre class="file" data-file="src/App.svelte">&lt;svelte:options runes={false} /&gt;
+
+&lt;script&gt;
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {paes}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: state is not defined</pre>
+<p>No modo antigo, <code>$state</code> é lido como acesso à store <code>state</code>. A correção é remover a opção ou trocar a declaração por <code>let paes = 0</code>.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No modo antigo</th><th>Equivalente no modo runas</th></tr>
+<tr><td><code>let x = 0</code></td><td><code>let x = $state(0)</code></td></tr>
+<tr><td><code>$: y = x * 2</code></td><td><code>let y = $derived(x * 2)</code></td></tr>
+<tr><td><code>$: { console.log(x) }</code></td><td><code>$effect(() =&gt; { console.log(x); })</code></td></tr>
+<tr><td><code>export let nome</code></td><td><code>let { nome } = $props()</code></td></tr>
+<tr><td><code>on:click={…}</code></td><td><code>onclick={…}</code></td></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td></tr>
+<tr><td><code>&lt;svelte:options runes={false} /&gt;</code></td><td>apagar a opção</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sinal</th><th>Significa</th></tr>
+<tr><td>o arquivo não tem runa</td><td>está no modo antigo; funciona como está</td></tr>
+<tr><td>o arquivo tem uma runa</td><td>está no modo novo; sintaxe antiga dá erro</td></tr>
+<tr><td><code>state is not defined</code></td><td>runas desligadas por <code>runes={false}</code></td></tr>
+<tr><td><code>event_directive_deprecated</code></td><td><code>on:click</code> no modo novo; use <code>onclick</code></td></tr>
+<tr><td><code>slot_element_deprecated</code></td><td><code>&lt;slot /&gt;</code> no modo novo; use <code>{@render}</code></td></tr>
+</table>
+</div>
+
+<p>A tradução de um arquivo antigo é mecânica: cada <code>export let</code> vira uma prop no <code>$props()</code>, cada <code>let</code> que aparece na tela vira <code>$state</code>, cada <code>$:</code> vira <code>$derived</code> ou <code>$effect</code>, cada <code>on:</code> vira atributo de evento. Faça um por vez, rode a página, confira. Migração aos poucos é o que o próprio Svelte recomenda.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que coloca um componente no modo runas?</p>
+<label><input type="radio" name="q1"> a extensão do arquivo</label>
+<label><input type="radio" name="q1"> a presença de pelo menos uma runa no script</label>
+<label><input type="radio" name="q1"> o campo <code>runes</code> no <code>package.json</code></label>
+<label><input type="radio" name="q1"> usar <code>onclick</code> em vez de <code>on:click</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual é o equivalente moderno de <code>$: total = qtd * 0.9</code>?</p>
+<label><input type="radio" name="q1"> <code>$: total = $state(qtd * 0.9)</code></label>
+<label><input type="radio" name="q1"> <code>$effect(() =&gt; { total = qtd * 0.9; })</code></label>
+<label><input type="radio" name="q1"> <code>let total = $derived(qtd * 0.9)</code></label>
+<label><input type="radio" name="q1"> <code>export let total = qtd * 0.9</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que acontece num componente com <code>&lt;svelte:options runes={false} /&gt;</code> que usa <code>$state</code>?</p>
+<label><input type="radio" name="q1"> a página quebra com <code>state is not defined</code>, porque o cifrão passa a significar store</label>
+<label><input type="radio" name="q1"> o compilador recusa o arquivo antes de rodar</label>
+<label><input type="radio" name="q1"> funciona normalmente: a opção só afeta o estilo</label>
+<label><input type="radio" name="q1"> as runas viram constantes e o valor não muda</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let qtd = 2;<br><input data-answer="$: total = qtd * 0.9">;<br>&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;<br><br>// no modo antigo, a linha começa com $: para reagir à quantidade</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Componente sem nenhuma runa é compilado no <strong>modo antigo</strong>, e continua funcionando.</li>
+  <li>No modo antigo, cada atribuição (<code>x = 3</code>, <code>x++</code>) avisa a tela; mutações em listas não.</li>
+  <li><code>$:</code> era a reatividade: cálculo virava <code>$derived</code>, ação virava <code>$effect</code>.</li>
+  <li><code>export let</code> era a prop; hoje é <code>let { nome } = $props()</code>.</li>
+  <li><code>on:click</code> era o evento; hoje é <code>onclick</code>, e misturar os dois é erro.</li>
+  <li><code>&lt;slot /&gt;</code> era o buraco do pai; hoje é <code>{@render children()}</code>.</li>
+  <li>Uma única runa coloca o arquivo no modo novo e invalida a sintaxe antiga.</li>
+  <li><code>&lt;svelte:options runes={false} /&gt;</code> força o modo antigo; usar runa ali quebra a página com <code>state is not defined</code>.</li>
+  <li>Migre um arquivo por vez, traduzindo item por item da tabela.</li>
+  <li>Código novo: sempre o modo runas.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
