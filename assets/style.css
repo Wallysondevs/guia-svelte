@@ -229,7 +229,10 @@ kbd {
 .btn-lg { padding: 12px 26px; font-size: 18px; }
 
 /* ---------------- Blocos de código ---------------- */
-.syntax, .cmd, .file, .out {
+.syntax, .cmd, .file, .out,
+/* código que aparece fora da caixa: página de referência e de exercícios listam o componente
+   inteiro sem caixa em volta — sem esta regra o bloco não rola e estoura a largura no celular */
+.script, .solucao {
   position: relative;
   margin: 10px 0 16px;
   padding: 14px 16px;
@@ -248,6 +251,11 @@ kbd {
   color: var(--code-text);
   border-left: 4px solid var(--accent);
   padding-right: 80px;
+}
+.script, .solucao {
+  background: var(--code-bg);
+  color: var(--code-text);
+  border-left: 4px solid var(--accent);
 }
 .file { padding-top: 34px; }
 .file[data-file]::before {

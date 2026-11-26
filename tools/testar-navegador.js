@@ -156,8 +156,27 @@ async function testarPagina(pg, url, nomePag, esperado) {
             const t = document.querySelectorAll(".trysvelte")[ix].querySelector(".try-task");
             return t ? t.innerText : "";
           }, i);
+          // é conteúdo, não defeito, quando a própria página mostra essa mensagem de erro
+          // (na prosa, num pre.out ou num cenário) — a caixa começa quebrada de propósito
+          const mensagem = (estado.out.match(/Erro de compilação[^:]*:\s*(.*)$/s) || [])[1] || "";
+          const documentado = mensagem ? await pg.evaluate(({ msg }) => {
+            // a página pode citar o erro por inteiro ou só o trecho que interessa
+            // (às vezes sem o `<p>` do começo): basta uma janela de 25 letras bater
+            const texto = (() => {
+              const copia = document.querySelector(".content").cloneNode(true);
+              copia.querySelectorAll(".trysvelte").forEach((b2) => b2.remove());
+              return copia.innerText.replace(/\s+/g, " ");
+            })();
+            const limpo = msg.replace(/\s+/g, " ").trim();
+            if (!limpo) return false;
+            const janela = Math.min(25, limpo.length);
+            for (let k = 0; k + janela <= limpo.length; k++) {
+              if (texto.indexOf(limpo.slice(k, k + janela)) !== -1) return true;
+            }
+            return false;
+          }, { msg: mensagem }) : false;
           const quebraDeProposito = /Erro de compila/i.test(estado.out) &&
-            /n[ãa]o compila|erro de compila|n[ãa]o roda|quebrad|recusa|impede/i.test(missao);
+            (documentado || /n[ãa]o compila|erro de compila|n[ãa]o roda|quebrad|recusa|impede/i.test(missao));
           if (quebraDeProposito) notas.push("caixa " + (i + 1) + " começa quebrada como a missão diz (" + estado.out.replace(/\s+/g, " ").slice(0, 80) + ")");
           else problemas.push("caixa " + (i + 1) + ": o componente montou vazio (saída: " + estado.out + ")");
         }
