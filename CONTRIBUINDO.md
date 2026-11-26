@@ -317,7 +317,7 @@ interna, o endereço MAC e o nome da rede Wi-Fi. Só `ana@notebook` e `/home/ana
 
 ```bash
 export PATH="$HOME/.local/node22/bin:$PATH"
-export NODE_PATH=/home/wallyson/guia-react/node_modules
+export NODE_PATH="$HOME/guia-react/node_modules"
 cd ~/guia-svelte-novo
 node tools/testar-missoes.js -q SUA-PAGINA.html
 ```

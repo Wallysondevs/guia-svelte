@@ -100,7 +100,7 @@ const DEFEITOS = [
   {
     nome: "dado da máquina real",
     espera: /dado da máquina real/,
-    html: (h) => h.replace("ana@notebook:~/loja$ npm run dev", "ana@notebook:/home/" + "wallyson/loja$ npm run dev"),
+    html: (h) => h.replace("ana@notebook:~/loja$ npm run dev", "ana@notebook:/home/fulano/loja$ npm run dev"),
     semSim: true
   },
   {
