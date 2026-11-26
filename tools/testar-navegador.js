@@ -149,7 +149,18 @@ async function testarPagina(pg, url, nomePag, esperado) {
         }, i);
         rodadas++;
         if (!estado.temIframe) problemas.push("caixa " + (i + 1) + ": o Rodar não criou o iframe do resultado");
-        else if (!estado.html) problemas.push("caixa " + (i + 1) + ": o componente montou vazio (saída: " + estado.out + ")");
+        else if (!estado.html) {
+          // há aula em que o código de partida NÃO compila de propósito (a missão pede a migração).
+          // Nesse caso não é defeito da página: vira nota, desde que a missão avise e a solução passe.
+          const missao = await pg.evaluate((ix) => {
+            const t = document.querySelectorAll(".trysvelte")[ix].querySelector(".try-task");
+            return t ? t.innerText : "";
+          }, i);
+          const quebraDeProposito = /Erro de compila/i.test(estado.out) &&
+            /n[ãa]o compila|erro de compila|n[ãa]o roda|quebrad|recusa|impede/i.test(missao);
+          if (quebraDeProposito) notas.push("caixa " + (i + 1) + " começa quebrada como a missão diz (" + estado.out.replace(/\s+/g, " ").slice(0, 80) + ")");
+          else problemas.push("caixa " + (i + 1) + ": o componente montou vazio (saída: " + estado.out + ")");
+        }
         else if (estado.altura < 40) problemas.push("caixa " + (i + 1) + ": o iframe ficou com " + Math.round(estado.altura) + " px de altura");
         // meta que PEDE erro (data-goal com "erro:") quebra o componente de propósito: o erro
         // de console daí é o conteúdo da aula, não defeito da página
@@ -274,6 +285,7 @@ async function testarPagina(pg, url, nomePag, esperado) {
       r.problemas.slice(0, 8).forEach((m) => console.log("    " + m));
     } else {
       console.log("✓ " + p + "  " + r.notas[0] + "  (" + (r.ms / 1000).toFixed(1) + " s)");
+      r.notas.slice(1).forEach((n) => console.log("    nota: " + n));
     }
   }
 
