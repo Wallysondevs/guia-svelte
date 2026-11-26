@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>onMount — o código que só pode rodar depois que a tela existe | Guia Svelte</title>
+<meta name="description" content="onMount no Svelte 5: por que ler window e medir elementos precisa esperar a montagem, a ordem real do ciclo de vida e as mensagens do compilador quando dá errado.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">onMount</span></h1>
+
+<p class="intro">A Ana quer pendurar uma faixa na vitrine da padaria, mas antes precisa saber a largura exata do vidro. Ela não mede a parede antes da vitrine existir: espera a obra terminar e só então passa a trena. Com componente é igual. O código escrito no topo do arquivo roda <em>antes</em> de existir tela, e é por isso que ler a largura da janela ali dá errado. Esta aula ensina o momento certo: <strong>onMount</strong>, a função que roda uma vez, depois que o componente já está no navegador.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é <strong>montagem</strong> e por que o código do <code>&lt;script&gt;</code> roda antes do HTML existir.</li>
+  <li>Como importar e usar <code>onMount</code>, com o código completo da Ana e a saída real.</li>
+  <li>Por que a mesma tela mostra <code>0</code> no servidor e o valor de verdade no navegador.</li>
+  <li>A ordem exata em que o componente nasce, do primeiro cálculo do script até o <code>onMount</code>.</li>
+  <li>Como medir um elemento da tela com <code>bind:this</code> dentro do <code>onMount</code>.</li>
+  <li>A diferença entre rodar uma vez (<code>onMount</code>) e rodar sempre (<code>$effect</code>).</li>
+  <li>O que a função devolvida pelo <code>onMount</code> faz — e por que ela é o assunto da próxima aula.</li>
+  <li>Os três erros reais desta aula, com a mensagem que o compilador mostra.</li>
+  <li>Como conferir tudo isso no projeto da Ana, com <code>npm run dev</code> e <code>npm run build</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: só dá para medir o que já está na parede</h2>
+
+<p>Na padaria da Ana, a vitrine é de vidro e tem uma moldura de madeira. Para encomendar a faixa de pano, ela precisa da largura interna em centímetros. Se ela medir a parede antes do vidraceiro instalar a vitrine, vai medir o vazio: o número não serve para nada. O trabalho tem uma <em>ordem</em>, e medir vem depois de instalar.</p>
+
+<p>Um componente Svelte tem a mesma ordem, e essa é a única ideia desta aula. O arquivo tem um bloco <code>&lt;script&gt;</code> com as variáveis, um HTML que mostra essas variáveis e, quando o navegador monta o componente, um elemento de verdade aparece na tela. Só que o script roda <strong>primeiro</strong>. Quando a primeira linha do script executa, não existe nenhum elemento na tela, não existe <code>document</code>, não existe <code>window</code>: existe apenas o texto que o compilador gerou. É por isso que perguntar a largura da janela ali devolve erro, e não um número.</p>
+
+<p>A solução é uma função chamada <code>onMount</code> — "na montagem", em inglês. Você entrega a ela um pedaço de código, e o Svelte se compromete a chamar esse código <strong>uma vez</strong>, depois que o componente está montado no navegador, com o HTML já na tela. É a trena entregue depois da obra pronta.</p>
+
+<p>Três palavras aparecem o tempo todo quando o assunto é esse. <em>Montagem</em> é o momento em que o Svelte cria os elementos no navegador e liga os valores do estado a eles. <em>DOM</em> é o nome técnico do que o navegador tem na memória: a árvore de elementos da página, com altura, largura e posição. E <em>renderização no servidor</em> (SSR, de <em>server-side rendering</em>) é quando o mesmo componente é transformado em HTML por um programa rodando fora do navegador — num servidor, sem janela, sem tela e sem <code>window</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Medir a parede antes de instalar a vitrine</td><td>Ler <code>window.innerWidth</code> no topo do <code>&lt;script&gt;</code></td></tr>
+<tr><td>Esperar a vitrine estar instalada</td><td>Esperar a <strong>montagem</strong> do componente</td></tr>
+<tr><td>Passar a trena depois da obra</td><td>Chamar <code>onMount</code> com a sua função</td></tr>
+<tr><td>Anotar a medida no caderno</td><td>Guardar o valor numa variável <code>$state</code></td></tr>
+<tr><td>A faixa é cortada com a medida do caderno</td><td>A tela mostra o valor atualizado sozinha</td></tr>
+</table>
+</div>
+
+<p>Repare que o <code>onMount</code> não cria a tela: ele <em>espera</em> a tela. Quem cria a tela é o Svelte, a partir do HTML do arquivo. O papel do <code>onMount</code> é dizer "quando você terminar de montar, faça isto aqui". Essa distinção parece pequena e é a origem de quase todo erro de quem está começando: a pessoa lê a documentação, copia o <code>onMount</code> e esquece de guardar o resultado numa variável de estado, então o valor é lido e nunca aparece.</p>
+
+<h2>2. O primeiro <code>onMount</code> da Ana</h2>
+
+<p>O componente abaixo faz uma coisa só: pergunta ao navegador a largura da janela e mostra o número. Ele é o exemplo mínimo de leitura do navegador, e vai servir de base para o resto da aula.</p>
+
+<pre class="file" data-file="src/Vitrine.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let largura = $state(0);
+
+  onMount(() =&gt; {
+    largura = window.innerWidth;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;A vitrine tem {largura} pixels de largura.&lt;/p&gt;</pre>
+
+<p>Se você mandar esse arquivo para o renderizador, ele devolve um texto que decepciona:</p>
+
+<pre class="out">A vitrine tem 0 pixels de largura.</pre>
+
+<p>Zero. E o zero não é um bug: é a resposta honesta de um programa que rodou fora do navegador. Quem transformou o componente em HTML foi o Node, um programa de terminal que não tem janela, não tem tela e não tem <code>window</code>. Nesse ambiente o <code>onMount</code> não é chamado — ele é uma promessa para o navegador, e o Node não é o navegador. O HTML entregue tem o valor inicial, <code>0</code>. Quando o navegador recebe esse HTML e monta o componente, a função passa a valer e o número na tela vira a largura real.</p>
+
+<p>É por isso que o valor inicial importa tanto. Ele é o que aparece no primeiro instante, antes de qualquer leitura do navegador, e é o que aparece para quem recebe a página sem JavaScript (ou com a rede lenta). Escolher <code>0</code> para uma largura é razoável; escolher <code>''</code> para a hora da Ana também, desde que a tela saiba mostrar um traço em vez de um espaço vazio.</p>
+
+<h3>A anatomia do <code>onMount</code></h3>
+
+<dl class="anatomy">
+  <dt>import { onMount } from 'svelte'</dt><dd>o <code>onMount</code> não é uma palavra da linguagem: é uma função que vem da biblioteca <code>svelte</code>. Sem essa linha, o nome não existe no arquivo e o componente quebra ao ser executado.</dd>
+  <dt>let largura = $state(0)</dt><dd>o <strong>estado</strong> que vai guardar a medida. O zero é o valor de partida, o que a tela mostra antes de o navegador responder. <code>$state</code> é o que permite a tela acompanhar quando o valor mudar.</dd>
+  <dt>onMount(() =&gt; { … })</dt><dd>registra a função para ser chamada <strong>uma vez</strong>, depois da montagem. O <code>=&gt;</code> é a seta que separa "o que entra" (nada, por isso os parênteses vazios) de "o que acontece".</dd>
+  <dt>largura = window.innerWidth</dt><dd>a leitura do navegador. <code>window.innerWidth</code> é a largura da janela em pixels. Aqui é o único lugar do arquivo em que <code>window</code> pode ser tocado com segurança.</dd>
+  <dt>&lt;p&gt;A vitrine tem {largura}…</dt><dd>o HTML que mostra o estado. Quando <code>largura</code> muda dentro do <code>onMount</code>, este parágrafo é redesenhado sem ninguém escrever <code>document.querySelector</code>.</dd>
+</dl>
+
+<p>A ordem das linhas também ensina. O <code>import</code> vem primeiro porque é uma declaração de dependência; o estado vem depois, porque o <code>onMount</code> vai usá-lo; e o registro do <code>onMount</code> vem por último, quando todas as peças que ele usa já existem. Se você inverter e chamar <code>onMount</code> antes de declarar <code>largura</code>, o JavaScript reclama de variável usada antes de existir.</p>
+
+<div class="tip">
+<strong>O nome do arquivo não muda nada</strong>
+<p>Chamar o arquivo de <code>Vitrine.svelte</code>, <code>App.svelte</code> ou <code>Medida.svelte</code> não interfere no <code>onMount</code>. O que importa é que o componente comece com letra maiúscula, para o compilador saber que é um componente seu e não uma tag do HTML.</p>
+</div>
+
+<h2>3. Por que o servidor não vê a vitrine</h2>
+
+<p>Quando a Ana abre <code>http://localhost:5173/</code>, acontecem duas coisas em lugares diferentes. Primeiro, um programa no seu computador — o servidor de desenvolvimento — transforma o componente em HTML. Depois, o navegador recebe esse HTML, desenha a página e só então executa o JavaScript que monta o componente de verdade, liga os cliques e chama o <code>onMount</code>.</p>
+
+<p>Essa divisão em duas etapas é o que faz o Svelte ser rápido na primeira visita: o visitante vê o conteúdo antes de o JavaScript terminar de carregar. O preço é que o código do componente precisa sobreviver a dois ambientes diferentes. Um deles tem <code>window</code>, <code>document</code> e <code>localStorage</code>; o outro não tem nada disso. O <code>onMount</code> é a fronteira entre os dois: tudo o que só existe no navegador vai para dentro dele.</p>
+
+<p>O terminal da Ana mostra o servidor no ar, pronto para responder:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 579 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>A linha <code>ready in 579 ms</code> é o tempo que o Vite levou para preparar tudo. <code>Local</code> é o endereço que só existe dentro da sua máquina; nada foi publicado na internet. Enquanto esse comando estiver rodando, cada arquivo salvo é recompilado e o navegador recarrega sozinho.</p>
+
+<p>Para ver a diferença entre as duas etapas com os próprios olhos, abra a página e use "Exibir código-fonte" (não o inspetor de elementos). No fonte, o parágrafo vem com o texto que o servidor gerou. No inspetor, o mesmo parágrafo já mostra o número que o <code>onMount</code> escreveu. É o mesmo componente, em dois momentos.</p>
+
+<h2>4. A ordem em que o componente nasce</h2>
+
+<p>Vale decorar esta ordem, porque ela explica todos os erros desta aula. São cinco etapas, sempre nesta sequência, e cada uma tem um conjunto diferente de coisas disponíveis.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Etapa</th><th>O que já existe</th><th>O que ainda não existe</th></tr>
+<tr><td>1. O <code>import</code> e as declarações do script</td><td>as funções importadas, os valores iniciais</td><td>nenhum elemento, nenhum <code>document</code></td></tr>
+<tr><td>2. O cálculo do HTML (no servidor ou no navegador)</td><td>o estado com os valores iniciais</td><td>o <code>onMount</code> ainda não rodou</td></tr>
+<tr><td>3. A montagem no navegador</td><td>os elementos no DOM, com altura e posição</td><td>as medidas do <code>onMount</code></td></tr>
+<tr><td>4. O <code>onMount</code></td><td>tudo: <code>window</code>, <code>document</code>, o elemento do <code>bind:this</code></td><td>nada que importe</td></tr>
+<tr><td>5. As atualizações seguintes</td><td>os efeitos e os valores derivados, a cada mudança</td><td>—</td></tr>
+</table>
+</div>
+
+<p>O item 2 é o que surpreende. O HTML é calculado com os valores iniciais, e o <code>onMount</code> ainda não rodou porque ele pertence à etapa 4. Isso significa que a primeira pintura da tela é sempre "sem navegador". Se o valor inicial for feio (um zero solto, um traço, um "carregando"), ele vai aparecer por um instante. Vale escolher esse valor com carinho, e não deixá-lo como sobra.</p>
+
+<p>O item 3 é onde o <code>bind:this</code> se encaixa: é o Svelte quem entrega, para a sua variável, a referência do elemento de verdade. Só depois disso <code>offsetHeight</code>, <code>focus()</code> e <code>scrollIntoView()</code> passam a fazer sentido.</p>
+
+<h2>5. Experimente: ler o navegador e mostrar na tela</h2>
+
+<p>A caixa abaixo compila e roda de verdade no seu navegador — é o compilador do Svelte, não uma imitação. O componente começa mostrando um traço no lugar do tema, porque ninguém foi ao navegador perguntar qual é. Sua missão é fazer essa pergunta na hora certa.</p>
+
+<div class="trysvelte" data-goal="outre:^Tema: (claro|escuro)$">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra <code>Tema: —</code>. Pergunte ao navegador, dentro do <code>onMount</code>, se ele prefere tema claro ou escuro, e mostre a resposta.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let tema = $state('—');
+&lt;/script&gt;
+
+&lt;p&gt;Tema: {tema}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let tema = $state('—');
+
+  onMount(() =&gt; {
+    const prefereEscuro = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    tema = prefereEscuro ? 'escuro' : 'claro';
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Tema: {tema}&lt;/p&gt;</pre>
+</div>
+
+<p>A pergunta é feita com <code>window.matchMedia</code>, que consulta uma preferência do sistema operacional. Repare nas duas peças: a leitura mora dentro do <code>onMount</code> e o resultado entra numa variável <code>$state</code>. Uma peça sem a outra não resolve — a leitura fora do <code>onMount</code> quebra no servidor, e o valor sem <code>$state</code> não avisa a tela quando muda depois.</p>
+
+<p>Esse segundo problema não gera mensagem nenhuma. O componente compila, roda, e mostra o valor antigo em silêncio. É o tipo de falha em que a única defesa é o hábito: <strong>todo valor que aparece na tela e pode mudar nasce com <code>$state</code></strong>.</p>
+
+<div class="warning">
+<strong>Um detalhe real que confunde na hora de testar</strong>
+<p>Se você guardar o valor numa variável comum e atribuir <em>dentro</em> do <code>onMount</code>, o número novo pode até aparecer na primeira pintura, porque a montagem termina antes de o texto do parágrafo ser desenhado. Isso é sorte da ordem interna, não contrato: na mudança seguinte a tela não acompanha. Confiar nesse acaso é o caminho mais curto para um bug que só aparece em produção.</p>
+</div>
+
+<h2>6. Medir um elemento com <code>bind:this</code></h2>
+
+<p>Ler a janela é fácil. O problema de verdade da Ana é outro: ela quer pendurar a faixa na placa de preços, e a placa tem uma altura que depende do texto e da fonte. Para medir <em>aquele</em> elemento, você precisa de uma referência a ele. No Svelte, isso é o <code>bind:this</code>.</p>
+
+<pre class="file" data-file="src/Placa.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let placa;
+  let altura = $state(0);
+
+  onMount(() =&gt; {
+    altura = placa.offsetHeight;
+  });
+&lt;/script&gt;
+
+&lt;div bind:this={placa} class="placa"&gt;PÃO FRANCÊS — R$ 0,90&lt;/div&gt;
+&lt;p&gt;Altura medida: {altura} pixels&lt;/p&gt;</pre>
+
+<pre class="out">&lt;div class="placa"&gt;PÃO FRANCÊS — R$ 0,90&lt;/div&gt; &lt;p&gt;Altura medida: 0 pixels&lt;/p&gt;</pre>
+
+<p>De novo o zero, e de novo com razão: no servidor não há elemento para medir, então <code>placa</code> continua vazia e o <code>onMount</code> nem é chamado. No navegador, o <code>bind:this</code> preenche <code>placa</code> com o elemento real antes do <code>onMount</code> rodar, e aí <code>offsetHeight</code> devolve um número em pixels.</p>
+
+<h3>A anatomia da referência</h3>
+
+<dl class="anatomy">
+  <dt>let placa;</dt><dd>uma variável <strong>sem <code>$state</code></strong>, de propósito: ela guarda um <em>elemento</em>, não um valor que muda. Quem vai redesenhar a tela é <code>altura</code>, não ela.</dd>
+  <dt>bind:this={placa}</dt><dd>a diretiva que diz "guarde nesta variável o elemento de verdade deste <code>&lt;div&gt;</code>". Ela é preenchida pelo Svelte no momento da montagem.</dd>
+  <dt>placa.offsetHeight</dt><dd>a altura do elemento em pixels, já contando o espaço interno. Existem <code>offsetWidth</code>, <code>clientHeight</code> e <code>getBoundingClientRect()</code> para outras medidas.</dd>
+  <dt>altura = $state(0)</dt><dd>o valor que a tela lê. Estado de verdade, porque ele muda depois da montagem e o parágrafo precisa acompanhar.</dd>
+</dl>
+
+<p>Existe uma alternativa a <code>bind:this</code>: procurar o elemento com <code>document.querySelector('.placa')</code>. Funciona, e é o que você faria em JavaScript puro. O custo é que o seletor vira uma combinação frágil de texto: mudar a classe no HTML quebra o código do script, e dois componentes com a mesma classe passam a brigar pelo mesmo elemento. O <code>bind:this</code> não tem esse problema, porque a referência é daquele elemento e de mais nenhum.</p>
+
+<h2>7. Experimente: medir a placa na hora certa</h2>
+
+<p>A caixa abaixo tenta medir a placa antes de ela existir. O código roda, encontra <code>undefined</code> no lugar do elemento e quebra. Sua missão é mudar a medida para dentro do <code>onMount</code>, com <code>bind:this</code>.</p>
+
+<div class="trysvelte" data-goal="outre:Altura: [1-9][0-9]* px$">
+<p class="try-task"><strong>Missão:</strong> a placa existe na tela, mas a medida falha porque o elemento ainda não estava lá. Faça a altura aparecer em pixels.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let placa;
+  let altura = $state(0);
+
+  altura = placa.offsetHeight;
+&lt;/script&gt;
+
+&lt;div bind:this={placa} class="placa"&gt;PÃO FRANCÊS — R$ 0,90&lt;/div&gt;
+&lt;p&gt;Altura: {altura} px&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let placa;
+  let altura = $state(0);
+
+  onMount(() =&gt; {
+    altura = placa.offsetHeight;
+  });
+&lt;/script&gt;
+
+&lt;div bind:this={placa} class="placa"&gt;PÃO FRANCÊS — R$ 0,90&lt;/div&gt;
+&lt;p&gt;Altura: {altura} px&lt;/p&gt;</pre>
+</div>
+
+<p>O valor que aparece depende da fonte e do tamanho do texto no seu navegador — por isso a meta da caixa aceita qualquer número de pixels maior que zero, e não um número fixo. É assim que se escreve um teste de medida: você confere que a medida <em>existe</em> e é plausível, não que ela vale exatamente 24.</p>
+
+<h2>8. Rodar uma vez, rodar sempre: <code>onMount</code> e <code>$effect</code></h2>
+
+<p>O <code>onMount</code> roda uma vez e acabou. Se você quiser reagir a cada mudança de um valor, o instrumento é outro: o <code>$effect</code>, que o guia apresenta em detalhe em outra aula. A diferença prática é simples de sentir: o <code>onMount</code> é a trena passada uma vez; o <code>$effect</code> é o funcionário que mede de novo toda vez que a vitrine muda de lugar.</p>
+
+<pre class="file" data-file="src/Contador.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let cliques = $state(0);
+
+  onMount(() =&gt; {
+    console.log('montei uma vez');
+  });
+
+  $effect(() =&gt; {
+    console.log('cliques agora vale', cliques);
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;cliques: {cliques}&lt;/button&gt;</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Instrumento</th><th>Quando roda</th><th>Para que serve</th></tr>
+<tr><td><code>onMount(fn)</code></td><td>uma vez, depois da montagem, só no navegador</td><td>ler o navegador, medir, iniciar um timer, buscar dados</td></tr>
+<tr><td><code>$effect(fn)</code></td><td>uma vez na montagem e de novo a cada valor que ele lê mudar</td><td>acompanhar mudanças e sincronizar algo de fora</td></tr>
+<tr><td><code>$derived(…)</code></td><td>quando um valor que ele usa muda</td><td>calcular um valor a partir de outros, sem efeito colateral</td></tr>
+<tr><td><code>onDestroy(fn)</code></td><td>uma vez, quando o componente sai da tela</td><td>desligar o que o <code>onMount</code> ligou</td></tr>
+</table>
+</div>
+
+<p>Uma pegadinha de leitura: o <code>$effect</code> também não roda no servidor. Os dois são código de navegador. A diferença é que o <code>$effect</code> conhece as suas dependências e se repete, enquanto o <code>onMount</code> não conhece nada e roda uma vez. Se o seu problema é "ao abrir, faça isso", use <code>onMount</code>. Se é "sempre que este valor mudar, faça aquilo", use <code>$effect</code>.</p>
+
+<h2>9. Experimente: o HTML já existe quando o <code>onMount</code> roda</h2>
+
+<p>A caixa abaixo conta quantos itens existem na tela. A contagem é feita na primeira linha possível do script, antes de qualquer elemento nascer, e devolve zero. Sua missão é mover a contagem para o momento em que a lista já está montada.</p>
+
+<div class="trysvelte" data-goal="outre:Itens na tela: 3$">
+<p class="try-task"><strong>Missão:</strong> a lista tem três itens, mas o contador mostra <code>0</code>. Faça ele mostrar <code>3</code> lendo o DOM depois da montagem.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let quantidade = $state(0);
+
+  quantidade = document.querySelectorAll('li').length;
+&lt;/script&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;pão&lt;/li&gt;
+  &lt;li&gt;leite&lt;/li&gt;
+  &lt;li&gt;café&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Itens na tela: {quantidade}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let quantidade = $state(0);
+
+  onMount(() =&gt; {
+    quantidade = document.querySelectorAll('li').length;
+  });
+&lt;/script&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;pão&lt;/li&gt;
+  &lt;li&gt;leite&lt;/li&gt;
+  &lt;li&gt;café&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Itens na tela: {quantidade}&lt;/p&gt;</pre>
+</div>
+
+<p>Aqui a diferença não é de navegador para servidor: as duas versões rodam no navegador. A diferença é de <em>ordem</em>. Na primeira, o script termina antes de o <code>&lt;ul&gt;</code> existir; na segunda, o Svelte monta a lista e só depois chama a função. É a mesma trena, passada em momentos diferentes.</p>
+
+<h2>10. A função que o <code>onMount</code> devolve</h2>
+
+<p>Existe uma última peça no <code>onMount</code>, e ela é o assunto da próxima aula. Se a função que você entrega ao <code>onMount</code> devolver <em>outra</em> função, o Svelte guarda essa segunda função e a chama quando o componente sai da tela. É o lugar de desligar o que você ligou.</p>
+
+<pre class="file" data-file="src/Cronometro.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let segundos = $state(0);
+
+  onMount(() =&gt; {
+    const id = setInterval(() =&gt; {
+      segundos++;
+    }, 1000);
+
+    return () =&gt; {
+      clearInterval(id);
+    };
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Na padaria há {segundos} segundos.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Na padaria há 0 segundos.&lt;/p&gt;</pre>
+
+<p>Sem o <code>return</code>, cada vez que o componente aparecesse e desaparecesse um <code>setInterval</code> novo ficaria rodando para sempre — eventualmente dezenas deles, todos escrevendo na mesma variável. O custo de esquecer a limpeza não aparece no primeiro teste; aparece quando o usuário navega várias vezes e a página começa a ficar lenta.</p>
+
+<p>O build da Ana compila os componentes e mostra o peso do que vai para o navegador:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CTri1Sda.js  36.03 kB │ gzip: 13.81 kB
+✓ built in 1.83s</pre>
+
+<p>"111 modules transformed" é o compilador trabalhando: cada <code>.svelte</code> vira JavaScript, o runtime do Svelte entra junto e o resultado é um arquivo só, com hash no nome. O <code>gzip</code> é o tamanho depois da compressão que o servidor faz de graça — o número que importa para quem visita a padaria no celular.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram das ferramentas reais deste guia, com o componente quebrado escrito num arquivo e executado. Não são exemplos inventados: é o texto que aparece.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>document</code> no topo do script</strong>
+<p>O código parece inocente e roda perfeitamente no seu computador de desenvolvimento. No servidor, ele nem chega a desenhar a página.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let largura = document.documentElement.clientWidth;
+&lt;/script&gt;
+
+&lt;p&gt;Largura: {largura}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: document is not defined</pre>
+<p>A tradução é literal: "document não está definido". Não é erro de Svelte, é o JavaScript avisando que essa variável global não existe naquele ambiente. A correção é mover a leitura para dentro de um <code>onMount</code>, como no componente da seção 2.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>const</code> no estado que o <code>onMount</code> altera</strong>
+<p>Este é o erro de digitação mais comum da aula: trocar <code>let</code> por <code>const</code> achando que "estado é constante". Estado é justamente o que muda.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  const largura = $state(0);
+
+  onMount(() =&gt; {
+    largura = window.innerWidth;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Largura: {largura}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 4): Cannot assign to constant</pre>
+<p>"Cannot assign to constant" quer dizer "não posso atribuir a uma constante". Repare que o compilador aponta a linha 7, a da atribuição dentro do <code>onMount</code>, e não a linha 4, onde está o <code>const</code>. A dica é ler a mensagem ao contrário: o problema está onde você tentou escrever.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — esqueceu o <code>import</code></strong>
+<p>Sem a linha de <code>import</code>, o nome <code>onMount</code> não existe. O erro não é de sintaxe: o arquivo compila e só falha na execução.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let largura = $state(0);
+
+  onMount(() =&gt; {
+    largura = window.innerWidth;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Largura: {largura}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: onMount is not defined</pre>
+<p>A mensagem "onMount is not defined" e o seu irmão "document is not defined" têm a mesma forma: um nome que o JavaScript não conhece. Quando o erro cita um nome de função do Svelte, a primeira coisa a conferir é a lista de <code>import</code> no topo do script.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Vem de</th><th>Quando é chamada</th></tr>
+<tr><td><code>onMount(fn)</code></td><td><code>'svelte'</code></td><td>uma vez, depois da montagem, no navegador</td></tr>
+<tr><td><code>onDestroy(fn)</code></td><td><code>'svelte'</code></td><td>uma vez, quando o componente sai da tela</td></tr>
+<tr><td><code>$effect(fn)</code></td><td>runa, sem import</td><td>na montagem e a cada dependência que muda</td></tr>
+<tr><td><code>$derived(expr)</code></td><td>runa, sem import</td><td>quando alguma dependência muda, para recalcular</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma na tela</th><th>Causa provável</th><th>Onde olhar</th></tr>
+<tr><td>sempre <code>0</code> ou <code>—</code>, nunca o valor real</td><td>variável sem <code>$state</code></td><td>a declaração do estado</td></tr>
+<tr><td>"… is not defined"</td><td>falta o <code>import</code> ou o nome está errado</td><td>o topo do <code>&lt;script&gt;</code></td></tr>
+<tr><td>"Cannot assign to constant"</td><td><code>const</code> onde devia ser <code>let</code></td><td>a declaração do estado</td></tr>
+<tr><td>funciona no navegador e o build quebra</td><td>leitura do navegador fora do <code>onMount</code></td><td>as primeiras linhas do script</td></tr>
+</table>
+</div>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Quando a função entregue ao <code>onMount</code> é chamada?</p>
+<label><input type="radio" name="q1"> antes do HTML ser calculado, para o valor já sair pronto</label>
+<label><input type="radio" name="q1"> uma vez, depois que o componente está montado no navegador</label>
+<label><input type="radio" name="q1"> a cada vez que qualquer estado do componente muda</label>
+<label><input type="radio" name="q1"> no servidor, durante a renderização</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que o componente da Vitrine mostra <code>0</code> quando o HTML é gerado fora do navegador?</p>
+<label><input type="radio" name="q1"> porque o <code>$state</code> não funciona fora do navegador</label>
+<label><input type="radio" name="q1"> porque o compilador apaga o <code>onMount</code> na versão de produção</label>
+<label><input type="radio" name="q1"> porque o <code>onMount</code> não roda nesse ambiente: o HTML sai com os valores iniciais</label>
+<label><input type="radio" name="q1"> porque <code>window.innerWidth</code> vale zero em qualquer lugar</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Você quer medir a altura de um <code>&lt;div&gt;</code> do próprio componente. Qual é o caminho?</p>
+<label><input type="radio" name="q1"> <code>bind:this</code> na tag e a medida dentro do <code>onMount</code></label>
+<label><input type="radio" name="q1"> medir no topo do script, antes do HTML</label>
+<label><input type="radio" name="q1"> usar <code>document.write</code> com a altura</label>
+<label><input type="radio" name="q1"> declarar o <code>&lt;div&gt;</code> como <code>const</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { onMount } from 'svelte';<br>let largura = $state(0);<br><br><input data-answer="onMount(() => { largura = window.innerWidth; });|onMount(() => largura = window.innerWidth);">&nbsp;<br><br>&lt;p&gt;Largura: {largura}&lt;/p&gt;<br><br>// a medida só pode ser lida depois que o componente está montado</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O <code>&lt;script&gt;</code> roda antes do HTML: no topo do arquivo não existe <code>document</code> nem <code>window</code>.</li>
+  <li><code>onMount</code> vem de <code>'svelte'</code> e chama a sua função <strong>uma vez</strong>, depois da montagem, só no navegador.</li>
+  <li>A saída fora do navegador mostra os valores iniciais: <code>0</code>, <code>'—'</code>, <code>''</code>. Escolha esse valor com cuidado.</li>
+  <li>Ordem do ciclo de vida: script, cálculo do HTML, montagem, <code>onMount</code>, atualizações.</li>
+  <li><code>bind:this={el}</code> entrega o elemento de verdade; a medida (<code>offsetHeight</code>) só faz sentido dentro do <code>onMount</code>.</li>
+  <li>Todo valor que aparece na tela e muda precisa de <code>$state</code>; sem isso o número certo é lido e nunca mostrado.</li>
+  <li><code>onMount</code> roda uma vez; <code>$effect</code> roda de novo a cada dependência alterada.</li>
+  <li>Devolver uma função no <code>onMount</code> registra a limpeza, chamada quando o componente sai da tela.</li>
+  <li>Os erros desta aula: <code>document is not defined</code>, <code>Cannot assign to constant</code> e <code>onMount is not defined</code>.</li>
+  <li>O build mostra quantos módulos foram transformados e o peso final: é o número que o visitante baixa.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

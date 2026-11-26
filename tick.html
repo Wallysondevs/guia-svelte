@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tick() — esperar a tela alcançar o valor | Guia Svelte</title>
+<meta name="description" content="tick() no Svelte 5: por que o DOM só muda depois do seu código, como esperar com await tick(), quando usar flushSync e as mensagens reais quando dá errado.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">tick()</span></h1>
+
+<p class="intro">Na padaria da Ana, o pedido é escrito no caderno e só depois vira comanda na cozinha. Entre uma coisa e outra existe um intervalo, curto mas real. Dentro de um componente acontece igual: você muda o valor, e o HTML só acompanha no passo seguinte. Quando o seu código precisa do HTML já atualizado — para medir, focar ou contar elementos — existe uma função que espera esse passo: <strong>tick()</strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que mudar o estado não muda o HTML no mesmo instante.</li>
+  <li>O que o Svelte faz entre a sua linha e o desenho da tela.</li>
+  <li>Como esperar a atualização com <code>await tick()</code>.</li>
+  <li>Por que a função que usa <code>tick()</code> precisa ser <code>async</code>.</li>
+  <li>Os três casos em que <code>tick()</code> é necessário de verdade.</li>
+  <li>Como medir um elemento que acabou de aparecer na tela.</li>
+  <li>O que é <code>flushSync</code> e qual é o custo dele.</li>
+  <li>A diferença entre <code>tick()</code>, <code>$effect</code> e <code>$derived</code> nessa fila.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o caderno e a comanda</h2>
+
+<p>A Ana anota o pedido do cliente no caderno, e a cozinha só começa a trabalhar quando a folha chega lá. Ela não consegue perguntar "o pão já está no forno?" no mesmo segundo em que escreveu: primeiro a folha precisa chegar. O intervalo é pequeno, mas existe, e quem confunde os dois momentos se atrapalha.</p>
+
+<p>Um componente tem exatamente essa divisão. O seu código mexe nas variáveis de estado; o Svelte, em outro momento, lê essas variáveis e atualiza o HTML. O motivo é eficiência: se cada mudança desenhasse a tela na hora, uma função que troca cinco valores faria cinco desenhos. O Svelte junta as mudanças do mesmo passo e desenha uma vez só. Esse desenho agrupado se chama <strong>flush</strong> — "despejo", numa tradução livre: é quando a fila de mudanças é aplicada.</p>
+
+<p>Quase sempre você não percebe esse intervalo, porque ninguém escreve código que dependa dele. O problema aparece quando o seu código, logo depois de mudar um valor, precisa <em>ler a tela</em>: contar quantos itens existem, medir a altura de uma caixa que acabou de aparecer, colocar o cursor num campo criado naquele instante. Aí o HTML ainda está no estado antigo, e a leitura devolve o número errado.</p>
+
+<p>A solução é pedir para esperar: <code>await tick()</code>. A função <code>tick</code> devolve uma promessa que se resolve quando o próximo desenho terminou. Traduzindo: "espere a folha chegar na cozinha e depois continue".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Escrever o pedido no caderno</td><td><code>itens = [...itens, 'leite']</code></td></tr>
+<tr><td>A folha chegar na cozinha</td><td>o Svelte aplicar a mudança no HTML</td></tr>
+<tr><td>Perguntar "já está no forno?" antes da folha chegar</td><td>ler o DOM logo depois de mudar o estado</td></tr>
+<tr><td>Esperar a folha chegar e então perguntar</td><td><code>await tick()</code></td></tr>
+<tr><td>Levar a folha na mão, sem esperar</td><td><code>flushSync(fn)</code></td></tr>
+</table>
+</div>
+
+<h2>2. O componente que conta os itens da tela</h2>
+
+<p>O exemplo da Ana conta quantos itens existem <em>no HTML</em> depois de adicionar um. Não é a mesma coisa que contar o tamanho da lista: um erro no <code>{#each}</code> pode deixar a lista maior que a tela, e é justamente isso que o teste pega.</p>
+
+<pre class="file" data-file="src/Comanda.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+
+  let itens = $state(['pão']);
+  let naTela = $state(0);
+
+  async function adicionar() {
+    itens = [...itens, 'leite'];
+    await tick();
+    naTela = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+&lt;p&gt;Itens na tela: {naTela}&lt;/p&gt;</pre>
+
+<pre class="out">pão adicionar Itens na tela: 0</pre>
+
+<p>O texto acima é o que o renderizador produz fora do navegador: a lista com o primeiro item, o botão e o contador ainda em zero. <code>naTela</code> começa em zero e só muda no clique, depois de o <code>tick</code> resolver — e no servidor não há clique.</p>
+
+<p>O ponto delicado está na ordem das duas linhas:</p>
+
+<pre class="file" data-file="src/Ordem.svelte">&lt;script&gt;
+  let itens = $state(['pão']);
+  let naTela = $state(0);
+
+  function adicionar() {
+    itens = [...itens, 'leite'];
+    naTela = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+&lt;p&gt;Itens na tela: {naTela}&lt;/p&gt;</pre>
+
+<pre class="out">pão adicionar Itens na tela: 0</pre>
+
+<p>As duas versões produzem o mesmo HTML inicial, e é por isso que esse erro passa despercebido em qualquer conferência de marcação. A diferença aparece no clique: a segunda versão mostra <code>1</code> depois de adicionar o segundo item, porque contou o DOM antes de ele mudar. A primeira mostra <code>2</code>.</p>
+
+<h3>A anatomia do <code>await tick()</code></h3>
+
+<dl class="anatomy">
+  <dt>import { tick } from 'svelte'</dt><dd><code>tick</code> é uma função importada, como <code>onMount</code>. Sem essa linha, o nome não existe no arquivo.</dd>
+  <dt>async function adicionar()</dt><dd>a palavra <code>async</code> autoriza o <code>await</code> dentro da função. Só funções assim podem esperar promessas; fora delas, o compilador recusa o <code>await</code>.</dd>
+  <dt>await tick()</dt><dd>espera o próximo desenho terminar. A partir da linha seguinte, o DOM já contém o item novo. <code>tick</code> devolve uma promessa: sem o <code>await</code>, você não espera nada.</dd>
+  <dt>document.querySelectorAll('li').length</dt><dd>a leitura da tela, agora confiável. Contar elementos do DOM é o jeito mais direto de provar que o HTML acompanhou.</dd>
+</dl>
+
+<p>Uma confusão comum: <code>tick()</code> não é "espere um tempo". Não há relógio, não há atraso artificial. Ele espera <em>um passo</em> do próprio Svelte, que dura o tempo de aplicar as mudanças pendentes — normalmente menos de um milissegundo. Usar <code>setTimeout</code> no lugar funciona por acidente e cobra caro: às vezes o passo do Svelte ainda não aconteceu, às vezes já aconteceu há muito tempo, e o código fica imprevisível.</p>
+
+<h2>3. Quando <code>tick()</code> é necessário</h2>
+
+<p>Existem três famílias de caso. Fora delas, quase sempre há um caminho melhor — e vale conhecer os dois lados, porque usar <code>tick</code> onde não precisa deixa o código mais difícil de ler sem ganho nenhum.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Precisa de <code>tick()</code>?</th><th>Caminho</th></tr>
+<tr><td>medir a altura de um elemento que acabou de aparecer</td><td><strong>sim</strong></td><td><code>await tick()</code> e então <code>offsetHeight</code></td></tr>
+<tr><td>colocar o cursor num campo criado agora</td><td><strong>sim</strong></td><td><code>await tick()</code> e então <code>campo.focus()</code></td></tr>
+<tr><td>rolar a lista até o último item</td><td><strong>sim</strong></td><td><code>await tick()</code> e então <code>scrollIntoView()</code></td></tr>
+<tr><td>calcular um valor a partir de outro</td><td>não</td><td><code>$derived</code></td></tr>
+<tr><td>reagir a uma mudança de estado</td><td>não</td><td><code>$effect</code></td></tr>
+<tr><td>mostrar na tela um valor que veio do clique</td><td>não</td><td>o próprio <code>$state</code> resolve</td></tr>
+</table>
+</div>
+
+<p>Repare que os três casos que pedem <code>tick</code> têm algo em comum: todos precisam de uma medida ou de um comando que só faz sentido no elemento <em>já desenhado</em>. Se o seu problema é calcular ou mostrar, o instrumento é outro. O <code>tick</code> é a ponte entre o mundo dos valores e o mundo dos elementos.</p>
+
+<h2>4. Experimente: contar o que está na tela</h2>
+
+<p>A caixa abaixo é a versão sem espera do componente da seção 2. Clique em <strong>adicionar</strong> e veja o contador ficar um item atrás.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^pão leite adicionar Itens na tela: 2$">
+<p class="try-task"><strong>Missão:</strong> depois de um clique, a lista tem dois itens e o contador mostra <code>1</code>. Faça ele mostrar <code>2</code>, esperando o desenho terminar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['pão']);
+  let naTela = $state(0);
+
+  function adicionar() {
+    itens = [...itens, 'leite'];
+    naTela = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+&lt;p&gt;Itens na tela: {naTela}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+
+  let itens = $state(['pão']);
+  let naTela = $state(0);
+
+  async function adicionar() {
+    itens = [...itens, 'leite'];
+    await tick();
+    naTela = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+&lt;p&gt;Itens na tela: {naTela}&lt;/p&gt;</pre>
+</div>
+
+<p>Duas mudanças na solução: o <code>import</code> e o par <code>async</code>/<code>await</code>. Se você esquecer o <code>async</code>, o compilador recusa o arquivo com a mensagem que aparece na seção 9 — o <code>await</code> só existe dentro de função assíncrona.</p>
+
+<h2>5. Medir a caixa que acabou de aparecer</h2>
+
+<p>O caso da medida é o mais delicado, porque o erro não devolve um número errado: devolve um erro de execução. Se o elemento ainda não existe, a variável do <code>bind:this</code> está vazia, e ler <code>offsetHeight</code> de <code>undefined</code> quebra o componente.</p>
+
+<pre class="file" data-file="src/Altura.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+
+  let mostra = $state(false);
+  let caixa = $state();
+  let altura = $state(0);
+
+  async function abrir() {
+    mostra = true;
+    await tick();
+    altura = caixa.offsetHeight;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={abrir}&gt;abrir comanda&lt;/button&gt;
+{#if mostra}
+  &lt;div bind:this={caixa} style="height: 40px"&gt;comanda&lt;/div&gt;
+{/if}
+&lt;p&gt;Altura: {altura} px&lt;/p&gt;</pre>
+
+<pre class="out">abrir comanda Altura: 0 px</pre>
+
+<p>Aqui aparece uma escolha nova: <code>let caixa = $state()</code>, e não <code>let caixa</code>. O motivo é técnico e vale saber, porque o compilador avisa: quando uma variável é escrita por uma função que também é lida na tela, declarar sem <code>$state</code> faz o compilador emitir o aviso <code>non_reactive_update</code>, dizendo que a atualização de <code>caixa</code> não vai disparar redesenho. Com <code>$state</code>, o <code>bind:this</code> e a leitura ficam combinados.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^abrir comanda comanda Altura: 40 px$">
+<p class="try-task"><strong>Missão:</strong> o botão faz a comanda aparecer, mas a medida estoura porque a caixa ainda não existe. Espere o desenho e mostre <code>Altura: 40 px</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let mostra = $state(false);
+  let caixa = $state();
+  let altura = $state(0);
+
+  function abrir() {
+    mostra = true;
+    altura = caixa.offsetHeight;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={abrir}&gt;abrir comanda&lt;/button&gt;
+{#if mostra}
+  &lt;div bind:this={caixa} style="height: 40px"&gt;comanda&lt;/div&gt;
+{/if}
+&lt;p&gt;Altura: {altura} px&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+
+  let mostra = $state(false);
+  let caixa = $state();
+  let altura = $state(0);
+
+  async function abrir() {
+    mostra = true;
+    await tick();
+    altura = caixa.offsetHeight;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={abrir}&gt;abrir comanda&lt;/button&gt;
+{#if mostra}
+  &lt;div bind:this={caixa} style="height: 40px"&gt;comanda&lt;/div&gt;
+{/if}
+&lt;p&gt;Altura: {altura} px&lt;/p&gt;</pre>
+</div>
+
+<p>O mesmo desenho serve para <code>focus()</code> e para <code>scrollIntoView()</code>: são comandos que precisam do elemento na tela, e nenhum deles tem como funcionar antes do desenho. Guarde a regra: <strong>estado muda agora, DOM muda no próximo passo</strong>.</p>
+
+<h2>6. <code>flushSync</code>: quando você não pode esperar</h2>
+
+<p>Existe uma segunda ferramenta, para quem precisa do HTML atualizado <em>na mesma linha</em>, sem <code>await</code>. É o <code>flushSync</code>: ele força o desenho pendente a acontecer agora.</p>
+
+<pre class="file" data-file="src/Total.svelte">&lt;script&gt;
+  import { flushSync } from 'svelte';
+
+  let n = $state(0);
+
+  function somar() {
+    flushSync(() =&gt; {
+      n++;
+    });
+    console.log(document.querySelector('output').textContent);
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;somar&lt;/button&gt;
+&lt;output&gt;{n}&lt;/output&gt;</pre>
+
+<pre class="out">&lt;button&gt;somar&lt;/button&gt; &lt;output&gt;0&lt;/output&gt;</pre>
+
+<p>O <code>flushSync</code> recebe uma função, aplica as mudanças dela e desenha antes de devolver o controle. O custo é o inverso do benefício: você perde o agrupamento e pode provocar vários desenhos seguidos, cada um recalculando posições na tela. Em uma lista grande, isso aparece como travamento. A recomendação do guia é preferir <code>await tick()</code> e deixar o <code>flushSync</code> para os casos em que o código não pode ser assíncrono — uma biblioteca de terceiros que exige a medida na hora, por exemplo.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^somar 1 lido: 1$">
+<p class="try-task"><strong>Missão:</strong> o clique soma, mas a leitura do <code>&lt;output&gt;</code> pega o valor velho: <code>lido: 0</code>. Faça a leitura enxergar o valor novo, sem transformar a função em assíncrona.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let n = $state(0);
+  let lido = $state('—');
+
+  function somar() {
+    n++;
+    lido = document.querySelector('output').textContent;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;somar&lt;/button&gt;
+&lt;output&gt;{n}&lt;/output&gt;
+&lt;p&gt;lido: {lido}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { flushSync } from 'svelte';
+
+  let n = $state(0);
+  let lido = $state('—');
+
+  function somar() {
+    flushSync(() =&gt; { n++; });
+    lido = document.querySelector('output').textContent;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;somar&lt;/button&gt;
+&lt;output&gt;{n}&lt;/output&gt;
+&lt;p&gt;lido: {lido}&lt;/p&gt;</pre>
+</div>
+
+<p>Se você resolver essa missão com <code>async</code> e <code>await tick()</code>, a meta também é cumprida — as duas formas levam ao mesmo resultado. O que muda é o custo: o <code>tick</code> espera o agrupamento normal, o <code>flushSync</code> o atropela.</p>
+
+<h2>7. <code>tick()</code>, <code>$effect</code> e <code>$derived</code> na fila</h2>
+
+<p>É comum a dúvida: se o <code>$effect</code> roda depois das mudanças, ele substitui o <code>tick</code>? Não substitui, e a diferença está no que cada um enxerga. O <code>$effect</code> é chamado <em>depois</em> de o DOM ser atualizado, então dentro dele a medida já é confiável. O problema é que ele roda sempre que uma dependência muda, e você perde o controle sobre <em>quando</em> a leitura acontece.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Instrumento</th><th>Quando roda</th><th>O DOM já está atualizado?</th></tr>
+<tr><td>o corpo do seu evento (<code>onclick</code>)</td><td>no clique</td><td><strong>não</strong></td></tr>
+<tr><td><code>await tick()</code></td><td>quando o desenho pendente termina</td><td><strong>sim</strong></td></tr>
+<tr><td><code>$effect</code></td><td>na montagem e a cada dependência alterada</td><td><strong>sim</strong>, mas em todo ciclo</td></tr>
+<tr><td><code>$derived</code></td><td>durante o cálculo do desenho</td><td>não se aplica: é valor, não efeito</td></tr>
+</table>
+</div>
+
+<p>O <code>tick</code> devolve uma promessa, e isso permite um uso elegante: <code>{#await tick()}</code>. No servidor, a promessa não resolve e o bloco mostra o conteúdo de espera; no navegador, resolve no primeiro desenho. Veja o componente:</p>
+
+<pre class="file" data-file="src/Espera.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+&lt;/script&gt;
+
+{#await tick()}
+  &lt;p&gt;esperando&lt;/p&gt;
+{:then}
+  &lt;p&gt;pronto&lt;/p&gt;
+{/await}</pre>
+
+<pre class="out">esperando</pre>
+
+<p>É um exemplo didático, e não um padrão recomendado: usar <code>tick</code> como promessa de dados confunde o leitor, porque o bloco <code>{#await}</code> foi feito para esperar <em>dados</em>, não o desenho. Para carregar dados existe a aula de <code>{#await}</code>. Guarde esta seção pelo diagnóstico: se a sua tela mostra "esperando" e nunca muda, o problema é a promessa que nunca resolve no servidor.</p>
+
+<h2>8. Conferindo no projeto da Ana</h2>
+
+<p>O servidor de desenvolvimento recarrega o componente a cada arquivo salvo, e é onde você testa o clique de verdade:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 885 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O build mostra o custo de tudo isso no pacote final. Note que o tamanho cresce quando o componente usa <code>tick</code>: o runtime do Svelte inclui a máquina de desenho de qualquer jeito, mas o código do componente e as importações entram na conta.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DzZfQx3P.js  41.49 kB │ gzip: 15.98 kB
+✓ built in 2.40s</pre>
+
+<p>Os 41.49 kB são o JavaScript que o visitante baixa antes de a página ficar interativa; 15.98 kB é o mesmo arquivo comprimido, o número que a rede realmente transporta. Não é pouco, e é por isso que o guia insiste em não importar coisas sem necessidade.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram da execução dos componentes quebrados neste guia, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>await</code> numa função que não é <code>async</code></strong>
+<p>O compilador do Svelte usa o parser do JavaScript, e o parser recusa <code>await</code> fora de função assíncrona antes mesmo de olhar o Svelte.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+
+  let n = $state(0);
+
+  function somar() {
+    n++;
+    await tick();
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;{n}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 4): Cannot use keyword 'await' outside an async function</pre>
+<p>A correção é uma palavra: <code>async function somar()</code>. A mensagem aponta a linha do <code>await</code>, e não a da declaração da função — leia com calma para não corrigir o lugar errado.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>await</code> no topo do componente</strong>
+<p>Quem tenta esperar o desenho no nível do script esbarra numa regra do modo com runas: o topo do componente não pode ser assíncrono, a menos que o projeto ligue a opção experimental de assincronismo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+
+  let itens = $state([]);
+  const depois = await tick();
+&lt;/script&gt;
+
+&lt;p&gt;{itens.length}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 17): Cannot use `await` in deriveds and template expressions, or at the top level of a component, unless the `experimental.async` compiler option is `true`</pre>
+<p>A tradução útil: "await só dentro de função". Mova a espera para a função que precisa dela — no caso, a que adiciona itens e lê o DOM.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>tick()</code> mostrado como se fosse valor</strong>
+<p>Este não quebra nada: ele publica a promessa na tela. A saída é literalmente o texto que o JavaScript usa para representar uma promessa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+&lt;/script&gt;
+
+&lt;p&gt;{tick()}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;[object Promise]&lt;/p&gt;</pre>
+<p><code>[object Promise]</code> é o sintoma de uma promessa tratada como texto. Sempre que ele aparecer, o diagnóstico é o mesmo: falta <code>await</code> ou falta <code>{#await}</code>. O mesmo acontece com qualquer função que devolve promessa, não só com <code>tick</code>.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>Vem de</th><th>O que faz</th></tr>
+<tr><td><code>await tick()</code></td><td><code>'svelte'</code></td><td>espera o próximo desenho terminar</td></tr>
+<tr><td><code>flushSync(fn)</code></td><td><code>'svelte'</code></td><td>desenha agora, dentro da função, sem agrupar</td></tr>
+<tr><td><code>$effect(fn)</code></td><td>runa</td><td>roda depois do desenho, a cada dependência alterada</td></tr>
+<tr><td><code>$derived(expr)</code></td><td>runa</td><td>calcula valor durante o desenho</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td>contagem um item atrás</td><td>leitura do DOM antes do desenho</td><td><code>await tick()</code> antes de ler</td></tr>
+<tr><td><code>Cannot read properties of undefined</code></td><td>o elemento ainda não existe</td><td><code>await tick()</code> antes de medir</td></tr>
+<tr><td><code>[object Promise]</code> na tela</td><td>promessa mostrada como texto</td><td><code>await</code> ou <code>{#await}</code></td></tr>
+<tr><td>travamento ao medir uma lista grande</td><td><code>flushSync</code> em excesso</td><td>trocar por <code>await tick()</code></td></tr>
+</table>
+</div>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Por que o DOM não está atualizado na linha seguinte a uma mudança de estado?</p>
+<label><input type="radio" name="q1"> porque o Svelte espera 100 milissegundos antes de desenhar</label>
+<label><input type="radio" name="q1"> porque o Svelte agrupa as mudanças e desenha no passo seguinte</label>
+<label><input type="radio" name="q1"> porque o estado só existe no servidor</label>
+<label><input type="radio" name="q1"> porque o navegador bloqueia o desenho durante o clique</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>await tick()</code> espera?</p>
+<label><input type="radio" name="q1"> o tempo passar, como um <code>setTimeout</code></label>
+<label><input type="radio" name="q1"> a rede responder</label>
+<label><input type="radio" name="q1"> o próximo desenho do Svelte terminar</label>
+<label><input type="radio" name="q1"> o componente sair da tela</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual é o custo de usar <code>flushSync</code> em vez de <code>await tick()</code>?</p>
+<label><input type="radio" name="q1"> você perde o agrupamento e pode provocar vários desenhos seguidos</label>
+<label><input type="radio" name="q1"> o componente deixa de funcionar no servidor</label>
+<label><input type="radio" name="q1"> o estado para de ser reativo</label>
+<label><input type="radio" name="q1"> o CSS do componente sai do escopo</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">async function adicionar() {<br>&nbsp; itens = [...itens, 'leite'];<br>&nbsp; <input data-answer="await tick();|await tick()">&nbsp;<br>&nbsp; naTela = document.querySelectorAll('li').length;<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Mudar o estado não muda o HTML no mesmo instante: o Svelte agrupa e desenha no passo seguinte.</li>
+  <li><code>tick()</code> devolve uma promessa que resolve quando o desenho pendente termina.</li>
+  <li>Use <code>await tick()</code> dentro de uma função <code>async</code>.</li>
+  <li>Os três casos clássicos: medir, focar e rolar até um elemento que acabou de aparecer.</li>
+  <li><code>tick</code> não é espera de tempo; é espera de passo.</li>
+  <li><code>flushSync(fn)</code> desenha na hora, ao custo de perder o agrupamento.</li>
+  <li><code>$effect</code> roda depois do desenho; <code>$derived</code> calcula durante o desenho.</li>
+  <li><code>await</code> fora de função <code>async</code> é erro de compilação.</li>
+  <li><code>[object Promise]</code> na tela significa promessa tratada como texto.</li>
+  <li>O mesmo HTML inicial pode esconder um erro de ordem: só o clique revela.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

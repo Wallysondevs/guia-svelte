@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Limpando o que Criou — a função devolvida pelo onMount | Guia Svelte</title>
+<meta name="description" content="Como desligar o que o componente ligou: a função devolvida pelo onMount, o onDestroy, clearInterval, removeEventListener e o que acontece quando a limpeza falta.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Limpando o que Criou</span></h1>
+
+<p class="intro">A Ana fecha a padaria às sete da noite e apaga a luz da vitrine. Se ela esquecer, a lâmpada fica queimando a noite inteira e a conta de energia chega maior no fim do mês. Um componente tem o mesmo dever: tudo o que ele liga — um relógio, um ouvinte de evento, uma assinatura — precisa ser desligado quando ele sai da tela. Nesta aula você aprende onde escrever esse desligamento e o que acontece quando ele falta.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que um componente precisa desfazer o que fez, e quando isso acontece.</li>
+  <li>O que a <strong>função devolvida</strong> pelo <code>onMount</code> faz.</li>
+  <li>Como limpar <code>setInterval</code>, <code>setTimeout</code> e ouvinte de evento.</li>
+  <li>Quando usar <code>onDestroy</code> em vez de devolver a função.</li>
+  <li>Que a limpeza roda também quando o <code>$effect</code> se repete, não só ao sair da tela.</li>
+  <li>Como provar um vazamento de temporizador contando os que estão vivos.</li>
+  <li>O que o compilador faz quando você tenta guardar o retorno do <code>$effect</code>.</li>
+  <li>Os três erros reais desta aula, com a mensagem copiada do compilador.</li>
+  <li>Por que <code>removeEventListener</code> precisa da <em>mesma</em> função do <code>addEventListener</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: apagar a luz ao fechar</h2>
+
+<p>Na padaria, cada abertura tem um fechamento. A Ana liga o forno e o desliga, abre a porta e a fecha, começa a bater o ponto do pão e para. Nada disso é burocracia: é o que mantém a loja funcionando amanhã. Quem esquece de desligar não tem um problema hoje, e sim uma conta no fim do mês.</p>
+
+<p>Em programação acontece o mesmo. Quando o componente aparece na tela, ele pode ligar coisas que vivem <em>fora</em> dele: um relógio que dispara a cada segundo, um ouvinte do evento de redimensionar a janela, uma ligação aberta com o servidor. Essas coisas não desaparecem quando o componente desaparece. Elas continuam funcionando, gastando memória e escrevendo em variáveis que ninguém está mais vendo. Esse é o <strong>vazamento</strong>, ou <em>leak</em>.</p>
+
+<p>O Svelte oferece dois lugares para desligar. O primeiro é a <strong>função devolvida</strong>: se o código que você entrega ao <code>onMount</code> devolver uma função, o Svelte a chama quando o componente sai da tela. O segundo é o <code>onDestroy</code>, que registra a limpeza separadamente. Os dois funcionam; a diferença é de estilo e de escopo, e você vai ver as duas formas nesta aula.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Ligar a luz da vitrine ao abrir</td><td><code>onMount(() =&gt; { … })</code></td></tr>
+<tr><td>Apagar a luz ao fechar</td><td>a função devolvida no fim do <code>onMount</code></td></tr>
+<tr><td>Parar o relógio da parede</td><td><code>clearInterval(id)</code></td></tr>
+<tr><td>Cancelar a encomenda que ainda não saiu</td><td><code>clearTimeout(id)</code></td></tr>
+<tr><td>Tirar o cartaz de promoção do mural</td><td><code>removeEventListener('resize', fn)</code></td></tr>
+<tr><td>Fechar a loja e ir dormir</td><td>o componente sair da tela</td></tr>
+</table>
+</div>
+
+<p>Uma palavra nova aparece no meio do caminho: <strong>desmontar</strong> (em inglês, <em>unmount</em>) é o contrário de montar. É o momento em que o Svelte tira o componente do DOM — porque o usuário trocou de página, porque uma condição <code>{#if}</code> deixou de valer, ou porque o aplicativo inteiro foi fechado. Desmontar é o "fechar a padaria" do componente.</p>
+
+<h2>2. O primeiro cronômetro e a função devolvida</h2>
+
+<p>O componente abaixo mostra há quantos segundos a padaria está aberta. Ele liga um <code>setInterval</code> na montagem e devolve, no fim, uma função que desliga o mesmo intervalo.</p>
+
+<pre class="file" data-file="src/Cronometro.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let segundos = $state(0);
+
+  onMount(() =&gt; {
+    const id = setInterval(() =&gt; {
+      segundos++;
+    }, 1000);
+
+    return () =&gt; {
+      clearInterval(id);
+    };
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Na padaria há {segundos} segundos.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Na padaria há 0 segundos.&lt;/p&gt;</pre>
+
+<p>O HTML gerado fora do navegador mostra o valor inicial, como sempre: o <code>onMount</code> não roda ali. No navegador, o número começa a subir de segundo em segundo, e para no instante em que o componente sai da tela — porque a função devolvida chama <code>clearInterval</code>.</p>
+
+<h3>A anatomia da limpeza</h3>
+
+<dl class="anatomy">
+  <dt>const id = setInterval(…)</dt><dd>o <strong>identificador</strong> do relógio. <code>setInterval</code> devolve um número ou objeto que representa aquele relógio; sem guardar esse valor, você não tem como desligá-lo depois.</dd>
+  <dt>segundos++</dt><dd>o que o relógio faz a cada segundo. Como <code>segundos</code> é <code>$state</code>, a tela acompanha.</dd>
+  <dt>return () =&gt; { … }</dt><dd>a <strong>função de limpeza</strong>. O <code>return</code> dentro do <code>onMount</code> não devolve um valor de negócio: ele registra o que fazer na saída. O Svelte guarda essa função e chama na hora certa.</dd>
+  <dt>clearInterval(id)</dt><dd>desliga o relógio daquele <code>id</code> e apenas daquele. Um <code>clearInterval</code> sem argumento não faz nada; um com o <code>id</code> errado desliga o relógio de outro componente.</dd>
+</dl>
+
+<p>Repare no detalhe que mais confunde: o <code>onMount</code> devolve <em>uma função</em>, não o resultado dela. Quem chama é o Svelte, no momento da desmontagem. Se você escrever <code>return clearInterval(id)</code> em vez de <code>return () =&gt; clearInterval(id)</code>, o intervalo é desligado imediatamente, na montagem, e o cronômetro nunca começa a contar. É um erro silencioso: nenhuma mensagem, só um número parado em zero.</p>
+
+<div class="tip">
+<strong>Uma variável por recurso</strong>
+<p>Se o componente liga um relógio e um ouvinte, guarde um identificador para cada e limpe os dois na mesma função devolvida. A limpeza é uma só, com várias linhas dentro — como fechar a loja: apagar a luz, trancar a porta, desligar o forno.</p>
+</div>
+
+<h2>3. Ouvinte de evento: tirar o que pendurou</h2>
+
+<p>O segundo caso clássico é o ouvinte de evento. O componente da Ana mede a largura da janela e se atualiza quando o usuário redimensiona o navegador. Para isso, ele pendura uma função no evento <code>resize</code> da <code>window</code>.</p>
+
+<pre class="file" data-file="src/Largura.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let largura = $state(0);
+
+  onMount(() =&gt; {
+    function medir() {
+      largura = window.innerWidth;
+    }
+
+    medir();
+    window.addEventListener('resize', medir);
+
+    return () =&gt; {
+      window.removeEventListener('resize', medir);
+    };
+  });
+&lt;/script&gt;
+
+&lt;p&gt;A janela tem {largura} pixels.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;A janela tem 0 pixels.&lt;/p&gt;</pre>
+
+<p>A função <code>medir</code> é declarada <em>dentro</em> do <code>onMount</code> de propósito. O <code>removeEventListener</code> só remove o ouvinte se receber exatamente a mesma função que foi adicionada — mesma referência, não apenas o mesmo código. Uma função criada de novo, mesmo com o corpo idêntico, é outra função para o navegador, e o ouvinte antigo continua lá.</p>
+
+<h3>A anatomia do ouvinte</h3>
+
+<dl class="anatomy">
+  <dt>function medir() { … }</dt><dd>a função que reage ao evento. Precisa ter nome (ou estar guardada numa variável) para que a remoção use a mesma referência.</dd>
+  <dt>medir();</dt><dd>uma chamada imediata, para a tela não começar em zero. O <code>resize</code> só dispara quando a janela muda; sem essa chamada, o primeiro valor ficaria errado.</dd>
+  <dt>window.addEventListener('resize', medir)</dt><dd>pendura a função no evento. A partir daqui, cada redimensionamento chama <code>medir</code>.</dd>
+  <dt>window.removeEventListener('resize', medir)</dt><dd>despendura. Sem esta linha, cada montagem do componente deixaria um ouvinte a mais na janela.</dd>
+</dl>
+
+<p>Existe um atalho do Svelte para esse caso: <code>&lt;svelte:window onresize={medir} /&gt;</code> registra o ouvinte e o remove sozinho quando o componente sai. Ele é ótimo para eventos da janela e do corpo da página, e não serve para tudo — um <code>IntersectionObserver</code> ou uma conexão de dados continuam exigindo limpeza escrita à mão. Por isso vale aprender a forma manual primeiro: ela é a que funciona em qualquer recurso.</p>
+
+<h2>4. Quando usar <code>onDestroy</code></h2>
+
+<p>Devolver a função é o caminho mais curto quando a limpeza está colada na criação. Existe um segundo caminho, o <code>onDestroy</code>, que registra a limpeza como um bloco separado:</p>
+
+<pre class="file" data-file="src/Relogio.svelte">&lt;script&gt;
+  import { onDestroy } from 'svelte';
+
+  let segundos = $state(0);
+
+  const id = setInterval(() =&gt; {
+    segundos++;
+  }, 1000);
+
+  onDestroy(() =&gt; {
+    clearInterval(id);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Aberta há {segundos} segundos.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Aberta há 0 segundos.&lt;/p&gt;</pre>
+
+<p>As duas formas desligam o relógio. A diferença é onde o código mora. Na versão com <code>onMount</code>, quem lê o arquivo de cima para baixo vê a criação e a destruição no mesmo bloco, uma embaixo da outra. Na versão com <code>onDestroy</code>, a criação fica no meio do script e a destruição no fim. Para um recurso só, tanto faz; para cinco, a primeira forma costuma ser mais fácil de conferir.</p>
+
+<p>O <code>onDestroy</code> ganha quando a limpeza precisa acontecer mesmo que a criação tenha falhado no meio, ou quando o recurso é criado fora do <code>onMount</code> — por exemplo, um <code>$effect</code> que abre uma conexão a cada mudança de filtro. Nesse caso, a limpeza natural é a do próprio <code>$effect</code>, como você vê na seção 7.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Onde a limpeza fica</th><th>Quando é chamada</th></tr>
+<tr><td><code>return () =&gt; { … }</code> no <code>onMount</code></td><td>no fim do próprio <code>onMount</code></td><td>ao desmontar o componente</td></tr>
+<tr><td><code>onDestroy(() =&gt; { … })</code></td><td>em qualquer lugar do script</td><td>ao desmontar o componente</td></tr>
+<tr><td><code>return () =&gt; { … }</code> no <code>$effect</code></td><td>no fim do próprio efeito</td><td>antes de cada nova execução do efeito e ao desmontar</td></tr>
+</table>
+</div>
+
+<p>Uma descoberta real, que surpreende: o <code>onDestroy</code> também roda no servidor. Ao renderizar o componente fora do navegador, o Svelte cria e destrói a instância na mesma passada, e a limpeza é chamada. Se você puser um <code>console.log</code> dentro dela, ele aparece no terminal antes do HTML. Isso é útil para depurar e é uma armadilha para quem coloca ali algo que só faz sentido no navegador.</p>
+
+<h2>5. Experimente: dois temporizadores onde devia haver um</h2>
+
+<p>A caixa abaixo liga um temporizador sempre que o ritmo muda. Sem a limpeza, o primeiro continua rodando e a tela passa a contar o dobro. O componente conta os temporizadores vivos para você ver o vazamento acontecendo.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;outre:^trocar ritmo temporizadores: 1 tiques: [0-9]+$">
+<p class="try-task"><strong>Missão:</strong> clique em <strong>trocar ritmo</strong> duas vezes: o contador de temporizadores sobe para 3. Deixe exatamente <strong>um</strong> vivo, limpando o anterior.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let ritmo = $state(100);
+  let vivos = 0;
+  let naTela = $state(0);
+  let tiques = $state(0);
+
+  $effect(() =&gt; {
+    const ms = ritmo;
+    const id = setInterval(() =&gt; { tiques++; }, ms);
+    vivos++;
+    naTela = vivos;
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (ritmo = ritmo === 100 ? 200 : 100)}&gt;trocar ritmo&lt;/button&gt;
+&lt;p&gt;temporizadores: {naTela}&lt;/p&gt;
+&lt;p&gt;tiques: {tiques}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let ritmo = $state(100);
+  let vivos = 0;
+  let naTela = $state(0);
+  let tiques = $state(0);
+
+  $effect(() =&gt; {
+    const ms = ritmo;
+    const id = setInterval(() =&gt; { tiques++; }, ms);
+    vivos++;
+    naTela = vivos;
+
+    return () =&gt; {
+      clearInterval(id);
+      vivos--;
+      naTela = vivos;
+    };
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (ritmo = ritmo === 100 ? 200 : 100)}&gt;trocar ritmo&lt;/button&gt;
+&lt;p&gt;temporizadores: {naTela}&lt;/p&gt;
+&lt;p&gt;tiques: {tiques}&lt;/p&gt;</pre>
+</div>
+
+<p>Duas coisas para observar. A primeira: a limpeza roda <em>antes</em> de o efeito rodar de novo, e não só na saída da tela. É por isso que o número de temporizadores vivos se mantém em um. A segunda: a contagem usa uma variável comum (<code>vivos</code>) espelhada numa variável de tela (<code>naTela</code>). O motivo é técnico e vale saber: escrever num <code>$state</code> que o próprio efeito lê cria uma dependência circular, e o Svelte aborta com erro de profundidade. O espelho evita isso.</p>
+
+<h2>6. Experimente: cancelar a encomenda que ainda não saiu</h2>
+
+<p>Nem todo recurso é um relógio que repete. Um <code>setTimeout</code> dispara uma vez, depois de um tempo, e também precisa ser cancelado — senão a mensagem atrasada chega depois que o cliente já desistiu.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:#cancelar;;depois:400;;outre:cancelado$">
+<p class="try-task"><strong>Missão:</strong> peça, cancele e espere. A mensagem atrasada chega e sobrescreve o "cancelado". Guarde o identificador do <code>setTimeout</code> e cancele de verdade.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aviso = $state('nada');
+
+  function pedir() {
+    setTimeout(() =&gt; { aviso = 'pão no forno'; }, 250);
+    aviso = 'pedido enviado';
+  }
+
+  function cancelar() {
+    aviso = 'cancelado';
+  }
+&lt;/script&gt;
+
+&lt;button onclick={pedir}&gt;pedir&lt;/button&gt;
+&lt;button id="cancelar" onclick={cancelar}&gt;cancelar&lt;/button&gt;
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aviso = $state('nada');
+  let id;
+
+  function pedir() {
+    id = setTimeout(() =&gt; { aviso = 'pão no forno'; }, 250);
+    aviso = 'pedido enviado';
+  }
+
+  function cancelar() {
+    clearTimeout(id);
+    aviso = 'cancelado';
+  }
+&lt;/script&gt;
+
+&lt;button onclick={pedir}&gt;pedir&lt;/button&gt;
+&lt;button id="cancelar" onclick={cancelar}&gt;cancelar&lt;/button&gt;
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>id</code> fica fora das funções, no escopo do componente, porque as duas precisam do mesmo valor: uma guarda, a outra usa. Se você declarar <code>let id</code> dentro de <code>pedir</code>, o <code>cancelar</code> não vê nada e o cancelamento vira uma linha morta.</p>
+
+<p>O mesmo raciocínio vale para o ouvinte do <code>resize</code>: o identificador é o par função + evento, e o <code>removeEventListener</code> precisa dos dois. Guardar a função numa variável do componente, e não dentro de uma função que cria outra a cada chamada, é o que garante a referência certa.</p>
+
+<h2>7. A limpeza do <code>$effect</code> e o vazamento de ouvintes</h2>
+
+<p>O <code>$effect</code> também aceita uma função de limpeza, e ela roda em dois momentos: antes de cada nova execução do efeito e na desmontagem. Isso resolve um problema que o <code>onMount</code> não resolve — quando o efeito se repete muitas vezes e cada repetição pendura um ouvinte novo.</p>
+
+<p>Imagine um componente que escuta um evento e, a cada mudança de configuração, registra o ouvinte outra vez. Sem limpeza, depois de três mudanças existem quatro ouvintes. Um único evento disparado faz o contador subir quatro. É o vazamento clássico, e ele não aparece em um teste rápido: aparece quando o usuário fica na tela e mexe nos filtros.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;clique:button;;outre:contador: 3$">
+<p class="try-task"><strong>Missão:</strong> clique três vezes no botão. Cada clique deveria somar 1, mas o contador chega a 9: os ouvintes antigos continuam pendurados. Remova o ouvinte antes de registrar o próximo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let contador = $state(0);
+  let versao = $state(0);
+
+  $effect(() =&gt; {
+    versao;
+    const aoSinal = () =&gt; { contador++; };
+    window.addEventListener('sinal', aoSinal);
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; { versao++; window.dispatchEvent(new Event('sinal')); }}&gt;sinal&lt;/button&gt;
+&lt;p&gt;contador: {contador}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let contador = $state(0);
+  let versao = $state(0);
+
+  $effect(() =&gt; {
+    versao;
+    const aoSinal = () =&gt; { contador++; };
+    window.addEventListener('sinal', aoSinal);
+    return () =&gt; window.removeEventListener('sinal', aoSinal);
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; { versao++; window.dispatchEvent(new Event('sinal')); }}&gt;sinal&lt;/button&gt;
+&lt;p&gt;contador: {contador}&lt;/p&gt;</pre>
+</div>
+
+<p>A linha <code>versao;</code> sozinha parece inútil e é o coração do exemplo: ler a variável ali dentro é o que cria a dependência, então o efeito roda de novo a cada clique. Sem essa leitura, o efeito rodaria uma vez e nenhum vazamento apareceria.</p>
+
+<p>O build da Ana, com o cronômetro no lugar do componente principal, mostra o peso do que vai para o navegador:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CBlMPbMG.js  36.43 kB │ gzip: 13.99 kB
+✓ built in 1.64s</pre>
+
+<p>E o servidor de desenvolvimento, para conferir o comportamento sem esperar o build:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 511 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Nos dois casos, nada foi publicado: <code>localhost</code> é a sua máquina conversando com ela mesma. O build só gera arquivos na pasta <code>dist/</code>.</p>
+
+<h2>8. O que não precisa de limpeza</h2>
+
+<p>Depois de aprender a limpar, é comum exagerar e tentar desligar tudo. Vale saber o que o próprio Svelte já resolve, para não escrever código à toa.</p>
+
+<p>O primeiro item é o <code>onclick</code> escrito no HTML. Quando você escreve <code>&lt;button onclick={pedir}&gt;</code>, o Svelte registra esse ouvinte e o remove sozinho na desmontagem. Você nunca precisa de <code>removeEventListener</code> para ele. O mesmo vale para <code>oninput</code>, <code>onsubmit</code> e todos os atributos de evento em elementos do componente: eles pertencem ao componente e morrem com ele.</p>
+
+<p>O segundo item são as variáveis. Um <code>$state</code> ou um <code>$derived</code> não é um recurso externo: quando o componente sai da tela, o Svelte larga as referências e o coletor de lixo do navegador faz o resto. Ninguém precisa "zerar" o estado na saída.</p>
+
+<p>O terceiro item é o <code>&lt;svelte:window&gt;</code>, que registra ouvintes da janela e os remove na desmontagem, como o <code>&lt;svelte:body&gt;</code> faz com os do corpo da página. É a forma curta do exemplo da seção 3.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que é</th><th>Precisa limpar?</th><th>Quem limpa</th></tr>
+<tr><td><code>onclick</code> e outros eventos no HTML</td><td>não</td><td>o Svelte, na desmontagem</td></tr>
+<tr><td><code>$state</code> e <code>$derived</code></td><td>não</td><td>o coletor de lixo do navegador</td></tr>
+<tr><td><code>&lt;svelte:window onresize={…} /&gt;</code></td><td>não</td><td>o Svelte</td></tr>
+<tr><td><code>setInterval</code>, <code>setTimeout</code></td><td><strong>sim</strong></td><td>você, na limpeza</td></tr>
+<tr><td><code>addEventListener</code> em <code>window</code> ou <code>document</code></td><td><strong>sim</strong></td><td>você, na limpeza</td></tr>
+<tr><td>observador, conexão, assinatura</td><td><strong>sim</strong></td><td>você, na limpeza</td></tr>
+</table>
+</div>
+
+<p>O critério é sempre o mesmo: se o recurso vive <em>fora</em> do componente e guarda uma referência a uma função de dentro dele, você precisa desligá-lo. Se ele nasce e morre junto com o HTML do componente, o Svelte cuida.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo foram copiadas da execução real dos componentes quebrados. O compilador desta versão escreve exatamente assim.</p>
+
+<div class="cenario">
+<strong>Erro 1 — tentar guardar o retorno do <code>$effect</code></strong>
+<p>Quem vem do <code>onMount</code> tenta o mesmo truque no <code>$effect</code>: guardar o retorno para chamar depois. Não existe esse retorno.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let segundos = $state(0);
+
+  const parar = $effect(() =&gt; {
+    const id = setInterval(() =&gt; segundos++, 1000);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{segundos}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 16): `$effect()` can only be used as an expression statement</pre>
+<p>"Can only be used as an expression statement" quer dizer que o <code>$effect</code> precisa ser uma linha sozinha, sem <code>const</code> nem atribuição na frente. Para parar um efeito, você não chama função nenhuma: a limpeza é a função devolvida, chamada pelo próprio Svelte.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — ouvinte pendurado no topo do script</strong>
+<p>O código roda no navegador, e o servidor quebra na primeira linha: não existe <code>window</code> fora do navegador.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let largura = $state(0);
+
+  window.addEventListener('resize', () =&gt; {
+    largura = window.innerWidth;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{largura}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: window is not defined</pre>
+<p>Além de quebrar no servidor, esse ouvinte nunca seria removido: ele é criado a cada montagem e não tem limpeza associada. A correção é mudar para dentro do <code>onMount</code> e devolver a remoção, como no componente da seção 3.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>onDestroy</code> sem <code>import</code></strong>
+<p>O nome parece parte da linguagem, mas é uma função importada. Sem a linha de importação, o componente compila e falha ao executar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  onDestroy(() =&gt; {
+    console.log('saiu da tela');
+  });
+&lt;/script&gt;
+
+&lt;p&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: onDestroy is not defined</pre>
+<p>A pista está no nome da função dentro da mensagem: quando o erro cita algo que começa com <code>on</code> e maiúscula, quase sempre falta <code>import { … } from 'svelte'</code>.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Recurso ligado</th><th>Como desligar</th><th>Precisa guardar</th></tr>
+<tr><td><code>setInterval</code></td><td><code>clearInterval(id)</code></td><td>o <code>id</code> devolvido</td></tr>
+<tr><td><code>setTimeout</code></td><td><code>clearTimeout(id)</code></td><td>o <code>id</code> devolvido</td></tr>
+<tr><td><code>addEventListener</code></td><td><code>removeEventListener</code></td><td>a mesma função e o mesmo nome de evento</td></tr>
+<tr><td><code>requestAnimationFrame</code></td><td><code>cancelAnimationFrame(id)</code></td><td>o <code>id</code> da animação</td></tr>
+<tr><td><code>IntersectionObserver</code></td><td><code>observador.disconnect()</code></td><td>o objeto do observador</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Onde olhar</th></tr>
+<tr><td>o número sobe mais rápido que o esperado</td><td>vários temporizadores vivos</td><td>a limpeza do efeito</td></tr>
+<tr><td>o contador soma a mais por clique</td><td>ouvintes acumulados</td><td><code>removeEventListener</code></td></tr>
+<tr><td>a página fica lenta depois de navegar</td><td>recursos não desligados</td><td>o retorno do <code>onMount</code></td></tr>
+<tr><td>o intervalo nunca começa</td><td><code>return clearInterval(id)</code> em vez de devolver uma função</td><td>o <code>return</code> do <code>onMount</code></td></tr>
+</table>
+</div>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que a função devolvida dentro do <code>onMount</code> faz?</p>
+<label><input type="radio" name="q1"> devolve o valor do estado para o componente pai</label>
+<label><input type="radio" name="q1"> é chamada na desmontagem, para desligar o que foi ligado</label>
+<label><input type="radio" name="q1"> substitui o <code>onDestroy</code>, que deixou de existir</label>
+<label><input type="radio" name="q1"> roda a cada segundo, junto com o <code>setInterval</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que <code>removeEventListener</code> precisa receber a mesma função do <code>addEventListener</code>?</p>
+<label><input type="radio" name="q1"> porque o navegador compara o texto do código-fonte</label>
+<label><input type="radio" name="q1"> porque o Svelte guarda o nome da função numa lista</label>
+<label><input type="radio" name="q1"> porque o navegador identifica o ouvinte pelo par evento + referência da função</label>
+<label><input type="radio" name="q1"> porque só é possível remover um ouvinte por vez</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Quando a função de limpeza de um <code>$effect</code> é chamada?</p>
+<label><input type="radio" name="q1"> antes de cada nova execução do efeito e na desmontagem</label>
+<label><input type="radio" name="q1"> só na desmontagem, nunca antes</label>
+<label><input type="radio" name="q1"> a cada segundo, se o efeito tiver um <code>setInterval</code></label>
+<label><input type="radio" name="q1"> nunca: o <code>$effect</code> não aceita limpeza</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">onMount(() =&gt; {<br>&nbsp; const id = setInterval(() =&gt; segundos++, 1000);<br>&nbsp; <input data-answer="return () => clearInterval(id);|return () => { clearInterval(id); };">&nbsp;<br>});</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Todo recurso ligado precisa ser desligado: temporizador, ouvinte, observador, conexão.</li>
+  <li>Desmontar é o momento em que o componente sai da tela.</li>
+  <li><code>return () =&gt; { … }</code> no <code>onMount</code> registra a limpeza chamada na desmontagem.</li>
+  <li><code>onDestroy(() =&gt; { … })</code> faz o mesmo, com a limpeza em outro lugar do script.</li>
+  <li>A limpeza do <code>$effect</code> roda antes de cada nova execução e na desmontagem.</li>
+  <li>Guardar o <code>id</code> do <code>setInterval</code> ou do <code>setTimeout</code> é o que permite cancelar.</li>
+  <li><code>removeEventListener</code> exige a mesma referência de função usada no <code>addEventListener</code>.</li>
+  <li>Escrever num <code>$state</code> que o efeito também lê pode gerar erro de profundidade de atualização.</li>
+  <li>Os erros desta aula: <code>$effect</code> guardado numa constante, <code>window</code> no topo e <code>onDestroy</code> sem import.</li>
+  <li>O <code>onDestroy</code> também roda no servidor, durante a renderização.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
