@@ -592,7 +592,8 @@ var NIVEIS = [
       i.setAttribute("autocapitalize", "off");
       var maior = 0;
       respostas(i).forEach(function (r) { maior = Math.max(maior, r.length); });
-      i.style.width = Math.max(4, maior + 2) + "ch";
+      i.style.width = Math.min(22, Math.max(4, maior + 2)) + "ch";
+      i.style.maxWidth = "100%";
     });
     var acoes = el("div", { "class": "ex-actions" },
       '<button type="button" class="ex-check">Verificar</button>' +

@@ -141,6 +141,12 @@
           resolve({ erro: "não consegui abrir o resultado (iframe fora do documento?)", html: "", texto: "", doc: null, elem: alvo, destruir: function () {} });
           return;
         }
+        // componente que quebrou é parado: um laço de efeito infinito queimaria a máquina do leitor
+        if (erroRuntime) {
+          try {
+            iframe.srcdoc = "<!doctype html><meta charset='utf-8'><body style=\"margin:0;padding:12px;font:14px/1.5 system-ui;color:#b42318\">componente parado: o erro acima interrompeu a execução.</body>";
+          } catch (e) {}
+        }
         ajustarAltura();
         resolve({
           erro: erroRuntime,

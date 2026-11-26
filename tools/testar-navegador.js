@@ -84,8 +84,9 @@ async function testarPagina(pg, url, nomePag, esperado) {
   const problemas = [];
   const notas = [];
   const erros = [];
-  const aoErro = (e) => erros.push("exceção na página: " + String(e && e.message || e).slice(0, 160));
-  const aoConsole = (m) => { if (m.type() === "error") erros.push("console: " + m.text().slice(0, 160)); };
+  let dentroDasCaixas = false;   // erro de componente é verificado pelo testar-missoes
+  const aoErro = (e) => { if (!dentroDasCaixas) erros.push("exceção na página: " + String(e && e.message || e).slice(0, 160)); };
+  const aoConsole = (m) => { if (!dentroDasCaixas && m.type() === "error") erros.push("console: " + m.text().slice(0, 160)); };
   pg.on("pageerror", aoErro);
   pg.on("console", aoConsole);
 
@@ -111,12 +112,14 @@ async function testarPagina(pg, url, nomePag, esperado) {
 
     let rodadas = 0, verificadas = 0, comMeta = 0;
     if (!rapido && info.caixas) {
+      dentroDasCaixas = true;
       // espera o simulador carregar (compilador de 830 KB na primeira página)
       await pg.waitForFunction("window.__sveltePronto === true", { timeout: 30000 }).catch(() => {
         problemas.push("o compilador não carregou (window.__sveltePronto nunca ficou true)");
       });
       comMeta = await pg.evaluate(() => document.querySelectorAll(".trysvelte[data-goal]").length);
       for (let i = 0; i < info.caixas; i++) {
+        const antes = erros.length;
         const okRodar = await pg.evaluate((ix) => {
           const c = document.querySelectorAll(".trysvelte")[ix];
           const b = c.querySelectorAll(".try-bar button")[0];
@@ -125,7 +128,11 @@ async function testarPagina(pg, url, nomePag, esperado) {
           return true;
         }, i);
         if (!okRodar) { problemas.push("caixa " + (i + 1) + " sem botão Rodar"); continue; }
-        await dormir(450);
+        const alvoEspera = await pg.evaluate((ix) => {
+          const c = document.querySelectorAll(".trysvelte")[ix];
+          return /(^|;;)\s*erro:/.test(c.getAttribute("data-goal") || "") ? 2600 : 450;
+        }, i);
+        await dormir(alvoEspera);
         const estado = await pg.evaluate((ix) => {
           const c = document.querySelectorAll(".trysvelte")[ix];
           const vivo = c.querySelector(".try-vivo");
@@ -143,9 +150,21 @@ async function testarPagina(pg, url, nomePag, esperado) {
         if (!estado.temIframe) problemas.push("caixa " + (i + 1) + ": o Rodar não criou o iframe do resultado");
         else if (!estado.html) problemas.push("caixa " + (i + 1) + ": o componente montou vazio (saída: " + estado.out + ")");
         else if (estado.altura < 40) problemas.push("caixa " + (i + 1) + ": o iframe ficou com " + Math.round(estado.altura) + " px de altura");
+        // meta que PEDE erro (data-goal com "erro:") quebra o componente de propósito: o erro
+        // de console daí é o conteúdo da aula, não defeito da página
+        const pedeErro = await pg.evaluate((ix) => {
+          const c = document.querySelectorAll(".trysvelte")[ix];
+          return /(^|;;)\s*erro:/.test(c.getAttribute("data-goal") || "");
+        }, i);
+        if (pedeErro) erros.length = antes;
       }
-      // Verificar em todas: a meta tem de bater com a solução? Não: aqui só conferimos que o botão responde
+      // Verificar em todas: aqui só conferimos que o botão responde
       for (let i = 0; i < info.caixas; i++) {
+        const antesV = erros.length;
+        const pedeErroV = await pg.evaluate((ix) => {
+          const c = document.querySelectorAll(".trysvelte")[ix];
+          return /(^|;;)\s*erro:/.test(c.getAttribute("data-goal") || "");
+        }, i);
         const respondeu = await pg.evaluate((ix) => {
           const c = document.querySelectorAll(".trysvelte")[ix];
           const b = c.querySelectorAll(".try-bar button")[1];
@@ -154,15 +173,20 @@ async function testarPagina(pg, url, nomePag, esperado) {
           return true;
         }, i);
         if (!respondeu) continue;
-        await dormir(400);
-        const st = await pg.evaluate((ix) => {
-          const c = document.querySelectorAll(".trysvelte")[ix];
-          const s = c.querySelector(".try-status");
-          return s ? s.innerText.trim() : "";
-        }, i);
+        let st = "";
+        for (let tentativa = 0; tentativa < 15 && !st; tentativa++) {
+          await dormir(200);
+          st = await pg.evaluate((ix) => {
+            const c = document.querySelectorAll(".trysvelte")[ix];
+            const s = c.querySelector(".try-status");
+            return s ? s.innerText.trim() : "";
+          }, i);
+        }
         if (!st) problemas.push("caixa " + (i + 1) + ": o Verificar não escreveu status");
         else verificadas++;
+        if (pedeErroV) erros.length = antesV;
       }
+      dentroDasCaixas = false;
     }
 
     // celular: 375 px, sem rolagem horizontal
@@ -170,9 +194,16 @@ async function testarPagina(pg, url, nomePag, esperado) {
     await dormir(150);
     const celular = await pg.evaluate(() => {
       const de = document.documentElement;
+      const rolaSozinho = (e) => {
+        for (let p = e.parentElement; p; p = p.parentElement) {
+          const ov = getComputedStyle(p).overflowX;
+          if (ov === "auto" || ov === "scroll") return true;
+        }
+        return false;
+      };
       const largos = Array.from(document.querySelectorAll("body *")).filter((e) => {
         const b = e.getBoundingClientRect();
-        return b.width > 0 && b.right > window.innerWidth + 1;
+        return b.width > 0 && b.right > window.innerWidth + 1 && !rolaSozinho(e);
       }).slice(0, 3).map((e) => {
         const cls = typeof e.className === "string" && e.className ? "." + e.className.split(/\s+/)[0] : "";
         return e.tagName.toLowerCase() + cls;
@@ -194,7 +225,12 @@ async function testarPagina(pg, url, nomePag, esperado) {
       await pg.evaluate(() => document.documentElement.removeAttribute("data-theme"));
     }
 
-    erros.slice(0, 6).forEach((e) => problemas.push(e));
+    // a página pode pedir um erro de propósito: data-goal="erro:<trecho>"
+    const trechos = Array.from(new Set((await pg.evaluate(() => Array.from(document.querySelectorAll(".trysvelte[data-goal]"))
+      .map((c) => c.getAttribute("data-goal").split(";;").map((p) => p.trim()).filter((p) => p.indexOf("erro:") === 0).map((p) => p.slice(5).trim()))
+      .flat().filter(Boolean)))));
+    const pretendido = (msg) => trechos.some((t) => msg.indexOf(t) !== -1);
+    erros.filter((e) => !pretendido(e)).slice(0, 6).forEach((e) => problemas.push(e));
     notas.push("caixas=" + info.caixas + ", Rodar " + rodadas + ", Verificar " + verificadas + (comMeta ? "/" + comMeta : "") +
       ", menu=" + info.menu + "/" + esperado + ", 375 px " + (celular.rolagem > celular.janela + 1 ? "ROLANDO" : "ok"));
     return { problemas, notas, ms: Date.now() - t0 };
