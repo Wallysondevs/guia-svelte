@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$derived — o valor que se calcula sozinho | Guia Svelte</title>
+<meta name="description" content="A runa $derived do Svelte 5 do zero: o total da cesta da Ana, o jeito errado de atualizar à mão, derivados em cadeia, listas e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">$derived</span></h1>
+
+<p class="intro">A Ana vende pão a noventa centavos e precisa do total da cesta na lousa. Ela sabe fazer a conta: quantidade vezes preço. O problema é que a conta precisa ser refeita toda vez que a quantidade muda, e ninguém quer depender de lembrar disso. O Svelte tem uma runa para exatamente esse papel: <code>$derived</code> guarda o <em>resultado</em> de uma conta e refaz a conta sozinha quando um dos números muda.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um valor <strong>derivado</strong>: resultado de uma conta, não um valor guardado à mão.</li>
+  <li>Como escrever <code>let total = $derived(qtd * unitario)</code>.</li>
+  <li>Por que atualizar o total dentro de cada clique dá errado.</li>
+  <li>Como o Svelte descobre de quais valores a conta depende.</li>
+  <li>O que acontece quando um derivado usa outro derivado.</li>
+  <li>Como calcular totais de listas com <code>reduce</code>.</li>
+  <li>A diferença entre <code>get</code> de classe e <code>$derived</code> em classe.</li>
+  <li>Por que <code>$derived</code> não serve para efeitos colaterais.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como o projeto da Ana compila tudo com <code>npm run build</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a conta que se refaz sozinha</h2>
+
+<p>Na lousa da padaria, a Ana escreve duas coisas: quantos pães tem na cesta e quanto custa o total. O total não é um dado novo — é uma conta com os dados que ela já tem. Se ela anotar "total: 1,80" à mão, no dia em que a quantidade mudar a lousa vai mentir, porque a conta não foi refeita.</p>
+
+<p>Um valor que depende de outros valores tem nome: <strong>valor derivado</strong>. No Svelte 5 ele nasce com a runa <code>$derived</code>. Você escreve a conta uma vez e nunca mais se preocupa: quando qualquer número da conta muda, o resultado muda junto, antes de a tela ser desenhada.</p>
+
+<p>Isso não é o mesmo que guardar estado. Estado é o que você decide; derivado é o que resulta de uma decisão. A quantidade de pães é uma decisão (o cliente pediu dois); o total é consequência. Misturar os dois é a origem de metade dos bugs de tela desatualizada que existem por aí.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Quantos pães o cliente pediu</td><td>Estado: <code>let qtd = $state(2)</code></td></tr>
+<tr><td>O preço unitário na tabela</td><td>Estado: <code>let unitario = $state(0.9)</code></td></tr>
+<tr><td>A conta: quantidade × preço</td><td>Derivado: <code>$derived(qtd * unitario)</code></td></tr>
+<tr><td>Refazer a conta quando muda a quantidade</td><td>O Svelte faz sozinho</td></tr>
+<tr><td>Anotar o total à mão e esquecer de refazer</td><td><code>let total = 0</code> e nunca atualizar</td></tr>
+</table>
+</div>
+
+<p>Repare na ordem: primeiro o estado, depois o derivado. Um derivado sempre nasce de algo que já existe. E ele é <strong>preguiçoso</strong>: a conta só é feita quando alguém lê o valor — na hora de desenhar, por exemplo. Por isso a ordem das linhas não trava o cálculo: no momento da leitura, tudo o que a conta precisa já está pronto.</p>
+
+<p>Preguiçoso aqui é elogio. Se ninguém mostra o total em lugar nenhum, a conta não roda; se três pedaços da tela leem o mesmo total, a conta roda uma vez e o resultado é reaproveitado. Você ganha tempo de máquina sem escrever uma linha de otimização.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>$derived</code> da Ana</h2>
+
+<p>Três linhas no script resolvem a lousa: duas de estado e uma de conta.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let total = $derived(qtd * unitario);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 1.80&lt;/p&gt;</pre>
+
+<p>Dois pães a noventa centavos dão um real e oitenta. Repare que <code>total</code> não recebeu <code>1.8</code> escrito à mão: recebeu uma <em>receita</em>. O compilador transforma essa receita num valor que se recalcula quando <code>qtd</code> ou <code>unitario</code> mudam, e só quando eles mudam de verdade.</p>
+
+<h3>A anatomia da linha derivada</h3>
+
+<dl class="anatomy">
+  <dt>let total</dt><dd>o <strong>nome do resultado</strong>. Você lê <code>total</code> como leria qualquer variável.</dd>
+  <dt>= $derived(…)</dt><dd>a <strong>runa</strong>: diz que o valor nasce de uma conta, não de uma decisão sua.</dd>
+  <dt>qtd * unitario</dt><dd>a <strong>expressão</strong>. Pode ser uma conta, uma comparação, uma chamada de função — desde que devolva um valor.</dd>
+  <dt>qtd, unitario</dt><dd>as <strong>dependências</strong>. O Svelte descobre sozinho quais são, lendo a expressão uma vez.</dd>
+  <dt>total.toFixed(2)</dt><dd>o derivado é número, então os métodos de número funcionam nele normalmente.</dd>
+</dl>
+
+<div class="tip">
+<strong>Derivado não é atalho para tudo</strong>
+<p>Se a conta é de uma linha, <code>$derived</code> resolve. Se ela precisa de várias linhas, com variáveis intermediárias e <code>if</code>, existe <code>$derived.by(() =&gt; { … })</code> — a runa irmã, com aula própria logo depois desta. E se o que você quer é <em>fazer</em> algo quando um valor muda (mandar um pedido, mexer no título da página), a runa é <code>$effect</code>, não <code>$derived</code>.</p>
+</div>
+
+<hr>
+
+<h2>3. O jeito errado: atualizar à mão</h2>
+
+<p>Antes de acreditar no <code>$derived</code>, vale ver o problema que ele resolve. Sem a runa, o total teria de ser uma variável comum, atualizada em cada lugar onde a quantidade muda:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let total = 0;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 0.00&lt;/p&gt;</pre>
+
+<p>A tela mostra zero porque ninguém calculou nada. Para funcionar, cada botão teria de lembrar de atualizar o total:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let total = $state(1.8);
+
+  function somarUm() {
+    qtd++;
+    total = qtd * unitario;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={somarUm}&gt;mais um pão&lt;/button&gt;</pre>
+
+<p>Assim funciona — até aparecer o segundo botão, o campo que muda o preço, o desconto e a importação de uma cesta pronta. Cada caminho novo precisa lembrar da linha <code>total = qtd * unitario</code>, e no dia em que alguém esquecer, a lousa mente. Com <code>$derived</code> existe um único lugar onde a conta mora, e ele não pode ser esquecido, porque ninguém precisa chamá-lo.</p>
+
+<div class="warning">
+<strong>Duas fontes de verdade</strong>
+<p>Quando <code>qtd</code> e <code>total</code> podem ser mudados de forma independente, eles podem discordar. E quando discordam, não existe "certo": os dois são estado. Derivar o total elimina a segunda fonte de verdade e, com ela, a possibilidade de discordância.</p>
+</div>
+
+<hr>
+
+<h2>4. O primeiro experimento: faça a conta</h2>
+
+<p>A caixa abaixo tem quantidade e preço unitário, mas o total está fixo em zero. Sua missão é fazer o total virar uma conta de verdade.</p>
+
+<div class="trysvelte" data-goal="out:Total: R$ 1.80">
+<p class="try-task"><strong>Missão:</strong> dois pães a noventa centavos. Faça o total mostrar <strong>R$ 1.80</strong> sem escrever o número à mão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let total = 0;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let total = $derived(qtd * unitario);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>A meta compara o texto inteiro da tela com <code>Total: R$ 1.80</code>. Se você escrever <code>let total = 1.8</code>, a caixa aceita — o texto é o mesmo — mas o componente não aprendeu nada. O objetivo do exercício é a conta, não o número.</p>
+
+<hr>
+
+<h2>5. Quem depende de quem</h2>
+
+<p>O Svelte não adivinha: ele lê a expressão do derivado e anota cada valor que aparece ali. No exemplo, a expressão <code>qtd * unitario</code> toca em duas variáveis de estado. São essas duas — e só elas — que disparam o recálculo. Mexer em outra coisa não refaz a conta.</p>
+
+<p>Isso tem uma consequência prática importante: <strong>o derivado enxerga o que está escrito na expressão</strong>. Se você esconder o valor dentro de uma função que só existe para o cálculo, o Svelte ainda enxerga, porque ele executa a função para descobrir as dependências. Mas se você guardar um valor numa variável comum e usá-la, a variável não avisa ninguém, e a conta fica velha.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let unitario = $state(0.9);
+  let bruto = $derived(qtd * unitario);
+  let comDesconto = $derived(bruto * 0.9);
+&lt;/script&gt;
+
+&lt;p&gt;Bruto: R$ {bruto.toFixed(2)}&lt;/p&gt;
+&lt;p&gt;Com desconto: R$ {comDesconto.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Bruto: R$ 1.80&lt;/p&gt; &lt;p&gt;Com desconto: R$ 1.62&lt;/p&gt;</pre>
+
+<p>Aqui a corrente tem dois elos: <code>bruto</code> depende de <code>qtd</code> e <code>unitario</code>; <code>comDesconto</code> depende de <code>bruto</code>. Quando a quantidade muda, o Svelte recalcula o bruto, vê que ele mudou, recalcula o desconto e só então desenha. Você não coordena nada disso — a ordem é consequência de quem depende de quem.</p>
+
+<dl class="anatomy">
+  <dt>bruto</dt><dd>o <strong>primeiro elo</strong>: conta feita com estado.</dd>
+  <dt>comDesconto</dt><dd>o <strong>segundo elo</strong>: conta feita com outro derivado.</dd>
+  <dt>0.9</dt><dd>o fator do desconto de dez por cento. Poderia ser um <code>$state</code> se a Ana quisesse mudá-lo na tela.</dd>
+  <dt>ordem das linhas</dt><dd>não trava o cálculo, porque o derivado roda na leitura. Mesmo assim, escrever na ordem em que se lê ajuda quem abre o arquivo depois.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="outre:^Total: R\$ 1\.80;;clique:button;;outre:^Total: R\$ 2\.70">
+<p class="try-task"><strong>Missão:</strong> o total está zerado e não acompanha o clique. Faça ele mostrar <strong>R$ 1.80</strong> e passar para <strong>R$ 2.70</strong> depois de um pão a mais.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um pão&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $derived(qtd * 0.9);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um pão&lt;/button&gt;</pre>
+</div>
+
+<p>Observe que o botão não toca no total: ele só muda a quantidade. Quem faz o resto é a runa. Esse é o teste que separa um derivado de uma variável atualizada à mão: o botão pode não saber que o total existe.</p>
+
+<hr>
+
+<h2>6. Derivado com lista</h2>
+
+<p>O caso mais comum na vida real é o total de uma lista. A Ana tem os itens da cesta, cada um com o seu preço, e quer a soma. Em JavaScript isso se faz com <code>reduce</code>, e o <code>$derived</code> embrulha a chamada:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([{ preco: 0.9 }, { preco: 1.2 }]);
+  let total = $derived(itens.reduce((soma, item) =&gt; soma + item.preco, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 2.10&lt;/p&gt;</pre>
+
+<p><code>reduce</code> é "reduzir a lista a um valor só": ele começa em <code>0</code> (o segundo argumento), percorre cada item e vai somando <code>item.preco</code> ao acumulador <code>soma</code>. Como <code>itens</code> é estado reativo, mexer na lista — inclusive com <code>push</code> — avisa o derivado, e o total se refaz. Essa ligação entre estado profundo e derivado é o que faz o padrão funcionar sem nenhum código extra.</p>
+
+<p>Se a conta dentro da lista crescer (desconto por item, frete, imposto), a expressão de uma linha começa a ficar ilegível. É a hora de <code>$derived.by</code>, que aceita uma função com várias linhas e um <code>return</code>. A próxima aula é exatamente sobre isso.</p>
+
+<hr>
+
+<h2>7. Derivado em cadeia</h2>
+
+<p>Você já viu dois elos. A cadeia pode ser maior, e o custo continua o mesmo: cada elo é uma linha. O que muda é o cuidado com a ordem e com a legibilidade.</p>
+
+<div class="trysvelte" data-goal="outre:^Com desconto: R\$ 1\.62;;clique:button;;outre:^Com desconto: R\$ 2\.43">
+<p class="try-task"><strong>Missão:</strong> o bruto já é derivado; o desconto de dez por cento está zerado. Mostre <strong>R$ 1.62</strong> e faça acompanhar o clique (<strong>R$ 2.43</strong> com três pães).</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let bruto = $derived(qtd * 0.9);
+  let comDesconto = 0;
+&lt;/script&gt;
+
+&lt;p&gt;Com desconto: R$ {comDesconto.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um pão&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let bruto = $derived(qtd * 0.9);
+  let comDesconto = $derived(bruto * 0.9);
+&lt;/script&gt;
+
+&lt;p&gt;Com desconto: R$ {comDesconto.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;mais um pão&lt;/button&gt;</pre>
+</div>
+
+<p>Três pães dão 2,70 de bruto; com dez por cento de desconto, 2,43. O botão continua sem saber de nada: ele muda a quantidade, e a corrente faz o resto. Quando a Ana mudar a regra do desconto, existe um só lugar para mexer.</p>
+
+<hr>
+
+<h2>8. <code>get</code> de classe e <code>$derived</code></h2>
+
+<p>Quem vem de JavaScript puro conhece outra forma de valor calculado: o <code>get</code> de uma classe. Ele também refaz a conta a cada leitura. A diferença é <em>quando</em> a conta roda e quanto ela é reaproveitada.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando calcula</th><th>Onde usar</th></tr>
+<tr><td><code>let x = $derived(expr)</code></td><td>quando uma dependência muda; guarda o resultado até a próxima mudança</td><td>no componente</td></tr>
+<tr><td><code>get x() { return … }</code></td><td>a cada leitura, todas as vezes</td><td>em classe, quando a conta é barata</td></tr>
+<tr><td><code>x = $derived.by(() =&gt; { … })</code></td><td>igual ao derivado, com função de várias linhas</td><td>conta longa</td></tr>
+<tr><td><code>let x = 0</code></td><td>nunca; fica com o valor que recebeu</td><td>valor que não depende de nada</td></tr>
+</table>
+</div>
+
+<p>O <code>get</code> é ótimo para contas de uma linha dentro de uma classe, e o Svelte trata classes com campos reativos sem problema. Já o <code>$derived</code> evita repetir a conta quando ela é cara — uma soma de mil itens, por exemplo, calculada uma vez por mudança em vez de uma vez por leitura.</p>
+
+<p>Em classe, o campo derivado se escreve como os outros campos, sem <code>let</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  class Cesta {
+    qtd = $state(2);
+    unitario = 0.9;
+    total = $derived(this.qtd * this.unitario);
+  }
+
+  const cesta = new Cesta();
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {cesta.total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 1.80&lt;/p&gt;</pre>
+
+<p>Repare no <code>this</code>: dentro da classe, os campos são acessados com <code>this.</code>. O <code>unitario</code> ficou sem runa porque não muda; se a Ana quisesse editar o preço na tela, ele também seria <code>$state</code>.</p>
+
+<hr>
+
+<h2>9. Derivado não é lugar de efeito</h2>
+
+<p>Existe uma tentação: usar <code>$derived</code> para "aproveitar" e fazer algo além de calcular, como salvar no <code>localStorage</code> ou mudar o título da página. Não faça. A expressão de um derivado pode rodar várias vezes, em ordens que você não controla, e um efeito colateral repetido é uma bomba.</p>
+
+<p>A regra é simples: <strong>derivado calcula e devolve; efeito faz e não devolve</strong>. Se a sua conta precisa de um <code>console.log</code>, de uma chamada de rede ou de mexer no documento, ela não é derivada — é efeito, e a runa é <code>$effect</code>.</p>
+
+<p>Tem também a tentação de atribuir ao derivado. O compilador aceita a atribuição, e é aí que mora o perigo: no próximo recálculo o valor volta a ser o resultado da conta, e você perde a mudança sem entender por quê. Trate o derivado como leitura, do mesmo jeito que trata uma prop.</p>
+
+<hr>
+
+<h2>10. Rodando no computador da Ana</h2>
+
+<p>O servidor de desenvolvimento mostra o resultado na hora:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 571 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Na tela, a cesta mostra o bruto e o valor com desconto. Cada clique em "mais um pão" refaz a conta inteira: quantidade, bruto, desconto, texto. Você não vê nada acontecer no terminal, porque o recálculo é do componente, não do servidor.</p>
+
+<p>O build de produção compila as runas em JavaScript comum:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CGjL9_NC.js  36.40 kB │ gzip: 14.07 kB
+✓ built in 905ms</pre>
+
+<p>Os 111 módulos incluem o runtime do Svelte, que é quem executa as contas de dependência. É por isso que o mesmo componente pesa poucos kilobytes a mais do que um HTML com JavaScript escrito à mão — e economiza as linhas que você não escreveu.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Três mensagens do compilador de verdade, cada uma apontando um jeito diferente de errar a runa.</p>
+
+<div class="cenario">
+<p><strong>1. A runa sem parênteses.</strong> Escrever <code>$derived</code> sozinho parece "declarar que é derivado", mas a runa precisa da conta:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $derived;
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 14): Cannot use rune without parentheses</pre>
+<p>"Não posso usar a runa sem parênteses". Toda runa é uma chamada: <code>$derived(…)</code>, <code>$state(…)</code>, <code>$props()</code>. Sem os parênteses, o compilador não sabe o que calcular.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. Duas expressões.</strong> Quem quer calcular duas coisas tenta passar as duas de uma vez. A runa aceita uma só:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let total = $derived(qtd * 0.9, qtd);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 14): `$derived` must be called with exactly one argument</pre>
+<p>"<code>$derived</code> precisa ser chamado com exatamente um argumento". Para dois resultados, duas linhas — ou um objeto devolvido por <code>$derived.by</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. A runa no meio do HTML.</strong> Parece econômico calcular direto na marcação. Não é permitido:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let qtd = $state(2);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {$derived(qtd * 0.9)}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 11): `$derived(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+<p>"<code>$derived(...)</code> só pode ser usado como valor inicial de uma declaração de variável, como campo de classe, ou na primeira atribuição a um campo de classe no construtor". A conta derivada precisa de um nome, no script. No HTML você escreve a conta direto (<code>{qtd * 0.9}</code>) se ela for curta, ou usa a variável derivada.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado</th></tr>
+<tr><td><code>let t = $derived(qtd * 0.9)</code></td><td>número recalculado quando <code>qtd</code> muda</td></tr>
+<tr><td><code>let t = $derived(itens.reduce(…, 0))</code></td><td>soma de lista reativa</td></tr>
+<tr><td><code>let r = $derived(a &gt; 10)</code></td><td>verdadeiro/falso derivado, ótimo para <code>{#if}</code></td></tr>
+<tr><td><code>let d = $derived(bruto * 0.9)</code></td><td>derivado de derivado (cadeia)</td></tr>
+<tr><td><code>total = $derived(…)</code> em classe</td><td>campo derivado, sem <code>let</code></td></tr>
+<tr><td><code>$derived.by(() =&gt; { … })</code></td><td>conta de várias linhas, com <code>return</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que fazer</th></tr>
+<tr><td><code>Cannot use rune without parentheses</code></td><td>chamar a runa: <code>$derived(conta)</code></td></tr>
+<tr><td><code>must be called with exactly one argument</code></td><td>uma expressão por derivado</td></tr>
+<tr><td><code>can only be used as a variable declaration initializer…</code></td><td>tirar a runa do HTML e dar um nome a ela no script</td></tr>
+<tr><td><code>state_referenced_locally</code></td><td>o valor foi lido uma vez; use derivado ou leia dentro do HTML</td></tr>
+</table>
+</div>
+
+<p>Resumindo o critério de escolha, que vale para o resto do guia: se o valor <strong>pode ser calculado</strong> a partir de outros, ele é derivado; se ele <strong>vem de fora</strong> (do servidor, do usuário, de uma prop), é estado. Um derivado nunca é fonte de verdade — ele é consequência.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>let total = $derived(qtd * 0.9)</code> faz?</p>
+<label><input type="radio" name="q1"> calcula uma vez, na montagem, e guarda o resultado</label>
+<label><input type="radio" name="q1"> recalcula sempre que <code>qtd</code> muda e avisa a tela</label>
+<label><input type="radio" name="q1"> cria uma função que você precisa chamar no clique</label>
+<label><input type="radio" name="q1"> guarda a expressão como texto para mostrar no HTML</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. A Ana tem <code>itens</code> (lista reativa) e quer o total. Qual linha é a derivada correta?</p>
+<label><input type="radio" name="q1"> <code>let total = 0;</code></label>
+<label><input type="radio" name="q1"> <code>let total = $derived;</code></label>
+<label><input type="radio" name="q1"> <code>let total = $derived(itens.reduce((soma, item) =&gt; soma + item.preco, 0));</code></label>
+<label><input type="radio" name="q1"> <code>{$derived(itens.length)}</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que não usar <code>$derived</code> para salvar algo no <code>localStorage</code>?</p>
+<label><input type="radio" name="q1"> porque o derivado pode rodar várias vezes e repetir o efeito</label>
+<label><input type="radio" name="q1"> porque o <code>localStorage</code> só funciona no servidor</label>
+<label><input type="radio" name="q1"> porque o derivado não aceita texto</label>
+<label><input type="radio" name="q1"> porque a runa só funciona dentro de classes</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let qtd = $state(3);<br>let total = <input data-answer="$derived(qtd * 0.9)">&nbsp;;<br>&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;<br><br>// três pães a noventa centavos, e o total acompanha a quantidade</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><strong>Valor derivado</strong> é o resultado de uma conta com outros valores, não um dado decidido por você.</li>
+  <li><code>let x = $derived(expressão)</code> cria o derivado e refaz a conta quando uma dependência muda.</li>
+  <li>As dependências são as variáveis que aparecem na expressão — o Svelte as descobre executando a conta.</li>
+  <li>Atualizar o total à mão em cada clique funciona até o segundo caminho aparecer; o derivado elimina essa segunda fonte de verdade.</li>
+  <li>Derivado de derivado compõe uma corrente, na ordem das linhas do script.</li>
+  <li>Listas reativas combinam com <code>reduce</code>: <code>$derived(itens.reduce(…, 0))</code>.</li>
+  <li><code>get</code> de classe calcula a cada leitura; <code>$derived</code> guarda o resultado entre mudanças.</li>
+  <li>Derivado calcula e devolve; efeito faz e não devolve — não misture os dois.</li>
+  <li>Não atribua a um derivado: no próximo recálculo o valor calculado volta.</li>
+  <li>Erros desta aula: runa sem parênteses, dois argumentos e runa dentro do HTML.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

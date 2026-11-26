@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$props() — o que vem de fora | Guia Svelte</title>
+<meta name="description" content="Como um componente Svelte recebe valores de fora: $props(), valores padrão, renomear na desmontagem, resto com spread e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">$props()</span></h1>
+
+<p class="intro">A Ana tem uma placa de preço na parede da padaria, e quer a mesma placa para o café, o pão de queijo e o sonho. O desenho é igual; o que muda é o nome do produto e o preço. Num componente, essas duas informações que chegam de fora têm nome: <strong>propriedades</strong>, ou <em>props</em>. Nesta aula você aprende a declarar o que o seu componente aceita e a passar valores para ele — sem copiar e colar o mesmo HTML três vezes.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma <strong>propriedade</strong> e por que ela vem de fora.</li>
+  <li>Como declarar o que o componente recebe com <code>$props()</code>.</li>
+  <li>Como o componente pai passa texto, número e expressões.</li>
+  <li>Valores padrão com <code>=</code> dentro da desmontagem.</li>
+  <li>Como renomear uma prop com <code>nome: apelido</code>.</li>
+  <li>Como juntar as props que sobram com <code>...resto</code>.</li>
+  <li>O que acontece quando o pai não manda nada e o filho não tem padrão.</li>
+  <li>Por que a prop é do pai, mesmo quando o filho a copia para uma variável.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como o projeto da Ana compila dois componentes com <code>npm run build</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a placa que serve para vários produtos</h2>
+
+<p>Na padaria, a placa do pão francês e a placa do café têm o mesmo formato: fundo branco, nome do produto em cima, preço embaixo. Se a Ana desenhar cada placa do zero, ela vai errar a cor de uma, o tamanho da letra de outra, e qualquer mudança no formato vira uma tarde inteira de trabalho. O jeito inteligente é desenhar <em>uma</em> placa com dois espaços em branco: um para o nome, outro para o preço.</p>
+
+<p>Um componente funciona assim. Ele é o desenho da placa, e as <strong>props</strong> são os espaços em branco. Quem usa o componente — o <strong>pai</strong> — preenche os espaços. O componente que recebe — o <strong>filho</strong> — só precisa declarar quais espaços existem. O filho não decide o preço do café; ele sabe desenhar um preço qualquer que receba.</p>
+
+<p>Isso muda a forma de pensar. Sem props, você escreveria três blocos de HTML quase iguais. Com props, você escreve um componente e chama três vezes, mudando só o que é diferente. Quando o formato da placa mudar, você mexe num arquivo e as três placas mudam juntas.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O desenho da placa, igual para todos</td><td>O arquivo <code>Cartao.svelte</code></td></tr>
+<tr><td>O espaço em branco do nome do produto</td><td>Uma prop: <code>nome</code></td></tr>
+<tr><td>O espaço em branco do preço</td><td>Outra prop: <code>preco</code></td></tr>
+<tr><td>Quem escreve o nome na placa</td><td>O componente pai: <code>&lt;Cartao nome="café" /&gt;</code></td></tr>
+<tr><td>Uma placa sem nome nenhum</td><td>Prop que o pai não mandou: chega vazia</td></tr>
+</table>
+</div>
+
+<p>O vocabulário do guia: <em>propriedade</em> é o valor que vem de fora; <em>pai</em> é quem usa o componente; <em>filho</em> é o componente usado. Repare que a prop é uma via de mão única: o pai manda, o filho mostra. Quando o filho precisa devolver uma mudança, existe <code>$bindable</code>, que tem aula própria mais adiante.</p>
+
+<hr>
+
+<h2>2. O componente que recebe</h2>
+
+<p>Toda prop nasce de uma linha parecida com esta, no topo do <code>&lt;script&gt;</code>:</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { nome = 'pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<p>Aqui está o pulo do gato: <code>$props()</code> devolve um objeto com tudo o que o pai mandou, e você <em>desmonta</em> esse objeto em variáveis com <code>let { … } =</code>. O que está antes do sinal de igual, entre chaves, são os nomes das props. O que está depois é a runa.</p>
+
+<pre class="out">&lt;p&gt;pão francês: R$ 0.90&lt;/p&gt;</pre>
+
+<p>Esse é o HTML que o compilador gera quando ninguém passa nada — o componente usa os padrões. Dez centavos e um nome: o filho desenha a placa sozinho, com o conteúdo de reserva.</p>
+
+<h3>A anatomia da linha que recebe</h3>
+
+<dl class="anatomy">
+  <dt>let { … }</dt><dd>a <strong>desmontagem</strong>: pega o objeto devolvido e separa o que interessa em variáveis com nome.</dd>
+  <dt>nome</dt><dd>o <strong>primeiro espaço em branco</strong> da placa. É o nome que o pai usa ao passar o valor.</dd>
+  <dt>= 'pão francês'</dt><dd>o <strong>valor padrão</strong>, usado quando o pai não manda nada. Sem ele, a prop chega vazia.</dd>
+  <dt>preco = 0.9</dt><dd>outra prop, com padrão numérico. Número não leva aspas.</dd>
+  <dt>= $props()</dt><dd>a <strong>runa</strong> que entrega os valores do pai. Precisa ficar no topo do script do componente.</dd>
+</dl>
+
+<div class="tip">
+<strong>Uma vez só</strong>
+<p><code>$props()</code> é chamado uma vez por componente. Você pode desmontar tudo numa linha só, como aqui, ou guardar o objeto inteiro em <code>let props = $props()</code> e ler <code>props.nome</code> depois. Chamar a runa duas vezes não é permitido, e a mensagem desse erro aparece no fim da aula.</p>
+</div>
+
+<hr>
+
+<h2>3. O pai que manda os valores</h2>
+
+<p>Do outro lado existe um componente que importa o filho e o usa como se fosse uma tag. Repare no nome com maiúscula e nos atributos:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+&lt;/script&gt;
+
+&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;Cartao nome="café" preco={0.5} /&gt;
+&lt;Cartao nome="pão de queijo" preco={1.2} /&gt;</pre>
+
+<p>Cada <code>&lt;Cartao … /&gt;</code> é uma placa desenhada com valores diferentes: o primeiro cartão mostra <code>café: R$ 0.50</code>, o segundo mostra <code>pão de queijo: R$ 1.20</code>. O arquivo do filho não mudou uma linha. Esse é o ganho inteiro das props: um desenho, muitos usos.</p>
+
+<p>Tem duas sintaxes no mesmo elemento, e é importante não confundir. <code>nome="café"</code> passa o <strong>texto</strong> café; as aspas fazem parte do valor. <code>preco={0.5}</code> passa o <strong>número</strong> 0.5; as chaves dizem "isto é uma expressão, calcule antes de passar". Se você escrever <code>preco="0.5"</code>, o filho recebe o texto <code>"0.5"</code> e a conta <code>preco.toFixed(2)</code> quebra.</p>
+
+<h3>A anatomia do que o pai escreve</h3>
+
+<dl class="anatomy">
+  <dt>&lt;Cartao</dt><dd>o componente importado, com <strong>inicial maiúscula</strong>. Minúscula seria tratada como tag de HTML desconhecida.</dd>
+  <dt>nome="café"</dt><dd>prop com <strong>texto</strong>: aspas normais, sem chaves. O valor vai como está.</dd>
+  <dt>preco={0.5}</dt><dd>prop com <strong>expressão</strong>: chaves em volta. Pode ser número, conta, variável — <code>preco={cesta.total}</code> também vale.</dd>
+  <dt>/&gt;</dt><dd>fecha o componente sem conteúdo dentro. Um componente que recebe conteúdo usa <code>&lt;Cartao&gt;…&lt;/Cartao&gt;</code>.</dd>
+</dl>
+
+<p>Quando o componente tem muitas props, escrever uma a uma cansa. Existe o <strong>espalhamento</strong>: <code>&lt;Cartao {...produto} /&gt;</code> passa cada campo do objeto <code>produto</code> como uma prop. O nome do campo tem de bater com o nome da prop — <code>{ nome, preco }</code> vira <code>nome={…} preco={…}</code>. É útil quando os dados vêm de uma lista.</p>
+
+<hr>
+
+<h2>4. Quando o pai não manda nada</h2>
+
+<p>Nem todo pai manda tudo. Se o filho declara <code>preco</code> sem valor padrão e o pai esquece de passar, o valor chega <code>undefined</code> — a palavra que o JavaScript usa para "não existe". Veja o estrago:</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { nome, preco } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<p>Sem props nenhuma, o componente nem termina de desenhar:</p>
+
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'toFixed')</pre>
+
+<p>"Não consigo ler propriedades de algo indefinido (lendo <code>toFixed</code>)" — em português claro: você pediu para o número se formatar, mas não havia número nenhum ali. O texto <code>nome</code> não quebra porque o vazio vira string vazia; o número quebra porque <code>undefined</code> não tem o método <code>toFixed</code>.</p>
+
+<p>Duas saídas para isso. A primeira é o valor padrão, que já apareceu na seção anterior: <code>preco = 0.9</code>. A segunda é tratar o caso na hora de mostrar, com <code>??</code> — o operador que diz "se o valor da esquerda não existir, use o da direita":</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let props = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{props.nome ?? 'sem nome'}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;sem nome&lt;/p&gt;</pre>
+
+<p>O <code>??</code> não substitui o zero nem a string vazia — só <code>undefined</code> e <code>null</code>. Isso importa: um preço <code>0</code> é um preço de verdade (o pão de ontem, de graça), e não pode virar "sem preço".</p>
+
+<hr>
+
+<h2>5. O primeiro experimento: conserte o cartão</h2>
+
+<p>O componente abaixo é um cartão sem valores padrão. Ele quebra quando ninguém passa nada, e a caixa mostra a mesma mensagem que o compilador mostrou acima. Sua missão é fazer o cartão funcionar sozinho.</p>
+
+<div class="trysvelte" data-goal="out:pão francês: R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> dê valores padrão para <code>nome</code> e <code>preco</code>, de modo que o cartão mostre <strong>pão francês: R$ 0.90</strong> mesmo sem receber nada.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { nome, preco } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que o HTML não mudou: só a linha do <code>$props()</code>. Em quase todo conserto de props o trabalho é na declaração, porque é ela que decide o que o componente aceita e o que ele faz quando não recebe.</p>
+
+<hr>
+
+<h2>6. Trocar o nome da variável</h2>
+
+<p>Às vezes o nome que o pai usa não é o nome que faz sentido dentro do filho. O pai pode passar <code>nome</code>, e o filho preferir chamar de <code>produto</code> para deixar claro que aquilo é um produto. A desmontagem permite renomear com dois-pontos:</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { nome: produto = 'pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{produto}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;pão francês: R$ 0.90&lt;/p&gt;</pre>
+
+<p>A leitura é: "pegue o campo <code>nome</code> do objeto e guarde na variável <code>produto</code>, com padrão <code>'pão francês'</code>". O pai continua escrevendo <code>nome="café"</code>; dentro do filho, o valor se chama <code>produto</code>. Se você usar <code>{nome}</code> no HTML, o compilador reclama que <code>nome</code> não existe — não há variável com esse nome ali.</p>
+
+<div class="trysvelte" data-goal="out:pão francês: R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> a prop chega como <code>nome</code> e é guardada em <code>produto</code>. Use a variável certa no HTML para o cartão voltar a desenhar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { nome: produto = 'pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { nome: produto = 'pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{produto}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Ao rodar, a caixa mostra <code>nome is not defined</code>. É um erro de JavaScript comum, e a solução é de uma palavra: trocar <code>{nome}</code> por <code>{produto}</code>. Sempre que renomear na desmontagem, procure o nome antigo no HTML.</p>
+
+<hr>
+
+<h2>7. O resto das props: <code>...resto</code></h2>
+
+<p>Um componente que embrulha outro — um cartão que aceita qualquer atributo e repassa — precisa pegar as props que não conhece. Para isso serve o <strong>resto</strong>, com três pontinhos:</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { nome = 'pão', ...resto } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;
+&lt;p&gt;outras props: {Object.keys(resto).length}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;pão&lt;/p&gt; &lt;p&gt;outras props: 0&lt;/p&gt;</pre>
+
+<p><code>resto</code> é um objeto com tudo o que o pai mandou e não foi desmontado. Sem props extras, ele é vazio e a contagem dá zero. Com <code>preco={0.9}</code> e <code>desconto={10}</code> chegando, daria dois.</p>
+
+<p>O uso mais comum do resto é repassar: <code>&lt;button {...resto}&gt;</code> leva adiante <code>onclick</code>, <code>disabled</code>, <code>aria-label</code> e o que mais o pai tiver passado, sem que o componente precise conhecer cada nome. É a diferença entre um componente fechado e um componente que se adapta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Valor quando o pai não manda</th></tr>
+<tr><td><code>let { nome } = $props()</code></td><td>declara a prop, sem padrão</td><td><code>undefined</code></td></tr>
+<tr><td><code>let { nome = 'pão' } = $props()</code></td><td>declara com valor padrão</td><td><code>'pão'</code></td></tr>
+<tr><td><code>let { nome: produto } = $props()</code></td><td>renomeia para uso interno</td><td><code>undefined</code></td></tr>
+<tr><td><code>let { nome, ...resto } = $props()</code></td><td>separa o que sobra</td><td><code>resto</code> é <code>{}</code></td></tr>
+<tr><td><code>let props = $props()</code></td><td>guarda o objeto inteiro</td><td><code>props.nome</code> é <code>undefined</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>8. O objeto inteiro e o <code>??</code></h2>
+
+<p>Nem sempre você sabe de antemão quais props vão chegar. Guardar o objeto inteiro deixa o componente flexível: você lê o que precisa na hora e decide o que fazer quando falta.</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let props = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{props.nome ?? 'sem nome'}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;sem nome&lt;/p&gt;</pre>
+
+<p>O custo dessa flexibilidade é que o compilador não tem como avisar que você digitou <code>props.nme</code> — não existe lista de props para conferir. Com a desmontagem, um nome errado vira erro na hora; com o objeto, vira uma tela vazia e meia hora de procura. Prefira desmontar; guarde o objeto quando o componente for mesmo genérico.</p>
+
+<div class="trysvelte" data-goal="out:sem nome">
+<p class="try-task"><strong>Missão:</strong> quando o pai não manda <code>nome</code>, a tela fica vazia. Mostre o texto <strong>sem nome</strong> nesse caso.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let props = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{props.nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let props = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{props.nome ?? 'sem nome'}&lt;/p&gt;</pre>
+</div>
+
+<p>O verificador compara o texto inteiro da tela, e o texto inicial é vazio. Depois da correção ele é <code>sem nome</code> — nem mais, nem menos.</p>
+
+<hr>
+
+<h2>9. A prop é do pai (e isso é de propósito)</h2>
+
+<p>Tem uma confusão que aparece sempre: o filho recebe <code>preco</code> e quer mudar o preço. Ele até consegue, porque dentro do script <code>preco</code> é uma variável como outra qualquer. Mas o valor que o pai guarda não muda. No dia seguinte, o pai desenha o filho de novo com o preço antigo, e ninguém entende por que a mudança sumiu.</p>
+
+<p>A regra é: <strong>quem manda é o pai</strong>. O filho desenha o que recebeu e avisa o pai quando algo acontece (com um evento, ou com uma prop vinculada). Esse caminho de volta tem nome — fluxo de dados de baixo para cima — e é o assunto das aulas de eventos de componente e de <code>$bindable</code>.</p>
+
+<p>Enquanto isso, trate as props como leitura. Se precisar de um valor que muda dentro do filho, crie um estado separado e comece com o valor recebido:</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { preco = 0.9 } = $props();
+  let desconto = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {(preco * (1 - desconto)).toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+
+<p>Aqui o filho não mexe na prop: ele mexe no próprio <code>desconto</code>, que nasceu com <code>$state</code> e é dele. A conta mistura os dois — o valor de fora e o valor de dentro — e o resultado aparece na tela. Essa mistura é o pão de cada dia de um componente.</p>
+
+<hr>
+
+<h2>10. Rodando no computador da Ana</h2>
+
+<p>O projeto dela tem dois arquivos de componente: <code>src/App.svelte</code>, que é o pai, e <code>src/Cartao.svelte</code>, que é o filho. O servidor de desenvolvimento sobe assim:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 571 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Com o servidor no ar, o navegador mostra o título e os dois cartões: <code>café: R$ 0.50</code> e <code>pão de queijo: R$ 1.20</code>. Se você trocar o valor de uma prop no pai e salvar, o cartão correspondente muda na hora — sem recarregar a página.</p>
+
+<p>O build junta os dois componentes no mesmo pacote:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 113 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DnfhVX1T.js  36.70 kB │ gzip: 14.19 kB
+✓ built in 1.70s</pre>
+
+<p>O número de módulos subiu de 111 para 113 quando o segundo componente entrou no projeto: cada arquivo <code>.svelte</code> é um módulo a mais. O tamanho final também cresce um pouco, porque o código do cartão vai junto — mesmo que o pai use o cartão duas vezes, o desenho é compilado uma vez só.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Três mensagens reais, colhidas do compilador rodando os arquivos quebrados. As duas primeiras param a compilação; a terceira só aparece quando a página tenta desenhar.</p>
+
+<div class="cenario">
+<p><strong>1. <code>export let</code> no modo runas.</strong> Quem aprendeu Svelte antes de 2024 escreve assim. O compilador recusa:</p>
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { nome } = $props();
+  export let preco = 0.9;
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: R$ {preco}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+<p>"Não posso usar <code>export let</code> no modo runas — use <code>$props()</code>". A partir do momento em que o componente usa uma runa, ele está no modo novo, e o jeito antigo de declarar prop não vale mais. A correção é juntar tudo na desmontagem: <code>let { nome, preco = 0.9 } = $props()</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. Passar valores para a runa.</strong> Parece natural escrever os padrões dentro do <code>$props(…)</code>, mas a runa não aceita argumentos:</p>
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { nome, preco } = $props({ nome: 'pão', preco: 0.9 });
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: R$ {preco}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 24): `$props` cannot be called with arguments</pre>
+<p>"<code>$props</code> não pode ser chamado com argumentos". Os padrões moram do lado esquerdo, na desmontagem: <code>let { nome = 'pão', preco = 0.9 } = $props()</code>. A runa só entrega; quem decide o que fazer com o que chegou é o seu código.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. O pai não manda e o filho confia.</strong> Este compila sem uma queixa e quebra na hora de desenhar:</p>
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { nome, preco } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'toFixed')</pre>
+<p>O compilador não sabe se o pai vai mandar <code>preco</code> — isso só se descobre rodando. Por isso valor padrão não é luxo: é o que transforma um componente frágil num componente que sempre desenha alguma coisa.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No pai</th><th>O que chega no filho</th></tr>
+<tr><td><code>&lt;Cartao nome="café" /&gt;</code></td><td>texto <code>"café"</code></td></tr>
+<tr><td><code>&lt;Cartao preco={0.5} /&gt;</code></td><td>número <code>0.5</code></td></tr>
+<tr><td><code>&lt;Cartao preco={cesta.total} /&gt;</code></td><td>o valor da expressão, recalculado quando muda</td></tr>
+<tr><td><code>&lt;Cartao {...produto} /&gt;</code></td><td>uma prop por campo do objeto</td></tr>
+<tr><td><code>&lt;Cartao /&gt;</code></td><td>props vazias; os padrões do filho entram em ação</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que fazer</th></tr>
+<tr><td><code>Cannot use `export let` in runes mode</code></td><td>trocar por <code>let { … } = $props()</code></td></tr>
+<tr><td><code>`$props` cannot be called with arguments</code></td><td>tirar os valores de dentro da runa e pôr como padrão</td></tr>
+<tr><td><code>Cannot use `$props()` more than once</code></td><td>desmontar tudo numa chamada só</td></tr>
+<tr><td><code>`$props()` can only be used at the top level…</code></td><td>mover a linha para o topo do <code>&lt;script&gt;</code></td></tr>
+<tr><td><code>Cannot read properties of undefined</code></td><td>falta de valor padrão ou de tratamento com <code>??</code></td></tr>
+</table>
+</div>
+
+<p>Uma última ideia: props são a fronteira do componente. Tudo o que está dentro é seu; tudo o que vem de fora passa por essa linha. Quanto mais clara a fronteira — com nomes bons e padrões honestos —, mais fácil é usar o componente sem ler o código dele.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual linha declara duas props com valor padrão?</p>
+<label><input type="radio" name="q1"> <code>let nome, preco = $props();</code></label>
+<label><input type="radio" name="q1"> <code>let { nome = 'pão', preco = 0.9 } = $props();</code></label>
+<label><input type="radio" name="q1"> <code>export let nome = 'pão'; export let preco = 0.9;</code></label>
+<label><input type="radio" name="q1"> <code>let props = $props({ nome: 'pão' });</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Como o pai passa o número 0.5 para a prop <code>preco</code>?</p>
+<label><input type="radio" name="q1"> <code>&lt;Cartao preco="0.5" /&gt;</code></label>
+<label><input type="radio" name="q1"> <code>&lt;Cartao preco=0.5 /&gt;</code> (sem nada em volta)</label>
+<label><input type="radio" name="q1"> <code>&lt;Cartao preco={0.5} /&gt;</code></label>
+<label><input type="radio" name="q1"> <code>&lt;cartao preco={0.5} /&gt;</code> com minúscula</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>let { nome: produto } = $props()</code> faz?</p>
+<label><input type="radio" name="q1"> pega o campo <code>nome</code> e guarda numa variável chamada <code>produto</code></label>
+<label><input type="radio" name="q1"> renomeia a prop para o pai passar <code>produto</code></label>
+<label><input type="radio" name="q1"> cria uma prop nova chamada <code>produto</code> com valor vazio</label>
+<label><input type="radio" name="q1"> dá o valor padrão <code>'produto'</code> para <code>nome</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let { nome = 'café', preco = <input data-answer="0.5"> } = $props();<br>&lt;p&gt;{nome}: R$ {preco.toFixed(2)}&lt;/p&gt;<br><br>// o café custa cinquenta centavos quando o pai não manda nada</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><strong>Propriedade</strong> (prop) é o valor que o componente recebe de fora; o pai manda, o filho mostra.</li>
+  <li><code>let { nome, preco } = $props()</code> declara o que o componente aceita, desmontando o objeto da runa.</li>
+  <li>Valores padrão ficam na desmontagem: <code>nome = 'pão'</code>, <code>preco = 0.9</code>.</li>
+  <li>O pai passa texto com aspas e expressão com chaves: <code>nome="café"</code>, <code>preco={0.5}</code>.</li>
+  <li>Componente usado como tag tem inicial maiúscula; o nome do arquivo também.</li>
+  <li><code>nome: produto</code> renomeia a prop para uso interno, sem mudar o nome que o pai usa.</li>
+  <li><code>...resto</code> junta as props não desmontadas, útil para repassar atributos.</li>
+  <li>Sem padrão e sem valor do pai, a prop chega <code>undefined</code> e o número quebra em <code>toFixed</code>.</li>
+  <li><code>??</code> troca <code>undefined</code> e <code>null</code> por um valor de reserva — sem afetar <code>0</code> nem texto vazio.</li>
+  <li>A prop pertence ao pai: mudar a variável no filho não muda o pai; o caminho de volta é evento ou <code>$bindable</code>.</li>
+  <li>Erros desta aula: <code>export let</code> no modo runas, <code>$props</code> com argumentos, <code>$props()</code> duas vezes e prop sem padrão.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$state — o valor que avisa a tela | Guia Svelte</title>
+<meta name="description" content="A runa $state explicada do zero: a cesta de pães da Ana, o valor que avisa a tela, $state.raw, $state.snapshot, classes e os erros reais do compilador Svelte 5.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">$state</span></h1>
+
+<p class="intro">A Ana vende pão na padaria e controla a cesta num caderno: três pães, quatro pães, cinco. Na lousa da parede ela escreve o total do dia, e o problema é sempre o mesmo — quando o caderno muda, a lousa fica velha até alguém lembrar de reescrever. Nesta aula você conhece a peça do Svelte que resolve isso: <code>$state</code>. É ela que transforma uma variável comum num valor que <em>avisa</em> a tela quando muda.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é <strong>estado</strong> e por que a tela precisa ser avisada.</li>
+  <li>Como criar estado com <code>let paes = $state(0)</code>.</li>
+  <li>O que acontece com o HTML quando o valor muda e quando não muda.</li>
+  <li>Que <code>$state</code> guarda texto, número e <code>true</code>/<code>false</code> do mesmo jeito.</li>
+  <li>As três formas de mudar o valor: <code>++</code>, <code>+=</code> e a troca direta.</li>
+  <li>Por que <code>let mensagem = 'O pão custa ' + preco</code> copia o valor e não acompanha mais.</li>
+  <li>Quando usar <code>$state.raw</code> e quando usar <code>$state.snapshot</code>.</li>
+  <li>Como usar <code>$state</code> dentro de uma classe, do jeito da cesta da Ana.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como o projeto da Ana roda com <code>npm run dev</code> e <code>npm run build</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: um valor que avisa quando muda</h2>
+
+<p>Imagine a padaria em duas versões. Na primeira, a Ana escreve o total do dia num papel e cola na parede. Se ela vender mais um pão, o papel continua dizendo o número antigo — o papel não sabe de nada. Na segunda versão, a Ana escreve o total numa lousa e deixa um combinado com o ajudante: "sempre que eu mudar o número aqui, você apaga a lousa e escreve o número novo". A lousa nunca fica atrasada.</p>
+
+<p>O Svelte trabalha assim. O seu HTML é a lousa, o valor é o que está escrito, e existe um ajudante invisível — o compilador — que fez o combinado com você antes da página abrir. O que ele precisa saber é <em>qual</em> valor deve ser vigiado. É para isso que serve a runa <code>$state</code>: ela marca a variável como "valor vigiado". Quando o valor muda, o ajudante reescreve só o pedaço da tela que usa aquele valor.</p>
+
+<p>Sem essa marca, a variável é papel. Ela guarda o número, você pode até mudá-lo, mas ninguém reescreve a lousa. Esse é o mal-entendido número um de quem começa: o código parece igual, e a tela não muda. O nome técnico do que <code>$state</code> cria é <strong>estado reativo</strong> — estado porque é um valor guardado, reativo porque a tela reage a ele.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O caderno de pedidos</td><td>O bloco <code>&lt;script&gt;</code> do componente</td></tr>
+<tr><td>Cada linha do caderno: "3 pães"</td><td>Uma variável: <code>let paes = $state(3)</code></td></tr>
+<tr><td>O combinado com o ajudante</td><td>A runa <code>$state</code></td></tr>
+<tr><td>Apagar e escrever o número novo na lousa</td><td>A tela se redesenhando sozinha</td></tr>
+<tr><td>Papel colado na parede</td><td><code>let paes = 3</code> — guarda o valor, mas não avisa</td></tr>
+</table>
+</div>
+
+<p>Repare numa coisa importante: <code>$state</code> não muda o valor, não formata, não salva. Ele só faz o combinado de avisar. Quem decide <em>o que</em> aparece na tela continua sendo o seu HTML, com as chaves <code>{ }</code>. Essa separação entre guardar e mostrar volta em todas as aulas de estado.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>$state</code> da Ana</h2>
+
+<p>O componente abaixo é a cesta da Ana em forma de código. Ele tem um valor (quantos pães estão na cesta), um lugar onde esse valor aparece e um botão que muda o valor:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães na cesta: {paes}&lt;/p&gt;
+&lt;button onclick={() =&gt; paes++}&gt;mais um pão&lt;/button&gt;</pre>
+
+<p>O compilador do Svelte transforma esse arquivo em HTML e JavaScript. O HTML que o navegador recebe é este:</p>
+
+<pre class="out">&lt;p&gt;Pães na cesta: 0&lt;/p&gt; &lt;button&gt;mais um pão&lt;/button&gt;</pre>
+
+<p>E o texto que aparece na tela, que é o que a Ana vê, é este:</p>
+
+<pre class="out">Pães na cesta: 0 mais um pão</pre>
+
+<p>Nada de surpresa até aqui: o botão mostra o que está escrito nele, o parágrafo mostra o valor inicial <code>0</code>. A diferença entre papel e lousa aparece no clique, e é por isso que ela engana tanto. Clique no botão deste componente na caixa lá embaixo e veja o número subir sem que ninguém tenha pedido para a página se atualizar.</p>
+
+<h3>A anatomia do estado</h3>
+
+<dl class="anatomy">
+  <dt>let paes</dt><dd>o <strong>nome</strong> do valor. <code>let</code> diz que ele pode ser trocado depois; um valor que nunca muda poderia ser <code>const</code>.</dd>
+  <dt>= $state(0)</dt><dd>o <strong>valor inicial</strong> embrulhado na runa. O <code>0</code> é o que aparece na tela antes de qualquer clique.</dd>
+  <dt>{paes}</dt><dd>o <strong>buraco</strong> no HTML onde o valor entra. Toda vez que <code>paes</code> mudar, esse buraco é preenchido de novo.</dd>
+  <dt>onclick={() =&gt; paes++}</dt><dd>a <strong>mudança</strong>. <code>paes++</code> soma um ao valor; a seta guarda essa ação para rodar no clique.</dd>
+  <dt>paes++</dt><dd>a forma curta de <code>paes = paes + 1</code>. Vale também <code>paes += 2</code> para somar dois.</dd>
+</dl>
+
+<div class="tip">
+<strong>Por que o nome tem cifrão</strong>
+<p><code>$state</code> é uma <strong>runa</strong> (do inglês <em>rune</em>, o símbolo de um alfabeto antigo). Runas são palavras que o compilador do Svelte reconhece e trata de um jeito especial — não são funções comuns que você importa de algum lugar. O cifrão na frente existe para você reconhecer de longe o que é reativo e o que não é.</p>
+</div>
+
+<hr>
+
+<h2>3. A lousa que ninguém avisa</h2>
+
+<p>O componente abaixo tem dois contadores na mesma tela. O das vendas nasceu com <code>$state</code>; o dos cafés nasceu com um <code>let</code> comum:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cafes = 0;
+  let vendas = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cafés: {cafes}&lt;/p&gt;
+&lt;button onclick={() =&gt; cafes++}&gt;mais um café&lt;/button&gt;
+&lt;p&gt;Vendas: {vendas}&lt;/p&gt;
+&lt;button onclick={() =&gt; vendas++}&gt;contar venda&lt;/button&gt;</pre>
+
+<p>O HTML inicial não denuncia nada de errado:</p>
+
+<pre class="out">&lt;p&gt;Cafés: 0&lt;/p&gt; &lt;button&gt;mais um café&lt;/button&gt; &lt;p&gt;Vendas: 0&lt;/p&gt; &lt;button&gt;contar venda&lt;/button&gt;</pre>
+
+<p>Quem denuncia é o compilador, com um aviso que vale ouro:</p>
+
+<pre class="out">aviso: non_reactive_update (linha 2): `cafes` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates
+https://svelte.dev/e/non_reactive_update</pre>
+
+<p>Leia devagar: "<code>cafes</code> é atualizado, mas não foi declarado com <code>$state(...)</code>; mudar o valor não vai disparar as atualizações corretamente". É o combinado que faltou. Quando o componente usa pelo menos uma runa, ele entra no <strong>modo runas</strong> — e nesse modo só o que nasceu com <code>$state</code> avisa a tela. O <code>vendas</code> sobe no clique; o <code>cafes</code> muda por dentro e a lousa fica no zero.</p>
+
+<p>Guarde a regra prática do guia: <strong>todo valor que aparece na tela e pode mudar nasce com <code>$state</code></strong>. Valores que só existem para uma conta interna, que nunca aparecem e nunca mudam depois de calculados, podem ser <code>let</code> ou <code>const</code> comuns.</p>
+
+<h3>O quase-certo que engana</h3>
+
+<p>Existe uma armadilha que faz gente experiente perder a tarde. Se os dois números estiverem no mesmo parágrafo, o Svelte desenha os dois numa atualização só: o clique no estado dispara essa atualização, e o valor comum é lido de novo junto. Parece que funciona. No código gerado dá para ver por quê — o compilador escreve <code>$.update(vendas); cafes++;</code> e uma única função que redesenha os dois textos.</p>
+
+<p>Por isso o aviso do compilador vale mais do que o teste de clicar e ver: ele olha a declaração, não o acaso daquela tela. E existe um segundo caso que confunde: um componente que <strong>não usa runa nenhuma</strong> é compilado no modo antigo, onde <code>let</code> com atribuição ainda atualiza a tela. Esse é o mundo anterior ao Svelte 5, com regras próprias — ele tem aula inteira nesta trilha, "let e o Modo Antigo", logo depois desta. O guia ensina o mundo novo: runas, sempre.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Cafés: 1">
+<p class="try-task"><strong>Missão:</strong> o contador de vendas funciona e o de cafés fica parado. Faça o café subir para 1 no primeiro clique, do jeito certo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cafes = 0;
+  let vendas = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cafés: {cafes}&lt;/p&gt;
+&lt;button onclick={() =&gt; cafes++}&gt;mais um café&lt;/button&gt;
+&lt;p&gt;Vendas: {vendas}&lt;/p&gt;
+&lt;button onclick={() =&gt; vendas++}&gt;contar venda&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cafes = $state(0);
+  let vendas = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cafés: {cafes}&lt;/p&gt;
+&lt;button onclick={() =&gt; cafes++}&gt;mais um café&lt;/button&gt;
+&lt;p&gt;Vendas: {vendas}&lt;/p&gt;
+&lt;button onclick={() =&gt; vendas++}&gt;contar venda&lt;/button&gt;</pre>
+</div>
+
+<p>Repare que a solução não mexe no botão nem no parágrafo: mexe só na declaração. É o padrão de quase todo conserto de reatividade — o problema está em quem guarda o valor, não em quem mostra.</p>
+<hr>
+
+<h2>4. Texto, número e <code>true</code>/<code>false</code></h2>
+
+<p><code>$state</code> não tem preferência por tipo. Ele embrulha o que você der: texto entre aspas, número sem aspas, ou um dos dois valores de verdade do JavaScript, <code>true</code> (verdadeiro) e <code>false</code> (falso). A Ana usa os três na mesma tela:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let preco = $state(0.9);
+  let aberta = $state(true);
+&lt;/script&gt;
+
+&lt;p&gt;{nome} cobra R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;p&gt;Padaria aberta: {aberta}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana cobra R$ 0.90&lt;/p&gt; &lt;p&gt;Padaria aberta: true&lt;/p&gt;</pre>
+
+<p>Duas observações que valem para o resto do guia. A primeira: número com vírgula se escreve com ponto (<code>0.9</code>), porque é assim que o JavaScript entende. A segunda: <code>true</code> aparece na tela como a palavra <em>true</em>, sem tradução. Para mostrar "aberta" e "fechada" você usa uma condição, que é assunto de uma aula inteira mais adiante — por enquanto, repare que o valor guardado é um booleano e a tela só repete o que recebeu.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Tipo</th><th>Como se escreve</th><th>Exemplo da Ana</th></tr>
+<tr><td>texto (<em>string</em>)</td><td>entre aspas simples ou duplas</td><td><code>$state('pão francês')</code></td></tr>
+<tr><td>número</td><td>sem aspas, com ponto decimal</td><td><code>$state(0.9)</code></td></tr>
+<tr><td>verdadeiro/falso (<em>boolean</em>)</td><td><code>true</code> ou <code>false</code>, sem aspas</td><td><code>$state(true)</code></td></tr>
+<tr><td>lista</td><td>entre colchetes, itens separados por vírgula</td><td><code>$state(['pão', 'café'])</code></td></tr>
+<tr><td>objeto</td><td>entre chaves, com pares nome/valor</td><td><code>$state({ paes: 3 })</code></td></tr>
+</table>
+</div>
+
+<p>A lista e o objeto merecem uma aula só deles, porque <code>$state</code> faz uma coisa esperta com os dois: ele vigia também o que está <em>dentro</em>. Essa aula é a próxima da trilha, <code>$state</code> com objetos e listas.</p>
+
+<hr>
+
+<h2>5. Três jeitos de mudar o valor</h2>
+
+<p>Mudar o valor é escrever uma nova atribuição em algum lugar que roda depois — normalmente dentro de uma função ligada a um clique. Os três jeitos que você vai usar todo dia:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães na cesta: {paes}&lt;/p&gt;
+&lt;button onclick={() =&gt; paes++}&gt;mais um&lt;/button&gt;
+&lt;button onclick={() =&gt; (paes += 2)}&gt;mais dois&lt;/button&gt;
+&lt;button onclick={() =&gt; (paes = 0)}&gt;zerar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pães na cesta: 0&lt;/p&gt; &lt;button&gt;mais um&lt;/button&gt; &lt;button&gt;mais dois&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt;</pre>
+
+<p>Os três botões fazem coisas diferentes com o mesmo valor. <code>paes++</code> soma um; <code>paes += 2</code> soma dois; <code>paes = 0</code> joga fora o que havia e começa do zero. Todos os três disparam o aviso para a tela, porque todos os três <em>reassignam</em> a variável — a palavra feia para "o nome recebeu um valor novo".</p>
+
+<dl class="anatomy">
+  <dt>paes++</dt><dd>soma 1 ao valor atual. É o mesmo que <code>paes = paes + 1</code>, escrito de forma curta.</dd>
+  <dt>paes += 2</dt><dd>soma 2 ao valor atual. Troque o 2 por qualquer outro número e a conta acompanha.</dd>
+  <dt>paes = 0</dt><dd>troca o valor por 0, sem olhar para o que estava lá. É o botão de "começar de novo".</dd>
+  <dt>( … )</dt><dd>os parênteses em volta da conta existem porque a seta <code>=&gt;</code> espera uma expressão. Sem eles, o compilador reclama.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="outre:^Pães na cesta: 5;;clique:button;;outre:^Pães na cesta: 7">
+<p class="try-task"><strong>Missão:</strong> a cesta deve começar com <strong>5 pães</strong> e cada clique deve somar <strong>2</strong> (5, depois 7).</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães na cesta: {paes}&lt;/p&gt;
+&lt;button onclick={() =&gt; paes++}&gt;mais um pão&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let paes = $state(5);
+&lt;/script&gt;
+
+&lt;p&gt;Pães na cesta: {paes}&lt;/p&gt;
+&lt;button onclick={() =&gt; (paes += 2)}&gt;mais dois pães&lt;/button&gt;</pre>
+</div>
+
+<p>Repare que a meta confere <em>duas</em> coisas: o texto antes do clique e o texto depois. Uma missão que só olhasse o começo seria cumprida por acidente; uma que só olhasse o fim não verificaria o valor inicial. Sempre que a aula pedir uma mudança, a meta vai olhar os dois lados.</p>
+
+<hr>
+
+<h2>6. A pegadinha do valor copiado</h2>
+
+<p>Existe um erro de raciocínio que não quebra nada e por isso é pior: usar o estado num lugar que roda <em>uma vez só</em>. Veja:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let mensagem = 'O pão custa ' + preco;
+&lt;/script&gt;
+
+&lt;p&gt;{mensagem}&lt;/p&gt;</pre>
+
+<p>A página abre certinha, com o texto montado:</p>
+
+<pre class="out">&lt;p&gt;O pão custa 0.9&lt;/p&gt;</pre>
+
+<p>E o compilador avisa que tem algo estranho ali:</p>
+
+<pre class="out">aviso: state_referenced_locally (linha 3): This reference only captures the initial value of `preco`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally</pre>
+
+<p>Traduzindo o aviso: "esta referência só captura o valor inicial de <code>preco</code>". A linha <code>let mensagem = 'O pão custa ' + preco</code> roda uma vez, na montagem do componente, e o que fica guardado é um texto pronto — <code>"O pão custa 0.9"</code>. Se o preço mudar depois, a mensagem continua a antiga, porque ela é uma fotografia, não uma ligação.</p>
+
+<p>A solução é deixar a conta dentro do HTML, para ela ser refeita a cada mudança:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;O pão custa {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;O pão custa 0.90&lt;/p&gt;</pre>
+
+<p>Agora o buraco <code>{preco.toFixed(2)}</code> é reavaliado sempre que <code>preco</code> muda. Quando a conta é maior que uma linha, você não precisa inchar o HTML: existe <code>$derived</code>, uma runa feita exatamente para valores calculados a partir de outros — ela tem aula própria nesta trilha. Por enquanto, fique com a regra: <strong>conta que depende de estado mora onde pode ser refeita</strong>.</p>
+
+<hr>
+
+<h2>7. <code>$state.raw</code>: quando não precisa vigiar por dentro</h2>
+
+<p><code>$state</code> comum vigia o valor e tudo o que está dentro dele: cada item de uma lista, cada campo de um objeto. Isso custa um pouco de trabalho, e em listas grandes o custo aparece. Quando a Ana troca a lista inteira a cada mudança, vigiar item por item é desperdício. Para esse caso existe <code>$state.raw</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cores = $state.raw(['trigo', 'centeio']);
+&lt;/script&gt;
+
+&lt;p&gt;{cores.join(' e ')}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;trigo e centeio&lt;/p&gt;</pre>
+
+<p>A regra do <code>raw</code> (cru, em inglês) é dura: mexer por dentro não avisa ninguém. <code>cores.push('milho')</code> altera a lista e a tela não fica sabendo. O que funciona é trocar a lista inteira: <code>cores = [...cores, 'milho']</code>. Em compensação, o Svelte não precisa embrulhar cada item, e a conta fica mais leve.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Cores: trigo, centeio, milho">
+<p class="try-task"><strong>Missão:</strong> o botão empurra uma cor nova para a lista, mas a tela não mostra. Faça a lista avisar a tela quando ganha um item.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cores = $state.raw(['trigo', 'centeio']);
+&lt;/script&gt;
+
+&lt;p&gt;Cores: {cores.join(', ')}&lt;/p&gt;
+&lt;button onclick={() =&gt; cores.push('milho')}&gt;mais uma cor&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cores = $state(['trigo', 'centeio']);
+&lt;/script&gt;
+
+&lt;p&gt;Cores: {cores.join(', ')}&lt;/p&gt;
+&lt;button onclick={() =&gt; cores.push('milho')}&gt;mais uma cor&lt;/button&gt;</pre>
+</div>
+
+<p>Uma letra de diferença na declaração — <code>.raw</code> a menos — e o mesmo <code>push</code> passa a funcionar. O <code>raw</code> não é errado; ele é uma promessa de que você troca a lista inteira. Se você promete e não cumpre, a tela não fica sabendo.</p>
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Vigia o conteúdo?</th><th>Como mudar</th></tr>
+<tr><td><code>$state(valor)</code></td><td>sim, item por item</td><td><code>lista.push(x)</code> já atualiza a tela</td></tr>
+<tr><td><code>$state.raw(valor)</code></td><td>não, só a troca do valor</td><td><code>lista = [...lista, x]</code></td></tr>
+<tr><td><code>$state.snapshot(valor)</code></td><td>não é estado: é uma cópia</td><td>não se muda; serve para ler ou enviar</td></tr>
+</table>
+</div>
+
+<p>O nome <em>raw</em> é honesto: você recebe o valor cru, sem o embrulho que faz o aviso. Use quando o valor é grande e você troca tudo de uma vez — uma lista de produtos vinda do servidor, por exemplo. Para o caderno de pedidos da Ana, que muda um item por vez, o <code>$state</code> comum é o certo.</p>
+
+<hr>
+
+<h2>8. <code>$state.snapshot</code>: a foto para levar embora</h2>
+
+<p>Quando o valor é um objeto ou uma lista, o <code>$state</code> não devolve o objeto original: devolve um embrulho que avisa quando algo muda. Esse embrulho é ótimo dentro do componente e péssimo na hora de mandar o dado para fora — para uma API, para o <code>localStorage</code>, para uma biblioteca que não conhece o Svelte. Para isso existe <code>$state.snapshot</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let carrinho = $state({ itens: ['pão', 'café'] });
+  const copia = $state.snapshot(carrinho);
+&lt;/script&gt;
+
+&lt;p&gt;{copia.itens.join(', ')}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;pão, café&lt;/p&gt;</pre>
+
+<p><em>Snapshot</em> é "fotografia instantânea". A função devolve uma cópia comum, sem embrulho, do jeito que o resto do mundo espera. Repare que a cópia é tirada na hora da linha 3: se o carrinho mudar depois, a foto continua com os dois itens. Quem quiser a foto nova precisa tirar outra.</p>
+
+<div class="warning">
+<strong>Foto não é espelho</strong>
+<p>Trocar <code>$state.snapshot(carrinho)</code> por <code>carrinho</code> numa chamada de rede é um erro comum: o que vai junto é o embrulho reativo, não o dado. O sintoma é um objeto estranho do outro lado, com campos a mais. Se o dado vai sair do componente, tire a foto.</p>
+</div>
+
+<hr>
+
+<h2>9. <code>$state</code> dentro de uma classe</h2>
+
+<p>Quando a padaria cresce, a Ana não quer cinco variáveis soltas para a mesma coisa. Ela quer uma <strong>cesta</strong> com os seus pães e o seu total. Em JavaScript isso é uma classe, e o Svelte aceita a runa no campo da classe:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  class Cesta {
+    paes = $state(0);
+    get total() {
+      return this.paes * 0.9;
+    }
+  }
+
+  const cesta = new Cesta();
+&lt;/script&gt;
+
+&lt;p&gt;{cesta.paes} pães: R$ {cesta.total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; cesta.paes++}&gt;mais um&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;0 pães: R$ 0.00&lt;/p&gt; &lt;button&gt;mais um&lt;/button&gt;</pre>
+
+<p>O campo <code>paes</code> é estado reativo; o <code>get total()</code> é um cálculo que se refaz a cada leitura, então o preço acompanha. Ao clicar, <code>cesta.paes++</code> muda o campo e o Svelte avisa a tela — a mesma mecânica de sempre, agora com <code>cesta.</code> na frente.</p>
+
+<p>O ganho de usar classe aparece quando existem várias cestas: cada <code>new Cesta()</code> tem o seu próprio <code>paes</code>, e as contas ficam junto dos dados em vez de espalhadas. O custo é mais conceitos de uma vez — classe, <code>new</code>, <code>this</code> —, por isso esta é a última seção de código da aula, e não a primeira.</p>
+
+<p>O detalhe que derruba muita gente: <code>paes = $state(0)</code> sem <code>let</code> nem <code>const</code> — campo de classe é assim, sem palavra na frente. Se você escrever <code>let paes = $state(0)</code> dentro da classe, o compilador recusa com a mensagem que aparece na seção de erros.</p>
+
+<hr>
+
+<h2>10. Rodando no computador da Ana</h2>
+
+<p>No projeto dela, em <code>~/loja</code>, o servidor de desenvolvimento sobe com um comando e mostra o endereço onde a página está:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 571 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Enquanto esse comando roda, cada <code>Ctrl+S</code> no arquivo aparece no navegador em menos de um segundo — inclusive a mudança do valor inicial de um <code>$state</code>, que aparece na tela sem recarregar. Quando o trabalho está pronto, o build gera a versão de produção:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-7Pqxt0XN.js  36.31 kB │ gzip: 14.04 kB
+✓ built in 3.14s</pre>
+
+<p>O número de módulos (<code>111</code>) conta os arquivos que o compilador juntou, e o tamanho final cresce um pouco a cada recurso novo que você usa. Não existe mágica: <code>$state</code> é compilado em JavaScript comum que mantém um registro de quem depende de quem. O que muda é que você não escreve esse registro.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Os três tropeços abaixo foram colhidos do compilador de verdade, rodando os arquivos quebrados. Leia a mensagem com calma: ela quase sempre diz exatamente o que fazer.</p>
+
+<div class="cenario">
+<p><strong>1. A runa solta, sem variável.</strong> Quem começa costuma escrever <code>$state(0)</code> como se fosse uma chamada que "cria estado". O compilador recusa:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães na cesta: 0&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): `$state(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+<p>Em português: "<code>$state(...)</code> só pode ser usado como valor inicial de uma declaração de variável, como campo de classe, ou na primeira atribuição a um campo de classe dentro do construtor". Ou seja: a runa precisa estar do lado direito de um <code>let</code>, de um <code>const</code> ou de um campo de classe. Sozinha, ela não faz sentido.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. <code>const</code> com valor que muda.</strong> Estado muda de valor; <code>const</code> promete que não muda. Misturar os dois dá erro:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const paes = $state(0);
+  paes = 10;
+&lt;/script&gt;
+
+&lt;p&gt;Pães na cesta: {paes}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 2): Cannot assign to constant</pre>
+<p>"Cannot assign to constant" é "não posso atribuir a uma constante". A correção é trocar <code>const</code> por <code>let</code>. A exceção é quando o estado é um objeto e você muda um campo dele — aí a variável não muda, só o conteúdo, e <code>const</code> funciona.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. A runa dentro do modo antigo.</strong> Se o componente declara <code>&lt;svelte:options runes={false} /&gt;</code>, o Svelte volta ao modo antigo, onde <code>$state</code> não existe. O compilador aceita, e o erro só aparece quando a página abre:</p>
+<pre class="file" data-file="src/App.svelte">&lt;svelte:options runes={false} /&gt;
+
+&lt;script&gt;
+  let paes = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Pães na cesta: {paes}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: state is not defined</pre>
+<p>"state is not defined" quer dizer que o navegador procurou uma variável chamada <code>state</code> e não achou. No modo antigo, o cifrão tem outro significado: ele serve para ler <em>stores</em>, um recurso anterior às runas. O <code>$state</code> virou <code>$.store_get(…, '$state', state)</code> e quebrou. A correção é escolher um dos mundos: runas (o que este guia ensina) ou modo antigo, com <code>let</code> e <code>$:</code>.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Quando usar</th></tr>
+<tr><td><code>let x = $state(valor)</code></td><td>estado que avisa a tela, vigiando o conteúdo</td><td>o caso normal</td></tr>
+<tr><td><code>let x = $state.raw(valor)</code></td><td>estado que só avisa quando o valor inteiro é trocado</td><td>listas grandes trocadas de uma vez</td></tr>
+<tr><td><code>$state.snapshot(x)</code></td><td>cópia comum, sem embrulho reativo</td><td>enviar para fora: API, <code>localStorage</code></td></tr>
+<tr><td><code>campo = $state(valor)</code></td><td>estado dentro de uma classe</td><td>vários objetos do mesmo tipo</td></tr>
+<tr><td><code>x++</code>, <code>x += 2</code>, <code>x = 0</code></td><td>formas de mudar o valor</td><td>no handler do clique</td></tr>
+<tr><td><code>$state.raw.by</code></td><td>não existe — não invente</td><td>use <code>$derived.by</code> para cálculos</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que significa</th></tr>
+<tr><td><code>can only be used as a variable declaration initializer…</code></td><td>a runa está solta; falta <code>let</code>, <code>const</code> ou campo de classe</td></tr>
+<tr><td><code>Cannot assign to constant</code></td><td>você declarou com <code>const</code> e tentou trocar o valor</td></tr>
+<tr><td><code>state_referenced_locally</code></td><td>você leu o estado num lugar que roda uma vez só</td></tr>
+<tr><td><code>state is not defined</code></td><td><code>$state</code> usado em componente no modo antigo</td></tr>
+<tr><td><code>Cannot use rune without parentheses</code></td><td>faltou chamar: escreva <code>$state(0)</code>, não <code>$state</code></td></tr>
+</table>
+</div>
+
+<p>Uma última ideia antes dos exercícios: <code>$state</code> é a única runa que <em>escreve</em>. As outras — <code>$derived</code>, <code>$effect</code>, <code>$props</code> — leem estado para calcular, reagir ou receber. Por isso esta aula vem primeiro: sem um valor que avisa, não há o que calcular nem o que observar.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que <code>$state</code> acrescenta a uma variável comum?</p>
+<label><input type="radio" name="q1"> deixa o valor mais rápido de ler</label>
+<label><input type="radio" name="q1"> impede que o valor seja alterado por engano</label>
+<label><input type="radio" name="q1"> avisa a tela quando o valor muda, para ela se redesenhar</label>
+<label><input type="radio" name="q1"> converte o valor em texto para aparecer no HTML</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. A Ana quer uma lista grande que é sempre trocada inteira, nunca item por item. Qual escrita é a mais adequada?</p>
+<label><input type="radio" name="q1"> <code>let lista = ['pão']</code></label>
+<label><input type="radio" name="q1"> <code>let lista = $state.raw(['pão'])</code></label>
+<label><input type="radio" name="q1"> <code>let lista = $state.snapshot(['pão'])</code></label>
+<label><input type="radio" name="q1"> <code>const lista = $state(['pão'])</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que <code>let mensagem = 'O pão custa ' + preco</code> para de acompanhar o preço?</p>
+<label><input type="radio" name="q1"> porque a conta roda uma vez e guarda um texto pronto</label>
+<label><input type="radio" name="q1"> porque <code>$state</code> não funciona com texto</label>
+<label><input type="radio" name="q1"> porque falta <code>$state</code> na variável <code>mensagem</code></label>
+<label><input type="radio" name="q1"> porque o sinal de <code>+</code> não serve para juntar texto</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let aberta = <input data-answer="$state(true)">&nbsp;;<br>&lt;p&gt;Padaria aberta: {aberta}&lt;/p&gt;<br><br>// a padaria começa aberta, e a lousa precisa acompanhar se ela fechar</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><strong>Estado</strong> é o valor que pode mudar dentro do componente; <strong>reativo</strong> é o que se atualiza sozinho quando ele muda.</li>
+  <li><code>let x = $state(valor)</code> cria estado reativo: a tela é avisada a cada mudança.</li>
+  <li><code>let x = valor</code> sem a runa guarda o valor, mas a tela não acompanha — o HTML inicial é idêntico, o clique é que denuncia.</li>
+  <li>A runa só vale do lado direito de um <code>let</code>, de um <code>const</code> ou de um campo de classe; sozinha, ela dá erro de compilação.</li>
+  <li><code>$state</code> aceita texto, número, <code>true</code>/<code>false</code>, listas e objetos; número decimal se escreve com ponto.</li>
+  <li>Para mudar: <code>x++</code> soma um, <code>x += 2</code> soma dois, <code>x = 0</code> troca tudo.</li>
+  <li>Conta que depende de estado mora no HTML (ou num <code>$derived</code>), nunca numa variável calculada uma vez só.</li>
+  <li><code>$state.raw</code> não vigia o conteúdo: só a troca do valor inteiro avisa a tela.</li>
+  <li><code>$state.snapshot</code> tira uma cópia comum, para enviar o dado para fora do componente.</li>
+  <li>Em classe, o campo se escreve <code>paes = $state(0)</code>, sem <code>let</code>.</li>
+  <li>Os erros desta aula: runa solta, <code>const</code> com valor trocado, <code>$state</code> no modo antigo e runa sem parênteses.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
