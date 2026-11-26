@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hooks.server.js — o porteiro de toda requisição no SvelteKit | Guia Svelte</title>
+<meta name="description" content="O hook handle, o sequence e o handleError do SvelteKit 3 explicados com os logs reais da padaria da Ana: quem passa, quem é barrado e o que sobra registrado.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">hooks.server.js</span></h1>
+
+<p class="intro">A padaria da Ana tem um porteiro. Ele não assa o pão nem atende no caixa, mas nenhuma pessoa entra sem passar por ele: anota quem chegou, confere se pode entrar na área dos fundos e avisa a equipe quando alguém cai na escada. No SvelteKit esse porteiro é um arquivo chamado <code>src/hooks.server.js</code>. Ele roda em <strong>toda</strong> requisição que chega ao servidor — antes da página, antes do <code>load</code>, antes de qualquer componente. Esta aula mostra o que ele pode fazer, o que ele não vê e como as mensagens aparecem no terminal.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um hook de servidor e por que ele roda antes da página.</li>
+  <li>Como é a assinatura de um <code>handle</code>: <code>event</code> e <code>resolve</code>.</li>
+  <li>Como registrar cada requisição com método, caminho, status e tempo.</li>
+  <li>Como usar <code>sequence</code> para encadear vários hooks e por que a ordem importa.</li>
+  <li>Como guardar dados da requisição em <code>event.locals</code> para o <code>load</code> usar.</li>
+  <li>Como barrar uma área com <code>redirect</code> antes da página carregar.</li>
+  <li>O que o hook não vê: arquivo estático e página pré-renderizada.</li>
+  <li>Como o <code>handleError</code> transforma um erro em mensagem amigável.</li>
+  <li>Os três tropeços reais: hook sem retorno, redirecionamento em loop e o aviso do <code>status</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o porteiro na porta</h2>
+
+<p>Imagine a padaria cheia, num sábado. O porteiro fica na porta e faz três coisas em ordem: olha quem está chegando, decide se deixa passar e, se a pessoa for para a área dos fundos sem crachá, encaminha para a entrada de novo. Só depois disso o atendente do balcão vê o cliente.</p>
+
+<p>O <code>hooks.server.js</code> é esse porteiro, e a ordem importa do mesmo jeito. Cada requisição que chega ao servidor — um pedido de página, uma imagem, um envio de formulário — passa por ele. Se o hook devolver uma resposta, a requisição termina ali, sem chegar à rota. Se ele chamar <code>resolve(event)</code>, a requisição segue o caminho normal e o hook recebe a resposta de volta, podendo mexer nela.</p>
+
+<p>O detalhe que faz diferença: <strong>um arquivo só, para o site inteiro</strong>. Você não escreve hook por página; escreve um <code>src/hooks.server.js</code> ao lado da pasta <code>routes</code>, e ele vale para tudo. É onde ficam as coisas que precisam acontecer em todas as requisições — sessão, cabeçalhos, registro de log, medição de tempo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No porteiro da padaria</th><th>No <code>hooks.server.js</code></th></tr>
+<tr><td>Anotar quem chegou e a que horas</td><td><code>console.log</code> com método e caminho</td></tr>
+<tr><td>Conferir o crachá</td><td>ler o cookie de sessão</td></tr>
+<tr><td>Guardar o nome do cliente para o balcão</td><td><code>event.locals.usuario</code></td></tr>
+<tr><td>Mandar para a entrada quem não tem crachá</td><td><code>throw redirect(303, '/entrar')</code></td></tr>
+<tr><td>Avisar a equipe quando alguém cai</td><td><code>handleError</code></td></tr>
+</table>
+</div>
+
+<h2>2. O arquivo que roda antes de tudo</h2>
+
+<p>O arquivo tem 30 linhas e faz três trabalhos diferentes. Vale ler inteiro, porque cada parte é reaproveitada na vida real:</p>
+
+<pre class="file" data-file="src/hooks.server.js">import { sequence } from '@sveltejs/kit/hooks';
+import { redirect } from '@sveltejs/kit';
+
+const registrar = async ({ event, resolve }) =&gt; {
+	const inicio = performance.now();
+	const resposta = await resolve(event);
+	const ms = Math.round(performance.now() - inicio);
+	console.log(`${event.request.method} ${event.url.pathname} → ${resposta.status} (${ms} ms)`);
+	return resposta;
+};
+
+const sessao = async ({ event, resolve }) =&gt; {
+	const sid = event.cookies.get('sessao');
+	event.locals.usuario = sid === 'ana-123' ? { nome: 'Ana', papel: 'dona' } : null;
+
+	if (event.url.pathname.startsWith('/conta') &amp;&amp; !event.locals.usuario) {
+		throw redirect(303, `/entrar?de=${event.url.pathname}`);
+	}
+	return resolve(event);
+};
+
+export const handle = sequence(registrar, sessao);
+
+export function handleError({ error, event, status }) {
+	console.error(`[erro ${status}] ${event.request.method} ${event.url.pathname}: ${error.message}`);
+	return {
+		message: 'A padaria teve um problema. Tente de novo em instantes.',
+		codigo: status
+	};
+}</pre>
+
+<dl class="anatomy">
+  <dt>export const handle</dt><dd>o nome obrigatório do hook principal. O SvelteKit procura exatamente este <em>export</em>; com outro nome, o arquivo é ignorado em silêncio.</dd>
+  <dt>{ event, resolve }</dt><dd>o que o hook recebe. <code>event</code> descreve a requisição; <code>resolve</code> é a função que entrega a requisição para o resto do app.</dd>
+  <dt>await resolve(event)</dt><dd>a chamada que “deixa passar”. Ela devolve a <code>Response</code> pronta — status, cabeçalhos e corpo.</dd>
+  <dt>event.locals</dt><dd>uma caixa vazia para o hook guardar o que quiser, disponível depois em todo <code>load</code> daquela requisição.</dd>
+  <dt>event.cookies.get</dt><dd>lê o cookie que veio do navegador. É assim que o porteiro reconhece o crachá.</dd>
+  <dt>sequence(registrar, sessao)</dt><dd>junta dois hooks num só, na ordem em que estão escritos. O primeiro da lista é o primeiro a rodar.</dd>
+  <dt>handleError</dt><dd>o hook de erro. Recebe o erro, o evento e o status, e devolve os dados que a página de erro mostra.</dd>
+</dl>
+
+<p>Repare que <code>registrar</code> chama <code>resolve</code> e depois mexe na resposta; <code>sessao</code> chama <code>resolve</code> no fim, como última linha. Essa diferença não é estilo: o que vem antes do <code>resolve</code> acontece na ida, o que vem depois acontece na volta. Medir tempo só faz sentido com a resposta na mão.</p>
+
+<h2>3. <code>event</code> e <code>resolve</code>, peça por peça</h2>
+
+<p>Quase todo hook é a mesma pergunta: o que eu preciso saber da requisição e o que eu faço com a resposta? O objeto <code>event</code> responde a primeira parte:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Em <code>event</code></th><th>O que é</th><th>Exemplo</th></tr>
+<tr><td><code>event.request</code></td><td>o pedido cru: método, cabeçalhos, corpo</td><td><code>event.request.method</code></td></tr>
+<tr><td><code>event.url</code></td><td>o endereço pedido, já como objeto <code>URL</code></td><td><code>event.url.pathname</code></td></tr>
+<tr><td><code>event.cookies</code></td><td>leitor e gravador de cookies</td><td><code>event.cookies.get('sessao')</code></td></tr>
+<tr><td><code>event.locals</code></td><td>a caixa que o hook entrega ao <code>load</code></td><td><code>event.locals.usuario</code></td></tr>
+<tr><td><code>event.params</code></td><td>os pedaços variáveis da rota</td><td><code>event.params.id</code></td></tr>
+<tr><td><code>event.setHeaders</code></td><td>define cabeçalho da resposta</td><td><code>event.setHeaders({ 'x-loja': 'ana' })</code></td></tr>
+</table>
+</div>
+
+<p><code>resolve(event)</code> entrega tudo isso ao restante do app e devolve uma <code>Response</code>. Com a resposta na mão, o hook pode ler <code>resposta.status</code>, acrescentar um cabeçalho — <code>resposta.headers.set('x-tempo', ms + 'ms')</code> — ou simplesmente devolver como veio. O que ele <strong>não</strong> pode é esquecer de devolver: o contrato diz que todo <code>handle</code> termina com uma <code>Response</code>, e o primeiro cenário de erro desta aula mostra o que acontece quando ele termina com nada.</p>
+
+<h2>4. Os logs que o hook produz</h2>
+
+<p>Com o projeto no ar, cada pedido aparece no terminal em duas linhas: a do hook e a do próprio Vite. Este é o terminal da Ana, copiado de uma sessão real:</p>
+
+<pre class="term">GET / → 200 (207 ms)
+200 GET /
+GET /erro → 404 (7 ms)
+404 GET /erro
+GET /api/produtos → 200 (1 ms)
+200 GET /api/produtos
+GET /cache → 200 (11 ms)
+200 GET /cache
+GET /seo → 200 (10 ms)
+200 GET /seo
+GET /entrar → 200 (11 ms)
+200 GET /entrar
+POST /entrar → 400 (4 ms)
+400 POST /entrar?/entrar
+POST /entrar → 200 (3 ms)
+200 POST /entrar?/entrar</pre>
+
+<p>A primeira linha de cada par vem do <code>console.log</code> do hook: método, caminho, status e tempo. A segunda vem do Vite, que também registra o pedido. Quando as duas discordam, é sinal de que algo aconteceu no meio — e há um caso assim nesta sessão.</p>
+
+<p>O teste POST com senha errada voltou <code>400</code>. O teste com a senha certa voltou <code>200</code> no registro, embora o navegador tenha recebido um redirecionamento: a resposta que o hook viu foi o “envelope” da ação de formulário, não a página final. Esse tipo de detalhe só aparece quando você lê o log com atenção.</p>
+
+<h2>5. Caixa 1: quem entra e quem é barrado</h2>
+
+<p>O trabalho mais comum de um hook é decidir. A caixa abaixo tem dois pedidos e diz que os dois entram, mesmo quando um deles não tem crachá.</p>
+
+<div class="trysvelte" data-goal="outre:/painel: barrado">
+<p class="try-task"><strong>Missão:</strong> mostre <code>entra</code> para quem tem <code>temCookie: true</code> e <code>barrado</code> para quem não tem. O texto precisa conter <code>/painel: barrado</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const pedidos = [
+		{ caminho: '/conta', temCookie: true },
+		{ caminho: '/painel', temCookie: false }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each pedidos as p}
+		&lt;li&gt;{p.caminho}: entra&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const pedidos = [
+		{ caminho: '/conta', temCookie: true },
+		{ caminho: '/painel', temCookie: false }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each pedidos as p}
+		&lt;li&gt;{p.caminho}: {p.temCookie ? 'entra' : 'barrado'}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>No hook de verdade essa decisão não vira texto: vira <code>throw redirect(303, '/entrar')</code> ou <code>return resolve(event)</code>. O <code>303</code> é o status “veja outro endereço”, e ele é o certo depois de um POST, porque manda o navegador buscar a página com GET. Usar <code>302</code> também funciona, mas o <code>303</code> deixa a intenção explícita.</p>
+
+<h2>6. <code>sequence</code>: dois hooks, uma fila</h2>
+
+<p>Quando um arquivo tem dois hooks, alguém precisa dizer em que ordem eles rodam. Isso é o <code>sequence</code>: ele recebe os hooks e devolve um só, encadeado. O primeiro da lista é o mais externo — ele começa antes e termina depois.</p>
+
+<pre class="file" data-file="src/hooks.server.js">import { sequence } from '@sveltejs/kit/hooks';
+
+const registrar = async ({ event, resolve }) =&gt; {
+	const inicio = performance.now();
+	const resposta = await resolve(event);
+	console.log(`${event.request.method} ${event.url.pathname} → ${resposta.status}`);
+	return resposta;
+};
+
+const sessao = async ({ event, resolve }) =&gt; {
+	event.locals.usuario = event.cookies.get('sessao') === 'ana-123' ? { nome: 'Ana' } : null;
+	return resolve(event);
+};
+
+export const handle = sequence(registrar, sessao);</pre>
+
+<p>Com essa ordem, o fluxo é: <code>registrar</code> anota a hora, chama <code>resolve</code>, que chama <code>sessao</code>, que define <code>locals</code> e chama o app. Na volta, <code>registrar</code> recebe a resposta e imprime o status. Se a ordem fosse <code>sequence(sessao, registrar)</code>, o cálculo de tempo ficaria dentro da sessão e o porteiro mais externo passaria a ser o de sessão — o que muda o que acontece quando <code>sessao</code> lança um redirecionamento.</p>
+
+<p>E é exatamente isso que explica uma ausência no log. Quando a Ana pediu <code>/conta</code> sem cookie, o Vite registrou <code>303 GET /conta</code>, mas o hook <code>registrar</code> não imprimiu nada. O motivo: <code>sessao</code> lançou o redirecionamento antes de a resposta existir, e o <code>await resolve(event)</code> de <code>registrar</code> nunca devolveu. Sem resposta, não há status para imprimir.</p>
+
+<h2>7. O que o hook não vê</h2>
+
+<p>Duas categorias de pedido passam longe do seu hook, e as duas surpreendem. A primeira é o arquivo estático: imagem, PDF, <code>robots.txt</code>. Eles são entregues antes de o app ser chamado. A segunda é a página pré-renderizada: o HTML já existe no disco, e o pedido é atendido sem rodar o servidor.</p>
+
+<pre class="term">GET / → 200 (92 ms)
+200 GET /
+[erro 404] GET /naoexiste.svg: Not Found
+GET /naoexiste.svg → 404 (20 ms)
+404 GET /naoexiste.svg</pre>
+
+<p>Nessa sessão três pedidos foram feitos: a página inicial, o <code>/logo.svg</code> e um arquivo inventado. Só dois aparecem no registro. O logotipo foi entregue direto do disco, sem app, sem hook. O arquivo inventado não existia, caiu no roteador e passou pelo hook — por isso virou página de erro com registro.</p>
+
+<p>A consequência prática é dupla. Contagem de acesso por hook é uma contagem de <em>páginas</em>, não de pedidos; se a Ana quiser medir tráfego de imagem, precisa de outra ferramenta. E proteção por hook não alcança arquivo estático: um PDF confidencial em <code>static</code> está público mesmo com a sessão sendo verificada no <code>handle</code>.</p>
+
+<h2>8. Caixa 2: a ordem da fila</h2>
+
+<p>A ordem em que os hooks rodam muda o resultado, então vale treinar. A caixa abaixo empilha dois nomes numa trilha, na ordem errada. A missão é fazer a trilha começar por <code>registrar</code>.</p>
+
+<div class="trysvelte" data-goal="out:Ordem: registrar → sessao">
+<p class="try-task"><strong>Missão:</strong> troque a ordem das chamadas para a trilha ficar <code>registrar → sessao</code>, que é a ordem de um <code>sequence(registrar, sessao)</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const trilha = [];
+	function registrar(nome) {
+		trilha.push(nome);
+	}
+
+	registrar('sessao');
+	registrar('registrar');
+&lt;/script&gt;
+
+&lt;p&gt;Ordem: {trilha.join(' → ')}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const trilha = [];
+	function registrar(nome) {
+		trilha.push(nome);
+	}
+
+	registrar('registrar');
+	registrar('sessao');
+&lt;/script&gt;
+
+&lt;p&gt;Ordem: {trilha.join(' → ')}&lt;/p&gt;</pre>
+</div>
+
+<p><code>push</code> acrescenta no fim da lista e <code>join</code> transforma a lista em texto, com o separador que você escolher. É a forma mais direta de ver a ordem de execução sem abrir o depurador — e o mesmo truque serve para entender qualquer sequência de funções, dentro ou fora do Svelte.</p>
+
+<h2>9. <code>locals</code>, <code>handleError</code> e o que fica registrado</h2>
+
+<p><code>event.locals</code> é a ponte entre o hook e o <code>load</code>. O hook escreve; a página lê. No projeto da Ana, <code>sessao</code> grava <code>{ nome: 'Ana', papel: 'dona' }</code> quando o cookie é o esperado, e <code>null</code> quando não é. O <code>+layout.server.js</code> devolve esse valor, e qualquer página acessa <code>data.usuario</code>.</p>
+
+<p>Dois outros exports completam o arquivo, e vale saber que existem mesmo que você não precise deles hoje. O <code>init</code> roda uma vez só, quando o servidor sobe — é o lugar de abrir conexão com o banco, ler um arquivo de configuração ou preparar um cache em memória. Já o <code>handleFetch</code> roda quando o código do servidor faz um <code>fetch</code> para uma API; ele serve para repassar o cookie da requisição original para essa API, coisa que o <code>fetch</code> do Node não faz sozinho. Nenhum dos dois aparece em toda requisição: o primeiro é da vida do processo, o segundo é das chamadas internas.</p>
+
+<p>O <code>handleError</code> é o outro lado do porteiro: ele cuida de quem tropeça. Roda quando um erro escapa de um <code>load</code> ou de uma ação, e o que ele devolve vira o que a página de erro mostra. No terminal, cada erro passa por ele e sai registrado:</p>
+
+<pre class="term">[sveltekit] handle_error_status_deprecated
+The `status` property of `handleError` is deprecated. Use `error.status` for expected and framework errors, or `500` for unexpected errors.
+https://svelte.dev/e/kit/handle_error_status_deprecated
+[erro 404] GET /erro: Pão não encontrado na prateleira
+GET /erro → 404 (16 ms)
+404 GET /erro</pre>
+
+<p>O aviso de obsolescência é do SvelteKit 3: o segundo parâmetro do <code>handleError</code> não deve mais trazer <code>status</code> como propriedade separada. O valor continua funcionando por enquanto, mas o caminho novo é ler <code>error.status</code> — o status viaja dentro do próprio erro. A linha <code>[erro 404]</code> é do <code>console.error</code> do projeto, e mostra o mesmo pedido que o Vite registra logo abaixo.</p>
+
+<h2>10. Caixa 3: a caixa que o hook entrega</h2>
+
+<p>Quando ninguém está logado, <code>event.locals.usuario</code> é <code>null</code> — e acessar <code>.nome</code> de <code>null</code> quebra a página, como o primeiro cenário de erro vai mostrar. A caixa abaixo escreve o nome fixo “Ana”, mesmo com o usuário nulo.</p>
+
+<div class="trysvelte" data-goal="out:Bem-vinda, visitante">
+<p class="try-task"><strong>Missão:</strong> use <code>locals.usuario?.nome</code> e o operador <code>??</code> para mostrar <code>visitante</code> quando não houver usuário. O texto deve virar <code>Bem-vinda, visitante</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const locals = { usuario: null };
+&lt;/script&gt;
+
+&lt;p&gt;Bem-vinda, Ana&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const locals = { usuario: null };
+	const nome = $derived(locals.usuario?.nome ?? 'visitante');
+&lt;/script&gt;
+
+&lt;p&gt;Bem-vinda, {nome}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>?.</code> é o encadeamento opcional: se a parte da esquerda for <code>null</code> ou <code>undefined</code>, a expressão inteira vira <code>undefined</code> em vez de quebrar. O <code>??</code> então troca esse <code>undefined</code> pelo texto padrão. Juntos, eles resolvem o caso “usuário pode não existir” sem <code>if</code> e sem risco de derrubar a página.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do servidor de desenvolvimento desta máquina. A primeira derruba a página; a segunda gira para sempre; a terceira é um aviso que aparece toda vez que o erro passa pelo hook.</p>
+
+<div class="cenario">
+<strong>Erro 1 — o hook não devolve resposta</strong>
+<p>Um <code>handle</code> que não chama <code>resolve</code> e não devolve <code>Response</code> deixa o SvelteKit sem resposta. O servidor tenta ler o status de <code>undefined</code> e o pedido termina em 500.</p>
+<pre class="file" data-file="src/hooks.server.js">export const handle = async ({ event }) =&gt; {
+	return undefined;
+};</pre>
+<pre class="term">TypeError: Cannot read properties of undefined (reading 'status')
+500 GET /
+TypeError: Cannot read properties of undefined (reading 'status')
+500 GET /produtos</pre>
+<p>A leitura é literal: alguém tentou ler <code>.status</code> de <code>undefined</code>. A correção é terminar o hook com <code>return resolve(event)</code> ou com uma <code>Response</code> montada à mão. Todo caminho do hook precisa terminar devolvendo alguma coisa.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — o redirecionamento em loop</strong>
+<p>Um hook que manda todo mundo para <code>/entrar</code> cria um ciclo: o pedido de <code>/entrar</code> também é redirecionado para <code>/entrar</code>. O navegador desiste depois de algumas voltas, e o <code>curl</code> avisa com o código 47.</p>
+<pre class="term">ana@notebook:~/loja$ curl -sS -L -o /dev/null http://localhost:5173/
+curl: (47) Maximum (50) redirects followed</pre>
+<p>No terminal do servidor, o mesmo pedido aparece repetido até o limite: <code>303 GET /entrar</code> várias vezes seguidas. A correção é excluir a própria rota de destino da regra — no projeto da Ana, <code>event.url.pathname.startsWith('/conta')</code> faz exatamente isso, porque <code>/entrar</code> não começa com <code>/conta</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Aviso 3 — <code>status</code> no <code>handleError</code></strong>
+<p>Não derruba nada, mas aparece no terminal a cada erro. É o SvelteKit 3 avisando que a propriedade mudou de lugar.</p>
+<pre class="term">[sveltekit] handle_error_status_deprecated
+The `status` property of `handleError` is deprecated. Use `error.status` for expected and framework errors, or `500` for unexpected errors.
+https://svelte.dev/e/kit/handle_error_status_deprecated</pre>
+<p>A mensagem diz o que fazer: usar <code>error.status</code> em vez do <code>status</code> separado. Enquanto você não trocar, o aviso volta a cada erro — e um terminal cheio de aviso esconde o erro de verdade.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Export</th><th>Quando roda</th><th>Para que serve</th></tr>
+<tr><td><code>handle</code></td><td>toda requisição</td><td>sessão, log, cabeçalho, bloqueio</td></tr>
+<tr><td><code>handleError</code></td><td>quando um erro escapa</td><td>mensagem amigável e registro</td></tr>
+<tr><td><code>handleFetch</code></td><td>quando o servidor faz <code>fetch</code></td><td>repassar cookie para uma API interna</td></tr>
+<tr><td><code>init</code></td><td>uma vez, quando o servidor sobe</td><td>preparar banco, ler configuração</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação no <code>handle</code></th><th>O que fazer</th></tr>
+<tr><td>deixar passar</td><td><code>return resolve(event)</code></td></tr>
+<tr><td>responder sem chegar na rota</td><td>devolver uma <code>Response</code></td></tr>
+<tr><td>barrar e mandar para outra página</td><td><code>throw redirect(303, '/entrar')</code></td></tr>
+<tr><td>recusar com erro</td><td><code>throw error(403, 'sem acesso')</code></td></tr>
+<tr><td>guardar dado para o <code>load</code></td><td><code>event.locals.algo = valor</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Quando o <code>handle</code> roda?</p>
+<label><input type="radio" name="q-hk"> só quando a página tem <code>load</code></label>
+<label><input type="radio" name="q-hk"> só em produção</label>
+<label><input type="radio" name="q-hk"> em toda requisição ao servidor, antes da rota</label>
+<label><input type="radio" name="q-hk"> uma vez, quando o servidor sobe</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que <code>event.locals</code> faz?</p>
+<label><input type="radio" name="q-hk"> guarda a resposta final da página</label>
+<label><input type="radio" name="q-hk"> leva dados do hook para os <code>load</code> daquela requisição</label>
+<label><input type="radio" name="q-hk"> grava um cookie no navegador</label>
+<label><input type="radio" name="q-hk"> substitui o <code>+layout.server.js</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o <code>/logo.svg</code> não aparece no log do hook?</p>
+<label><input type="radio" name="q-hk"> porque arquivo estático é entregue antes de o app ser chamado</label>
+<label><input type="radio" name="q-hk"> porque o <code>console.log</code> não aceita imagem</label>
+<label><input type="radio" name="q-hk"> porque o hook só roda em POST</label>
+<label><input type="radio" name="q-hk"> porque o arquivo tem menos de 1 kB</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">// src/hooks.server.js<br>export const handle = async ({ event, resolve }) =&gt; {<br>&nbsp;&nbsp;if (event.url.pathname.startsWith('/conta') &amp;&amp; !event.locals.usuario) {<br>&nbsp;&nbsp;&nbsp;&nbsp;throw <input data-answer="redirect(303, '/entrar')|redirect(303,'/entrar')|redirect(303, `/entrar`)">;<br>&nbsp;&nbsp;}<br>&nbsp;&nbsp;return resolve(event);<br>};</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>src/hooks.server.js</code> é o porteiro: roda em toda requisição ao servidor, antes da rota.</li>
+  <li>O <code>handle</code> recebe <code>{ event, resolve }</code> e precisa terminar devolvendo uma <code>Response</code>.</li>
+  <li><code>event</code> traz <code>request</code>, <code>url</code>, <code>cookies</code>, <code>params</code> e a caixa <code>locals</code>.</li>
+  <li><code>await resolve(event)</code> deixa a requisição seguir e devolve a resposta para o hook mexer.</li>
+  <li><code>sequence(a, b)</code> encadeia hooks na ordem escrita; o primeiro é o mais externo.</li>
+  <li>Quem redireciona antes do <code>resolve</code> não gera linha de status para o hook que mede tempo.</li>
+  <li>Arquivo estático não passa pelo hook; página pré-renderizada também não.</li>
+  <li><code>locals</code> é a ponte entre hook e <code>load</code>; use <code>?.</code> e <code>??</code> para lidar com a ausência de usuário.</li>
+  <li><code>handleError</code> decide a mensagem da página de erro e registra o problema.</li>
+  <li>Erros desta aula: hook sem retorno, redirecionamento em loop e <code>handle_error_status_deprecated</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

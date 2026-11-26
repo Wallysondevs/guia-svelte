@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build e Deploy no SvelteKit — do npm run build ao servidor | Guia Svelte</title>
+<meta name="description" content="A padaria da Ana sai do notebook e vai para a internet: build de produção, node build, variáveis no servidor, SIGTERM, porta ocupada e os erros reais dessa viagem.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Build e Deploy</span></h1>
+
+<p class="intro">Até agora o site da Ana só existe no notebook dela, num endereço que começa com <code>localhost</code> e que ninguém mais no mundo consegue abrir. Chegou a hora de levar a padaria para a internet. A viagem tem quatro etapas: gerar o pacote, conferir o pacote, ligar o servidor e apontar o endereço. Cada etapa tem um comando e cada comando tem uma saída — e é isso que esta aula mostra, com o terminal copiado de uma execução real.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que muda entre o servidor de desenvolvimento e o pacote de produção.</li>
+  <li>Como ler a saída de <code>npm run build</code> sem se perder nas linhas.</li>
+  <li>Como subir o pacote gerado com <code>node build</code>.</li>
+  <li>Quais variáveis de ambiente precisam existir na máquina de produção.</li>
+  <li>O que fazer quando a porta já está ocupada.</li>
+  <li>Por que o servidor precisa continuar rodando depois que você fecha o terminal.</li>
+  <li>O que é o <code>SIGTERM</code> e por que o adaptador-node trata esse sinal.</li>
+  <li>Como conferir com <code>npm run preview</code> antes de anunciar o endereço.</li>
+  <li>Os três tropeços reais: variável faltando, porta ocupada e servidor fora do ar.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a mudança do pão para a loja nova</h2>
+
+<p>Enquanto a Ana vende na porta de casa, ela usa a cozinha inteira: a bancada, a farinha espalhada, o forno ligado o dia todo. É prático porque ela está ali mesmo. No dia em que abre a loja na rua, ela não leva a cozinha suja: leva o pão pronto, numa caixa, e a loja tem a sua própria estrutura — balcão, vitrine, caixa registradora.</p>
+
+<p>Publicar um site é essa mudança. O servidor de desenvolvimento é a cozinha: recompila a cada arquivo salvo, mostra mensagem detalhada, recarrega a página sozinho. Nada disso serve no ar. O pacote de produção é a caixa de pão: só o que o cliente precisa, sem farinha espalhada, sem ferramenta de cozinha.</p>
+
+<p>O adaptador (assunto da aula anterior) decide o formato da caixa. Nesta aula a caixa é a do <code>adapter-node</code>, que produz uma pasta <code>build/</code> com um servidor Node completo. As etapas seguintes são iguais para qualquer adaptador: gerar, conferir, ligar, apontar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na mudança da padaria</th><th>No SvelteKit</th></tr>
+<tr><td>A cozinha bagunçada de casa</td><td><code>npm run dev</code>, com recarga automática</td></tr>
+<tr><td>A caixa de pão pronta para a loja</td><td>a pasta <code>build/</code></td></tr>
+<tr><td>Conferir o pão antes de fechar a caixa</td><td><code>npm run preview</code></td></tr>
+<tr><td>Abrir a loja e deixar alguém no balcão</td><td><code>node build</code> rodando sem parar</td></tr>
+<tr><td>O endereço pintado na fachada</td><td>o domínio apontando para a máquina</td></tr>
+</table>
+</div>
+
+<h2>2. O que o build de produção faz</h2>
+
+<p>O comando é o mesmo de sempre — <code>npm run build</code> —, mas o que ele produz é outra coisa. Os três primeiros segundos da sessão mostram o Vite compilando o lado do servidor:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 161 modules transformed.
+rendering chunks...
+computing gzip size...</pre>
+
+<p>“building ssr environment for production” é a frase que separa desenvolvimento de produção: SSR quer dizer renderização no servidor, o modo em que o HTML sai pronto do servidor antes de chegar ao navegador. “161 modules transformed” é a conta dos seus arquivos e das dependências que o SvelteKit juntou.</p>
+
+<p>Depois do build do servidor vem o build do cliente, e então a parte que só existe no SvelteKit:</p>
+
+<pre class="term">✓ built in 404ms
+Prerendering
+GET /seo → 200 (12 ms)
+GET /sobre → 200 (2 ms)
+GET / → 204 (0 ms)
+GET /produtos → 204 (0 ms)
+GET /entrar → 204 (0 ms)
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-node
+Copying assets
+Compressing and hashing assets
+✔ done</pre>
+
+<p>A seção <code>Prerendering</code> é o app rodando de verdade durante o build, para gerar as páginas que têm <code>prerender = true</code>. É por isso que o <code>console.log</code> do seu <code>hooks.server.js</code> aparece ali: o servidor está no ar, só que por alguns milissegundos e sem ninguém visitando. Se um <code>load</code> consulta o banco nessa hora, o banco precisa estar acessível durante o build também.</p>
+
+<p>“✔ done” é o adaptador terminando. A partir daí existe uma pasta <code>build/</code> que é o site inteiro. O próximo passo é colocar essa pasta para rodar.</p>
+
+<h2>3. Subindo o pacote: <code>node build</code></h2>
+
+<p>O comando é curto porque o adaptador-node escreveu um ponto de entrada. Rodando na máquina da Ana, com a variável do banco no ambiente:</p>
+
+<pre class="term">ana@notebook:~/loja$ DATABASE_URL='postgres://ana:segredo@localhost:5432/padaria' node build
+Listening on http://0.0.0.0:3000</pre>
+
+<dl class="anatomy">
+  <dt>DATABASE_URL='…'</dt><dd>a variável de ambiente passada só para este comando. Ela vale para o processo que está nascendo, não para o resto do terminal.</dd>
+  <dt>node</dt><dd>o programa que executa JavaScript fora do navegador. É o mesmo <code>node</code> de todos os outros comandos do projeto.</dd>
+  <dt>build</dt><dd>o nome da pasta gerada pelo adaptador. O Node procura um <code>index.js</code> dentro dela; é esse arquivo que liga o servidor.</dd>
+  <dt>Listening on http://0.0.0.0:3000</dt><dd>a confirmação: o servidor está escutando em todas as interfaces, na porta 3000.</dd>
+  <dt>%{http_code}</dt><dd>nos comandos de conferência, o espaço onde o <code>curl</code> escreve o status da resposta.</dd>
+</dl>
+
+<p>Uma linha e o servidor está no ar. <code>0.0.0.0</code> é “todas as interfaces de rede”: significa que o servidor aceita pedido vindo de fora da máquina, não só do próprio computador. É diferente de <code>127.0.0.1</code>, que aceitaria apenas pedidos locais. O <code>3000</code> é a porta padrão do adaptador-node.</p>
+
+<p>Com o servidor no ar, um pedido de fora funciona igual ao de desenvolvimento — e agora sem <code>localhost</code> na frente:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/
+200
+ana@notebook:~/loja$ curl -s http://localhost:3000/seo | grep -o '&lt;title&gt;[^&lt;]*&lt;/title&gt;'
+&lt;title&gt;Pão francês quentinho toda manhã | Padaria da Ana&lt;/title&gt;
+ana@notebook:~/loja$ curl -s -D - -o /dev/null http://localhost:3000/cache | grep -i 'cache-control\|etag'
+cache-control: max-age=60
+etag: "1yfxlpq"</pre>
+
+<p>Repare que a página <code>/seo</code> já vem com o título certo no HTML, sem JavaScript nenhum rodando: ela foi pré-renderizada no build. E o <code>cache-control</code> definido no <code>load</code> com <code>setHeaders</code> chegou ao cliente, junto com um <code>etag</code> que o adaptador calculou.</p>
+
+<h2>4. As variáveis que a máquina de produção precisa ter</h2>
+
+<p>Aqui mora o tropeço mais comum da primeira publicação. O arquivo <code>.env</code> é do desenvolvimento: ele fica na máquina da Ana e não vai para o Git. Na máquina de produção o <code>.env</code> não existe, então as variáveis precisam ser passadas de outro jeito — na linha de comando, como no exemplo acima, ou no painel da plataforma de deploy.</p>
+
+<p>Quais variáveis, exatamente? O adaptador-node tem as dele, para configurar o próprio servidor. O arquivo gerado no build lista todas, e vale conhecer as principais:</p>
+
+<pre class="term">ana@notebook:~/loja$ sed -n 4,19p build/server/adapter-node-env.js
+var expected = /* @__PURE__ */ new Set([
+	"SOCKET_PATH",
+	"HOST",
+	"PORT",
+	"ORIGIN",
+	"XFF_DEPTH",
+	"ADDRESS_HEADER",
+	"PROTOCOL_HEADER",
+	"HOST_HEADER",
+	"PORT_HEADER",
+	"BODY_SIZE_LIMIT",
+	"SHUTDOWN_TIMEOUT",
+	"IDLE_TIMEOUT",
+	"KEEP_ALIVE_TIMEOUT",
+	"HEADERS_TIMEOUT"
+]);</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Variável do adaptador</th><th>Para que serve</th></tr>
+<tr><td><code>PORT</code></td><td>a porta onde o servidor escuta (padrão 3000)</td></tr>
+<tr><td><code>HOST</code></td><td>a interface de rede (padrão 0.0.0.0)</td></tr>
+<tr><td><code>ORIGIN</code></td><td>o endereço público, usado para montar URLs absolutas</td></tr>
+<tr><td><code>BODY_SIZE_LIMIT</code></td><td>tamanho máximo de corpo aceito num POST</td></tr>
+<tr><td><code>SHUTDOWN_TIMEOUT</code></td><td>segundos de espera para encerrar pedidos em andamento</td></tr>
+<tr><td><code>ADDRESS_HEADER</code></td><td>de qual cabeçalho vem o IP real do cliente, atrás de proxy</td></tr>
+</table>
+</div>
+
+<p>Além dessas, existem as suas: as que você declarou em <code>src/env.js</code>. A regra é a de sempre — pública e estática fica congelada no build; privada ou dinâmica precisa existir na máquina na hora em que o servidor sobe. No projeto da Ana, <code>DATABASE_URL</code> é exatamente esse caso.</p>
+
+<h2>5. Caixa 1: o roteiro de publicação</h2>
+
+<p>Publicar é seguir um roteiro. A caixa abaixo tem três passos e diz “ok” para os três, mesmo quando um deles não foi feito. A missão é mostrar <code>falta</code> onde o passo está pendente.</p>
+
+<div class="trysvelte" data-goal="outre:passar DATABASE_URL: falta">
+<p class="try-task"><strong>Missão:</strong> cada passo tem <code>feito: true</code> ou <code>feito: false</code>. Mostre <code>ok</code> quando estiver feito e <code>falta</code> quando não estiver; o texto precisa conter <code>passar DATABASE_URL: falta</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const passos = [
+		{ nome: 'rodar o build', feito: true },
+		{ nome: 'passar DATABASE_URL', feito: false },
+		{ nome: 'subir o servidor', feito: false }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each passos as p}
+		&lt;li&gt;{p.nome}: ok&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const passos = [
+		{ nome: 'rodar o build', feito: true },
+		{ nome: 'passar DATABASE_URL', feito: false },
+		{ nome: 'subir o servidor', feito: false }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each passos as p}
+		&lt;li&gt;{p.nome}: {p.feito ? 'ok' : 'falta'}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Esse tipo de lista de verificação vale mais do que parece. Numa publicação real, “passar a variável” é o passo que ninguém lembra, e o sintoma é o servidor subindo e caindo em seguida com <code>env_invalid</code> — você vai ver essa mensagem na seção de erros.</p>
+
+<h2>6. O servidor precisa continuar rodando</h2>
+
+<p>Enquanto o terminal estiver aberto, <code>node build</code> fica no ar. Feche o terminal e o servidor morre junto: o processo é filho do shell. Numa máquina de verdade isso não resolve — ninguém vai deixar uma janela aberta a vida toda.</p>
+
+<p>A solução é um gerenciador de processos, um programa cujo trabalho é manter outro programa vivo. No Linux, o mais comum é o <code>systemd</code>; no mundo Node, o <code>pm2</code> é popular. Os dois fazem a mesma coisa: iniciam o processo no boot, reiniciam se ele cair e guardam a saída num arquivo de log.</p>
+
+<p>O adaptador-node ajuda nesse trabalho porque trata sinais do sistema. Quando o <code>systemd</code> ou o Docker pede para parar, ele manda o sinal <code>SIGTERM</code>; o servidor gerado espera os pedidos em andamento terminarem, dentro do <code>SHUTDOWN_TIMEOUT</code>, e só então encerra. A prova está no terminal: ao receber o sinal, nada de erro e nada de pilha.</p>
+
+<pre class="term">ana@notebook:~/loja$ node build &gt; loja.log 2&gt;&amp;1 &amp;
+ana@notebook:~/loja$ sleep 2; curl -s -o /dev/null -w 'GET / -&gt; %{http_code}\n' http://localhost:3000/
+GET / -&gt; 200
+ana@notebook:~/loja$ kill -TERM $!; wait $!; echo "codigo de saida: $?"
+codigo de saida: 0
+ana@notebook:~/loja$ cat loja.log
+Listening on http://0.0.0.0:3000
+GET / → 200 (40 ms)</pre>
+
+<p>O código de saída é zero, e zero em Unix quer dizer “terminei bem”. O servidor recebeu o pedido de encerramento, esperou os pedidos em andamento terminarem e saiu sem erro. Esse cuidado é o que evita cliente vendo “erro de conexão” no meio de um pagamento quando a máquina é reiniciada.</p>
+
+<div class="tip">
+<strong>Um processo, uma porta</strong>
+<p>Cada processo escuta uma porta. Se você subir <code>node build</code> duas vezes sem mudar a porta, o segundo não consegue escutar — e é isso que a seção de erros mostra com <code>EADDRINUSE</code>. Em produção, a plataforma cuida disso; na VPS, você decide a porta no comando.</p>
+</div>
+
+<h2>7. Caixa 2: quais variáveis precisam existir no servidor</h2>
+
+<p>Nem toda variável declarada em <code>src/env.js</code> precisa aparecer na máquina de produção. As estáticas já foram congeladas no build. As outras precisam ser encontradas quando o servidor sobe. A caixa abaixo conta todas.</p>
+
+<div class="trysvelte" data-goal="out:Precisam existir no servidor: 1">
+<p class="try-task"><strong>Missão:</strong> conte só as variáveis com <code>estatica: false</code>, que são as que o servidor precisa encontrar na hora de subir. O texto deve virar <code>Precisam existir no servidor: 1</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const vars = [
+		{ nome: 'DATABASE_URL', publica: false, estatica: false },
+		{ nome: 'PUBLIC_LOJA_NOME', publica: true, estatica: true }
+	];
+&lt;/script&gt;
+
+&lt;p&gt;Precisam existir no servidor: 2&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const vars = [
+		{ nome: 'DATABASE_URL', publica: false, estatica: false },
+		{ nome: 'PUBLIC_LOJA_NOME', publica: true, estatica: true }
+	];
+
+	const noServidor = $derived(vars.filter((v) =&gt; !v.estatica));
+&lt;/script&gt;
+
+&lt;p&gt;Precisam existir no servidor: {noServidor.length}&lt;/p&gt;</pre>
+</div>
+
+<p><code>filter</code> devolve uma lista nova só com os itens aprovados pela função. O <code>!</code> antes de <code>v.estatica</code> inverte o valor: aprovado quando for falso. Depois, <code>length</code> conta. A mesma estrutura serve para “quantos pedidos estão pendentes” ou “quantos produtos estão sem estoque”.</p>
+
+<h2>8. Conferindo antes de anunciar</h2>
+
+<p>Antes de apontar o domínio, uma passada de olho no pacote evita vexame. O comando <code>npm run preview</code> serve o build pelo Vite, sem o adaptador, e é útil para conferir página por página:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview -- --port 4173
+
+> loja@0.0.1 preview
+> vite preview --port 4173
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Note que o preview não imprime a versão do Vite nem a linha de “ready”: ele é mais silencioso que o <code>dev</code>. O comportamento das páginas, porém, é o do pacote final — inclusive o das variáveis congeladas no build.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que conferir</th><th>Como conferir</th></tr>
+<tr><td>O título e a descrição aparecem no HTML</td><td>ver o código-fonte da página, não o inspetor</td></tr>
+<tr><td>O formulário de login funciona</td><td>enviar senha errada e senha certa</td></tr>
+<tr><td>As páginas com <code>prerender</code> estão na pasta</td><td><code>ls build/prerendered</code></td></tr>
+<tr><td>Imagem e PDF abrem</td><td>clicar em cada link da pasta <code>static</code></td></tr>
+<tr><td>Nenhuma página protegida virou arquivo</td><td>procurar <code>conta.html</code> na pasta prerendered</td></tr>
+</table>
+</div>
+
+<p>Numa página de diagnóstico, o status vira componente com uma linha de lógica:</p>
+
+<pre class="file" data-file="src/lib/Status.svelte">&lt;script&gt;
+	let { status = 200 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Resposta: {status} {status === 200 ? 'ok' : 'verificar'}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Resposta: 200 ok&lt;/p&gt;</pre>
+
+<p>Com o valor padrão, o componente já responde <code>ok</code> quando ninguém passa nada. Quem passa <code>404</code> recebe <code>verificar</code> — a mesma ideia dos passos da caixa 1, agora com o status que o <code>curl</code> mostrou.</p>
+
+<p>A última linha da tabela é uma armadilha real. No projeto da Ana, o rastreador de links do build chegou na página <code>/conta</code> pelo menu, recebeu o redirecionamento do hook e congelou o resultado num arquivo <code>conta.html</code> de 112 bytes. Não vazou dado nenhum, mas a página passou a existir como arquivo estático. Quem depende de login para tudo precisa revisar a pasta antes de publicar.</p>
+
+<h2>9. Caixa 3: a ordem dos passos</h2>
+
+<p>Ordem errada em publicação custa tempo e susto. A caixa abaixo tem os três passos fora de ordem e mostra na sequência em que estão. A missão é colocar <code>rodar o build</code> primeiro.</p>
+
+<div class="trysvelte" data-goal="outre:^rodar o build">
+<p class="try-task"><strong>Missão:</strong> reordene a lista para que o primeiro parágrafo na tela seja <code>rodar o build</code>, depois <code>conferir com preview</code> e por último <code>subir o servidor</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const passos = ['subir o servidor', 'rodar o build', 'conferir com preview'];
+&lt;/script&gt;
+
+{#each passos as p}
+	&lt;p&gt;{p}&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const passos = ['rodar o build', 'conferir com preview', 'subir o servidor'];
+&lt;/script&gt;
+
+{#each passos as p}
+	&lt;p&gt;{p}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p>A ordem não é capricho: sem build não existe o que conferir, e sem conferir você sobe um pacote que talvez não funcione. Quem publica com pressa pula o meio e descobre o problema com o cliente olhando — que é exatamente o custo que o preview existe para evitar.</p>
+
+<h2>10. O endereço e o proxy</h2>
+
+<p>Falta o último pedaço: fazer o domínio apontar para a máquina. Num servidor alugado, o caminho comum é um proxy reverso — Nginx ou Caddy — recebendo o pedido na porta 80 e 443 e repassando para o <code>node build</code> na porta 3000. O proxy cuida do certificado HTTPS; o SvelteKit cuida da página.</p>
+
+<p>Nesse arranjo existem duas armadilhas. A primeira: o servidor Node passa a ver todos os pedidos vindo do proxy, então o IP do cliente precisa ser lido de um cabeçalho — é para isso que serve <code>ADDRESS_HEADER</code> e <code>XFF_DEPTH</code>. A segunda: URLs absolutas, como as de um sitemap, precisam saber o endereço público; é para isso que serve <code>ORIGIN</code>.</p>
+
+<p>Também vale saber que o endereço público não muda o código: o SvelteKit monta links relativos por padrão, e a página funciona em qualquer domínio. Configuração de proxy é infraestrutura, não programação de componente — e as duas coisas vivem em arquivos diferentes.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram da máquina da Ana. Duas são do próprio servidor Node; a terceira vem do <code>curl</code> tentando falar com um servidor que não está no ar.</p>
+
+<div class="cenario">
+<strong>Erro 1 — a variável não chegou na produção</strong>
+<p>O <code>.env</code> ficou na máquina de desenvolvimento e ninguém passou <code>DATABASE_URL</code> para o processo. O servidor sobe, valida o ambiente e cai antes de aceitar o primeiro pedido.</p>
+<pre class="term">ana@notebook:~/loja$ node build
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+[SvelteKit error: env_invalid
+Invalid environment variables:
+
+DATABASE_URL
+  - Value is missing. If it is optional, add a validator declaring it as such.
+
+https://svelte.dev/e/kit/env_invalid]
+
+Node.js v22.23.5</pre>
+<p>A correção é passar a variável na hora de subir — <code>DATABASE_URL='…' node build</code> — ou configurá-la no painel da plataforma. Um detalhe que confunde: no <code>npm run dev</code> isso não acontece, porque o Vite lê o <code>.env</code> sozinho. A diferença entre dev e produção é justamente essa.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — a porta já está ocupada</strong>
+<p>Você subiu o servidor uma vez e esqueceu. Ao subir de novo, o segundo processo não consegue escutar na mesma porta.</p>
+<pre class="term">ana@notebook:~/loja$ node build
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1941:16)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1977:8)</pre>
+<p><code>EADDRINUSE</code> é “endereço em uso”. A leitura é literal: já existe alguém escutando na porta 3000. As saídas são parar o processo antigo ou escolher outra porta — <code>PORT=3001 node build</code> — lembrando de ajustar o proxy para a porta nova.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — ninguém do outro lado</strong>
+<p>Este é o erro que o cliente vê quando o servidor não está no ar, ou quando a porta está errada. O <code>curl</code> é o mensageiro: ele avisa que a conexão não foi aceita.</p>
+<pre class="term">ana@notebook:~/loja$ curl -sS http://localhost:3000/
+curl: (7) Failed to connect to localhost port 3000 after 0 ms: Couldn't connect to server</pre>
+<p>O código 7 do <code>curl</code> é “não consegui conectar”, e não “a página não existe”. Isso ajuda a separar os dois problemas: 404 é páginas, 7 é servidor. Se o processo estiver rodando, confira a porta no comando e no proxy antes de suspeitar do código.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th><th>Saída típica</th></tr>
+<tr><td><code>npm run dev</code></td><td>servidor de desenvolvimento</td><td><code>Local: http://localhost:5173/</code></td></tr>
+<tr><td><code>npm run build</code></td><td>gera o pacote de produção</td><td><code>✔ done</code></td></tr>
+<tr><td><code>npm run preview</code></td><td>serve o build pelo Vite</td><td><code>Local: http://localhost:4173/</code></td></tr>
+<tr><td><code>node build</code></td><td>sobe o servidor Node gerado</td><td><code>Listening on http://0.0.0.0:3000</code></td></tr>
+<tr><td><code>PORT=3001 node build</code></td><td>sobe numa porta diferente</td><td><code>Listening on http://0.0.0.0:3001</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Problema</th><th>Mensagem</th><th>Primeiro passo</th></tr>
+<tr><td>variável faltando</td><td><code>env_invalid</code></td><td>passar a variável no ambiente</td></tr>
+<tr><td>porta ocupada</td><td><code>EADDRINUSE</code></td><td>parar o processo antigo ou trocar a porta</td></tr>
+<tr><td>servidor fora do ar</td><td><code>curl: (7)</code></td><td>conferir se <code>node build</code> está rodando</td></tr>
+<tr><td>página não existe</td><td><code>404</code></td><td>conferir rota e arquivo estático</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual comando sobe o pacote gerado pelo <code>adapter-node</code>?</p>
+<label><input type="radio" name="q-dp"> <code>npm run dev</code></label>
+<label><input type="radio" name="q-dp"> <code>node build</code></label>
+<label><input type="radio" name="q-dp"> <code>npm run preview</code></label>
+<label><input type="radio" name="q-dp"> <code>npx sv serve</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O servidor caiu com <code>EADDRINUSE: address already in use 0.0.0.0:3000</code>. O que significa?</p>
+<label><input type="radio" name="q-dp"> o banco de dados está fora do ar</label>
+<label><input type="radio" name="q-dp"> falta a variável <code>ORIGIN</code></label>
+<label><input type="radio" name="q-dp"> já existe um processo escutando na porta 3000</label>
+<label><input type="radio" name="q-dp"> o build não foi gerado</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o <code>node build</code> não encontra <code>DATABASE_URL</code> mesmo com o <code>.env</code> preenchido?</p>
+<label><input type="radio" name="q-dp"> porque o <code>.env</code> é lido no desenvolvimento; em produção a variável vem do ambiente</label>
+<label><input type="radio" name="q-dp"> porque o <code>.env</code> precisa de aspas duplas em todas as linhas</label>
+<label><input type="radio" name="q-dp"> porque o adaptador-node não aceita variáveis</label>
+<label><input type="radio" name="q-dp"> porque o build apagou o arquivo <code>.env</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">// subir o servidor gerado, com a variável do banco e na porta 3001<br>ana@notebook:~/loja$ <input data-answer="PORT=3001 DATABASE_URL='postgres://ana:segredo@localhost:5432/padaria' node build|DATABASE_URL='postgres://ana:segredo@localhost:5432/padaria' PORT=3001 node build"><br><br>// Listening on http://0.0.0.0:3001</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>npm run dev</code> é a cozinha; <code>npm run build</code> é a caixa de pão pronta para a loja.</li>
+  <li>O build roda o app para pré-renderizar páginas — por isso o banco precisa estar acessível durante o build.</li>
+  <li><code>node build</code> sobe o pacote do <code>adapter-node</code> e imprime <code>Listening on http://0.0.0.0:3000</code>.</li>
+  <li>O <code>.env</code> é do desenvolvimento; em produção a variável vem do ambiente ou do painel da plataforma.</li>
+  <li>O adaptador-node lê <code>PORT</code>, <code>HOST</code>, <code>ORIGIN</code>, <code>BODY_SIZE_LIMIT</code> e outros para se configurar.</li>
+  <li>Um gerenciador de processos (<code>systemd</code> ou <code>pm2</code>) mantém o servidor vivo e o reinicia.</li>
+  <li><code>SIGTERM</code> pede encerramento educado: o adaptador espera os pedidos em andamento.</li>
+  <li><code>npm run preview</code> confere o build antes de anunciar o endereço.</li>
+  <li>Erros desta aula: <code>env_invalid</code>, <code>EADDRINUSE</code> e <code>curl: (7)</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

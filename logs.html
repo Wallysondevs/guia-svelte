@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logs e Observabilidade no SvelteKit — o que fica registrado | Guia Svelte</title>
+<meta name="description" content="Do console.log no load ao handleError: como a padaria da Ana registra cada pedido, lê a pilha de erro real e evita gravar senha no arquivo de log.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Logs e Observabilidade</span></h1>
+
+<p class="intro">A Ana tem um caderno atrás do balcão onde anota o que aconteceu no dia: o pão que queimou, o cliente que reclamou do troco, a entrega que atrasou. Ninguém lê o caderno quando tudo dá certo — ele existe para o dia em que algo dá errado e ela precisa saber o que houve. Num programa, esse caderno são os <strong>logs</strong>: linhas de texto que o servidor escreve sozinho a cada pedido. Esta aula mostra onde essas linhas aparecem, como escrever as úteis e o que nunca deve entrar nelas.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é log e por que ele é diferente de mensagem de erro na tela.</li>
+  <li>Onde as linhas aparecem: terminal do dev, saída do build e log de produção.</li>
+  <li>Como registrar método, caminho, status e tempo de cada requisição.</li>
+  <li>Como ler uma pilha de erro de verdade, linha por linha.</li>
+  <li>Como o <code>handleError</code> separa o que o cliente vê do que a equipe vê.</li>
+  <li>Por que <code>'texto ' + objeto</code> vira <code>[object Object]</code>.</li>
+  <li>O que nunca pode ser gravado: senha, cookie, dado pessoal.</li>
+  <li>Para onde vai o log em produção: <code>stdout</code>, <code>journalctl</code>, Docker.</li>
+  <li>Os três tropeços reais: objeto colado, ciclo no JSON e a pilha de erro de 500.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o caderno atrás do balcão</h2>
+
+<p>Existe uma diferença grande entre o cartaz que o cliente lê e o caderno da Ana. O cartaz diz “voltamos já” — é curto, educado e não conta nada de útil. O caderno diz “12h03, forno 2 apagou, 14 pães perdidos, eletricista avisado às 12h40” — é feio, técnico e resolve o problema da semana seguinte.</p>
+
+<p>No SvelteKit acontece a mesma divisão. A página de erro que o cliente vê é o cartaz: uma frase curta, sem detalhe técnico, sem nome de arquivo. O log é o caderno: método HTTP, caminho, status, tempo, mensagem do erro e a pilha de chamadas que levou até ali. Quem confunde os dois acaba mostrando a senha do banco no cartaz ou escondendo do caderno a informação que resolveria o caso.</p>
+
+<p>Logar é barato e salva tempo. Uma linha por pedido responde perguntas que você vai fazer: a página ficou lenta por causa do banco ou do componente? O erro de ontem às 3h da manhã apareceu de novo? O formulário de login está sendo atacado? Sem log, a resposta é “acho que”.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No caderno da padaria</th><th>No log do SvelteKit</th></tr>
+<tr><td>Que dia e que hora</td><td>o horário que o servidor põe sozinho</td></tr>
+<tr><td>O que aconteceu</td><td>método, caminho e status</td></tr>
+<tr><td>Quanto tempo levou</td><td>milissegundos medidos com <code>performance.now()</code></td></tr>
+<tr><td>Quem avisou e o que fez</td><td>a pilha de erro, com arquivo e linha</td></tr>
+<tr><td>O que não se anota no caderno aberto</td><td>senha, cookie, dado pessoal</td></tr>
+</table>
+</div>
+
+<h2>2. Onde o log aparece</h2>
+
+<p>A mesma linha de <code>console.log</code> pode cair em três lugares diferentes, e saber qual é qual economiza muita procura:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Momento</th><th>Onde a linha aparece</th><th>Quem vê</th></tr>
+<tr><td><code>npm run dev</code></td><td>o terminal onde o comando roda</td><td>você, na sua máquina</td></tr>
+<tr><td><code>npm run build</code></td><td>o terminal do build, durante o prerender</td><td>você, no build</td></tr>
+<tr><td><code>node build</code></td><td>o terminal do servidor, ou o arquivo de log dele</td><td>quem administra o servidor</td></tr>
+<tr><td>navegador</td><td>o console do inspetor (F12)</td><td>quem está com a página aberta</td></tr>
+</table>
+</div>
+
+<p>O ponto que confunde: um <code>console.log</code> escrito dentro de um componente <code>.svelte</code> roda nos dois lados. Durante a renderização no servidor, ele aparece no terminal; no navegador, aparece no inspetor. Já um <code>console.log</code> dentro de um <code>+page.server.js</code> só existe no servidor — é o lugar certo para registrar informação sensível, porque ela não vai para o navegador de ninguém.</p>
+
+<p>O build também gera log, mesmo sem você escrever nada. Quando o SvelteKit pré-renderiza páginas, ele roda o seu app e registra cada uma:</p>
+
+<pre class="term">Prerendering
+GET /seo → 200 (12 ms)
+GET /sobre → 200 (2 ms)
+GET / → 204 (0 ms)
+GET /produtos → 204 (0 ms)
+GET /entrar → 204 (0 ms)</pre>
+
+<p>As duas primeiras linhas vieram do <code>console.log</code> do <code>hooks.server.js</code> — o mesmo hook da aula anterior, rodando durante o build. As outras três, com status <code>204</code>, são páginas que o rastreador de links visitou mas não gerou arquivo. Se uma delas tivesse consultado o banco, o banco precisaria estar no ar naquele instante.</p>
+
+<h2>3. O primeiro log: dentro do <code>load</code></h2>
+
+<p>Para registrar algo de dentro de uma página, o lugar natural é o <code>load</code> do servidor. O arquivo abaixo calcula o total de produtos e anota no terminal quantos são:</p>
+
+<pre class="file" data-file="src/routes/produtos/+page.server.js">const produtos = [
+	{ id: 1, nome: 'Pão francês', preco: 0.9 },
+	{ id: 2, nome: 'Sonho de creme', preco: 4.5 },
+	{ id: 3, nome: 'Pão de queijo', preco: 3.0 }
+];
+
+export function load() {
+	console.log(`[produtos] ${produtos.length} itens no catálogo`);
+	return { produtos };
+}</pre>
+
+<p>Com o servidor no ar, cada visita à página escreve a mesma linha. O texto entre crases é um <em>template literal</em>: a parte fixa fica entre crases e o valor calculado entra entre <code>${ }</code>. É o mesmo buraco das chaves no HTML, só que em JavaScript puro.</p>
+
+<dl class="anatomy">
+  <dt>console.log</dt><dd>escreve uma linha na saída padrão do processo. No servidor, é o terminal; em produção, o arquivo de log do gerenciador.</dd>
+  <dt>[produtos]</dt><dd>um prefixo com o nome da área. Com dez logs no projeto, o prefixo é o que permite filtrar a saída com <code>grep</code>.</dd>
+  <dt>${produtos.length}</dt><dd>o valor calculado na hora. A conta acontece antes de a linha ser escrita.</dd>
+  <dt>console.error</dt><dd>a mesma coisa, mas na saída de erro. A diferença aparece quando alguém filtra o log por gravidade.</dd>
+  <dt>performance.now()</dt><dd>o relógio de alta precisão do JavaScript, em milissegundos. É o que permite medir o tempo de um pedido.</dd>
+</dl>
+
+<p>Uma linha de log bem feita responde “o que, onde, quanto”. A do exemplo tem o assunto (<code>produtos</code>) e o número. Uma linha ruim seria <code>console.log('aqui')</code>: não diz nada quando você lê o arquivo três dias depois.</p>
+
+<h2>4. A linha de log como componente</h2>
+
+<p>Ver o log na tela, durante o desenvolvimento, ajuda a entender o formato. O componente abaixo monta uma linha no padrão que o hook usa:</p>
+
+<pre class="file" data-file="src/lib/LinhaDeLog.svelte">&lt;script&gt;
+	let { metodo = 'GET', caminho = '/produtos', status = 200 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{metodo} {caminho} → {status}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;GET /produtos → 200&lt;/p&gt;</pre>
+
+<p>A seta <code>→</code> é só um caractere de texto, mas ajuda a separar o pedido da resposta quando a linha é lida rápido. Numa página de diagnóstico, esse componente vira uma lista de pedidos recentes — é o que a caixa abaixo pede.</p>
+
+<h2>5. Caixa 1: montando as linhas do caderno</h2>
+
+<p>A caixa abaixo tem dois pedidos e escreve só o método e o caminho. A missão é acrescentar o status, no formato que o terminal mostra.</p>
+
+<div class="trysvelte" data-goal="outre:POST /entrar → 400">
+<p class="try-task"><strong>Missão:</strong> mostre cada pedido no formato <code>método caminho → status</code>. O texto precisa conter <code>POST /entrar → 400</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const pedidos = [
+		{ metodo: 'GET', caminho: '/produtos', status: 200 },
+		{ metodo: 'POST', caminho: '/entrar', status: 400 }
+	];
+&lt;/script&gt;
+
+{#each pedidos as p}
+	&lt;p&gt;{p.metodo} {p.caminho}&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const pedidos = [
+		{ metodo: 'GET', caminho: '/produtos', status: 200 },
+		{ metodo: 'POST', caminho: '/entrar', status: 400 }
+	];
+&lt;/script&gt;
+
+{#each pedidos as p}
+	&lt;p&gt;{p.metodo} {p.caminho} → {p.status}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p>O <code>400</code> na segunda linha diz muito: é o status de pedido malformado, e no projeto da Ana ele aparece quando a senha do formulário está errada. Um <code>400</code> repetido dezenas de vezes por minuto é sinal de gente tentando adivinhar senha. É esse tipo de leitura que o log permite e a tela não.</p>
+
+<h2>6. Medindo tempo sem inventar número</h2>
+
+<p>Tempo de resposta é a primeira métrica que a Ana vai querer quando o site ficar lento. A conta é simples: guarda o instante antes, guarda o instante depois, subtrai. A caixa abaixo mostra zero, porque ninguém somou nada ainda.</p>
+
+<div class="trysvelte" data-goal="out:Tempo total: 63 ms">
+<p class="try-task"><strong>Missão:</strong> some as três medidas e mostre o total: <code>Tempo total: 63 ms</code>. Use <code>reduce</code>, não o número escrito à mão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const medidas = [12, 48, 3];
+&lt;/script&gt;
+
+&lt;p&gt;Tempo total: 0 ms&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const medidas = [12, 48, 3];
+	const total = $derived(medidas.reduce((soma, m) =&gt; soma + m, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Tempo total: {total} ms&lt;/p&gt;</pre>
+</div>
+
+<p><code>reduce</code> percorre a lista carregando um acumulador. O primeiro argumento é a função que soma; o segundo é o valor inicial, zero. Sem o valor inicial, o <code>reduce</code> usaria o primeiro item da lista como ponto de partida — e numa lista vazia ele lançaria erro. Detalhe pequeno, diferença grande quando a lista pode estar vazia.</p>
+
+<h2>7. <code>handleError</code>: o log que sobra quando algo quebra</h2>
+
+<p>Os logs de rotina contam o que deu certo. O log de erro conta o que deu errado, e é o mais importante. No projeto da Ana, o <code>handleError</code> do <code>hooks.server.js</code> escreve no terminal e devolve uma mensagem curta para a tela:</p>
+
+<pre class="file" data-file="src/hooks.server.js">export function handleError({ error, event, status }) {
+	console.error(`[erro ${status}] ${event.request.method} ${event.url.pathname}: ${error.message}`);
+	return {
+		message: 'A padaria teve um problema. Tente de novo em instantes.',
+		codigo: status
+	};
+}</pre>
+
+<p>O que o cliente vê é o <code>return</code>. O que a equipe vê é o <code>console.error</code>. Essa separação é o motivo de o <code>handleError</code> existir: sem ele, o SvelteKit mostra uma página genérica e você fica sem saber qual erro foi. Com ele, o terminal registra e a página continua educada.</p>
+
+<p>Rodando, cada erro produz duas linhas: a do projeto e a do Vite.</p>
+
+<pre class="term">[erro 404] GET /erro: Pão não encontrado na prateleira
+GET /erro → 404 (16 ms)
+404 GET /erro
+[erro 500] GET /quebra-500: o forno apagou
+GET /quebra-500 → 500 (15 ms)
+500 GET /quebra-500</pre>
+
+<p>Repare na diferença de gravidade. O <code>404</code> é esperado: alguém pediu uma página que não existe, e a mensagem é específica (“Pão não encontrado na prateleira”). O <code>500</code> é inesperado: o <code>load</code> lançou um erro comum, sem status, e o framework transformou em 500. Em produção, é o 500 que precisa acordar alguém.</p>
+
+<h2>8. Caixa 2: o que não pode entrar no caderno</h2>
+
+<p>Log é texto que fica guardado e circula: aparece no terminal, no arquivo, no painel da plataforma. Senha em log é senha vazada. A caixa abaixo escreve uma linha com a senha na query, do jeito que um pedido mal feito chegaria.</p>
+
+<div class="trysvelte" data-goal="out:GET /entrar?senha=*** → 200">
+<p class="try-task"><strong>Missão:</strong> troque o valor da senha por três asteriscos, mantendo o resto da linha igual: <code>GET /entrar?senha=*** → 200</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const linha = 'GET /entrar?senha=pao123 → 200';
+&lt;/script&gt;
+
+&lt;p&gt;{linha}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const linha = 'GET /entrar?senha=pao123 → 200';
+	const limpa = $derived(linha.replace(/senha=\S*/, 'senha=***'));
+&lt;/script&gt;
+
+&lt;p&gt;{limpa}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>\S*</code> pega tudo o que não é espaço, então para no espaço antes da seta. Se você usasse <code>.*</code>, o resto da linha iria junto — e o log perderia justamente o status, que é a parte útil. A lição vale para qualquer texto: escolha o padrão pelo que ele precisa parar, não pelo que ele precisa pegar.</p>
+
+<p>Vale o mesmo para token de sessão, cookie inteiro, número de cartão e dados pessoais. O princípio é o do caderno aberto no balcão: se você não escreveria aquilo num papel que qualquer um pode ler, não escreva no log.</p>
+
+<h2>9. O que registrar e o que evitar</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Registre</th><th>Evite</th></tr>
+<tr><td>método, caminho, status e tempo</td><td>corpo inteiro do formulário</td></tr>
+<tr><td>identificador do pedido, não o nome do cliente</td><td>CPF, telefone, endereço completo</td></tr>
+<tr><td>mensagem do erro e a pilha</td><td>senha, token, chave de API</td></tr>
+<tr><td>nome da operação (<code>[produtos]</code>)</td><td><code>console.log('aqui')</code> sem contexto</td></tr>
+<tr><td>contagem e duração</td><td>o objeto inteiro da requisição</td></tr>
+</table>
+</div>
+
+<p>Existe uma razão técnica além da segurança para não logar tudo. Log gigante enche o disco, e disco cheio derruba o servidor. Numa VPS pequena, um log que cresce sem limite é uma bomba-relógio: o gerenciador de processos grava, o arquivo cresce, e um dia o servidor não consegue mais escrever. Rotação de log — guardar só os últimos dias — é configuração do sistema, não do SvelteKit, mas é a sua responsabilidade quando você administra a máquina.</p>
+
+<h2>10. Caixa 3: lendo o log de erro</h2>
+
+<p>Uma pilha de erro é o caderno no seu formato mais técnico: cada linha é uma chamada, da mais recente para a mais antiga. A caixa abaixo só mostra o status; a missão é separar o que é do projeto e o que é da biblioteca.</p>
+
+<pre class="file" data-file="src/lib/Pilha.svelte">&lt;script&gt;
+	let {
+		pilha = [
+			{ local: 'src/routes/+page.svelte:5', projeto: true },
+			{ local: 'node_modules/svelte/internal/server.js:416', projeto: false }
+		]
+	} = $props();
+&lt;/script&gt;
+
+{#each pilha as c}
+	&lt;p&gt;{c.local}{c.projeto ? ' aqui' : ''}&lt;/p&gt;
+{/each}</pre>
+
+<pre class="out">&lt;p&gt;src/routes/+page.svelte:5 aqui&lt;/p&gt;&lt;p&gt;node_modules/svelte/internal/server.js:416&lt;/p&gt;</pre>
+
+<p>A primeira linha da pilha de verdade é quase sempre a sua. Encontrar o arquivo <code>src/…</code> no meio de vinte linhas de <code>node_modules</code> é a habilidade que transforma um erro assustador em uma correção de cinco minutos. O resto da pilha explica o caminho que o framework fez até você — útil quando o problema não está no seu código.</p>
+
+<h2>11. Log em produção: para onde vai</h2>
+
+<p>No servidor, não existe “terminal aberto na sua frente”. O <code>console.log</code> escreve na saída padrão do processo, e alguém precisa estar coletando. As três formas mais comuns:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde o app roda</th><th>Como ler o log</th></tr>
+<tr><td>VPS com <code>systemd</code></td><td><code>journalctl -u loja -f</code></td></tr>
+<tr><td>Docker</td><td><code>docker logs -f nome-do-container</code></td></tr>
+<tr><td>Plataforma (Netlify, Vercel)</td><td>o painel da plataforma, aba de logs</td></tr>
+<tr><td>Arquivo próprio</td><td>redirecionar a saída: <code>node build &gt;&gt; loja.log 2&gt;&amp;1</code></td></tr>
+</table>
+</div>
+
+<p>Repare no padrão do último caso: <code>&gt;&gt;</code> acrescenta no fim do arquivo em vez de apagar, e <code>2&gt;&amp;1</code> manda a saída de erro para o mesmo lugar que a saída comum. Sem esse segundo pedaço, você perde justamente as linhas de erro — que são as que importam.</p>
+
+<p>Existe uma prática que vale desde o começo: escrever log em uma linha, sem quebra de linha no meio. Um log de várias linhas vira uma bagunça no arquivo, e ferramentas que leem log procuram uma linha por evento. Se você precisa registrar um objeto, converta com <code>JSON.stringify</code> em vez de imprimir o objeto direto.</p>
+
+<h2>12. Quando dá errado</h2>
+
+<p>As três saídas abaixo são reais. Duas saíram do próprio Node, com um comando de uma linha; a terceira é a pilha de erro de uma página que quebrou no servidor de desenvolvimento.</p>
+
+<div class="cenario">
+<strong>Erro 1 — o objeto virou <code>[object Object]</code></strong>
+<p>Você juntou texto com um objeto usando <code>+</code>. A conversão de objeto para texto não sabe o que fazer e devolve a assinatura genérica.</p>
+<pre class="term">ana@notebook:~/loja$ node -e "console.log('usuario: ' + { nome: 'Ana', papel: 'dona' })"
+usuario: [object Object]</pre>
+<p>A informação existe, mas não chegou ao log. A correção é escolher o campo — <code>usuario.nome</code> — ou usar <code>JSON.stringify</code> para ver o objeto inteiro. O <code>console.log</code> chamado direto com o objeto até mostra os campos no terminal, mas concatenar com <code>+</code> sempre vira <code>[object Object]</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — o JSON com ciclo não converte</strong>
+<p>Este aparece quando o objeto tem uma referência para si mesmo, coisa comum em objetos de configuração e em estruturas que apontam de volta para o pai.</p>
+<pre class="term">ana@notebook:~/loja$ node -e "const a = { nome: 'Ana' }; a.self = a; try { JSON.stringify(a) } catch (e) { console.log(e.message) }"
+Converting circular structure to JSON
+    --&gt; starting at object with constructor 'Object'
+    --- property 'self' closes the circle</pre>
+<p>A mensagem aponta o culpado: a propriedade <code>self</code> fecha o círculo. Para logar, escolha os campos que interessam — <code>JSON.stringify({ nome: a.nome })</code> — em vez de mandar a estrutura inteira. O mesmo erro acontece em produção quando alguém loga <code>event</code> ou a requisição inteira.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — a pilha do 500 no terminal</strong>
+<p>Uma página acessou <code>data.usuario.nome</code> quando <code>usuario</code> era <code>null</code>. O SvelteKit registrou a pilha e devolveu uma página 500 ao cliente.</p>
+<pre class="term">TypeError: Cannot read properties of null (reading 'nome')
+    at eval (src/routes/quebra-locals/+page.svelte:5:29)
+    at eval (node_modules/svelte/src/internal/server/renderer.js:416:11)
+    at Renderer.child (node_modules/svelte/src/internal/server/renderer.js:305:18)
+    at Renderer.component (node_modules/svelte/src/internal/server/renderer.js:414:8)</pre>
+<p>A primeira linha diz o tipo do erro e a propriedade: leitura de <code>nome</code> em <code>null</code>. A segunda aponta o lugar exato — <code>src/routes/quebra-locals/+page.svelte:5:29</code>, linha 5, coluna 29. As seguintes são do framework e explicam por que a renderização chegou ali; a pilha completa tem mais linhas internas. A correção é <code>data.usuario?.nome</code>, com o encadeamento opcional da aula de hooks.</p>
+</div>
+
+<h2>13. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ferramenta</th><th>Para que serve</th><th>Onde escrever</th></tr>
+<tr><td><code>console.log</code></td><td>rotina: pedido atendido, item contado</td><td><code>load</code>, hook, ação</td></tr>
+<tr><td><code>console.error</code></td><td>problema: erro, tentativa barrada</td><td><code>handleError</code>, ação</td></tr>
+<tr><td><code>console.time</code></td><td>medir um trecho no terminal</td><td>qualquer código de servidor</td></tr>
+<tr><td><code>performance.now()</code></td><td>medir com precisão e guardar o número</td><td>hook <code>handle</code></td></tr>
+<tr><td><code>JSON.stringify</code></td><td>transformar objeto em linha de texto</td><td>antes de logar</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa comum</th><th>Correção</th></tr>
+<tr><td><code>[object Object]</code></td><td>concatenação com <code>+</code></td><td>usar um campo ou <code>JSON.stringify</code></td></tr>
+<tr><td><code>Converting circular structure</code></td><td>objeto com referência a si</td><td>logar só os campos úteis</td></tr>
+<tr><td><code>Cannot read properties of null</code></td><td>dado que pode faltar</td><td><code>?.</code> e <code>??</code></td></tr>
+<tr><td>log sem linha nenhuma</td><td>o código não rodou nesse lado</td><td>conferir se é servidor ou navegador</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Onde aparece um <code>console.log</code> escrito dentro de <code>+page.server.js</code>?</p>
+<label><input type="radio" name="q-lg"> no console do navegador do cliente</label>
+<label><input type="radio" name="q-lg"> no terminal do servidor, onde o processo roda</label>
+<label><input type="radio" name="q-lg"> na página, dentro de um <code>&lt;pre&gt;</code></label>
+<label><input type="radio" name="q-lg"> no arquivo <code>.env</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual é o papel do <code>handleError</code> no assunto de logs?</p>
+<label><input type="radio" name="q-lg"> apagar o erro para o cliente não ver</label>
+<label><input type="radio" name="q-lg"> impedir que o erro aconteça</label>
+<label><input type="radio" name="q-lg"> registrar o erro no servidor e devolver uma mensagem curta para a tela</label>
+<label><input type="radio" name="q-lg"> gravar o erro no <code>.env</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que não se deve logar o corpo inteiro de um formulário de login?</p>
+<label><input type="radio" name="q-lg"> porque a senha ficaria gravada em texto no arquivo de log</label>
+<label><input type="radio" name="q-lg"> porque o log fica mais bonito sem isso</label>
+<label><input type="radio" name="q-lg"> porque o navegador não envia formulário</label>
+<label><input type="radio" name="q-lg"> porque o <code>console.log</code> não aceita objetos</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">// src/hooks.server.js<br>const inicio = performance.now();<br>const resposta = await resolve(event);<br>const ms = Math.round(performance.now() - inicio);<br>console.<input data-answer="log|error">(`${event.request.method} ${event.url.pathname} → ${resposta.status} (${ms} ms)`);<br><br>// uma linha por pedido, com método, caminho, status e tempo</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Log é o caderno do servidor: técnico, detalhado, para quem mantém o site.</li>
+  <li>O cartaz da tela é a página de erro; ele não mostra detalhe técnico.</li>
+  <li><code>console.log</code> em <code>+page.server.js</code> e em hooks aparece no terminal do servidor.</li>
+  <li>O build também roda o app, então os logs do hook aparecem durante o prerender.</li>
+  <li>Uma linha útil tem assunto, dado e contexto: <code>[produtos] 3 itens</code>.</li>
+  <li>Tempo de resposta é a diferença entre dois <code>performance.now()</code>, arredondada.</li>
+  <li><code>handleError</code> registra o erro e devolve a mensagem curta que o cliente vê.</li>
+  <li>Nunca logue senha, token, cookie inteiro ou dado pessoal; mascare com <code>replace</code>.</li>
+  <li><code>[object Object]</code> vem de concatenar objeto com texto; use <code>JSON.stringify</code>.</li>
+  <li>Objeto com ciclo quebra o <code>JSON.stringify</code>; logue só os campos que importam.</li>
+  <li>A primeira linha da pilha costuma apontar o arquivo e a linha do seu projeto.</li>
+  <li>Em produção, o log vai para <code>journalctl</code>, <code>docker logs</code> ou o painel da plataforma.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

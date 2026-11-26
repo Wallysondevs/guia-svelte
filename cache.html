@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cache e Pré-render no SvelteKit — congelar sem quebrar | Guia Svelte</title>
+<meta name="description" content="Prerender, setHeaders e cache-control no SvelteKit 3: o que a padaria da Ana congela no build, o que precisa de servidor e os erros reais que aparecem no caminho.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Cache e Pré-render</span></h1>
+
+<p class="intro">A Ana descobriu que pão congelado, bem embalado, sai do forno tão bom quanto o do dia — desde que ela saiba <em>o que</em> congelar. O pão de queijo sim; a coxinha frita, não. Com página de site é igual: a página “sobre” pode ser preparada uma vez e servida igual para todo mundo; a página da conta de cada cliente, nunca. Esta aula mostra como o SvelteKit pré-renderiza, como os cabeçalhos de cache mudam o comportamento do navegador e o que acontece quando você congela a coisa errada.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é pré-renderizar: gerar o HTML no build em vez de no pedido.</li>
+  <li>Como ligar e desligar o pré-render com <code>export const prerender</code>.</li>
+  <li>O que sai na pasta <code>build/prerendered</code> e por que há arquivos <code>.gz</code> e <code>.br</code>.</li>
+  <li>Como o rastreador de links decide o que congelar.</li>
+  <li>Como definir <code>cache-control</code> com <code>setHeaders</code>.</li>
+  <li>Por que um cabeçalho definido numa página pré-renderizada não chega ao cliente.</li>
+  <li>Quais rotas não podem ser congeladas e o erro que o build dá.</li>
+  <li>O que acontece quando uma página de login vira arquivo estático.</li>
+  <li>Os três tropeços reais: ações num site estático, rota dinâmica sem entradas e cache que serve dado velho.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o que dá para congelar</h2>
+
+<p>Congelar é trocar trabalho por espaço. A Ana congela pão de queijo porque ele é igual todos os dias, sai do forno em minutos e não depende de quem pediu. Ela não congela o pão recheado que o cliente monta na hora, com o recheio que ele escolheu.</p>
+
+<p>No SvelteKit, pré-renderizar é exatamente isso: rodar a página durante o build, gerar o HTML final e guardar em arquivo. Quando alguém pedir aquela página, o servidor entrega o arquivo — não roda <code>load</code>, não consulta banco, não monta componente. É o pedido mais barato que existe, e é por isso que ele é a primeira otimização de qualquer site.</p>
+
+<p>O custo aparece no dia em que o dado muda. Página congelada mostra o dado do dia do build até alguém compilar de novo. Se o preço do pão está no HTML congelado, mudar o preço no banco não muda a página. A pergunta que decide tudo é uma só: este conteúdo muda com que frequência, e quanto tempo de atraso o cliente aceita?</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na cozinha da Ana</th><th>No SvelteKit</th></tr>
+<tr><td>Congelar pão de queijo</td><td><code>export const prerender = true</code></td></tr>
+<tr><td>Fritar a coxinha na hora</td><td>página renderizada no servidor a cada pedido</td></tr>
+<tr><td>Etiqueta “consumir em 2 dias”</td><td><code>cache-control: max-age=…</code></td></tr>
+<tr><td>Congelar com o preço de ontem</td><td>página estática com dado velho</td></tr>
+<tr><td>Freezer cheio de embalagem repetida</td><td>pasta <code>prerendered</code> com HTML, <code>.gz</code> e <code>.br</code></td></tr>
+</table>
+</div>
+
+<h2>2. As três camadas de cache</h2>
+
+<p>“Cache” não é uma coisa só. No caminho entre o banco e o olho do cliente existem três lugares onde a resposta pode ser guardada, e cada um tem o seu controle:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Camada</th><th>Quem guarda</th><th>Como se controla</th></tr>
+<tr><td>Build</td><td>a pasta <code>build/prerendered</code></td><td><code>export const prerender</code></td></tr>
+<tr><td>Servidor</td><td>o processo Node e o proxy</td><td><code>setHeaders</code>, CDN, proxy</td></tr>
+<tr><td>Navegador</td><td>o computador do cliente</td><td><code>cache-control</code>, <code>etag</code></td></tr>
+</table>
+</div>
+
+<p>A ordem importa: o build decide o que pode virar arquivo; o servidor decide por quanto tempo pode guardar a resposta; o navegador decide se pede de novo. Errar a camada do meio é comum — a página não é pré-renderizada, mas o cabeçalho diz “guarde por um dia”, e o cliente passa um dia vendo o preço antigo mesmo com o banco atualizado.</p>
+
+<p>Existe ainda uma quarta camada que não é sua: o cache da plataforma. Netlify, Vercel e Cloudflare guardam respostas na borda, perto do cliente. As regras deles são configuradas no painel ou em arquivo próprio, e obedecem ao mesmo <code>cache-control</code> que você manda.</p>
+
+<h2>3. Pré-render: congelar no build</h2>
+
+<p>Ligar o pré-render é uma linha num arquivo <code>+page.js</code>. O arquivo não tem função nenhuma, só uma configuração:</p>
+
+<pre class="file" data-file="src/routes/seo/+page.js">export const prerender = true;</pre>
+
+<p>A escolha vale para a rota inteira. Também pode ser feita no <code>+layout.js</code>, e aí vale para todas as páginas abaixo dele — é assim que se congela o site inteiro de uma vez. No nível da página, ela vence a do layout, então dá para congelar tudo e abrir exceção para a área logada.</p>
+
+<dl class="anatomy">
+  <dt>export const</dt><dd>uma constante exportada. O SvelteKit lê esse valor antes de renderizar, por isso ele não pode ser uma função nem depender de dado.</dd>
+  <dt>prerender</dt><dd>o nome exato que o framework procura. Outro nome é ignorado em silêncio.</dd>
+  <dt>= true</dt><dd>congela no build. Com <code>false</code>, a página é sempre renderizada no pedido.</dd>
+  <dt>+page.js</dt><dd>o arquivo de opções da página. Pode ser <code>+page.server.js</code> também; a diferença é que o segundo roda só no servidor.</dd>
+</dl>
+
+<p>Com o pré-render ligado, o build passa a rodar o app e registra cada página gerada:</p>
+
+<pre class="term">Prerendering
+GET /seo → 200 (34 ms)
+GET /sobre → 200 (11 ms)
+GET / → 204 (1 ms)
+GET /produtos → 204 (2 ms)
+GET /entrar → 204 (0 ms)</pre>
+
+<p>As duas primeiras linhas são páginas que viraram arquivo. As três com <code>204</code> foram visitadas pelo rastreador de links e não geraram arquivo — <code>204</code> é “sem conteúdo” e aqui significa “não foi prerenderizada”. Repare que os tempos são pequenos: isso é a página sendo montada uma vez, no seu computador, não a resposta para um cliente.</p>
+
+<h2>4. O que sai na pasta <code>prerendered</code></h2>
+
+<p>Depois do build, os arquivos estão no disco. Listar a pasta é a forma mais direta de ver o que foi congelado:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls build/prerendered
+conta.html
+conta.html.br
+conta.html.gz
+seo
+seo.html
+seo.html.br
+seo.html.gz
+sobre
+sobre.html
+sobre.html.br
+sobre.html.gz</pre>
+
+<p>Cada página aparece três vezes, em formatos diferentes. O <code>.html</code> é o texto original; o <code>.gz</code> é o mesmo texto comprimido com gzip; o <code>.br</code> é comprimido com Brotli, que costuma ser menor. O servidor escolhe pelo cabeçalho <code>Accept-Encoding</code> que o navegador manda — é por isso que os três existem. A pasta sem extensão (por exemplo <code>seo</code>) guarda o conteúdo auxiliar da rota, como o arquivo de dados que o cliente busca na navegação.</p>
+
+<p>E tem um intruso na lista: <code>conta.html</code>. Ninguém escreveu <code>prerender = true</code> nessa página. O rastreador de links saiu da página inicial, seguiu o link do menu para <code>/conta</code>, recebeu o redirecionamento do hook e congelou o resultado. O conteúdo do arquivo mostra exatamente isso:</p>
+
+<pre class="term">ana@notebook:~/loja$ wc -c build/prerendered/conta.html
+112 build/prerendered/conta.html
+ana@notebook:~/loja$ grep -o 'url=[^"]*' build/prerendered/conta.html
+url=/entrar?de=/conta
+ana@notebook:~/loja$ grep -c 'location.href' build/prerendered/conta.html
+1</pre>
+
+<p>O arquivo tem 112 bytes e é um redirecionamento em duas técnicas: JavaScript e meta refresh. Nenhum dado vazou — a página de conta nunca foi renderizada com o usuário dentro. Mas o arquivo existe, é servido com status 200 e confunde qualquer conferência de segurança. A lição é revisar a pasta antes de publicar.</p>
+
+<h2>5. Caixa 1: o que pode ser congelado</h2>
+
+<p>A decisão de congelar é uma pergunta por rota. A caixa abaixo diz “congela” para as duas, inclusive para a página de conta, que depende de quem está logado.</p>
+
+<div class="trysvelte" data-goal="outre:/conta: servidor">
+<p class="try-task"><strong>Missão:</strong> mostre <code>congela</code> quando <code>muda</code> for falso e <code>servidor</code> quando for verdadeiro. O texto precisa conter <code>/conta: servidor</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const rotas = [
+		{ caminho: '/sobre', muda: false },
+		{ caminho: '/conta', muda: true }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each rotas as r}
+		&lt;li&gt;{r.caminho}: congela&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const rotas = [
+		{ caminho: '/sobre', muda: false },
+		{ caminho: '/conta', muda: true }
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each rotas as r}
+		&lt;li&gt;{r.caminho}: {r.muda ? 'servidor' : 'congela'}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>A regra por trás da caixa: se a página depende de cookie, de sessão ou de um dado que muda a cada pedido, ela é do servidor. Se a página é igual para todo mundo durante semanas, congele. Na dúvida, deixe no servidor — uma página no servidor funciona sempre; uma página congelada errada serve dado errado sem avisar ninguém.</p>
+
+<h2>6. Cabeçalhos: <code>setHeaders</code> e <code>cache-control</code></h2>
+
+<p>A segunda camada é a do servidor. Dentro de um <code>load</code>, o objeto de contexto traz <code>setHeaders</code>, e o cabeçalho mais comum é o <code>cache-control</code>:</p>
+
+<pre class="file" data-file="src/routes/cache/+page.server.js">export function load({ setHeaders }) {
+	setHeaders({ 'cache-control': 'max-age=60' });
+	return { geradoEm: new Date().toISOString() };
+}</pre>
+
+<p>A página calcula um valor novo a cada pedido e avisa que ele pode ser guardado por 60 segundos. Rodando o build e subindo o servidor, o cabeçalho aparece na resposta:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -D - -o /dev/null http://localhost:3000/cache | grep -i 'cache-control\|etag'
+cache-control: max-age=60
+etag: "ik6uzg"</pre>
+
+<p><code>max-age=60</code> quer dizer “pode guardar por sessenta segundos”. O <code>etag</code> é a impressão digital do conteúdo: o navegador manda o que tem, o servidor responde <code>304 Not Modified</code> se for igual, e o corpo não viaja de novo. São mecanismos diferentes que se completam.</p>
+
+<p>A política também pode ser representada na tela, numa página de diagnóstico que mostra as regras do site:</p>
+
+<pre class="file" data-file="src/lib/CacheTag.svelte">&lt;script&gt;
+	let { segundos = 60 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;cache-control: max-age={segundos}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;cache-control: max-age=60&lt;/p&gt;</pre>
+
+<p>Outros valores aparecem na prática. <code>no-store</code> diz “não guarde nada”, e é o certo para página de conta e de pagamento. <code>s-maxage</code> vale só para o cache compartilhado do proxy e da CDN. <code>stale-while-revalidate</code> permite entregar a versão velha enquanto a nova é buscada em segundo plano. Todos são texto no mesmo cabeçalho, e a escolha é sempre uma negociação entre frescor e velocidade.</p>
+
+<p>Existe uma armadilha aqui. Se essa página fosse pré-renderizada, o cabeçalho não chegaria ao cliente: o arquivo estático não carrega a decisão do <code>load</code>, porque o <code>load</code> não roda no pedido. A comparação abaixo é de execuções reais no servidor de produção:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -D - -o /dev/null http://localhost:3000/congela-header | head -3
+HTTP/1.1 200 OK
+etag: "f-mdoX6ApbHtBcebMPcvwN47rXqoTj-vzRVIYf1qk3s"
+vary: Accept-Encoding
+ana@notebook:~/loja$ curl -s -D - -o /dev/null http://localhost:3000/cache | head -3
+HTTP/1.1 200 OK
+cache-control: max-age=60</pre>
+
+<p>A página congelada devolve <code>etag</code> e <code>vary</code>, mas nenhum <code>cache-control</code> definido por você. Para controlar cache de página congelada, o lugar é a configuração do servidor ou da plataforma — não o <code>load</code>.</p>
+
+<h2>7. Caixa 2: um número, uma política</h2>
+
+<p>Cabeçalho de cache é decisão de produto escrita em número. Sessenta segundos é diferente de uma hora, e o texto precisa refletir a constante. A caixa abaixo tem a constante certa e o número errado no texto.</p>
+
+<div class="trysvelte" data-goal="out:cache-control: max-age=60">
+<p class="try-task"><strong>Missão:</strong> monte o texto usando a constante <code>segundos</code>, para sair <code>cache-control: max-age=60</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const segundos = 60;
+&lt;/script&gt;
+
+&lt;p&gt;cache-control: max-age=3600&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const segundos = 60;
+&lt;/script&gt;
+
+&lt;p&gt;cache-control: max-age={segundos}&lt;/p&gt;</pre>
+</div>
+
+<p>Escrever o número duas vezes — na constante e no texto — é como a página passa a mentir depois de uma mudança. Com o buraco <code>{segundos}</code>, existe um só lugar para mudar. O mesmo raciocínio vale para o tempo de expiração do cookie, a taxa de entrega e o limite de itens do carrinho.</p>
+
+<h2>8. O que não pode ser congelado</h2>
+
+<p>Algumas construções do SvelteKit simplesmente não cabem num arquivo. A mais comum é a ação de formulário: uma página com <code>actions</code> recebe POST, e POST precisa de servidor. Quando você marca essa página como pré-renderizável, o build avisa:</p>
+
+<pre class="term">SvelteKit error: prerender_actions
+Cannot prerender pages with actions
+https://svelte.dev/e/kit/prerender_actions
+    at sessao (src/hooks.server.js:19:9)</pre>
+
+<p>A mensagem é curta e direta. O detalhe interessante é a linha de baixo: o erro aconteceu dentro do hook <code>sessao</code>, no arquivo <code>src/hooks.server.js</code>, linha 19 — porque foi o hook que tentou resolver a rota durante o build. Uma mensagem de pré-render pode apontar para um arquivo que você nem estava editando.</p>
+
+<p>A lista do que não combina com pré-render inclui ações de formulário, páginas que dependem de cookie de sessão e rotas com parâmetro que não têm lista de entradas. Para estes casos existem duas saídas: deixar a página no servidor, ou usar <code>fallback</code> no adaptador estático, que entrega um HTML mínimo e deixa o JavaScript montar a página no navegador — a chamada SPA.</p>
+
+<h2>9. Caixa 3: a ordem das camadas</h2>
+
+<p>Saber a ordem ajuda a escolher onde mexer quando o cliente vê dado velho. A caixa abaixo lista as camadas fora de ordem.</p>
+
+<div class="trysvelte" data-goal="out:Ordem: build → servidor → navegador">
+<p class="try-task"><strong>Missão:</strong> ordene as camadas como o pedido caminha: primeiro o que foi congelado no build, depois o servidor, por último o navegador.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const camadas = ['build', 'navegador', 'servidor'];
+&lt;/script&gt;
+
+&lt;p&gt;Ordem: {camadas.join(' → ')}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const camadas = ['build', 'servidor', 'navegador'];
+&lt;/script&gt;
+
+&lt;p&gt;Ordem: {camadas.join(' → ')}&lt;/p&gt;</pre>
+</div>
+
+<p>Com a ordem na cabeça, o diagnóstico fica rápido. Página pré-renderizada com dado velho: mexa no build, ou tire o pré-render. Página dinâmica com dado velho: confira o <code>cache-control</code> e o cache da plataforma. Página certa no servidor e errada no navegador: o problema está no cache do próprio cliente, e um recarregamento forçado resolve na hora de testar.</p>
+
+<h2>10. Quem manda em cada página</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Tipo de página</th><th>Prerender?</th><th>Cache de servidor?</th></tr>
+<tr><td>“Sobre a padaria”</td><td>sim</td><td>desnecessário: já é arquivo</td></tr>
+<tr><td>Cardápio do dia</td><td>talvez</td><td><code>max-age=60</code> ajuda</td></tr>
+<tr><td>Conta do cliente</td><td>nunca</td><td>não guarde: é pessoal</td></tr>
+<tr><td>Formulário de login</td><td>nunca</td><td>não guarde</td></tr>
+<tr><td>Lista de produtos</td><td>talvez</td><td><code>max-age=30</code> é razoável</td></tr>
+<tr><td>Página de erro 404</td><td>não faz sentido</td><td>não</td></tr>
+</table>
+</div>
+
+<p>Repare que “talvez” aparece duas vezes. Não existe resposta única: depende de quanto tempo a Ana aceita mostrar o preço anterior. O que existe é a obrigação de decidir, porque o padrão — sem pré-render e sem cabeçalho — é sempre servir o dado fresco, ao custo de consultar o banco em cada pedido.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram de builds reais deste projeto. A primeira e a segunda são erros que interrompem o build; a terceira é um comportamento que não gera erro nenhum e por isso engana mais.</p>
+
+<div class="cenario">
+<strong>Erro 1 — página com ações marcada como estática</strong>
+<p>Basta uma página com <code>actions</code> receber <code>prerender = true</code>, ou herdar isso de um layout, para o build parar. O SvelteKit não consegue gerar um arquivo que receba POST.</p>
+<pre class="term">SvelteKit error: prerender_actions
+Cannot prerender pages with actions
+https://svelte.dev/e/kit/prerender_actions
+    at sessao (src/hooks.server.js:19:9)
+GET /quebra-prerender → 500 (24 ms)
+500 GET /quebra-prerender</pre>
+<p>Em desenvolvimento o sintoma é uma página 500; no build, o processo para. A correção é remover o <code>prerender</code> dessa rota ou tirar as ações dela, movendo o formulário para outra página. As duas coisas não convivem.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — rota dinâmica sem lista de entradas</strong>
+<p>Uma rota como <code>/congela-id/[id]</code> marcada como pré-renderizável precisa que alguém diga quais valores de <code>id</code> existem. Sem essa lista, o rastreador não encontra nenhum, e o build reclama.</p>
+<pre class="term">prerender_unseen_routes
+The following routes were marked as prerenderable, but were not prerendered because they were not found while crawling your app:
+  - /congela-id/[id]
+https://svelte.dev/e/kit/prerender_unseen_routes
+
+To suppress or handle this error, implement `handleUnseenRoutes` in https://svelte.dev/docs/kit/@sveltejs-kit-vite#prerender
+
+error during build:
+[Error: Prerendering failed] {
+  plugin: 'vite-plugin-sveltekit-compile',
+  hook: 'buildApp'
+}</pre>
+<p>O nome do erro diz o que aconteceu: rotas marcadas, não vistas. A saída é gerar a lista com a opção <code>entries</code> do pré-render — <code>entries: ['1', '2', '3']</code> — ou deixar a rota no servidor. Para um catálogo que cresce todo dia, a lista costuma vir do banco durante o build.</p>
+</div>
+
+<div class="cenario">
+<strong>Aviso 3 — a página de login que virou arquivo</strong>
+<p>Nenhum erro aparece, e é justamente o problema. O rastreador seguiu o link do menu, recebeu o redirecionamento do hook e congelou o resultado em <code>conta.html</code>. Em produção, o pedido a <code>/conta</code> devolve 200, sem passar pelo hook.</p>
+<pre class="term">ana@notebook:~/loja$ wc -c build/prerendered/conta.html
+112 build/prerendered/conta.html
+ana@notebook:~/loja$ grep -o 'url=[^"]*' build/prerendered/conta.html
+url=/entrar?de=/conta
+ana@notebook:~/loja$ curl -s -D - -o /dev/null http://localhost:3000/conta | head -3
+HTTP/1.1 200 OK
+etag: "7-DYfYF_Azx3mHEh08LY_w65McduCKKcStU7BxjvvLY"
+vary: Accept-Encoding</pre>
+<p>O status 200 para uma página protegida assusta, mesmo quando o corpo é só um redirecionamento. A correção é excluir a área logada do pré-render — <code>export const prerender = false</code> no layout da área — e revisar a pasta depois de cada build.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Opção</th><th>Onde se escreve</th><th>Efeito</th></tr>
+<tr><td><code>prerender = true</code></td><td><code>+page.js</code> ou <code>+layout.js</code></td><td>gera HTML no build</td></tr>
+<tr><td><code>prerender = false</code></td><td><code>+page.js</code> ou <code>+layout.js</code></td><td>renderiza a cada pedido, mesmo com o layout congelando</td></tr>
+<tr><td><code>entries</code></td><td>configuração do pré-render</td><td>lista os valores de rota dinâmica a gerar</td></tr>
+<tr><td><code>setHeaders</code></td><td><code>load</code> do servidor</td><td>define <code>cache-control</code> e outros cabeçalhos</td></tr>
+<tr><td><code>csr = false</code></td><td><code>+page.js</code></td><td>não manda JavaScript de página para o navegador</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo gerado</th><th>O que é</th></tr>
+<tr><td><code>pagina.html</code></td><td>o HTML pronto</td></tr>
+<tr><td><code>pagina.html.gz</code></td><td>o mesmo HTML comprimido com gzip</td></tr>
+<tr><td><code>pagina.html.br</code></td><td>o mesmo HTML comprimido com Brotli</td></tr>
+<tr><td><code>pagina/</code></td><td>dados auxiliares da rota</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>export const prerender = true</code> faz?</p>
+<label><input type="radio" name="q-cc"> guarda a página no cache do navegador por um dia</label>
+<label><input type="radio" name="q-cc"> gera o HTML da página durante o build e serve o arquivo pronto</label>
+<label><input type="radio" name="q-cc"> desliga o JavaScript da página</label>
+<label><input type="radio" name="q-cc"> protege a página com senha</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que uma página de conta não deve ser pré-renderizada?</p>
+<label><input type="radio" name="q-cc"> porque ela é grande demais</label>
+<label><input type="radio" name="q-cc"> porque o HTML congelado ocuparia muito disco</label>
+<label><input type="radio" name="q-cc"> porque o conteúdo depende de quem está logado e muda a cada pedido</label>
+<label><input type="radio" name="q-cc"> porque o SvelteKit proíbe <code>+page.svelte</code> nesse caso</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Você definiu <code>cache-control</code> com <code>setHeaders</code> numa página pré-renderizada e o cabeçalho não chegou ao cliente. Por quê?</p>
+<label><input type="radio" name="q-cc"> porque o <code>load</code> não roda no pedido: o arquivo estático não carrega o cabeçalho</label>
+<label><input type="radio" name="q-cc"> porque o <code>cache-control</code> está escrito errado</label>
+<label><input type="radio" name="q-cc"> porque o navegador apaga cabeçalhos de páginas estáticas</label>
+<label><input type="radio" name="q-cc"> porque o adaptador-node remove todos os cabeçalhos</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">// src/routes/sobre/+page.js<br>export const <input data-answer="prerender"> = true;<br><br>// o HTML dessa página é gerado no build e servido como arquivo</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Pré-renderizar é gerar o HTML no build e servir arquivo pronto, sem rodar <code>load</code>.</li>
+  <li><code>export const prerender = true</code> vale para a rota; no layout, vale para tudo abaixo.</li>
+  <li>O build mostra <code>Prerendering</code> e o status de cada página; <code>204</code> é “visitada e não gerada”.</li>
+  <li>A pasta <code>build/prerendered</code> guarda <code>.html</code>, <code>.gz</code> e <code>.br</code> de cada página.</li>
+  <li>O rastreador de links congela páginas alcançáveis — inclusive um redirecionamento de login.</li>
+  <li><code>setHeaders({ 'cache-control': 'max-age=60' })</code> controla o cache do servidor nas páginas dinâmicas.</li>
+  <li>Página pré-renderizada não leva o <code>cache-control</code> do <code>load</code>: não há <code>load</code> no pedido.</li>
+  <li><code>prerender_actions</code> avisa que página com ações não pode ser congelada.</li>
+  <li><code>prerender_unseen_routes</code> avisa que rota dinâmica precisa de lista de entradas.</li>
+  <li>Cache tem três camadas — build, servidor e navegador — e cada uma tem seu controle.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
