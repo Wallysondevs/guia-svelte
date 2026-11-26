@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>+page.server.js — o load que só roda no servidor | Guia Svelte</title>
+<meta name="description" content="O +page.server.js do SvelteKit: load com node:fs, cookies, segredos, o que pode voltar, o erro load_not_serializable e a saída real do projeto da Ana.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">+page.server.js</span></h1>
+
+<p class="intro">A Ana guarda o caderno de encomendas numa gaveta que só ela abre. O balcão mostra a lista pronta, mas o caderno em si ninguém leva embora. No SvelteKit essa gaveta é o arquivo <code>+page.server.js</code>: um <code>load</code> que roda <strong>só no servidor</strong> e por isso pode abrir arquivos, ler cookies e usar senhas sem que nada disso chegue ao navegador. É a mesma ideia da aula anterior, com uma porta a mais trancada.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Para que serve o <code>+page.server.js</code> e quando escolher ele.</li>
+  <li>Como ler um arquivo do disco com <code>node:fs</code> dentro do <code>load</code>.</li>
+  <li>Por que esse arquivo nunca é baixado pelo navegador.</li>
+  <li>O que pode e o que não pode voltar de um <code>load</code> de servidor.</li>
+  <li>O que são <code>cookies</code>, <code>locals</code> e <code>parent</code> no evento.</li>
+  <li>Como importar seus próprios módulos com <code>#lib</code> — e por que <code>$lib</code> saiu.</li>
+  <li>O erro <code>load_not_serializable</code> e o que ele protege.</li>
+  <li>Como conferir a rota com <code>curl</code> e o que o código 403 revela.</li>
+  <li>Três erros reais, copiados do terminal do projeto.</li>
+  <li>A diferença prática entre este arquivo e o <code>+page.js</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o caderno que fica na gaveta</h2>
+
+<p>Toda padaria tem dois tipos de informação. O preço do pão pode ficar na parede: se o cliente ver, ótimo. O caderno de fiado, não. Ele tem nome, dívida e às vezes um comentário que ninguém precisa ler. Guardar esse caderno na parede seria um desastre; guardá-lo na gaveta e mostrar só o total é o certo.</p>
+
+<p>Site funciona igual. Alguns dados são públicos: a lista de pães, o horário de funcionamento, a foto da vitrine. Outros são internos: a chave da API dos Correios, a senha do banco, o caminho de um arquivo no disco, o histórico de compras de uma pessoa. A regra é simples e não tem exceção: <strong>o que o navegador recebe, o visitante pode ler</strong>. Não existe "escondido no JavaScript"; o código do navegador é público.</p>
+
+<p>O <code>+page.server.js</code> é a gaveta. O <code>load</code> escrito nele roda no computador do servidor, tem acesso ao disco e aos cookies da requisição, e devolve apenas o resultado — o total, o nome, a lista já filtrada. O navegador nunca vê o caderno, só o bilhete que saiu dele.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>O caderno de fiado na gaveta</td><td>Um arquivo lido com <code>node:fs</code></td></tr>
+<tr><td>A chave da gaveta</td><td>A variável de ambiente com a senha</td></tr>
+<tr><td>O bilhete com o total</td><td>O objeto do <code>return</code></td></tr>
+<tr><td>Quem pergunta "sou eu?"</td><td>O cookie da sessão, lido no <code>cookies</code></td></tr>
+<tr><td>O balcão aberto para a rua</td><td>O <code>+page.svelte</code>, que vai para o navegador</td></tr>
+</table>
+</div>
+
+<p>O nome do arquivo não é enfeite: o <code>.server</code> no meio é a garantia. O SvelteKit compila esse arquivo só para o lado do servidor e, se você tentar importá-lo de um componente, o build recusa. Isso é diferente de "eu prometo que não uso no navegador" — é o empacotador que impede.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>+page.server.js</code></h2>
+
+<p>A rota <code>/encomendas</code> da Ana mostra as retiradas do dia. Os dados moram num arquivo JSON na pasta <code>dados/</code> do projeto, fora de <code>src</code>. Ler esse arquivo é trabalho de servidor, então o arquivo é <code>+page.server.js</code>:</p>
+
+<pre class="file" data-file="src/routes/encomendas/+page.server.js">import { readFile } from 'node:fs/promises';
+
+export async function load() {
+	const texto = await readFile('dados/encomendas.json', 'utf8');
+	const encomendas = JSON.parse(texto);
+
+	const total = encomendas.reduce((soma, e) =&gt; soma + e.total, 0);
+
+	return {
+		encomendas,
+		total,
+		carregadoEm: new Date().toLocaleTimeString('pt-BR')
+	};
+}</pre>
+
+<p>Compare com a aula anterior: nenhum <code>fetch</code>, nenhum <code>url</code>. Aqui o dado está no disco, e quem lê o disco é o <code>readFile</code> do módulo <code>node:fs/promises</code>. Esse módulo não existe no navegador — e é justamente por isso que o arquivo precisa ser <code>.server</code>.</p>
+
+<p>O componente que recebe o pacote não muda nada em relação à aula anterior. Ele declara <code>data</code>, desenha o total com duas casas e faz uma tabela com uma linha por encomenda:</p>
+
+<pre class="file" data-file="src/routes/encomendas/+page.svelte">&lt;script&gt;
+	let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Encomendas para retirada&lt;/h1&gt;
+&lt;p&gt;Total do dia: R$ {data.total.toFixed(2)}&lt;/p&gt;
+&lt;p&gt;Lido do servidor às {data.carregadoEm}&lt;/p&gt;
+
+&lt;table&gt;
+	&lt;tbody&gt;
+	{#each data.encomendas as e}
+		&lt;tr&gt;
+			&lt;td&gt;{e.cliente}&lt;/td&gt;
+			&lt;td&gt;{e.itens} item(ns)&lt;/td&gt;
+			&lt;td&gt;{e.retirada}&lt;/td&gt;
+		&lt;/tr&gt;
+	{/each}
+	&lt;/tbody&gt;
+&lt;/table&gt;</pre>
+
+<div class="trysvelte" data-goal="out:Total do dia: R$ 90.50">
+<p class="try-task"><strong>Missão:</strong> o servidor somou as três encomendas e devolveu <code>total</code>. Faça a conta certa: o total tem de ser <strong>R$ 90.50</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	// no projeto, esta lista e este total vêm do load do +page.server.js
+	const data = {
+		encomendas: [
+			{ cliente: 'Ana', total: 27.5 },
+			{ cliente: 'Bia', total: 9.0 },
+			{ cliente: 'Caio', total: 54.0 }
+		]
+	};
+
+	let total = $derived(data.encomendas.reduce((soma, e) =&gt; soma - e.total, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total do dia: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	// no projeto, esta lista e este total vêm do load do +page.server.js
+	const data = {
+		encomendas: [
+			{ cliente: 'Ana', total: 27.5 },
+			{ cliente: 'Bia', total: 9.0 },
+			{ cliente: 'Caio', total: 54.0 }
+		]
+	};
+
+	let total = $derived(data.encomendas.reduce((soma, e) =&gt; soma + e.total, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total do dia: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>reduce</code> percorre a lista guardando um acumulador. O segundo argumento, <code>0</code>, é o valor inicial; a função recebe o acumulador e o item e devolve o novo acumulador. Trocar <code>+</code> por <code>-</code> não gera erro nenhum — gera <code>-90.50</code>, um número perfeitamente válido e completamente errado. É o tipo de defeito que só a conferência pega.</p>
+
+<hr>
+
+<h2>3. A anatomia do arquivo de servidor</h2>
+
+<dl class="anatomy">
+  <dt>import { readFile } from 'node:fs/promises'</dt><dd>ferramenta do Node para ler arquivo sem travar o servidor. Só existe no servidor, e é por isso que este arquivo é <code>.server</code>.</dd>
+  <dt>readFile('dados/encomendas.json', 'utf8')</dt><dd>o caminho é relativo à raiz do projeto, onde o <code>npm run dev</code> foi iniciado. O <code>'utf8'</code> diz que o conteúdo é texto, não bytes.</dd>
+  <dt>JSON.parse(texto)</dt><dd>transforma o texto do arquivo em lista de objetos. Se o arquivo tiver uma vírgula sobrando, este é o ponto que estoura.</dd>
+  <dt>new Date().toLocaleTimeString('pt-BR')</dt><dd>roda no servidor, no fuso da máquina. Serve para provar que o valor foi calculado agora, e não no navegador.</dd>
+  <dt>return { encomendas, total, carregadoEm }</dt><dd>só dados. O que sai daqui é o que o navegador recebe; o resto fica.</dd>
+</dl>
+
+<p>Uma diferença de comportamento que surpreende: no <code>+page.server.js</code> o <code>load</code> roda <strong>a cada requisição</strong> ao servidor, e não há a versão "no navegador" da aula anterior. Quando o leitor navega de <code>/painel</code> para <code>/encomendas</code>, o SvelteKit faz uma requisição ao servidor só para essa rota e recebe o <code>data</code> em JSON. A página não recarrega, mas o servidor trabalha.</p>
+
+<pre class="file" data-file="src/lib/Resumo.svelte">&lt;script&gt;
+	const encomendas = [
+		{ cliente: 'Ana', total: 27.5 },
+		{ cliente: 'Bia', total: 9.0 }
+	];
+
+	const total = encomendas.reduce((soma, e) =&gt; soma + e.total, 0);
+&lt;/script&gt;
+
+&lt;p&gt;Total do dia: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total do dia: R$ 36.50&lt;/p&gt;</pre>
+
+<p>O componente acima é um pedaço isolado, sem SvelteKit, só para mostrar a conta e a formatação. A saída é a que o compilador gerou: <code>27.5 + 9</code> virou <code>36.50</code> porque o <code>toFixed(2)</code> entrou na hora de escrever. Guardar número e formatar na saída é o padrão em todo o projeto.</p>
+
+<hr>
+
+<h2>4. A saída real: o que chega ao navegador</h2>
+
+<p>O arquivo <code>dados/encomendas.json</code> fica fora de <code>src</code> e fora de <code>static</code>. Isso significa que ele <strong>não tem endereço</strong>: não existe URL que devolva o conteúdo dele. Quem quiser os dados passa pela rota, e a rota devolve só o que o <code>return</code> mandar.</p>
+
+<pre class="term">ana@notebook:~/loja$ ls dados
+encomendas.json
+ana@notebook:~/loja$ curl -s localhost:5173/encomendas | grep -o 'Total do dia: R$ [0-9.]*'
+Total do dia: R$ 90.50
+ana@notebook:~/loja$ curl -s localhost:5173/encomendas | grep -o 'Lido do servidor às [0-9:]*'
+Lido do servidor às 17:16:46</pre>
+
+<p>O horário vem do servidor, no formato brasileiro, e muda a cada requisição. Se você abrir o "ver código-fonte" do navegador nessa página, vai encontrar <code>Total do dia: R$ 90.50</code> — o resultado já calculado — e não vai encontrar o <code>readFile</code>, nem o caminho do arquivo, nem o código do <code>load</code>. Esse código nunca viajou para o navegador.</p>
+
+<p>E se alguém tentar adivinhar o endereço do arquivo? O servidor responde com um código, não com o conteúdo:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w '%{http_code}\n' localhost:5173/dados/encomendas.json
+403</pre>
+
+<p>O <code>403</code> quer dizer "proibido". O servidor de desenvolvimento sabe que aquele caminho não é público e recusa. Em produção a resposta pode ser <code>404</code>, mas o efeito é o mesmo: o arquivo não sai. Quem garante isso não é a sua disciplina, é a posição do arquivo no projeto.</p>
+
+<div class="warning">
+<strong>Pasta <code>static</code> é a rua</strong>
+<p>Tudo o que está em <code>static/</code> é servido com endereço público — <code>static/logo.png</code> vira <code>/logo.png</code>. Nunca coloque ali arquivo com dado de cliente, senha ou backup. Se o dado precisa de proteção, ele fica fora de <code>static</code> e só sai por um <code>load</code> de servidor ou por um endpoint que confira quem está pedindo.</p>
+</div>
+
+<hr>
+
+<h2>5. O que pode voltar de um <code>load</code> de servidor</h2>
+
+<p>O objeto do <code>return</code> atravessa uma fronteira: sai do processo do servidor e entra no navegador como texto. Por isso ele precisa ser <em>serializável</em>. Número, texto, booleano, <code>null</code>, lista e objeto simples passam. Função, classe, <code>Map</code>, <code>Set</code> e instâncias de biblioteca não passam — ou passam deformados.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Valor no <code>return</code></th><th>Passa?</th><th>Por quê</th></tr>
+<tr><td><code>'Ana'</code>, <code>27.5</code>, <code>true</code>, <code>null</code></td><td>sim</td><td>viram texto e voltam iguais</td></tr>
+<tr><td>Lista de objetos simples</td><td>sim</td><td>é o caso mais comum: linhas de uma tabela</td></tr>
+<tr><td><code>Date</code></td><td>sim, com cuidado</td><td>o SvelteKit usa <code>devalue</code> e reconstrói a data; ainda assim, texto é mais previsível</td></tr>
+<tr><td><code>BigInt</code></td><td>sim</td><td><code>devalue</code> também cobre esse tipo</td></tr>
+<tr><td>Função</td><td>não</td><td><code>load_not_serializable</code>, o erro desta aula</td></tr>
+<tr><td>Classe com métodos</td><td>não</td><td>os métodos são funções; perdem-se no caminho</td></tr>
+</table>
+</div>
+
+<p>A regra prática evita quase todos os problemas: <strong>devolva dado, não comportamento</strong>. Se o componente precisa de uma conta, calcule no componente com <code>$derived</code>. Se a conta é pesada ou depende do banco, calcule no <code>load</code> e devolva o resultado pronto. Função é a única coisa que nunca deve atravessar.</p>
+
+
+<div class="trysvelte" data-goal="out:Total: R$ 36.5">
+<p class="try-task"><strong>Missão:</strong> o JSON guarda o total como texto (<code>'27.50'</code>). Some os dois totais de verdade e mostre <strong>Total: R$ 36.5</strong> — sem colar texto com texto.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const encomendas = [
+		{ cliente: 'Ana', total: '27.50' },
+		{ cliente: 'Bia', total: '9.00' }
+	];
+
+	let total = $derived(encomendas.reduce((soma, e) =&gt; soma + e.total, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const encomendas = [
+		{ cliente: 'Ana', total: '27.50' },
+		{ cliente: 'Bia', total: '9.00' }
+	];
+
+	let total = $derived(encomendas.reduce((soma, e) =&gt; soma + Number(e.total), 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total}&lt;/p&gt;</pre>
+</div>
+
+<p>O sinal de mais tem dois empregos em JavaScript: somar números e colar textos. Com <code>'27.50'</code> e <code>0</code> na mesma conta, ele escolhe colar — o resultado vira uma string enorme e sem sentido. O <code>Number()</code> converte antes da conta. O problema nasce na fronteira: JSON não tem tipo numérico próprio, e um valor entre aspas chega como texto.</p>
+
+<hr>
+
+<h2>6. O evento do servidor: <code>cookies</code>, <code>locals</code> e <code>parent</code></h2>
+
+<p>No <code>+page.js</code> o evento traz <code>fetch</code>, <code>url</code> e <code>params</code>. No <code>+page.server.js</code> ele traz tudo isso e mais três coisas que só existem no servidor:</p>
+
+<dl class="anatomy">
+  <dt>cookies</dt><dd>ler e gravar cookies da resposta. <code>cookies.get('cliente')</code> devolve o valor ou <code>undefined</code>. É o assunto de uma aula inteira mais adiante.</dd>
+  <dt>locals</dt><dd>um objeto que o <code>hooks.server.js</code> preenche antes de qualquer <code>load</code>. Serve para guardar "quem é o usuário" uma vez e usar em todas as rotas.</dd>
+  <dt>request</dt><dd>a requisição crua: cabeçalhos, corpo, método. Em <code>load</code> quase nunca é preciso; em formulário, sim.</dd>
+  <dt>parent()</dt><dd>espera e devolve o <code>data</code> de um <code>+layout.server.js</code> acima. Chame só quando precisar: antes dele, o seu load roda em paralelo com o do layout.</dd>
+</dl>
+
+<p>Não é preciso decorar a lista. O hábito útil é outro: quando o erro disser "cannot read properties of undefined", pergunte <em>o que este arquivo recebe</em> e confira se aquela ferramenta existe neste lado da fronteira. <code>cookies</code> no <code>+page.js</code> dá esse erro exato, como você viu na aula anterior.</p>
+
+<hr>
+
+<h2>7. Importando seus módulos: <code>#lib</code></h2>
+
+<p>Projeto cresce e o código comum sai da rota para um módulo. No SvelteKit, a pasta combinada para isso é <code>src/lib</code>, e o <code>package.json</code> do projeto declara atalhos para ela:</p>
+
+<pre class="file" data-file="package.json">{
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	}
+}</pre>
+
+<p>Com esse atalho, qualquer arquivo do projeto importa <code>#lib/pedidos.js</code> sem precisar de <code>../../</code>. No SvelteKit 3 o atalho antigo, com cifrão, foi removido: quem escreve <code>$lib</code> recebe um erro que explica a troca. É um bom exemplo de mensagem que ensina — e está no cenário 1, mais adiante.</p>
+
+<p>Vale saber que <code>src/lib</code> é só uma convenção de organização. O que protege o arquivo é onde ele é <em>usado</em>: um módulo importado por um <code>+page.server.js</code> não vai para o navegador; o mesmo módulo importado por um <code>+page.js</code> ou por um componente vai. A fronteira é o arquivo que importa, não a pasta.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^ordenar Caio$">
+<p class="try-task"><strong>Missão:</strong> o servidor devolve a lista já ordenada — e a maior encomenda primeiro. O botão ordena ao contrário. Acerte a comparação para o primeiro nome ser <strong>Caio</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let encomendas = $state([
+		{ cliente: 'Bia', total: 9.0 },
+		{ cliente: 'Caio', total: 54.0 },
+		{ cliente: 'Ana', total: 27.5 }
+	]);
+
+	function ordenar() {
+		encomendas = [...encomendas].sort((a, b) =&gt; a.total - b.total);
+	}
+&lt;/script&gt;
+
+&lt;button onclick={ordenar}&gt;ordenar&lt;/button&gt;
+&lt;p&gt;{encomendas[0].cliente}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let encomendas = $state([
+		{ cliente: 'Bia', total: 9.0 },
+		{ cliente: 'Caio', total: 54.0 },
+		{ cliente: 'Ana', total: 27.5 }
+	]);
+
+	function ordenar() {
+		encomendas = [...encomendas].sort((a, b) =&gt; b.total - a.total);
+	}
+&lt;/script&gt;
+
+&lt;button onclick={ordenar}&gt;ordenar&lt;/button&gt;
+&lt;p&gt;{encomendas[0].cliente}&lt;/p&gt;</pre>
+</div>
+
+<p>Três detalhes nesse trecho. O <code>[...encomendas]</code> copia a lista antes de ordenar, porque <code>sort</code> mexe na lista original — e estado reativo pede uma lista nova para avisar a tela. O <code>sort</code> recebe uma função de comparação; devolver número negativo põe o primeiro antes. E a ordenação poderia estar no <code>load</code>, no servidor: a escolha é entre mandar a lista crua ou já ordenada. Lista grande e ordem fixa? Ordene no servidor e mande pronta.</p>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do terminal do projeto da Ana. Todas as rotas mostram <code>500 Internal Error</code> no navegador; o texto útil fica do lado do servidor.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>$lib</code>, que não existe mais</strong>
+<p>O atalho antigo da pasta <code>lib</code> foi removido no SvelteKit 3. O erro não é "módulo não encontrado": vem com a receita da troca.</p>
+<pre class="file" data-file="src/routes/encomendas/+page.server.js">import { encomendas } from '$lib/encomendas.js';
+
+export function load() {
+	return { encomendas };
+}</pre>
+<pre class="term">Internal server error: module_removed_lib
+`$lib` has been removed. Use `#lib` instead: https://svelte.dev/docs/kit/$lib. To keep using `$lib`, add `alias: { '$lib': 'src/lib' }` to your SvelteKit config.
+https://svelte.dev/e/kit/module_removed_lib</pre>
+<p>Traduzindo: "troque <code>$lib</code> por <code>#lib</code>; se você realmente quer o nome antigo, declare um apelido na configuração". A segunda opção existe para projetos migrados, não para projeto novo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — devolver uma função</strong>
+<p>O <code>return</code> tentou mandar um comportamento em vez de um dado. O SvelteKit recusa antes de desenhar e diz qual campo foi o culpado.</p>
+<pre class="file" data-file="src/routes/encomendas/+page.server.js">export function load() {
+	return { total: () =&gt; 90.5 };
+}</pre>
+<pre class="term">SvelteKit error: load_not_serializable
+Data returned from `load` while rendering `/encomendas` is not serializable: Cannot stringify a function (`data.total`). If you need to serialize/deserialize custom types, use transport hooks: https://svelte.dev/docs/kit/hooks#transport.
+https://svelte.dev/e/kit/load_not_serializable
+DevalueError: Cannot stringify a function</pre>
+<p><code>data.total</code> é o caminho exato do campo problemático. A correção é chamar a função no servidor e devolver o número: <code>return { total: 90.5 }</code>. O <code>total</code> que o componente mostra é dado, não cálculo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — o nome do campo não combina</strong>
+<p>O load devolveu <code>soma</code>; o componente pediu <code>data.total</code>. Nenhum erro de compilação: só um <code>undefined</code> chegando no <code>toFixed</code>.</p>
+<pre class="file" data-file="src/routes/encomendas/+page.server.js">return { encomendas, soma, carregadoEm };</pre>
+<pre class="term">TypeError: Cannot read properties of undefined (reading 'toFixed')
+    at eval (src/routes/encomendas/+page.svelte:6:33)
+500 GET /encomendas</pre>
+<p>A linha 6 do componente é a do total. O conserto pode ser no servidor (<code>total: soma</code>) ou no componente (<code>data.soma</code>), desde que os dois lados usem o mesmo nome. Um jeito de não repetir esse erro: escreva o <code>return</code> e o HTML na mesma sessão, olhando os dois.</p>
+</div>
+
+<hr>
+
+<h2>9. Conferindo a rota sem abrir o navegador</h2>
+
+<p>Quem está começando tende a conferir tudo no navegador: clicar, recarregar, olhar. Funciona, mas é lento e engana — o navegador mostra a página já hidratada, com JavaScript no meio. O <code>curl</code> mostra o que o servidor respondeu, que é a metade que decide se o dado chegou.</p>
+
+<p>Um roteiro de conferência em três linhas, sempre igual: o código de status, o texto que interessa e a ausência do que não devia aparecer. A terceira parte é a que pega vazamento de segredo.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/encomendas | grep -o '&lt;td&gt;[^&lt;]*&lt;/td&gt;'
+&lt;td&gt;Ana&lt;/td&gt;
+&lt;td&gt;3 item(ns)&lt;/td&gt;
+&lt;td&gt;08:00&lt;/td&gt;
+&lt;td&gt;Bia&lt;/td&gt;
+&lt;td&gt;1 item(ns)&lt;/td&gt;
+&lt;td&gt;09:30&lt;/td&gt;
+&lt;td&gt;Caio&lt;/td&gt;
+&lt;td&gt;6 item(ns)&lt;/td&gt;
+&lt;td&gt;10:15&lt;/td&gt;
+ana@notebook:~/loja$ curl -s localhost:5173/encomendas | grep -c 'encomendas.json'
+0</pre>
+
+<p><code>grep -c</code> conta linhas e imprime o número. Zero é a resposta que você quer: o nome do arquivo não aparece no HTML entregue. Se aparecesse, seria sinal de que um caminho interno vazou para a página — e caminho interno é uma pista para quem procura o que explorar.</p>
+
+<div class="tip">
+<strong>Cache do navegador engana</strong>
+<p>Se a página não muda depois de você salvar o arquivo, recarregue com <code>Ctrl+Shift+R</code> antes de suspeitar do código. E se o <code>curl</code> mostrar o valor novo enquanto o navegador mostra o antigo, o problema é cache, não <code>load</code>.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Para que serve</th></tr>
+<tr><td><code>src/routes/rota/+page.server.js</code></td><td><code>load</code> que roda só no servidor</td></tr>
+<tr><td><code>node:fs/promises</code></td><td>ler e escrever arquivo no disco</td></tr>
+<tr><td><code>evento.cookies</code></td><td>ler e gravar cookie da requisição</td></tr>
+<tr><td><code>evento.locals</code></td><td>o que o <code>hooks.server.js</code> guardou para esta requisição</td></tr>
+<tr><td><code>evento.parent()</code></td><td>o <code>data</code> do layout acima</td></tr>
+<tr><td><code>#lib/alguma-coisa.js</code></td><td>atalho para <code>src/lib</code></td></tr>
+<tr><td><code>error(404, '…')</code></td><td>interrompe e mostra a página de erro</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Arquivo certo</th></tr>
+<tr><td>Lista pública, filtro de endereço</td><td><code>+page.js</code></td></tr>
+<tr><td>Arquivo, banco, segredo, cookie</td><td><code>+page.server.js</code></td></tr>
+<tr><td>Precisa rodar também na navegação interna</td><td><code>+page.js</code></td></tr>
+<tr><td>Os dois na mesma pasta</td><td>não pode: escolha um</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Onde roda o <code>load</code> de um <code>+page.server.js</code>?</p>
+<label><input type="radio" name="q1"> no navegador, depois da página aparecer</label>
+<label><input type="radio" name="q1"> só no servidor, a cada requisição àquela rota</label>
+<label><input type="radio" name="q1"> nos dois, como no <code>+page.js</code></label>
+<label><input type="radio" name="q1"> dentro do <code>hooks.server.js</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que uma função no <code>return</code> derruba a rota?</p>
+<label><input type="radio" name="q1"> porque o Svelte não aceita funções em JavaScript</label>
+<label><input type="radio" name="q1"> porque funções são lentas para o navegador</label>
+<label><input type="radio" name="q1"> porque o objeto atravessa a fronteira como texto e função não vira texto</label>
+<label><input type="radio" name="q1"> porque o nome <code>load</code> já está ocupado</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que o <code>403</code> ao pedir <code>/dados/encomendas.json</code> prova?</p>
+<label><input type="radio" name="q1"> que o arquivo fora de <code>static</code> não tem endereço público</label>
+<label><input type="radio" name="q1"> que o <code>load</code> não rodou</label>
+<label><input type="radio" name="q1"> que o JSON está com erro de sintaxe</label>
+<label><input type="radio" name="q1"> que o servidor está desligado</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { readFile } from '<input data-answer="node:fs/promises">';<br><br>export async function load() {<br>&nbsp;&nbsp;const texto = await readFile('dados/encomendas.json', 'utf8');<br>&nbsp;&nbsp;return { encomendas: JSON.<input data-answer="parse">(texto) };<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>+page.server.js</code> guarda um <code>load</code> que roda <strong>só no servidor</strong>, a cada requisição.</li>
+  <li>É o arquivo para ler disco, banco, variável de ambiente, cookie e qualquer segredo.</li>
+  <li>O <code>.server</code> no nome não é estilo: o empacotador impede que esse arquivo vá para o navegador.</li>
+  <li>O que o navegador recebe é só o objeto do <code>return</code> — dado, nunca comportamento.</li>
+  <li><code>load_not_serializable</code> acontece quando o <code>return</code> leva função ou classe; a mensagem diz qual campo.</li>
+  <li>Arquivo em <code>dados/</code> não tem endereço público; <code>static/</code> tem, e por isso não guarda segredo.</li>
+  <li>O evento de servidor traz <code>cookies</code>, <code>locals</code>, <code>request</code> e <code>parent()</code>.</li>
+  <li>Importe seus módulos com <code>#lib/…</code>: no SvelteKit 3 o <code>$lib</code> foi removido e a mensagem ensina a troca.</li>
+  <li><code>curl</code> mostra o que o servidor respondeu de verdade; <code>grep -c</code> com zero confirma que nada vazou.</li>
+  <li>Nome de campo diferente entre o <code>return</code> e o HTML não gera erro de compilação — gera <code>undefined</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

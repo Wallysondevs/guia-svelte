@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lendo o data — o prop que a página recebe | Guia Svelte</title>
+<meta name="description" content="Como o +page.svelte lê o data que o load devolveu: $props, valor padrão, $derived a partir do data, layout e os erros reais de quem esquece o $props.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Lendo o data</span></h1>
+
+<p class="intro">O <code>load</code> fez o trabalho dele e devolveu o pacote. Agora a Ana precisa abrir esse pacote no balcão. No SvelteKit o pacote chega com um nome fixo — <code>data</code> — e o componente o recebe como <strong>propriedade</strong>, do mesmo jeito que recebe qualquer valor vindo de fora. Esta aula é sobre abrir o pacote sem quebrar o embrulho: declarar o prop, dar um valor padrão, calcular em cima dele e não confundir o dado que chega com o dado que você inventa.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como o <code>+page.svelte</code> declara o prop <code>data</code> com <code>$props()</code>.</li>
+  <li>Por que sem essa linha a página quebra com <code>data is not defined</code>.</li>
+  <li>Como dar um valor padrão para o componente não quebrar quando o dado falta.</li>
+  <li>Como calcular em cima do <code>data</code> com <code>$derived</code> sem alterar o original.</li>
+  <li>O que é o <code>form</code>, o outro prop que toda página de rota recebe.</li>
+  <li>Como o <code>data</code> do layout se junta ao da página.</li>
+  <li>Como ler o <code>data</code> de dentro de um componente fundo, sem passar prop em prop.</li>
+  <li>O aviso real do Svelte sobre <code>&lt;tr&gt;</code> fora de <code>&lt;tbody&gt;</code>.</li>
+  <li>Três erros reais, com a linha apontada pelo compilador.</li>
+  <li>Como conferir o texto final com <code>curl</code> e <code>grep</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o pacote que chega com nome escrito</h2>
+
+<p>Quando o mensageiro da padaria volta da cozinha, ele não joga a bandeja na mesa: entrega na mão de quem pediu, com um bilhete dizendo o que é. No SvelteKit o bilhete está sempre escrito <code>data</code>. Você não escolhe esse nome, não importa esse valor e não chama função nenhuma para recebê-lo. Ele simplesmente está disponível no componente — desde que você o declare.</p>
+
+<p>Essa declaração é a linha mais importante da aula: <code>let { data } = $props()</code>. Do lado direito, <code>$props()</code> devolve todos os valores que vieram de fora. Do lado esquerdo, as chaves desmontam esse objeto e pegam só o campo <code>data</code>. Se você não escrever essa linha, a variável <code>data</code> não existe dentro do componente, e o primeiro <code>data.qualquerCoisa</code> estoura.</p>
+
+<p>Existe uma sutileza que vale desde já: <code>data</code> é uma <strong>propriedade</strong>, não uma variável de estado. Você pode ler à vontade, mas não deve escrever nela. Quando a página precisa de um valor derivado — uma contagem, um total, um rótulo — esse valor nasce com <code>$derived</code>, e o <code>data</code> fica intocado.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A bandeja que chega da cozinha</td><td>O objeto <code>data</code></td></tr>
+<tr><td>O bilhete com o nome do pedido</td><td>A linha <code>let { data } = $props()</code></td></tr>
+<tr><td>Conferir quantos pães vieram</td><td><code>$derived(data.pedidos.length …)</code></td></tr>
+<tr><td>Escrever por cima do bilhete</td><td><code>data.pedidos = []</code> — não faça</td></tr>
+<tr><td>Uma bandeja vazia, por garantia</td><td>O valor padrão em <code>$props()</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. A declaração do prop, linha por linha</h2>
+
+<p>A rota <code>/painel</code> da Ana mostra a fila da cozinha. O <code>+page.server.js</code> devolve dois campos: a lista de pedidos e quantos já estão prontos.</p>
+
+<pre class="file" data-file="src/routes/painel/+page.server.js">import { listar } from '#lib/pedidos.js';
+
+export function load() {
+	const pedidos = listar();
+
+	return {
+		pedidos,
+		prontos: pedidos.filter((p) =&gt; p.pronto).length
+	};
+}</pre>
+
+<p>O componente recebe esse pacote e declara o prop. Uma linha, e a partir dela todos os campos ficam disponíveis com <code>data.</code> na frente:</p>
+
+<pre class="file" data-file="src/routes/painel/+page.svelte">&lt;script&gt;
+	let { data } = $props();
+
+	let faltam = $derived(data.pedidos.length - data.prontos);
+&lt;/script&gt;
+
+&lt;h1&gt;Painel da cozinha&lt;/h1&gt;
+&lt;p&gt;{data.prontos} pronto(s), {faltam} na fila&lt;/p&gt;
+
+&lt;ul&gt;
+	{#each data.pedidos as pedido (pedido.id)}
+		&lt;li&gt;{pedido.cliente}: {pedido.sabor} {pedido.pronto ? '✓' : '…'}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let { data }</dt><dd>declara uma variável chamada <code>data</code>. As chaves são <strong>desestruturação</strong>: pegam o campo <code>data</code> do objeto que vem depois do sinal de igual.</dd>
+  <dt>= $props()</dt><dd>a runa que entrega tudo o que o componente recebeu de fora. Sem ela, não há props — e sem props, não há <code>data</code>.</dd>
+  <dt>data.pedidos.length</dt><dd>quantos pedidos chegaram. É leitura pura: nada é alterado.</dd>
+  <dt>$derived(…)</dt><dd>uma variável que se recalcula sozinha quando <code>data</code> muda. O valor não é recalculado por você em lugar nenhum.</dd>
+  <dt>(pedido.id)</dt><dd>a chave do <code>{#each}</code>. Diz ao Svelte qual item é qual, para reaproveitar o HTML em vez de refazer tudo.</dd>
+</dl>
+
+<p>Repare que o componente não sabe que existe um arquivo <code>.json</code>, um <code>readFile</code> ou um banco atrás desse dado. Ele recebe um objeto e desenha. Essa ignorância é a força do desenho: no dia em que a Ana trocar a memória por um banco de verdade, o componente continua igual.</p>
+
+<hr>
+
+<h2>3. A saída real do painel</h2>
+
+<p>Com o servidor no ar, o <code>curl</code> mostra o que o visitante recebe. Os três pedaços que interessam são o título, a contagem e a lista:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/painel | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;'
+&lt;h1&gt;Painel da cozinha&lt;/h1&gt;
+ana@notebook:~/loja$ curl -s localhost:5173/painel | grep -o '&lt;p&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p&gt;1 pronto(s), 1 na fila&lt;/p&gt;
+ana@notebook:~/loja$ curl -s localhost:5173/painel | grep -o '&lt;li&gt;[^&lt;]*&lt;/li&gt;'
+&lt;li&gt;Ana: frango ✓&lt;/li&gt;
+&lt;li&gt;Bia: queijo …&lt;/li&gt;</pre>
+
+<p>O <code>1 pronto(s), 1 na fila</code> não veio escrito de lugar nenhum: <code>data.prontos</code> valia 1, a lista tinha 2 itens, então <code>faltam</code> calculou 1. O <code>$derived</code> rodou no servidor antes de o HTML sair; no navegador, ele rodará de novo quando o <code>data</code> mudar.</p>
+
+<p>O <code>{pedido.pronto ? '✓' : '…'}</code> é uma expressão condicional dentro das chaves: se <code>pronto</code> for verdadeiro, escreve o sinal de visto; se não, as reticências. Não é um bloco, é uma expressão — cabe numa linha e devolve um valor. Expressões assim são o jeito mais curto de escolher entre dois textos.</p>
+
+<div class="trysvelte" data-goal="out:0 pedido(s)">
+<p class="try-task"><strong>Missão:</strong> este componente é montado sem nenhum prop, e por isso quebra ao ler <code>data.pedidos</code>. Dê um valor padrão ao <code>data</code> para a página mostrar <strong>0 pedido(s)</strong> em vez de estourar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let { data } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{data.pedidos.length} pedido(s)&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let { data = { pedidos: [] } } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{data.pedidos.length} pedido(s)&lt;/p&gt;</pre>
+</div>
+
+<p>O valor padrão aparece depois do sinal de igual, dentro da desestruturação: <code>let { data = { pedidos: [] } } = $props()</code>. Ele só é usado quando o prop não vem. Em uma página de rota o SvelteKit sempre manda <code>data</code>, então o padrão parece inútil — até o dia em que você renderiza aquele componente em outro lugar, num teste ou numa caixa como esta.</p>
+
+<hr>
+
+<h2>4. Calcular a partir do <code>data</code>, sem estragar o <code>data</code></h2>
+
+<p>Quase toda página faz uma conta com o que recebeu. A tentação é guardar o resultado numa variável comum e atualizá-la à mão em cada lugar que mexe no dado. Isso funciona até a primeira distração. O <code>$derived</code> elimina a distração: a conta é declarada uma vez e o Svelte sabe quando refazer.</p>
+
+<pre class="file" data-file="src/lib/Painel.svelte">&lt;script&gt;
+	const data = {
+		pedidos: [
+			{ cliente: 'Ana', sabor: 'frango' },
+			{ cliente: 'Bia', sabor: 'queijo' }
+		],
+		prontos: 1
+	};
+
+	let faltam = $derived(data.pedidos.length - data.prontos);
+&lt;/script&gt;
+
+&lt;p&gt;{data.prontos} pronto(s), {faltam} na fila&lt;/p&gt;
+&lt;ul&gt;
+	{#each data.pedidos as p}
+		&lt;li&gt;{p.cliente}: {p.sabor}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;p&gt;1 pronto(s), 1 na fila&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Ana: frango&lt;/li&gt;&lt;li&gt;Bia: queijo&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O componente acima tem o <code>data</code> escrito à mão, só para você ver a conta isolada do SvelteKit. A saída é a do compilador: a conta virou <code>1</code>, e a lista virou dois <code>&lt;li&gt;</code>. Note que o <code>$derived</code> aparece antes de qualquer uso — ele precisa ser declarado no script, não no meio do HTML.</p>
+
+<p>Se a conta for mais do que uma expressão, existe <code>$derived.by</code>: você passa uma função e escreve quantas linhas quiser dentro dela. O resultado é o mesmo; muda só o conforto de quem escreve. O guia volta a esse ponto na aula de <code>$derived.by</code>.</p>
+
+<div class="trysvelte" data-goal="out:Atenção: 1 na fila">
+<p class="try-task"><strong>Missão:</strong> quando falta pedido na fila, o painel precisa avisar. Faça aparecer <strong>Atenção: 1 na fila</strong> com os dados atuais.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const data = { pedidos: ['frango', 'queijo'], prontos: 1 };
+	let faltam = $derived(data.pedidos.length - data.prontos);
+&lt;/script&gt;
+
+{#if faltam &lt; 0}
+	&lt;p&gt;Atenção: {faltam} na fila&lt;/p&gt;
+{:else}
+	&lt;p&gt;Tudo pronto&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const data = { pedidos: ['frango', 'queijo'], prontos: 1 };
+	let faltam = $derived(data.pedidos.length - data.prontos);
+&lt;/script&gt;
+
+{#if faltam &gt; 0}
+	&lt;p&gt;Atenção: {faltam} na fila&lt;/p&gt;
+{:else}
+	&lt;p&gt;Tudo pronto&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>A comparação trocada é o erro de lógica mais comum que existe. O código compila, a página aparece e o texto está errado — nenhum aviso, nenhum sublinhado vermelho. Por isso a conferência de saída importa tanto: <code>curl</code> e <code>grep</code> mostram o texto final, sem opinião.</p>
+
+<hr>
+
+<h2>5. O outro prop: <code>form</code></h2>
+
+<p>Além de <code>data</code>, toda página de rota recebe <code>form</code>. Ele é o resultado de um envio de formulário — quando não houve envio, vale <code>null</code>. Você vai usar muito daqui a poucas aulas; por ora basta saber que ele existe e que se declara junto:</p>
+
+<pre class="file" data-file="src/routes/encomenda/+page.svelte">&lt;script&gt;
+	let { data, form } = $props();
+&lt;/script&gt;
+
+{#if form?.ok}
+	&lt;p class="ok"&gt;Anotado para {form.cliente}.&lt;/p&gt;
+{:else if form?.falta}
+	&lt;p class="erro"&gt;{form.falta}&lt;/p&gt;
+{/if}</pre>
+
+<p>O ponto de interrogação em <code>form?.ok</code> é o <em>encadeamento opcional</em>: se <code>form</code> for <code>null</code>, a expressão inteira vira <code>undefined</code> em vez de estourar. Sem ele, a primeira renderização de qualquer página com esse código quebraria, porque <code>null.ok</code> não existe. Uma tecla que evita a maior parte dos erros de "cannot read properties of null".</p>
+
+<p>Repare também que o mesmo componente usa <code>data</code> e <code>form</code> lado a lado. Eles não se misturam: <code>data</code> é o que o <code>load</code> devolveu agora; <code>form</code> é a resposta do último envio. Cada um tem seu papel, e a página lê os dois com o mesmo <code>$props()</code>.</p>
+
+<hr>
+
+<h2>6. O <code>data</code> que vem do layout</h2>
+
+<p>Algumas informações valem para o site inteiro: o nome da padaria, o carrinho, o usuário logado. Elas não pertencem a uma rota só. O lugar delas é o <code>+layout.server.js</code>, cujo <code>load</code> roda para todas as páginas abaixo dele.</p>
+
+<pre class="file" data-file="src/routes/+layout.server.js">export function load() {
+	return {
+		loja: 'Padaria da Ana',
+		aberta: new Date().getHours() &gt;= 6 &amp;&amp; new Date().getHours() &lt; 19
+	};
+}</pre>
+
+<p>O <code>data</code> que chega a uma página é a <strong>junção</strong> do que o layout devolveu com o que a página devolveu. Se os dois têm um campo com o mesmo nome, o da página vence. Se a página precisa do valor do layout para calcular o seu, ela chama <code>parent()</code>:</p>
+
+<pre class="file" data-file="src/routes/painel/+page.server.js">export async function load({ parent }) {
+	const { aberta } = await parent();
+	const pedidos = listar();
+
+	return {
+		aberta,
+		pedidos,
+		prontos: pedidos.filter((p) =&gt; p.pronto).length
+	};
+}</pre>
+
+<p>A ordem importa: chame <code>parent()</code> só quando precisar do valor dele, e de preferência depois de já ter buscado o que é seu. Assim as duas buscas acontecem em paralelo em vez de uma esperar a outra. O SvelteKit não faz mágica de ordenação; ele respeita a ordem em que você escreve.</p>
+
+<div class="tip">
+<strong>Ler o <code>data</code> num componente fundo</strong>
+<p>Passar <code>data</code> por cinco componentes até chegar no rodapé é cansativo. Dentro de qualquer componente que esteja na árvore da página, <code>import { page } from '$app/state'</code> dá acesso a <code>page.data</code>, que é reativo. Use com parcimônia: componente que lê o mundo inteiro fica difícil de reaproveitar e de testar.</p>
+</div>
+
+<hr>
+
+<h2>7. Quando o <code>data</code> vira estado</h2>
+
+<p>Ler o <code>data</code> resolve a maior parte das páginas. Mas existe um caso em que a tela precisa mudar <em>depois</em> de carregada, sem ir ao servidor de novo: o funcionário marca um pedido como pronto e quer ver o número mudar na hora. Aí o dado recebido deixa de ser só leitura e passa a ser uma cópia editável na memória do navegador.</p>
+
+<p>A receita tem três passos e nenhum deles altera o <code>data</code> original. Primeiro, copie o valor para uma variável de estado: <code>let pedidos = $state(data.pedidos)</code>. Segundo, calcule o que depende dele com <code>$derived</code>. Terceiro, escreva funções que <em>troquem</em> a lista por outra lista, em vez de mexer no item.</p>
+
+<pre class="file" data-file="src/routes/painel/+page.svelte">&lt;script&gt;
+	let { data } = $props();
+
+	let pedidos = $state(data.pedidos);
+	let prontos = $derived(pedidos.filter((p) =&gt; p.pronto).length);
+
+	function marcar(id) {
+		pedidos = pedidos.map((p) =&gt; (p.id === id ? { ...p, pronto: true } : p));
+	}
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; marcar(1)}&gt;marcar o primeiro&lt;/button&gt;
+&lt;p&gt;{prontos} pronto(s)&lt;/p&gt;</pre>
+
+<div class="trysvelte" data-goal="clique:button;;outre:1 pronto\(s\)">
+<p class="try-task"><strong>Missão:</strong> o botão devia marcar o pedido de id 1 como pronto, e não marca nada. Depois do clique, mostre <strong>1 pronto(s)</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const data = {
+		pedidos: [
+			{ id: 1, cliente: 'Ana', pronto: false },
+			{ id: 2, cliente: 'Bia', pronto: false }
+		]
+	};
+
+	let pedidos = $state(data.pedidos);
+	let prontos = $derived(pedidos.filter((p) =&gt; p.pronto).length);
+
+	function marcar(id) {
+		pedidos = pedidos.map((p) =&gt; (p.cliente === id ? { ...p, pronto: true } : p));
+	}
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; marcar(1)}&gt;marcar o primeiro&lt;/button&gt;
+&lt;p&gt;{prontos} pronto(s)&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const data = {
+		pedidos: [
+			{ id: 1, cliente: 'Ana', pronto: false },
+			{ id: 2, cliente: 'Bia', pronto: false }
+		]
+	};
+
+	let pedidos = $state(data.pedidos);
+	let prontos = $derived(pedidos.filter((p) =&gt; p.pronto).length);
+
+	function marcar(id) {
+		pedidos = pedidos.map((p) =&gt; (p.id === id ? { ...p, pronto: true } : p));
+	}
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; marcar(1)}&gt;marcar o primeiro&lt;/button&gt;
+&lt;p&gt;{prontos} pronto(s)&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>map</code> devolve uma lista nova: para o item marcado, um objeto novo com <code>pronto: true</code>; para os outros, o mesmo objeto. Trocar a lista inteira é o que avisa a tela; mexer em <code>p.pronto</code> direto no item funcionaria em alguns casos e falharia em outros, e essa imprevisibilidade custa caro para quem está começando.</p>
+
+<p>Note que a cópia é rasa: <code>$state(data.pedidos)</code> guarda a mesma lista de objetos. Isso basta aqui porque nunca alteramos um objeto no lugar. Se a página precisasse mexer dentro de um item, o caminho seria copiar também o item, como o <code>{ ...p }</code> faz.</p>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<p>Três erros de quem está começando com o <code>data</code>. Os três aconteceram no projeto da Ana, e as mensagens estão copiadas do terminal.</p>
+
+<div class="cenario">
+<strong>Erro 1 — o jeito antigo de declarar prop</strong>
+<p>Quem já viu Svelte 4 escreve <code>export let data</code>. Em modo runas isso não existe mais, e o compilador diz exatamente qual é o substituto.</p>
+<pre class="file" data-file="src/routes/painel/+page.svelte">&lt;script&gt;
+	export let data;
+&lt;/script&gt;
+
+&lt;h1&gt;{data.pedidos.length}&lt;/h1&gt;</pre>
+<pre class="term">Internal server error: src/routes/painel/+page.svelte:2:1 Cannot use `export let` in runes mode — use `$props()` instead
+https://svelte.dev/e/legacy_export_invalid
+  Plugin: vite-plugin-svelte:compile
+  File: src/routes/painel/+page.svelte:2:1
+   1 |  &lt;script&gt;
+   2 |    export let data;
+                          ^
+   3 |  &lt;/script&gt;</pre>
+<p>A setinha aponta a coluna exata do problema. A troca é mecânica: <code>export let data</code> vira <code>let { data } = $props()</code>. As outras props seguem a mesma regra, dentro das mesmas chaves.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — esquecer o <code>$props()</code></strong>
+<p>Sem a declaração, o nome <code>data</code> simplesmente não existe no componente. O compilador não reclama, porque poderia ser uma variável global; o erro só aparece na hora de desenhar.</p>
+<pre class="file" data-file="src/routes/painel/+page.svelte">&lt;script&gt;
+	let pedidos = [];
+&lt;/script&gt;
+
+&lt;h1&gt;{data.pedidos.length}&lt;/h1&gt;</pre>
+<pre class="term">ReferenceError: data is not defined
+    at eval (src/routes/painel/+page.svelte:5:6)
+    at eval (node_modules/svelte/src/internal/server/renderer.js:416:11)
+500 GET /painel</pre>
+<p><code>is not defined</code> é o recado de "esse nome não existe aqui". A linha 5 é a do <code>{data.pedidos.length}</code>. Conserto: declarar o prop na linha 1, ou usar a variável que você realmente declarou.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — o campo que o <code>load</code> não devolveu</strong>
+<p>O load devolveu <code>pedidos</code>; o HTML pediu <code>data.lista</code>. O resultado é <code>undefined</code>, e o primeiro <code>.length</code> estoura.</p>
+<pre class="file" data-file="src/routes/painel/+page.svelte">&lt;script&gt;
+	let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{data.lista.length}&lt;/h1&gt;</pre>
+<pre class="term">TypeError: Cannot read properties of undefined (reading 'length')
+    at eval (src/routes/painel/+page.svelte:5:17)
+500 GET /painel</pre>
+<p>O compilador não tem como saber o formato do seu objeto; para ele, <code>data</code> é um valor qualquer. A conferência é sua: abra o <code>+page.server.js</code> e o <code>+page.svelte</code> lado a lado e compare os nomes dos campos letra por letra.</p>
+</div>
+
+<div class="warning">
+<strong>Um aviso que não é erro, mas suja a página</strong>
+<p>Este apareceu no projeto sem quebrar nada: uma tabela com <code>&lt;tr&gt;</code> solto, sem <code>&lt;tbody&gt;</code> em volta. O navegador reorganiza o HTML por conta própria e o Svelte avisa que a hidratação pode desencontrar.</p>
+<pre class="term">5:25:01 PM [vite-plugin-svelte] src/routes/encomendas/+page.svelte:11:2 `&lt;tr&gt;` cannot be a child of `&lt;table&gt;`. `&lt;table&gt;` only allows these children: `&lt;caption&gt;`, `&lt;colgroup&gt;`, `&lt;tbody&gt;`, `&lt;thead&gt;`, `&lt;tfoot&gt;`, `&lt;style&gt;`, `&lt;script&gt;`, `&lt;template&gt;`. When rendering this component on the server, the resulting HTML will be modified by the browser (by moving, removing, or inserting elements), likely resulting in a `hydration_mismatch` warning
+https://svelte.dev/e/node_invalid_placement_ssr</pre>
+<p>A correção é envolver as linhas em <code>&lt;tbody&gt;</code>. Vale tratar aviso assim como erro: ele quase sempre aponta um HTML que o navegador vai "consertar" sozinho, e o conserto dele nem sempre é o que você queria.</p>
+</div>
+
+<hr>
+
+<h2>9. Conferindo o que a página escreveu</h2>
+
+<p>Conferir texto é mais fácil do que parece. Escolha um pedaço do texto que só existe se o dado chegou — um número, um nome — e peça ao <code>grep</code> para encontrá-lo:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/painel | grep -o 'na fila'
+na fila
+ana@notebook:~/loja$ curl -s localhost:5173/painel | grep -o '1 pronto(s), 1 na fila'
+1 pronto(s), 1 na fila</pre>
+
+<p>Se a segunda linha sair, a página está certa. Se a primeira sair e a segunda não, o texto mudou — talvez o <code>$derived</code> esteja com a conta errada. Esse tipo de conferência entra em qualquer rotina de teste depois, e é a mesma ideia que uma ferramenta de teste automatizado faz: procurar no HTML final o texto que deveria estar ali.</p>
+
+<p>Uma armadilha conhecida: o navegador pode mostrar um valor e o <code>curl</code> outro se você estiver vendo uma versão em cache. Antes de acusar o código, recarregue com <code>Ctrl+Shift+R</code> e rode o <code>curl</code> de novo. Quando os dois discordam, quase sempre é cache de um dos lados.</p>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>O que faz</th></tr>
+<tr><td><code>let { data } = $props()</code></td><td>declara o prop <code>data</code>; sem isso o nome não existe</td></tr>
+<tr><td><code>let { data, form } = $props()</code></td><td>pega também a resposta do último envio de formulário</td></tr>
+<tr><td><code>let { data = { pedidos: [] } } = $props()</code></td><td>valor padrão quando o prop não vem</td></tr>
+<tr><td><code>$derived(…)</code></td><td>valor calculado a partir de outros valores reativos</td></tr>
+<tr><td><code>form?.ok</code></td><td>encadeamento opcional: não estoura se <code>form</code> for <code>null</code></td></tr>
+<tr><td><code>await parent()</code></td><td>o <code>data</code> do layout acima, dentro de um <code>load</code> de servidor</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Tradução</th></tr>
+<tr><td><code>data is not defined</code></td><td>falta a linha do <code>$props()</code></td></tr>
+<tr><td><code>Cannot read properties of undefined</code></td><td>o campo pedido não existe no objeto</td></tr>
+<tr><td><code>Cannot use `export let` in runes mode</code></td><td>modo antigo; use <code>$props()</code></td></tr>
+<tr><td><code>node_invalid_placement_ssr</code></td><td>HTML inválido que o navegador vai reorganizar</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="1"><p class="mc-q">1. Qual linha faz o <code>data</code> existir dentro do componente?</p>
+<label><input type="radio" name="q1"> <code>let { data } = $props()</code></label>
+<label><input type="radio" name="q1"> <code>import data from './data.js'</code></label>
+<label><input type="radio" name="q1"> <code>export let data</code></label>
+<label><input type="radio" name="q1"> <code>const data = $state({})</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Para calcular algo a partir do <code>data</code>, o que usar?</p>
+<label><input type="radio" name="q1"> uma variável comum, atualizada à mão</label>
+<label><input type="radio" name="q1"> <code>data = { ...data, total }</code></label>
+<label><input type="radio" name="q1"> <code>$derived</code>, que recalcula quando o <code>data</code> muda</label>
+<label><input type="radio" name="q1"> <code>$effect</code>, para reagir à mudança</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. O <code>data</code> de uma página é composto por quê?</p>
+<label><input type="radio" name="q1"> só pelo que o <code>load</code> da página devolveu</label>
+<label><input type="radio" name="q1"> pelo <code>data</code> do layout mais o do <code>load</code> da página</label>
+<label><input type="radio" name="q1"> por todas as variáveis do componente</label>
+<label><input type="radio" name="q1"> pelo que estiver no <code>localStorage</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;let { data } = <input data-answer="$props()">;<br>&nbsp;&nbsp;let faltam = <input data-answer="$derived">(data.pedidos.length - data.prontos);<br>&lt;/script&gt;<br><br>&lt;p&gt;{faltam} na fila&lt;/p&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O <code>data</code> chega ao <code>+page.svelte</code> como prop e se declara com <code>let { data } = $props()</code>.</li>
+  <li>Sem essa linha, o nome <code>data</code> não existe: <code>ReferenceError: data is not defined</code>.</li>
+  <li>Valor padrão na desestruturação evita quebra quando o prop não vem: <code>let { data = { pedidos: [] } } = $props()</code>.</li>
+  <li><code>data</code> é para ler. Para calcular, use <code>$derived</code>; para mudar, copie para uma variável de estado.</li>
+  <li><code>form</code> é o outro prop da rota: a resposta do último envio, ou <code>null</code>.</li>
+  <li><code>form?.ok</code> é encadeamento opcional e evita o erro de ler propriedade de <code>null</code>.</li>
+  <li>O <code>data</code> da página é a junção do <code>data</code> do layout com o do <code>load</code> da página; <code>parent()</code> acessa o do layout.</li>
+  <li>Nome de campo errado não gera erro de compilação: gera <code>Cannot read properties of undefined</code> na hora de desenhar.</li>
+  <li>Aviso também é recado: <code>node_invalid_placement_ssr</code> aponta HTML que o navegador vai reorganizar.</li>
+  <li><code>curl</code> mais <code>grep</code> conferem o texto final sem depender do navegador.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

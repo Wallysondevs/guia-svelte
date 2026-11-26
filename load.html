@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dados com +page.js — buscar antes de desenhar | Guia Svelte</title>
+<meta name="description" content="O arquivo +page.js do SvelteKit: a função load, o fetch, o url, o objeto que vira o prop data e a saída real das rotas do projeto da Ana, com os erros do servidor.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">+page.js</span></h1>
+
+<p class="intro">A Ana abriu a padaria às seis da manhã e o cardápio da parede ainda estava escrito com o giz de ontem. Antes de abrir o balcão, alguém precisa ir até a cozinha, ver o que saiu do forno e só então escrever a lista. No SvelteKit esse alguém tem nome: <strong>load</strong>, uma função que você escreve no arquivo <code>+page.js</code>. Ela busca os dados primeiro e entrega o resultado pronto para a página desenhar. Esta aula é sobre esse arquivo e sobre o objeto que ele devolve.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é a função <code>load</code> e por que ela existe.</li>
+  <li>Onde ela mora: o arquivo <code>+page.js</code>, ao lado do <code>+page.svelte</code>.</li>
+  <li>Como o objeto devolvido por ela vira o prop <code>data</code> da página.</li>
+  <li>Como usar <code>fetch</code> dentro do <code>load</code> e por que ele é especial.</li>
+  <li>Como ler o endereço com <code>url</code> e <code>searchParams</code>.</li>
+  <li>O que muda quando o mesmo arquivo roda no servidor e no navegador.</li>
+  <li>Por que <code>cookies</code> e <code>node:fs</code> não funcionam neste arquivo.</li>
+  <li>Três erros reais, com a mensagem que o servidor imprime.</li>
+  <li>Como conferir a sua rota com <code>curl</code>, sem abrir o navegador.</li>
+  <li>A diferença entre <code>+page.js</code> e <code>+page.server.js</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o bilhete da cozinha antes do balcão</h2>
+
+<p>Na padaria da Ana existe uma ordem que ninguém precisa explicar: primeiro a cozinha produz, depois o balcão mostra. Se o balcão mostrasse a lista antes de a cozinha terminar, o cliente leria "pão de queijo" e não haveria pão de queijo. A página de um site tem o mesmo problema. O HTML precisa de dados — preços, nomes, quantidades — e esses dados vêm de algum lugar: um arquivo, um banco, outro endereço da internet.</p>
+
+<p>O <strong>load</strong> é o mensageiro entre a cozinha e o balcão. Ele é uma função que você escreve no arquivo <code>+page.js</code>, do lado do <code>+page.svelte</code>. O SvelteKit chama essa função antes de desenhar a página, espera a resposta e entrega o que ela devolveu para o componente. O componente não sabe de onde o dado veio; ele só recebe um objeto chamado <code>data</code> e desenha.</p>
+
+<p>Há um ganho escondido nessa separação. Quem busca o dado é uma função de JavaScript puro, sem HTML no meio. Isso significa que você pode testar a busca sozinha, trocar a fonte do dado sem tocar no desenho e ler o código em duas camadas: "de onde vem" e "como aparece". É a mesma divisão que a Ana faz entre a cozinha e o balcão.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>A cozinha, que produz os pães</td><td>A função <code>load</code> do <code>+page.js</code></td></tr>
+<tr><td>A bandeja que vai do fundo até o balcão</td><td>O objeto que o <code>load</code> devolve com <code>return</code></td></tr>
+<tr><td>O balcão, que mostra o que chegou</td><td>O <code>+page.svelte</code></td></tr>
+<tr><td>O bilhete com o pedido do cliente</td><td>O <code>url</code>, com os parâmetros do endereço</td></tr>
+<tr><td>O fornecedor de farinha de outra cidade</td><td>O <code>fetch</code> para outro endereço</td></tr>
+<tr><td>O caderno de receitas, que fica na cozinha</td><td>O <code>+page.server.js</code>, que só roda no servidor</td></tr>
+</table>
+</div>
+
+<p>Repare no vocabulário: <em>rota</em> é um endereço do site (por exemplo <code>/cardapio</code>), <em>load</em> é a função que busca os dados dessa rota, e <em>data</em> é o nome do pacote que chega ao componente. Três palavras que voltam em todas as aulas de SvelteKit. O <code>data</code> não é mágica: é apenas o objeto que o seu <code>return</code> devolveu, embalado pelo SvelteKit e entregue como prop.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>load</code> do cardápio</h2>
+
+<p>O projeto da Ana fica em <code>~/loja</code> e a rota do cardápio é uma pasta dentro de <code>src/routes</code>. Toda rota é uma pasta com arquivos de nome reservado: <code>+page.svelte</code> é o que aparece na tela, <code>+page.js</code> é o que busca os dados antes. Comece pelo arquivo que busca:</p>
+
+<pre class="file" data-file="src/routes/cardapio/+page.js">export async function load({ fetch, url }) {
+	const tipo = url.searchParams.get('tipo') ?? 'salgado';
+	const resposta = await fetch('/api/cardapio?tipo=' + tipo);
+	const paes = await resposta.json();
+
+	return {
+		tipo,
+		paes,
+		quantos: paes.length
+	};
+}</pre>
+
+<p>Cinco linhas úteis. A função é <code>async</code> porque espera respostas da rede; recebe um objeto com duas ferramentas (<code>fetch</code> e <code>url</code>); monta o endereço do outro arquivo do projeto; e devolve um objeto com três campos. O nome <code>load</code> não é escolha sua: é o nome que o SvelteKit procura. Se você chamar de <code>buscar</code>, ninguém chama a sua função.</p>
+
+<p>A página que recebe esse objeto é um componente comum, com uma diferença: ela declara o prop <code>data</code> com <code>$props()</code>. Não há importação, não há chamada de função, não há <code>await</code> no componente. Quando o componente começa a desenhar, o dado já está ali.</p>
+
+<pre class="file" data-file="src/routes/cardapio/+page.svelte">&lt;script&gt;
+	let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Cardápio de hoje&lt;/h1&gt;
+&lt;p&gt;{data.quantos} pão(es) do tipo {data.tipo}&lt;/p&gt;
+
+&lt;ul&gt;
+	{#each data.paes as pao}
+		&lt;li&gt;{pao.nome} — R$ {pao.preco.toFixed(2)}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;
+
+&lt;a href="/cardapio?tipo=doce"&gt;ver os doces&lt;/a&gt;</pre>
+
+<div class="trysvelte" data-goal="out:3 pães no cardápio">
+<p class="try-task"><strong>Missão:</strong> no projeto, este objeto é o que o <code>load</code> devolveu. O campo certo chama-se <code>quantos</code>. Faça a linha mostrar <strong>3 pães no cardápio</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	// no projeto, este objeto é o que o load devolveu
+	const data = { paes: ['Pão francês', 'Pão de queijo', 'Croissant'], quantos: 3 };
+&lt;/script&gt;
+
+&lt;p&gt;{data.total} pães no cardápio&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	// no projeto, este objeto é o que o load devolveu
+	const data = { paes: ['Pão francês', 'Pão de queijo', 'Croissant'], quantos: 3 };
+&lt;/script&gt;
+
+&lt;p&gt;{data.quantos} pães no cardápio&lt;/p&gt;</pre>
+</div>
+
+<p>A caixa acima compila um componente sozinho, sem SvelteKit, então o objeto está escrito à mão com o mesmo formato que o <code>load</code> entrega. Trocar <code>total</code> por <code>quantos</code> parece pouco, mas é exatamente o tipo de erro que aparece quando o nome do campo do <code>return</code> não combina com o nome usado no HTML. O JavaScript não avisa: ele devolve <code>undefined</code> e segue em frente.</p>
+
+<hr>
+
+<h2>3. A anatomia do arquivo</h2>
+
+<p>Antes de seguir, vale olhar peça por peça. O <code>+page.js</code> é um módulo JavaScript normal, com uma regra: a função exportada com o nome <code>load</code> é o ponto de entrada. Tudo o que ela devolve vai para o componente; tudo o que ela não devolve, o componente não vê.</p>
+
+<dl class="anatomy">
+  <dt>export async function load</dt><dd><code>export</code> deixa a função visível para o SvelteKit; <code>async</code> permite usar <code>await</code> dentro dela. O nome tem de ser exatamente <code>load</code>.</dd>
+  <dt>({ fetch, url })</dt><dd>o <strong>evento</strong>: um objeto com ferramentas. Aqui pedimos duas. Poderia ser só <code>()</code> se a função não precisasse de nada.</dd>
+  <dt>url.searchParams.get('tipo')</dt><dd>lê o pedaço do endereço depois do <code>?</code>. Se não existir, o <code>??</code> escolhe <code>'salgado'</code> como padrão.</dd>
+  <dt>await fetch('/api/cardapio…')</dt><dd>faz a requisição e <strong>espera</strong> a resposta. Sem o <code>await</code>, você teria uma promessa, não a resposta.</dd>
+  <dt>return { tipo, paes, quantos }</dt><dd>o <strong>pacote</strong> que vai para o componente. Só campos de dados: nada de funções, nada de classes.</dd>
+</dl>
+
+<p>A última linha merece atenção. O objeto devolvido precisa ser <em>serializável</em>: texto, número, booleano, lista, objeto simples, <code>null</code>. Uma função dentro dele derruba a rota com a mensagem <code>load_not_serializable</code>, que aparece mais adiante nesta aula. O motivo é que esse objeto viaja do servidor para o navegador como texto, e função não vira texto.</p>
+
+<div class="tip">
+<strong>O arquivo pode ter outro nome?</strong>
+<p>Não. O SvelteKit monta a rota a partir de nomes reservados: <code>+page.svelte</code>, <code>+page.js</code>, <code>+page.server.js</code>, <code>+layout.svelte</code>. Um arquivo <code>cardapio.js</code> na mesma pasta é só um módulo comum, que ninguém chama sozinho. Você pode importá-lo de dentro do <code>load</code>, e isso é comum.</p>
+</div>
+
+<hr>
+
+<h2>4. A saída real: o que o servidor manda</h2>
+
+<p>Quem monta o HTML é o servidor, e ele usa o seu <code>load</code> antes de responder. Para ver isso sem abrir o navegador, use o <code>curl</code>, que baixa a página e mostra o texto que chega. Primeiro, o terminal do projeto:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite dev
+
+  VITE v8.4.0  ready in 1811 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O endereço <code>http://localhost:5173/</code> é a sua máquina falando com ela mesma. A porta 5173 é o padrão do Vite; se estiver ocupada por outro projeto, ele avisa e escolhe a próxima. Com o servidor no ar, peça a rota do cardápio e filtre só o que interessa:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/cardapio | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;'
+&lt;h1&gt;Cardápio de hoje&lt;/h1&gt;
+ana@notebook:~/loja$ curl -s localhost:5173/cardapio | grep -o '&lt;p&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p&gt;3 pão(es) do tipo salgado&lt;/p&gt;
+ana@notebook:~/loja$ curl -s localhost:5173/cardapio | grep -o '&lt;li&gt;[^&lt;]*&lt;/li&gt;'
+&lt;li&gt;Pão francês — R$ 0.90&lt;/li&gt;
+&lt;li&gt;Pão de queijo — R$ 3.50&lt;/li&gt;
+&lt;li&gt;Croissant — R$ 7.00&lt;/li&gt;</pre>
+
+<p>Três lições nessa saída. A primeira: o <code>{data.quantos}</code> virou <code>3</code> e o <code>{data.tipo}</code> virou <code>salgado</code> — o HTML que o navegador recebe já vem com os valores no lugar. A segunda: a lista foi desenhada no servidor, com três <code>&lt;li&gt;</code>, uma para cada pão. A terceira: o preço saiu com duas casas porque o <code>toFixed(2)</code> rodou antes de virar texto.</p>
+
+<p>Esse HTML é o que um leitor vê ao chegar de fora, vindo do Google por exemplo. Um site feito só com componente no navegador chegaria vazio e desenharia depois; aqui o conteúdo já vem escrito. Isso vale para leitores de tela, para o robô de busca e para quem está com internet lenta.</p>
+
+<p>Se você isolar só o pedaço do HTML que desenha a lista, sem SvelteKit no meio, dá para ver o que o compilador do Svelte faz com um <code>{#each}</code>. O componente abaixo tem os dados fixos no script, e a saída ao lado é a que o compilador gerou:</p>
+
+<pre class="file" data-file="src/lib/Cardapio.svelte">&lt;script&gt;
+	const paes = [
+		{ nome: 'Pão francês', preco: 0.9 },
+		{ nome: 'Pão de queijo', preco: 3.5 }
+	];
+&lt;/script&gt;
+
+&lt;p&gt;{paes.length} pão(es) no balcão&lt;/p&gt;
+&lt;ul&gt;
+	{#each paes as pao}
+		&lt;li&gt;{pao.nome} — R$ {pao.preco.toFixed(2)}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;p&gt;2 pão(es) no balcão&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Pão francês — R$ 0.90&lt;/li&gt;&lt;li&gt;Pão de queijo — R$ 3.50&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Não há laço no HTML que o navegador recebe: o <code>{#each}</code> desapareceu e no lugar ficaram dois <code>&lt;li&gt;</code> já escritos. O mesmo acontece com a lista do cardápio, só que ali quem manda os dados é o <code>load</code>.</p>
+
+<hr>
+
+<h2>5. <code>fetch</code> dentro do <code>load</code>: o servidor conversando consigo mesmo</h2>
+
+<p>O <code>load</code> pediu <code>/api/cardapio</code> usando o <code>fetch</code> que veio no evento, não o <code>fetch</code> global do navegador. Essa diferença importa. No servidor, esse <code>fetch</code> resolve o endereço internamente, sem sair para a internet; no navegador, ele faz uma requisição normal. Você escreve uma vez e funciona nos dois lugares.</p>
+
+<p>Do outro lado existe um <strong>endpoint</strong>: um arquivo <code>+server.js</code> que responde JSON. Ele é o fornecedor de farinha da metáfora — não sabe quem pediu, só entrega. Nesta aula ele aparece de passagem; a aula própria dele vem depois.</p>
+
+<pre class="file" data-file="src/routes/api/cardapio/+server.js">import { json } from '@sveltejs/kit';
+import { paes } from '#lib/cardapio.js';
+
+export function GET({ url }) {
+	const tipo = url.searchParams.get('tipo');
+	const lista = tipo ? paes.filter((p) =&gt; p.tipo === tipo) : paes;
+	return json(lista);
+}</pre>
+
+<p>O dado em si mora num módulo da pasta <code>src/lib</code>, que no SvelteKit 3 se importa com <code>#lib</code> (o antigo <code>$lib</code> foi removido — há um cenário sobre isso mais adiante). É uma lista de objetos, do jeito que o banco devolveria:</p>
+
+<pre class="file" data-file="src/lib/cardapio.js">export const paes = [
+	{ nome: 'Pão francês', preco: 0.9, tipo: 'salgado' },
+	{ nome: 'Pão de queijo', preco: 3.5, tipo: 'salgado' },
+	{ nome: 'Croissant', preco: 7.0, tipo: 'salgado' },
+	{ nome: 'Bolo de cenoura', preco: 6.5, tipo: 'doce' }
+];</pre>
+
+<p>Para ver o endpoint sozinho, peça direto o endereço. O <code>curl</code> mostra o JSON cru, sem HTML em volta:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/api/cardapio
+[{"nome":"Pão francês","preco":0.9,"tipo":"salgado"},{"nome":"Pão de queijo","preco":3.5,"tipo":"salgado"},{"nome":"Croissant","preco":7,"tipo":"salgado"},{"nome":"Bolo de cenoura","preco":6.5,"tipo":"doce"}]
+ana@notebook:~/loja$ curl -s 'localhost:5173/api/cardapio?tipo=doce'
+[{"nome":"Bolo de cenoura","preco":6.5,"tipo":"doce"}]</pre>
+
+<p>Repare que <code>7.0</code> virou <code>7</code> no JSON. Não é erro: número é número, e o zero à direita não existe na representação. Quem devolve as duas casas é o <code>toFixed(2)</code> na hora de mostrar. Guardar o valor cru e formatar só na tela é a regra que vale para dinheiro em qualquer projeto.</p>
+
+<div class="warning">
+<strong>Use o <code>fetch</code> do evento, não o global</strong>
+<p>Dentro do <code>load</code>, o <code>fetch</code> que chega no primeiro parâmetro carrega os cookies da requisição e evita chamar a si mesmo pela rede. Se você usar o <code>fetch</code> global, a chamada perde a identidade do visitante e pode até travar, porque o servidor tenta fazer uma requisição HTTP para ele mesmo enquanto ainda está ocupado respondendo.</p>
+</div>
+
+<hr>
+
+<h2>6. <code>url</code>: o filtro que vem no endereço</h2>
+
+<p>O endereço de uma página carrega informação. Em <code>/cardapio?tipo=doce</code> existe um pedaço depois da interrogação chamado <em>query string</em> — a "pergunta" que o visitante fez. No <code>load</code>, ela aparece em <code>url.searchParams</code>, que tem o método <code>get</code> para pegar um valor pelo nome.</p>
+
+<p>Por que não guardar o filtro numa variável de estado e pronto? Porque o filtro precisa sobreviver ao recarregamento, ao link compartilhado e ao botão voltar do navegador. Se o estado do filtro vive no endereço, qualquer pessoa que copie o link entrega o mesmo filtro para outra pessoa. Essa é a diferença entre um site e uma tela solta.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s 'localhost:5173/cardapio?tipo=doce' | grep -o '&lt;li&gt;[^&lt;]*&lt;/li&gt;'
+&lt;li&gt;Bolo de cenoura — R$ 6.50&lt;/li&gt;</pre>
+
+<p>O mesmo arquivo, o mesmo código, outro resultado — porque o <code>url</code> mudou. O <code>load</code> roda de novo a cada endereço diferente, e o SvelteKit guarda o resultado por endereço. Isso é o que permite ao link "ver os doces" da página funcionar sem nenhum JavaScript extra: é um <code>&lt;a href&gt;</code> comum apontando para outro endereço.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^1 pão\(es\) do tipo doce">
+<p class="try-task"><strong>Missão:</strong> o botão troca o filtro para <code>doce</code>, mas a lista fica vazia. O filtro deve comparar o <strong>tipo</strong> do pão com o tipo escolhido. Faça aparecer <strong>1 pão(es) do tipo doce</strong> depois do clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const paes = [
+		{ nome: 'Pão francês', tipo: 'salgado' },
+		{ nome: 'Bolo de cenoura', tipo: 'doce' }
+	];
+
+	let tipo = $state('salgado');
+	let lista = $derived(paes.filter((pao) =&gt; pao.nome === tipo));
+&lt;/script&gt;
+
+&lt;p&gt;{lista.length} pão(es) do tipo {tipo}&lt;/p&gt;
+&lt;button onclick={() =&gt; (tipo = 'doce')}&gt;ver os doces&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const paes = [
+		{ nome: 'Pão francês', tipo: 'salgado' },
+		{ nome: 'Bolo de cenoura', tipo: 'doce' }
+	];
+
+	let tipo = $state('salgado');
+	let lista = $derived(paes.filter((pao) =&gt; pao.tipo === tipo));
+&lt;/script&gt;
+
+&lt;p&gt;{lista.length} pão(es) do tipo {tipo}&lt;/p&gt;
+&lt;button onclick={() =&gt; (tipo = 'doce')}&gt;ver os doces&lt;/button&gt;</pre>
+</div>
+
+<p>O <code>$derived</code> é a peça que faz a lista se recalcular sozinha quando <code>tipo</code> muda: ele guarda o resultado de uma conta feita a partir de outros valores reativos. Não é uma função que você chama; é uma variável que se atualiza. Se você trocar por uma variável comum, o filtro roda uma vez e nunca mais.</p>
+
+<hr>
+
+<h2>7. <code>params</code>: o pedaço variável do caminho</h2>
+
+<p>Além da pergunta depois da interrogação, existe o valor que faz parte do caminho: em <code>/cardapio/pao-de-queijo</code>, o último pedaço identifica um pão. No SvelteKit uma pasta com colchetes marca esse pedaço variável — <code>src/routes/cardapio/[nome]/+page.js</code> — e o valor chega no <code>load</code> em <code>params.nome</code>.</p>
+
+<pre class="file" data-file="src/routes/cardapio/[nome]/+page.js">import { error } from '@sveltejs/kit';
+import { paes } from '#lib/cardapio.js';
+
+export function load({ params }) {
+	const pao = paes.find((p) =&gt; p.nome === params.nome);
+
+	if (!pao) {
+		error(404, 'esse pão não está no cardápio');
+	}
+
+	return { pao };
+}</pre>
+
+<p>Aqui aparece uma ferramenta nova: <code>error(404, …)</code>, importada de <code>@sveltejs/kit</code>. Ela interrompe o <code>load</code> e manda o SvelteKit desenhar a página de erro com o código e a mensagem. Sem ela, o componente receberia <code>pao: undefined</code> e quebraria com um erro feio de JavaScript no meio do HTML.</p>
+
+<p>O <code>params</code> e o <code>url</code> parecem primos, e são: os dois vêm do endereço. A diferença é que o <code>params</code> faz parte do caminho e é obrigatório para a rota existir, enquanto a query string é opcional e não muda qual página é. Guarde a regra prática: <em>o que identifica</em> vai no caminho; <em>o que filtra ou ordena</em> vai na query.</p>
+
+<hr>
+
+<h2>8. O mesmo arquivo roda duas vezes</h2>
+
+<p>Esta é a parte que confunde. O <code>+page.js</code> roda no servidor quando alguém chega de fora, e roda no navegador quando alguém navega de uma página para outra sem recarregar. O SvelteKit chama esse arquivo de <strong>load universal</strong> justamente por isso: ele vale nos dois mundos.</p>
+
+<p>A consequência é dura: dentro dele você não pode usar nada que exista só num dos lados. <code>window</code>, <code>document</code> e <code>localStorage</code> não existem no servidor. <code>node:fs</code>, <code>process.env</code> e <code>cookies</code> não existem no navegador. O código compila, o servidor responde, e o erro aparece quando o leitor clica num link — o pior lugar possível.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer usar</th><th>Em <code>+page.js</code></th><th>Em <code>+page.server.js</code></th></tr>
+<tr><td><code>fetch</code></td><td>sim, o do evento</td><td>sim, o do evento</td></tr>
+<tr><td><code>url</code> e <code>params</code></td><td>sim</td><td>sim</td></tr>
+<tr><td><code>cookies</code></td><td>não existe</td><td>sim</td></tr>
+<tr><td><code>node:fs</code>, banco de dados</td><td>não (roda no navegador também)</td><td>sim</td></tr>
+<tr><td><code>window</code>, <code>localStorage</code></td><td>só depois de montar, com <code>$effect</code></td><td>não roda no navegador</td></tr>
+<tr><td>Segredo, chave de API</td><td>nunca</td><td>sim, e não devolva para a página</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="digitar:input=queijo;;out:1 encontrado(s)">
+<p class="try-task"><strong>Missão:</strong> a caixa de busca precisa encontrar o pão pelo pedaço do nome. Digite <code>queijo</code> no campo e faça aparecer <strong>1 encontrado(s)</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const paes = ['Pão francês', 'Pão de queijo', 'Croissant'];
+	let busca = $state('');
+	let achados = $derived(paes.filter((nome) =&gt; nome === busca));
+&lt;/script&gt;
+
+&lt;input placeholder="buscar pão" bind:value={busca} /&gt;
+&lt;p&gt;{achados.length} encontrado(s)&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const paes = ['Pão francês', 'Pão de queijo', 'Croissant'];
+	let busca = $state('');
+	let achados = $derived(paes.filter((nome) =&gt; nome.includes(busca)));
+&lt;/script&gt;
+
+&lt;input placeholder="buscar pão" bind:value={busca} /&gt;
+&lt;p&gt;{achados.length} encontrado(s)&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>bind:value</code> liga o campo à variável nos dois sentidos: o que está na variável aparece no campo, e o que a pessoa digita volta para a variável. Sem ele, seria preciso um <code>oninput</code> copiando o valor à mão. O <code>$derived</code> então recalcula a lista, e a tela acompanha.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As mensagens abaixo saíram do servidor do projeto, copiadas como estão. Elas aparecem no terminal onde o <code>npm run dev</code> está rodando — o navegador mostra apenas <code>500 Internal Error</code>, o que não ajuda em nada. Esse é o primeiro hábito a criar: quando a página quebra, olhe o terminal.</p>
+
+<div class="cenario">
+<strong>Erro 1 — pedir <code>cookies</code> no arquivo errado</strong>
+<p>O <code>load</code> universal recebe <code>fetch</code>, <code>url</code> e <code>params</code>. <code>cookies</code> não está no pacote, então o valor chega como <code>undefined</code> e o <code>.get</code> estoura.</p>
+<pre class="file" data-file="src/routes/cardapio/+page.js">export function load({ cookies }) {
+	return { nome: cookies.get('cliente') };
+}</pre>
+<pre class="term">TypeError: Cannot read properties of undefined (reading 'get')
+    at load (src/routes/cardapio/+page.js:2:25)
+500 GET /cardapio</pre>
+<p>A leitura é direta: na linha 2, coluna 25, alguém chamou um método em <code>undefined</code>. A correção é mover a função para o <code>+page.server.js</code>, onde <code>cookies</code> existe de verdade — o assunto da próxima aula.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — esquecer o <code>return</code></strong>
+<p>Buscar o dado e não devolver nada é um erro silencioso: o servidor responde 200, a página aparece, e o componente recebe um objeto vazio. Nenhum erro vermelho, só um buraco onde deveria estar o número.</p>
+<pre class="file" data-file="src/routes/cardapio/+page.js">export async function load({ fetch }) {
+	const resposta = await fetch('/api/cardapio');
+}</pre>
+<pre class="term">ana@notebook:~/loja$ curl -s localhost:5173/cardapio | grep -o '&lt;p&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p&gt; pão(es) do tipo &lt;/p&gt;</pre>
+<p>Repare nos dois espaços vazios: <code>{data.quantos}</code> e <code>{data.tipo}</code> viraram nada, porque o JavaScript desenha <code>undefined</code> como texto vazio. Quando um número some sem erro, procure o <code>return</code>: ele é a única ligação entre a busca e a tela.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>actions</code> no arquivo errado</strong>
+<p>Formulário é assunto de <code>+page.server.js</code>. Se você exportar <code>actions</code> do <code>+page.js</code>, o SvelteKit recusa a rota inteira antes de rodar qualquer coisa:</p>
+<pre class="file" data-file="src/routes/cardapio/+page.js">export const actions = {
+	padrao: async () =&gt; ({ ok: true })
+};
+
+export function load() {
+	return { quantos: 1 };
+}</pre>
+<pre class="term">SvelteKit error: invalid_export_location
+Invalid export `actions` in `src/routes/cardapio/+page.js` (`actions` is a valid export in +page.server.js)
+https://svelte.dev/e/kit/invalid_export_location
+500 GET /cardapio</pre>
+<p>O SvelteKit lista os nomes que valem em cada arquivo. Decorar não é o caminho: a mensagem já diz onde o <code>actions</code> deveria estar. Sempre que o erro trouxer um endereço começando por <code>https://svelte.dev/e/</code>, vale abrir — é a página da documentação daquele erro exato.</p>
+</div>
+
+<hr>
+
+<h2>10. <code>+page.js</code> ou <code>+page.server.js</code>?</h2>
+
+<p>Os dois arquivos fazem a mesma pergunta ("quais são os dados desta página?") e respondem em lugares diferentes. O <code>+page.js</code> responde no servidor e no navegador; o <code>+page.server.js</code> responde só no servidor, e por isso pode tocar arquivos, cookies e segredos.</p>
+
+<p>A escolha prática é uma pergunta só: <em>este dado precisa existir no servidor por segurança, ou porque só ele alcança a fonte?</em> Se sim, <code>+page.server.js</code>. Se não — uma lista pública, um filtro de endereço — o <code>+page.js</code> tem uma vantagem: na navegação interna ele roda no navegador e a página não precisa de uma ida ao servidor só para trocar um filtro.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Escolha</th></tr>
+<tr><td>O dado é público e pequeno?</td><td><code>+page.js</code></td></tr>
+<tr><td>Preciso ler um arquivo, um banco ou <code>process.env</code>?</td><td><code>+page.server.js</code></td></tr>
+<tr><td>Preciso saber quem é o visitante (cookie, sessão)?</td><td><code>+page.server.js</code></td></tr>
+<tr><td>Quero que a navegação interna seja instantânea?</td><td><code>+page.js</code>, se possível</td></tr>
+<tr><td>Os dois arquivos na mesma pasta?</td><td>o SvelteKit recusa; escolha um</td></tr>
+</table>
+</div>
+
+<p>Quando o trabalho está pronto, o comando de build gera a versão de produção. O SvelteKit compila cada <code>.svelte</code>, cada <code>load</code> e cada endpoint, e escreve tudo em <code>.svelte-kit/output</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+vite v8.4.0 building ssr environment for production...
+✓ 111 modules transformed.
+.svelte-kit/output/client/_app/immutable/nodes/2.BbzvQ0UI.js        0.64 kB │ gzip:  0.33 kB
+.svelte-kit/output/client/_app/immutable/nodes/4.CwBTaD_m.js        0.70 kB │ gzip:  0.45 kB
+✓ built in 566ms
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app to run on the platform of your choosing
+✔ done</pre>
+
+<p>O aviso do adaptador não é erro. Ele quer dizer: "ainda não sei para onde você vai publicar". Para rodar o build na sua máquina existe o <code>npm run preview</code>, que serve a pasta gerada por http. O <code>load</code> que você escreveu está lá dentro, compilado.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Para que serve</th></tr>
+<tr><td><code>export function load(evento)</code></td><td>busca os dados da rota; o nome é reservado</td></tr>
+<tr><td><code>evento.fetch</code></td><td>requisição que carrega os cookies e evita chamar a si mesmo</td></tr>
+<tr><td><code>evento.url.searchParams.get('x')</code></td><td>lê o valor de <code>?x=…</code></td></tr>
+<tr><td><code>evento.params</code></td><td>lê os pedaços variáveis do caminho, como <code>[nome]</code></td></tr>
+<tr><td><code>return { … }</code></td><td>o pacote que vira o prop <code>data</code></td></tr>
+<tr><td><code>error(404, '…')</code></td><td>interrompe o load e mostra a página de erro</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th></tr>
+<tr><td><code>npm run dev</code></td><td>servidor de desenvolvimento com recarga automática</td></tr>
+<tr><td><code>curl -s localhost:5173/rota</code></td><td>baixa o HTML que o servidor montou</td></tr>
+<tr><td><code>curl -s 'localhost:5173/rota?x=1'</code></td><td>o mesmo, com query string (aspas por causa do <code>?</code>)</td></tr>
+<tr><td><code>npm run build</code></td><td>gera a versão de produção</td></tr>
+<tr><td><code>npm run preview</code></td><td>serve o build por http para conferir</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o <code>load</code> de um <code>+page.js</code> precisa devolver?</p>
+<label><input type="radio" name="q1"> o HTML da página, em texto</label>
+<label><input type="radio" name="q1"> um objeto com os dados que o componente vai usar</label>
+<label><input type="radio" name="q1"> a função que desenha o componente</label>
+<label><input type="radio" name="q1"> nada, ele só busca</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. De onde vem o <code>data</code> que o <code>+page.svelte</code> recebe?</p>
+<label><input type="radio" name="q1"> de uma variável global do SvelteKit</label>
+<label><input type="radio" name="q1"> de um arquivo <code>data.json</code> na pasta da rota</label>
+<label><input type="radio" name="q1"> do objeto devolvido pelo <code>return</code> do <code>load</code></label>
+<label><input type="radio" name="q1"> do <code>localStorage</code> do navegador</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que <code>cookies</code> não funciona no <code>+page.js</code>?</p>
+<label><input type="radio" name="q1"> porque esse arquivo também roda no navegador e lá não existe cookie do servidor</label>
+<label><input type="radio" name="q1"> porque cookies só existem em formulários</label>
+<label><input type="radio" name="q1"> porque o SvelteKit apagou os cookies na versão 3</label>
+<label><input type="radio" name="q1"> porque o nome certo é <code>cookie</code>, no singular</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">export async function <input data-answer="load">({ fetch }) {<br>&nbsp;&nbsp;const resposta = await fetch('/api/cardapio');<br>&nbsp;&nbsp;const paes = await resposta.json();<br>&nbsp;&nbsp;<input data-answer="return"> { paes };<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O <code>+page.js</code> é o arquivo do <strong>load universal</strong>: busca os dados antes de a página desenhar.</li>
+  <li>A função tem de se chamar <code>load</code> e ser exportada; outro nome não é chamado.</li>
+  <li>O objeto do <code>return</code> chega ao componente como o prop <code>data</code>, lido com <code>let { data } = $props()</code>.</li>
+  <li>Use o <code>fetch</code> do evento: ele carrega os cookies e evita a requisição para si mesmo.</li>
+  <li><code>url.searchParams.get()</code> lê o que vem depois do <code>?</code>; <code>params</code> lê o pedaço variável do caminho.</li>
+  <li>O mesmo arquivo roda no servidor e no navegador: nada de <code>cookies</code>, <code>node:fs</code> ou segredo.</li>
+  <li>O HTML chega pronto do servidor — quem confere isso é o <code>curl</code>, não o "ver código-fonte" do navegador.</li>
+  <li><code>error(404, '…')</code> interrompe o load e mostra a página de erro em vez de quebrar o componente.</li>
+  <li>O objeto devolvido precisa ser serializável: função dentro dele derruba a rota com <code>load_not_serializable</code>.</li>
+  <li>Quando a página mostra <code>500 Internal Error</code>, a mensagem de verdade está no terminal do <code>npm run dev</code>.</li>
+  <li>Para dados secretos ou que só o servidor alcança, o arquivo é o <code>+page.server.js</code> — a próxima aula.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
