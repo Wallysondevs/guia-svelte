@@ -642,7 +642,7 @@ Received: "/paes/promo"
 <ul>
   <li>Rota é a camada entre a conta e a tela: <code>+page.server.js</code>, <code>+page.js</code> e <code>+server.js</code>.</li>
   <li>O teste importa as funções da rota e monta os objetos que o SvelteKit montaria.</li>
-  <li><code>load</code> recebe o evento; no teste, uma <code>URL</code> de <code>localhost</code> basta para os casos simples.</li>
+  <li><code>load</code> recebe o evento; no teste, uma <code>URL</code> de <code>localhost</code> resolve os casos simples.</li>
   <li><code>redirect()</code> e <code>error()</code> lançam: capture e confira com <code>isRedirect</code> ou <code>isHttpError</code>.</li>
   <li>Action se testa com <code>FormData</code> dentro de um <code>Request</code> <code>POST</code>; <code>fail</code> devolve <code>status</code> e <code>data</code>.</li>
   <li>Endpoint se testa chamando <code>GET</code> ou <code>POST</code> e lendo o <code>Response</code> com <code>status</code>, <code>json()</code> e cabeçalhos.</li>
