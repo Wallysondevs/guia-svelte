@@ -411,7 +411,7 @@ src/App.svelte:13:&lt;p&gt;Menor preço: R$ {precos[0].toFixed(2)}&lt;/p&gt;</pr
 <label><input type="radio" name="q1"> uma função no <code>&lt;script&gt;</code></label>
 <label><input type="radio" name="q1"> um arquivo <code>.js</code> com a função de formatação</label></div>
 
-<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let precos = $state([0.9, 2.5, 4]);<br>let total = <input data-answer="$derived(precos.reduce((soma, p) => soma + p, 0))">;<br><br>// o total não pode ser digitado à mão: ele vem da lista</div></div>
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let precos = $state([0.9, 2.5, 4]);<br>let total = $derived(precos.reduce((soma, p) =&gt; soma + p, 0));<br>let comDesconto = $derived(<input data-answer="total * 0.9">);<br><br>// o total não pode ser digitado à mão: ele vem da lista</div></div>
 
 <hr>
 

@@ -553,7 +553,7 @@ Uncaught Error: https://svelte.dev/e/effect_update_depth_exceeded</pre>
 <label><input type="radio" name="q1"> porque a lista tinha menos itens depois do clique</label>
 <label><input type="radio" name="q1"> porque <code>{#each}</code> só desenha o primeiro item</label></div>
 
-<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let precos = $state([0.9, 2.5]);<br>let total = <input data-answer="$derived(precos.reduce((soma, p) =&gt; soma + p, 0))">;<br><br>&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</div></div>
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let precos = $state([0.9, 2.5]);<br>let total = <input data-answer="$derived">(precos.reduce((soma, p) =&gt; soma + p, 0));<br><br>&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</div></div>
 
 <hr>
 

@@ -459,7 +459,7 @@ Error: Failed to parse source for import analysis because the content contains i
 <label><input type="radio" name="q1"> o Vitest não foi instalado</label>
 <label><input type="radio" name="q1"> a função testada devolveu zero</label></div>
 
-<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { describe, it, expect } from 'vitest';<br>import { calcularTroco } from './troco.js';<br><br>describe('calcularTroco', () =&gt; {<br>&nbsp;&nbsp;it('fecha a conta nos centavos', () =&gt; {<br>&nbsp;&nbsp;&nbsp;&nbsp;<input data-answer="expect(calcularTroco(0.3, 0.1)).toBe(0.2)">;<br>&nbsp;&nbsp;});<br>});</div></div>
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { describe, it, expect } from 'vitest';<br>import { calcularTroco } from './troco.js';<br><br>describe('calcularTroco', () =&gt; {<br>&nbsp;&nbsp;it('fecha a conta nos centavos', () =&gt; {<br>&nbsp;&nbsp;&nbsp;&nbsp;let bruto = 0.3 - 0.1;<br>&nbsp;&nbsp;&nbsp;&nbsp;expect(bruto).<input data-answer="toBeCloseTo">(0.2);<br><br>&nbsp;&nbsp;&nbsp;&nbsp;let conta = Math.round(bruto * 100) / 100;<br>&nbsp;&nbsp;&nbsp;&nbsp;expect(conta).<input data-answer="toBe">(0.2);<br>&nbsp;&nbsp;});<br>});</div></div>
 
 <hr>
 
