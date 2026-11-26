@@ -275,6 +275,15 @@ escrita na página de que aquele bloco é composição de dois arquivos).
 - **Meta `html:` com aspas dentro** usa aspas simples no atributo:
   `data-goal='html:&lt;p class="ok"&gt;…&lt;/p&gt;'`.
 
+- **`data-file` é só para arquivo `.svelte`.** O conferidor compila o que estiver em `data-file`; um
+  `main.js` ou um `index.html` ali divergem por definição. Para esses, use `<pre class="file">` **sem**
+  `data-file` (ou `code` na prosa).
+- **Erro que só existe no navegador** (`each_key_duplicate` de produção, `effect_update_depth_exceeded`)
+  não sai no `pre.out` de um `pre.file`: aquele bloco é recompilado com `dev: false`. Deixe esses
+  erros na prosa, entre aspas, ou num `pre.term`.
+- **Saída depois de clique ou digitação**: pode vir num segundo `pre.out`, mas o **primeiro**
+  `pre.out` do par é o que o conferidor olha — ele tem de ser o estado inicial.
+
 ## 7. Privacidade
 
 Proibido: o nome do dono da máquina, o home real, o caminho de root, o IP da VPS, o IP da rede
