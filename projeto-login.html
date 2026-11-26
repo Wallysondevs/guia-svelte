@@ -92,7 +92,7 @@
 
 <pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -H 'Accept: text/html' http://localhost:5175/painel
 200
-ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5175/painel | grep -o "<h1>[^<]*</h1>"
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5175/painel | grep -o "&lt;h1&gt;[^&lt;]*&lt;/h1&gt;"
 &lt;h1&gt;Área do cliente&lt;/h1&gt;</pre>
 
 <h3>A anatomia da versão 1</h3>
@@ -152,7 +152,7 @@ ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5175/painel
 
 <p>Agora o formulário ganha <code>method="POST"</code>, e o SvelteKit procura uma <em>action</em> no arquivo ao lado. A action recebe o formulário, confere a senha e, se estiver tudo certo, grava o cookie e manda o navegador para outra página.</p>
 
-<pre class="file" data-file="src/routes/login/+page.server.js">import { fail, redirect } from '@sveltejs/kit';
+<pre class="file">import { fail, redirect } from '@sveltejs/kit';
 
 const USUARIOS = {
   'ana@padaria.com': { nome: 'Ana', senha: 'pao123' }
@@ -253,7 +253,7 @@ set-cookie: sessao=ana@padaria.com; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax
 
 <p>Com o cookie gravado, o painel pode perguntar ao servidor quem está pedindo. A checagem fica no <code>+page.server.js</code> da rota, e o <code>redirect</code> expulsa quem não tem cookie.</p>
 
-<pre class="file" data-file="src/routes/painel/+page.server.js">import { redirect } from '@sveltejs/kit';
+<pre class="file">import { redirect } from '@sveltejs/kit';
 
 export function load({ cookies }) {
   const usuario = cookies.get('sessao');
@@ -265,7 +265,7 @@ export function load({ cookies }) {
 
 <pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -H 'Accept: text/html' http://localhost:5175/painel
 303 http://localhost:5175/login
-ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' http://localhost:5175/painel | grep -o "<p>Olá[^<]*</p>"
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' http://localhost:5175/painel | grep -o "&lt;p&gt;Olá[^&lt;]*&lt;/p&gt;"
 &lt;p&gt;Olá, ana@padaria.com. Suas encomendas aparecem aqui.&lt;/p&gt;</pre>
 
 <p>O primeiro comando não tem cookie e recebe 303 com o endereço do login no cabeçalho <code>location</code>. O segundo manda o cookie na mão (<code>-H 'Cookie: …'</code>) e recebe a página com o nome. É exatamente o que o navegador faz sozinho: guarda o cookie e o envia em cada pedido ao mesmo site.</p>
@@ -298,7 +298,7 @@ ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padar
 
 <p>A versão 2 protege o painel dentro do próprio <code>+page.server.js</code>. Com dez rotas protegidas, seriam dez cópias da mesma checagem — e uma esquecida já abre o buraco. O <code>hooks.server.js</code> existe para rodar <strong>antes</strong> de qualquer rota, em todo pedido.</p>
 
-<pre class="file" data-file="src/hooks.server.js">import { redirect } from '@sveltejs/kit';
+<pre class="file">import { redirect } from '@sveltejs/kit';
 
 const PROTEGIDAS = ['/painel'];
 
@@ -317,7 +317,7 @@ export async function handle({ event, resolve }) {
 
 <p>Com o hook no lugar, o <code>load</code> do painel fica curto, e o <code>+page.svelte</code> só mostra o que recebeu. O botão "Sair" é outra action, e ela apaga o cookie:</p>
 
-<pre class="file" data-file="src/routes/painel/+page.server.js">import { redirect } from '@sveltejs/kit';
+<pre class="file">import { redirect } from '@sveltejs/kit';
 
 export function load({ locals }) {
   return { usuario: locals.usuario };

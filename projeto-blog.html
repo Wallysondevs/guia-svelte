@@ -186,7 +186,7 @@ ana@notebook:~/loja$ curl -s http://localhost:5174/ | grep -o "&lt;h1&gt;[^&lt;]
 
 <p>Na segunda versão a lista sai do componente e vai para um módulo compartilhado. Quem entrega os dados para a página é um arquivo com um nome específico: <code>+page.server.js</code>. Ele exporta uma função <code>load</code>, e o que ela devolve chega ao <code>+page.svelte</code> como a propriedade <code>data</code>.</p>
 
-<pre class="file" data-file="src/routes/+page.server.js">import { posts } from '#lib/posts.js';
+<pre class="file">import { posts } from '#lib/posts.js';
 
 export function load() {
   return {
@@ -227,7 +227,7 @@ export function load() {
 
 <p>Para cada receita ter endereço próprio, a pasta ganha colchetes: <code>src/routes/post/[slug]/</code>. O nome entre colchetes é o pedaço variável do caminho, e ele chega ao <code>load</code> dentro de <code>params</code>.</p>
 
-<pre class="file" data-file="src/routes/post/[slug]/+page.server.js">import { error } from '@sveltejs/kit';
+<pre class="file">import { error } from '@sveltejs/kit';
 import { posts } from '#lib/posts.js';
 
 export function load({ params }) {
@@ -294,7 +294,7 @@ ana@notebook:~/loja$ curl -s http://localhost:5174/post/sem-receita | grep -o "&
 
 <p>A terceira versão deixa o visitante escolher uma categoria. O detalhe importante: a escolha vai para a <strong>URL</strong>, não para um estado do componente. Assim o endereço <code>/?categoria=bolos</code> pode ser compartilhado e mostra a mesma coisa para qualquer pessoa.</p>
 
-<pre class="file" data-file="src/routes/+page.server.js">import { posts } from '#lib/posts.js';
+<pre class="file">import { posts } from '#lib/posts.js';
 
 export function load({ url }) {
   const categoria = url.searchParams.get('categoria') ?? 'todas';
@@ -341,7 +341,7 @@ export function load({ url }) {
 
 <p>Ainda na versão 3, o blog ganha um endereço que devolve <strong>dados</strong> em vez de página: um <code>+server.js</code>. Ele serve para outro programa consumir as receitas — um aplicativo, uma planilha, uma futura busca.</p>
 
-<pre class="file" data-file="src/routes/api/receitas/+server.js">import { json } from '@sveltejs/kit';
+<pre class="file">import { json } from '@sveltejs/kit';
 import { posts } from '#lib/posts.js';
 
 export function GET() {
@@ -521,7 +521,7 @@ ana@notebook:~/loja$ curl -s http://localhost:5174/ | grep -o "&lt;h1&gt;[^&lt;]
 <div class="cenario">
 <strong>Erro 2 — <code>load</code> sem o tratamento de "não achei"</strong>
 <p>Este é o bug que o <code>error(404)</code> evita. Sem ele, o <code>find</code> devolve <code>undefined</code> e a linha seguinte estoura.</p>
-<pre class="file" data-file="src/routes/post/[slug]/+page.server.js">import { posts } from '#lib/posts.js';
+<pre class="file">import { posts } from '#lib/posts.js';
 
 export function load({ params }) {
   const post = posts.find((p) =&gt; p.slug === params.slug);

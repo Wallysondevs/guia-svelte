@@ -146,9 +146,9 @@
 
 <p>Dá para provar com o <code>curl</code>, que não tem JavaScript nem memória de página. Ele pede a mesma página duas vezes e recebe sempre os dois pedidos iniciais:</p>
 
-<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | grep -o "<p>[0-9]* pedido[^<]*</p>"
+<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | grep -o "&lt;p&gt;[0-9]* pedido[^&lt;]*&lt;/p&gt;"
 &lt;p&gt;2 pedido(s)&lt;/p&gt;
-ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | grep -o "<li>[^<]*</li>"
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | grep -o "&lt;li&gt;[^&lt;]*&lt;/li&gt;"
 &lt;li&gt;8:30 — Dona Bia: Bolo de chocolate&lt;/li&gt;
 &lt;li&gt;10:00 — Firma São José: 30 pães franceses&lt;/li&gt;</pre>
 
@@ -160,7 +160,7 @@ ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | gre
 
 <p>A segunda versão move a lista para um módulo e coloca a validação numa <em>action</em>. O formulário passa a ter <code>method="POST"</code>, e o SvelteKit procura a action no <code>+page.server.js</code> ao lado.</p>
 
-<pre class="file" data-file="src/routes/+page.server.js">import { fail } from '@sveltejs/kit';
+<pre class="file">import { fail } from '@sveltejs/kit';
 import { pedidos, adicionar } from '#lib/pedidos.js';
 
 export function load() {
@@ -212,11 +212,11 @@ export const actions = {
 
 <p>Três coisas passaram a acontecer no servidor. O <code>load</code> entrega a lista a cada pedido. A action confere os campos e, quando falta algo, responde 400 com a mensagem. E o pedido novo entra no módulo compartilhado, então aparece para qualquer pessoa que pedir a página depois.</p>
 
-<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -X POST -d 'cliente=&amp;item=' http://localhost:5173/ | grep -o '<p class="erro[^>]*>[^&lt;]*</p>'
+<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -X POST -d 'cliente=&amp;item=' http://localhost:5173/ | grep -o '&lt;p class="erro[^&gt;]*&gt;[^&lt;]*&lt;/p&gt;'
 &lt;p class="erro svelte-1uha8ag"&gt;Cliente e pedido são obrigatórios&lt;/p&gt;
 ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -X POST -d 'cliente=Seu João&amp;item=12 pães de queijo' -o /dev/null -w "%{http_code}\n" http://localhost:5173/
 200
-ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | grep -o "<li>[^<]*</li>"
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | grep -o "&lt;li&gt;[^&lt;]*&lt;/li&gt;"
 &lt;li&gt;8:30 — Dona Bia: Bolo de chocolate&lt;/li&gt;
 &lt;li&gt;10:00 — Firma São José: 30 pães franceses&lt;/li&gt;
 &lt;li&gt;12:00 — Seu João: 12 pães de queijo&lt;/li&gt;</pre>
@@ -294,7 +294,7 @@ ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | gre
 
 <p>A versão final cresce: os pedidos ganham endereço próprio (<code>/pedidos</code>), a vitrine fica em <code>/</code>, entra o <code>/login</code> e nasce o <code>/api/pedidos</code>. Com mais rotas, proteger cada uma por conta própria vira erro garantido. O <code>hooks.server.js</code> centraliza a decisão.</p>
 
-<pre class="file" data-file="src/hooks.server.js">import { redirect } from '@sveltejs/kit';
+<pre class="file">import { redirect } from '@sveltejs/kit';
 
 const PROTEGIDAS = ['/pedidos', '/api/pedidos'];
 
@@ -315,7 +315,7 @@ export async function handle({ event, resolve }) {
 303 http://localhost:5173/login
 ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -H 'Accept: text/html' http://localhost:5173/api/pedidos
 303 http://localhost:5173/login
-ana@notebook:~/loja$ curl -s -H 'Cookie: sessao=ana@padaria.com' http://localhost:5173/pedidos | grep -o "<p[^>]*>[0-9]* pedido[^<]*</p>"
+ana@notebook:~/loja$ curl -s -H 'Cookie: sessao=ana@padaria.com' http://localhost:5173/pedidos | grep -o "&lt;p[^&gt;]*&gt;[0-9]* pedido[^&lt;]*&lt;/p&gt;"
 &lt;p class="svelte-1ld628l"&gt;2 pedido(s)&lt;/p&gt;</pre>
 
 <p>Com a sessão, a página responde 200 e a API devolve o mesmo conteúdo em JSON — é o endereço que um aplicativo de celular usaria:</p>
@@ -327,12 +327,12 @@ ana@notebook:~/loja$ curl -s -H 'Cookie: sessao=ana@padaria.com' http://localhos
 
 <pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' -X POST -d 'cliente=Seu João&amp;item=12 pães de queijo' -o /dev/null -w "%{http_code}\n" http://localhost:5173/pedidos
 200
-ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' http://localhost:5173/pedidos | grep -o "<p[^>]*>[0-9]* pedido[^<]*</p>"
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' http://localhost:5173/pedidos | grep -o "&lt;p[^&gt;]*&gt;[0-9]* pedido[^&lt;]*&lt;/p&gt;"
 &lt;p class="svelte-1ld628l"&gt;3 pedido(s)&lt;/p&gt;</pre>
 
 <p>O <code>+server.js</code> da API é curto porque não desenha nada: recebe o pedido, lê <code>locals</code> e devolve JSON. O hook já garantiu que existe sessão antes de chegar aqui.</p>
 
-<pre class="file" data-file="src/routes/api/pedidos/+server.js">import { json } from '@sveltejs/kit';
+<pre class="file">import { json } from '@sveltejs/kit';
 import { pedidos } from '#lib/pedidos.js';
 
 export function GET({ locals }) {
@@ -484,7 +484,7 @@ Could not detect a supported production environment. See https://svelte.dev/docs
 
 &lt;p&gt;{data.pedidos.length} pedido(s)&lt;/p&gt;</pre>
 <p>Depois do POST, a resposta é 400 e a mensagem aparece:</p>
-<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -X POST -d 'cliente=Seu João&amp;item=12 pães' http://localhost:5173/ | grep -o '<p class="erro[^>]*>[^&lt;]*</p>'
+<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -X POST -d 'cliente=Seu João&amp;item=12 pães' http://localhost:5173/ | grep -o '&lt;p class="erro[^&gt;]*&gt;[^&lt;]*&lt;/p&gt;'
 &lt;p class="erro svelte-1uha8ag"&gt;Cliente e pedido são obrigatórios&lt;/p&gt;</pre>
 <p>A mensagem está certa; o problema é o HTML. O <code>curl</code> manda os campos pelos nomes, mas a página sem <code>name</code> não os envia quando um navegador faz o POST.</p>
 </div>
