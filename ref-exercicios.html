@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exercícios — missões com saída conferida e gabarito | Guia Svelte</title>
+<meta name="description" content="Exercícios de Svelte 5 em seis níveis, cada um com a saída que o compilador produz, gabarito comentado, caixas para praticar e a explicação de como a verificação funciona.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Exercícios</span></h1>
+
+<p class="intro">A Ana aprendeu a fazer pão olhando, imitando e errando. Ninguém aprende a programar só lendo: a mão precisa escrever. Esta página é a bancada de treino — dezoito missões curtas, em ordem de dificuldade, cada uma com o resultado exato que a tela deve mostrar. O gabarito está no fim, mas o valor está em tentar antes de olhar. A Ana também tinha um caderno de receitas; ela só abria depois de queimar a primeira fornada.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como transformar um pedido em missão com resultado observável.</li>
+  <li>Exercícios de estado, evento, condicional e lista.</li>
+  <li>Exercícios de conta, dinheiro com duas casas e valor derivado.</li>
+  <li>Exercícios de formulário com <code>bind:value</code>.</li>
+  <li>Exercícios de espera com <code>{#await}</code>.</li>
+  <li>O que cada passo de verificação confere: <code>out:</code>, <code>outre:</code>, <code>clique:</code>, <code>digitar:</code>.</li>
+  <li>O gabarito comentado, com a saída real de cada solução.</li>
+  <li>Como continuar treinando depois desta página.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: missão com resultado observável</h2>
+
+<p>Um exercício de programação só presta se você conseguir responder "acertei?" sem perguntar a ninguém. Por isso cada missão desta página termina com uma frase do tipo "a tela deve mostrar <code>Cliques: 1</code>". A frase é o critério: se a tela mostra outra coisa, ainda não está pronto.</p>
+
+<p>Nas caixas interativas, esse critério vira uma <strong>meta</strong> — uma lista de passos que o guia executa no navegador de verdade, com o compilador de verdade. A meta pode clicar num botão, digitar num campo e comparar o texto final. Você não precisa acreditar em mim: clique em Verificar e veja o resultado.</p>
+
+<p>Três hábitos fazem diferença no treino. Primeiro: leia o erro inteiro, inclusive a linha. Segundo: mude uma coisa por vez — se mexer em três lugares e funcionar, você não sabe qual funcionou. Terceiro: quando acertar, apague uma linha e veja o que quebra; é assim que se entende o papel de cada pedaço.</p>
+
+<p>Cada missão desta página tem quatro partes, e vale reconhecê-las antes de escrever a primeira linha. O enunciado diz o que a tela deve mostrar. O código inicial é o ponto de partida — quase sempre um código que compila e faz a coisa errada. A meta é a frase que o verificador confere. E o gabarito, no fim, mostra uma solução possível, não a única.</p>
+
+<dl class="anatomy">
+  <dt>enunciado</dt><dd>o <strong>pedido</strong> em uma ou duas frases, sempre com o resultado visível: "a tela deve mostrar <code>Cliques: 1</code>".</dd>
+  <dt>código inicial</dt><dd>o <strong>ponto de partida</strong>. Compila, roda e erra o alvo — assim você vê a diferença entre "quase" e "certo".</dd>
+  <dt>meta</dt><dd>a <strong>frase conferível</strong>: um passo de clique, um de digitação e uma comparação de texto. É o que o botão Verificar executa.</dd>
+  <dt>gabarito</dt><dd>uma <strong>solução possível</strong> com a saída real do compilador. Se a sua saída for diferente, o seu código é diferente.</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nível</th><th>Tema</th><th>O que você treina</th></tr>
+<tr><td>1</td><td>estado e evento</td><td>variável que redesenha, clique que muda</td></tr>
+<tr><td>2</td><td>condicional</td><td><code>{#if}</code>, <code>{:else}</code>, comparação</td></tr>
+<tr><td>3</td><td>listas</td><td><code>{#each}</code>, índice, lista vazia</td></tr>
+<tr><td>4</td><td>contas</td><td>soma, <code>toFixed</code>, <code>$derived</code></td></tr>
+<tr><td>5</td><td>formulário</td><td><code>bind:value</code>, texto em caixa alta</td></tr>
+<tr><td>6</td><td>espera</td><td><code>{#await}</code>, <code>{:then}</code>, <code>{:catch}</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Nível 1 — estado e evento</h2>
+
+<p><strong>Missão 1.</strong> O botão existe, mas o número não muda. Faça a tela mostrar <code>Cliques: 1</code> depois de um clique, começando de zero. O critério é o texto completo do componente.</p>
+
+<pre class="script" data-file="Contador.svelte">&lt;script&gt;
+  let cliques = $state(5);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (cliques = cliques + 0)}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> comece em zero e faça o botão somar um por clique. A tela deve mostrar <code>Cliques: 1</code> depois de <strong>um</strong> clique.</p>
+<pre class="script" data-file="Contador.svelte">&lt;script&gt;
+  let cliques = $state(5);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (cliques = cliques + 0)}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="Contador.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (cliques = cliques + 1)}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<p><strong>Missão 2.</strong> O contador começa em 5 e nunca chega a zero. Faça ele começar em 5 e mostrar <code>Cliques: 4</code> após um clique. Aqui o exercício é achar o operador certo — e a diferença entre <code>- 1</code> e <code>- 10</code>.</p>
+
+<p><strong>Missão 3.</strong> O botão troca o nome para Bia e não volta. Faça ele <strong>alternar</strong>: um clique vai para Bia, outro volta para Ana. O critério é o texto <code>Olá, Bia</code> depois do primeiro clique e <code>Olá, Ana</code> depois do segundo.</p>
+
+<p>As três missões usam a mesma peça: uma variável criada com <code>$state</code> e uma função ligada ao <code>onclick</code>. A diferença entre elas é só a conta e a condição dentro da função.</p>
+
+<hr>
+
+<h2>3. Nível 2 — condicionais</h2>
+
+<p><strong>Missão 4.</strong> A placa diz <code>Aberta agora</code> mesmo com <code>aberta</code> valendo <code>false</code>. Faça a tela mostrar <code>Fechada</code> nesse estado, usando <code>{#if}</code> e <code>{:else}</code>.</p>
+
+<pre class="script" data-file="Status.svelte">&lt;script&gt;
+  let aberta = $state(false);
+&lt;/script&gt;
+
+&lt;p&gt;Aberta agora&lt;/p&gt;</pre>
+
+<p><strong>Missão 5.</strong> O turno começa em "madrugada" e nunca muda. Faça a escada de condições devolver <code>manhã</code> quando a hora for 7, <code>tarde</code> quando for 14 e <code>noite</code> quando for 20. O critério é a palavra que aparece na tela para cada hora.</p>
+
+<p><strong>Missão 6.</strong> A mensagem de erro aparece junto com a de sucesso. Faça aparecer só uma delas, dependendo de uma variável <code>ok</code>, e escolha textos curtos: <code>Salvo</code> e <code>Falhou</code>.</p>
+
+<p>Antes de escrever a escada, teste os valores no papel. Para hora 7, qual condição é a primeira verdadeira? Para hora 14? Para hora 20? Se a resposta não estiver clara em três linhas, a escada está na ordem errada. E lembre que a última condição pode ser o <code>{:else}</code> puro: "se nada acima valeu, é noite".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que escrever</th><th>O que não escrever</th></tr>
+<tr><td>escolher entre dois textos</td><td><code>{#if ok} … {:else} … {/if}</code></td><td>ternário dentro das chaves, quando passa de uma linha</td></tr>
+<tr><td>mais de dois caminhos</td><td><code>{:else if}</code> em escada</td><td><code>{#if}</code> dentro de <code>{#if}</code> para a mesma pergunta</td></tr>
+<tr><td>mostrar algo só às vezes</td><td><code>{#if}</code> sem <code>{:else}</code></td><td><code>style="display:none"</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. Nível 3 — listas</h2>
+
+<p><strong>Missão 7.</strong> A lista mostra os pedidos sem número. Faça aparecer <code>1. pão</code>, <code>2. leite</code>, <code>3. café</code>, usando o índice do <code>{#each}</code>.</p>
+
+<pre class="script" data-file="Lista.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;ol&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+
+<div class="trysvelte" data-goal="out:1. pão 2. leite">
+<p class="try-task"><strong>Missão:</strong> a lista mostra os itens sem número. Use o índice do <code>{#each}</code> para a tela virar <code>1. pão 2. leite</code>.</p>
+<pre class="script" data-file="Lista.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;ol&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+<pre class="solucao" data-file="Lista.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;ol&gt;
+  {#each pedidos as pedido, i}
+    &lt;li&gt;{i + 1}. {pedido}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+</div>
+
+<p><strong>Missão 8.</strong> Com a lista vazia, a tela fica em branco. Faça aparecer <code>Nenhum pedido ainda.</code> usando o <code>{:else}</code> do <code>{#each}</code>.</p>
+
+<p><strong>Missão 9.</strong> A lista perde o cursor do campo de texto quando um pedido novo é inserido no começo. Acrescente a chave <code>(pedido.id)</code> ao <code>{#each}</code> e explique, com suas palavras, por que o problema some.</p>
+
+<p>A chave é o exercício mais conceitual do nível. Ela não muda o que aparece na tela; muda <em>qual elemento o compilador reaproveita</em> quando a lista muda. Sem chave, ele usa a posição; com chave, usa a identidade.</p>
+
+<hr>
+
+<h2>5. Nível 4 — contas e dinheiro</h2>
+
+<p><strong>Missão 10.</strong> Some dois pedidos e mostre o total com duas casas: de <code>0.9</code> e <code>1.2</code> deve sair <code>Total: R$ 2.10</code>.</p>
+
+<div class="trysvelte" data-goal="out:Total: R$ 2.10">
+<p class="try-task"><strong>Missão:</strong> a soma está certa e a formatação não. Faça a tela mostrar <code>Total: R$ 2.10</code>, com duas casas.</p>
+<pre class="script" data-file="Total.svelte">&lt;script&gt;
+  let a = 0.9;
+  let b = 1.2;
+  let total = a + b;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Total.svelte">&lt;script&gt;
+  let a = 0.9;
+  let b = 1.2;
+  let total = a + b;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p><strong>Missão 11.</strong> O total fica velho quando a quantidade muda. Troque a conta guardada por um valor derivado, de modo que o total acompanhe as duas quantidades.</p>
+
+<p><strong>Missão 12.</strong> A lista tem três itens e a conta precisa de um laço. Use <code>$derived.by</code> para somar <code>preco × qtd</code> de cada item e mostrar <code>Total: R$ 3.00</code>.</p>
+
+<p><strong>Missão 13.</strong> Um pedido de 2 pães a R$ 0,90 com desconto de 10% deve mostrar <code>1.62</code>. O valor guardado é o preço cheio; o desconto é conta, não estado.</p>
+
+<p>A tentação, quando o total não acompanha, é chamar uma função a cada clique para recalcular. Funciona, e é o caminho errado: você cria um segundo lugar que guarda a mesma verdade. O derivado existe exatamente para isso — ele não guarda o valor, ele sabe como chegar nele. Se você se pegar escrevendo <code>total = ...</code> dentro de um evento, pare e pergunte: este valor pode ser calculado?</p>
+
+<p>Outra confusão comum é o desconto. O preço cheio é estado; o desconto é conta. Guardar o preço com desconto numa variável separada parece prático até o dia em que o preço muda e o desconto fica velho. A regra é a mesma do total: guarde o que o cliente informou, calcule o que depende disso.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro no exercício</th><th>Sintoma na tela</th><th>Conserto</th></tr>
+<tr><td>esqueceu <code>toFixed(2)</code></td><td><code>R$ 2.1</code></td><td>formate só na hora de mostrar</td></tr>
+<tr><td>somou texto com número</td><td><code>0.900.1</code></td><td>converta antes de somar</td></tr>
+<tr><td>guardou o total como estado</td><td>total antigo depois da mudança</td><td>use <code>$derived</code></td></tr>
+<tr><td>usou <code>$derived</code> com laço</td><td>texto da função na tela</td><td>use <code>$derived.by</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>6. Nível 5 — formulário</h2>
+
+<p><strong>Missão 14.</strong> O campo mostra Ana, mas digitar não muda o parágrafo. Faça o parágrafo acompanhar o campo sem escrever <code>oninput</code>: <code>Olá, Bia</code> depois de digitar Bia.</p>
+
+<p><strong>Missão 15.</strong> O nome digitado deve aparecer em caixa alta no título, sem alterar o valor guardado. Digitar <code>ana</code> deve mostrar <code>ANA</code> no título e <code>ana</code> no parágrafo.</p>
+
+<p><strong>Missão 16.</strong> A caixa de seleção começa marcada e o texto diz <code>pedido pago</code>. Ao desmarcar, o texto deve virar <code>falta pagar</code>. Use <code>bind:checked</code>.</p>
+
+<p>Formulário é onde a ligação de duas vias ganha e perde. Ganha porque o código fica menor: um <code>bind:value</code> substitui o par valor + <code>oninput</code> + atribuição. Perde porque o dado passa a ter dois donos — o campo e a variável —, e qualquer um dos dois pode mudar primeiro. Em campo de entrada isso é o que se quer; em dado de negócio, é confusão. Por isso o guia usa <code>bind</code> no formulário e callback no resto.</p>
+
+<p>As três missões têm a mesma raiz: o valor precisa morar num lugar só. No primeiro caso, no estado ligado ao campo; no segundo, no estado mais uma conta; no terceiro, no booleano da caixa.</p>
+
+<hr>
+
+<h2>7. Nível 6 — espera</h2>
+
+<p><strong>Missão 17.</strong> Enquanto a promessa não resolve, a tela mostra <code>assando…</code>. Depois, deve mostrar <code>Pronto: pão quentinho</code>. Use <code>{#await}</code> com <code>{:then}</code> e <code>{:catch}</code>.</p>
+
+<pre class="script" data-file="Espera.svelte">&lt;script&gt;
+  let pedido = $state(Promise.resolve('pão quentinho'));
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;Pronto: {valor}&lt;/p&gt;
+{:catch erro}
+  &lt;p&gt;Deu errado&lt;/p&gt;
+{/await}</pre>
+
+<p><strong>Missão 18.</strong> A promessa rejeita e a tela fica presa em "assando…". Acrescente o <code>{:catch}</code> com uma mensagem fixa: <code>Deu errado</code>.</p>
+
+<p>Um detalhe que confunde no começo: no servidor, o bloco <code>{#await}</code> desenha o estado de espera e para por aí. A forma curta, <code>{#await p then valor}</code>, desenha <strong>nada</strong> no servidor — o HTML sai vazio e o navegador preenche depois. É por isso que o guia usa a forma completa quando a saída precisa aparecer na página.</p>
+
+<hr>
+
+<h2>8. Como saber se acertou</h2>
+
+<p>O verificador das caixas compara coisas observáveis. Saber o que cada passo faz economiza tentativa e erro:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Passo</th><th>O que confere</th><th>Exemplo</th></tr>
+<tr><td><code>out:</code></td><td>o texto inteiro da tela, com espaços normalizados</td><td><code>out:Cliques: 1</code></td></tr>
+<tr><td><code>outre:</code></td><td>o texto contra uma expressão regular</td><td><code>outre:^Total: R\$ 2\.70</code></td></tr>
+<tr><td><code>html:</code></td><td>o HTML gerado, comparado como texto</td><td><code>html:&lt;h2&gt;Pão&lt;/h2&gt;</code></td></tr>
+<tr><td><code>erro:</code></td><td>um trecho da mensagem de compilação</td><td><code>erro:Expected whitespace</code></td></tr>
+<tr><td><code>clique:</code></td><td>clica no elemento antes de conferir</td><td><code>clique:button</code></td></tr>
+<tr><td><code>digitar:</code></td><td>escreve no campo e dispara o evento</td><td><code>digitar:input=Bia</code></td></tr>
+<tr><td><code>depois:</code></td><td>espera um tempo antes do próximo passo</td><td><code>depois:150</code></td></tr>
+</table>
+</div>
+
+<p>O passo mais traiçoeiro é o <code>out:</code>, porque ele compara o texto <strong>inteiro</strong>. Se a tela tem um botão e um parágrafo, o texto é a soma dos dois: <code>Total: R$ 1.80 somar</code>. Quando você quer conferir só um pedaço, use <code>outre:</code> com o começo do texto: <code>outre:^Total: R$ 1\.80</code>.</p>
+
+<p>E há um passo que não existe: "olhar o console". Meta que depende de <code>console.log</code> não é meta, porque o leitor não vê o console. Se o resultado não aparece na tela, o exercício está mal formulado — troque por algo visível.</p>
+
+<hr>
+
+<h2>9. Gabarito comentado</h2>
+
+<p>Leia o gabarito com o código ao lado, não com os olhos só no texto. Para cada solução, faça três perguntas: qual linha faz a tela mudar? qual linha faz o valor nascer? o que aconteceria se eu apagasse essa linha? Se você responder as três sem hesitar, o exercício cumpriu o papel — mesmo que a sua solução seja diferente da minha.</p>
+
+<p>As seis soluções abaixo são as que mais aparecem nos níveis 1 a 5. Cada uma vem com a saída real do compilador — a mesma que o verificador compara. Tente antes de ler: o valor do exercício está no erro, não no acerto.</p>
+
+<pre class="file" data-file="src/Ex1.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;Cliques: 0&lt;/button&gt;</pre>
+
+<p><strong>Por que funciona:</strong> o estado avisa a tela; o evento muda o estado. A saída mostra o valor inicial, e o clique levaria a <code>Cliques: 1</code>.</p>
+
+<pre class="file" data-file="src/Ex2.svelte">&lt;script&gt;
+  let aberta = $state(false);
+&lt;/script&gt;
+
+{#if aberta}
+  &lt;p&gt;Aberta agora&lt;/p&gt;
+{:else}
+  &lt;p&gt;Fechada&lt;/p&gt;
+{/if}</pre>
+
+<pre class="out">&lt;p&gt;Fechada&lt;/p&gt;</pre>
+
+<p><strong>Por que funciona:</strong> a condição falsa escolhe o <code>{:else}</code>. O parágrafo "Aberta agora" nem chega a existir no HTML.</p>
+
+<pre class="file" data-file="src/Ex3.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;ol&gt;
+  {#each pedidos as pedido, i}
+    &lt;li&gt;{i + 1}. {pedido}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+
+<pre class="out">&lt;ol&gt;&lt;li&gt;1. pão&lt;/li&gt;&lt;li&gt;2. leite&lt;/li&gt;&lt;/ol&gt;</pre>
+
+<p><strong>Por que funciona:</strong> o índice começa em zero, e <code>{i + 1}</code> mostra a contagem humana. Repare que o número faz parte do texto do item, não do marcador da lista.</p>
+
+<pre class="file" data-file="src/Ex4.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;Nenhum pedido ainda.&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Nenhum pedido ainda.&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p><strong>Por que funciona:</strong> o <code>{:else}</code> do each só entra quando a lista está vazia. Com um item, o aviso desaparece.</p>
+
+<pre class="file" data-file="src/Ex5.svelte">&lt;script&gt;
+  let itens = $state([{ preco: 0.9, qtd: 2 }, { preco: 1.2, qtd: 1 }]);
+  let total = $derived.by(() =&gt; {
+    let soma = 0;
+    for (const i of itens) soma += i.preco * i.qtd;
+    return soma;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 3.00&lt;/p&gt;</pre>
+
+<p><strong>Por que funciona:</strong> <code>$derived.by</code> aceita laço e <code>return</code>; o <code>toFixed</code> formata só o que aparece. Se você trocar por <code>$derived</code> com bloco, a tela mostra o texto da função.</p>
+
+<pre class="file" data-file="src/Ex6.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value={nome} /&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value="Ana"/&gt; &lt;p&gt;Olá, Ana&lt;/p&gt;</pre>
+
+<p><strong>Por que funciona:</strong> <code>bind:value</code> mantém campo e estado iguais. O HTML do servidor já sai com o valor; no navegador, digitar atualiza o parágrafo.</p>
+
+<hr>
+
+<h2>10. Teste rápido</h2>
+
+<p>Três perguntas de múltipla escolha e uma de completar. Elas não substituem a prática na caixa, mas pegam as confusões de conceito antes de você perder tempo no código.</p>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual é a diferença entre estado e derivado?</p>
+<label><input type="radio" name="qref1"> estado é para número e derivado é para texto</label>
+<label><input type="radio" name="qref1"> estado muda sozinho e derivado precisa de clique</label>
+<label><input type="radio" name="qref1"> estado é o dado que você muda; derivado é a conta feita a partir dele</label>
+<label><input type="radio" name="qref1"> são a mesma coisa, com nomes diferentes</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>out:</code> compara numa meta?</p>
+<label><input type="radio" name="qref2"> só o primeiro parágrafo da tela</label>
+<label><input type="radio" name="qref2"> o HTML completo do componente</label>
+<label><input type="radio" name="qref2"> o valor da variável que você escolher</label>
+<label><input type="radio" name="qref2"> o texto inteiro da tela, com espaços normalizados</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. A lista deve mostrar um aviso quando está vazia. O que usar?</p>
+<label><input type="radio" name="qref3"> o <code>{:else}</code> do <code>{#each}</code></label>
+<label><input type="radio" name="qref3"> um <code>{#if lista}</code> sempre verdadeiro</label>
+<label><input type="radio" name="qref3"> CSS com <code>display:none</code></label>
+<label><input type="radio" name="qref3"> um segundo <code>{#each}</code> vazio</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let total = <input data-answer="$derived(preco * qtd)|$derived(preco*qtd)">&nbsp;;<br>&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;<br><br>// o total precisa acompanhar preco e qtd quando eles mudarem</div></div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>Uma tabela de atalhos para quando você travar no meio de um exercício. A coluna da esquerda é o sintoma; a da direita, a peça que costuma faltar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Peça que falta</th></tr>
+<tr><td>o número não muda ao clicar</td><td><code>$state</code> na variável</td></tr>
+<tr><td>o texto aparece duas vezes</td><td>um <code>{:else}</code> no lugar do segundo bloco</td></tr>
+<tr><td>a lista não mostra nada</td><td><code>{:else}</code> com a mensagem de vazio</td></tr>
+<tr><td>o item mostra o array inteiro</td><td>faltou <code>as item</code> no <code>{#each}</code></td></tr>
+<tr><td>dinheiro com uma casa</td><td><code>toFixed(2)</code> na hora de mostrar</td></tr>
+<tr><td>total desatualizado</td><td><code>$derived</code> em vez de variável comum</td></tr>
+<tr><td>texto da função na tela</td><td><code>$derived.by</code> em vez de <code>$derived</code></td></tr>
+<tr><td>campo e texto diferentes</td><td><code>bind:value</code></td></tr>
+<tr><td>a tela fica em "assando…"</td><td><code>{:then}</code> ou <code>{:catch}</code> no await</td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Uma sugestão de rotina: abra o servidor, escolha uma missão, escreva a solução sem olhar o gabarito e recarregue a página. Se a tela mostrar o que a missão pede, você acertou. Se não, leia o erro no terminal e tente de novo — três tentativas valem mais do que uma leitura do gabarito.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 1.67s</pre>
+
+<p>Quando terminar os dezoito, volte aos projetos do guia e refaça um deles sem consultar o código. É o mesmo exercício em escala maior — e a mesma sensação de quando o pão sai do forno no ponto.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Exercício bom tem critério observável: uma frase que diz o que a tela deve mostrar.</li>
+  <li>Mude uma coisa por vez; se funcionar com três mudanças, você não sabe qual valeu.</li>
+  <li>Nível 1: <code>$state</code> mais <code>onclick</code> resolvem contador e alternância.</li>
+  <li>Nível 2: <code>{#if}</code> com <code>{:else}</code> e <code>{:else if}</code> para escolher o que aparece.</li>
+  <li>Nível 3: <code>{#each}</code> com índice para numerar, com chave para manter identidade, com <code>{:else}</code> para a lista vazia.</li>
+  <li>Nível 4: calcule com número e formate com <code>toFixed(2)</code> só na exibição; total é derivado, não estado.</li>
+  <li>Nível 5: <code>bind:value</code> e <code>bind:checked</code> mantêm campo e estado iguais.</li>
+  <li>Nível 6: <code>{#await}</code> com <code>{:then}</code> e <code>{:catch}</code>; no servidor, a saída é o estado de espera.</li>
+  <li><code>out:</code> compara o texto inteiro; <code>outre:</code> compara um trecho.</li>
+  <li>O gabarito está aqui, mas o aprendizado está na tentativa que falha.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

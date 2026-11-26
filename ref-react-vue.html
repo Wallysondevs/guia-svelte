@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vindo de React ou Vue — o mesmo problema, outro jeito de escrever | Guia Svelte</title>
+<meta name="description" content="Guia de tradução para quem vem de React ou Vue: useState, useMemo, useEffect, ref, computed, watch, v-model, slots e children no Svelte 5, com tabelas e saídas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Vindo de React ou Vue</span></h1>
+
+<p class="intro">A Ana trocou o caderno de papel por um aplicativo de pedidos. Ela já sabia anotar pedido, somar troco e riscar o que saiu — o que mudou foi o lugar onde se escreve. Quem vem de React ou de Vue está na mesma situação: o problema (tela que acompanha dado) é o mesmo, os nomes é que mudam. Esta página é a tabela de tradução, com o código dos três e a saída real do lado do Svelte.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que o compilador do Svelte faz que React e Vue deixam para o navegador.</li>
+  <li><code>useState</code> → <code>$state</code>, <code>useMemo</code> → <code>$derived</code>, <code>useEffect</code> → <code>$effect</code>.</li>
+  <li>Como props, <code>children</code> e listas com chave aparecem nos três.</li>
+  <li><code>ref</code>, <code>computed</code>, <code>watch</code> e <code>v-model</code> traduzidos para runas.</li>
+  <li>Por que <code>bind:value</code> dispensa o par valor + <code>onChange</code>.</li>
+  <li>O que não tem equivalente direto, e o que você deixa de precisar.</li>
+  <li>Onde o Svelte cobra um preço diferente das outras duas.</li>
+  <li>As mensagens reais quando alguém traz um hábito antigo para o arquivo novo.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o compilador conhece o seu componente</h2>
+
+<p>Em React e em Vue, o componente é uma função que roda de novo a cada mudança, e a biblioteca compara o resultado com o anterior para decidir o que atualizar. No Svelte, o compilador lê o seu arquivo e escreve código que atualiza <em>só o pedaço que mudou</em> — sem comparação, sem rodar a função inteira de novo. É por isso que não existe <code>useMemo</code>: não há trabalho repetido para evitar.</p>
+
+<p>Essa diferença muda o que você escreve. Em React, você declara dependências em arrays e reza para não esquecer uma; em Svelte, o compilador descobre as dependências lendo o seu código. Em Vue, você lembra de usar <code>.value</code> nos refs; em Svelte, a variável é a variável. O preço é que o arquivo <code>.svelte</code> não é JavaScript puro: ele precisa do compilador, e o jeito de escrever tem regras próprias (as runas).</p>
+
+<pre class="file" data-file="src/Contador.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;Cliques: 0&lt;/button&gt;</pre>
+
+<p>Em React, o mesmo contador tem três linhas de importação e um <code>setState</code>:</p>
+
+<pre class="file">import { useState } from 'react';
+
+export default function Contador() {
+  const [cliques, setCliques] = useState(0);
+  return &lt;button onClick={() =&gt; setCliques(cliques + 1)}&gt;Cliques: {cliques}&lt;/button&gt;;
+}</pre>
+
+<p>Em Vue, o mesmo contador usa <code>ref</code> e <code>.value</code> dentro do script:</p>
+
+<pre class="file">&lt;script setup&gt;
+import { ref } from 'vue';
+const cliques = ref(0);
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;button @click="cliques++"&gt;Cliques: {{ cliques }}&lt;/button&gt;
+&lt;/template&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let cliques = $state(0)</dt><dd>o <strong>estado</strong>. Substitui <code>useState(0)</code> e <code>ref(0)</code> ao mesmo tempo.</dd>
+  <dt>cliques++</dt><dd>a <strong>mutação</strong>. Não existe <code>setCliques</code> nem <code>.value</code>: a variável é a variável.</dd>
+  <dt>onclick</dt><dd>o <strong>evento</strong> como atributo comum. Substitui <code>onClick</code> do React e <code>@click</code> do Vue.</dd>
+  <dt>{cliques}</dt><dd>a <strong>interpolação</strong>. Uma chave, sem <code>{{ }}</code> duplo e sem <code>{}</code> de JSX com <code>return</code>.</dd>
+</dl>
+
+<hr>
+
+<h2>2. De React: <code>useState</code> vira <code>$state</code></h2>
+
+<p>A tradução mais direta é a do estado. A diferença de comportamento aparece em objetos e listas: no React, você sempre cria um valor novo e chama o setter; no Svelte, você pode mutar o objeto direto, porque o estado é profundo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>React</th><th>Svelte 5</th><th>Diferença prática</th></tr>
+<tr><td><code>useState(0)</code></td><td><code>$state(0)</code></td><td>sem setter; atribui direto</td></tr>
+<tr><td><code>setN(n + 1)</code></td><td><code>n++</code> ou <code>n = n + 1</code></td><td>a variável é o próprio valor</td></tr>
+<tr><td><code>setLista([...lista, x])</code></td><td><code>lista.push(x)</code></td><td>mutar já notifica</td></tr>
+<tr><td><code>useRef(0)</code> (valor mutável sem render)</td><td><code>let x = 0</code></td><td>variável comum não redesenha</td></tr>
+<tr><td><code>useState(() =&gt; caro())</code></td><td><code>$state(caro())</code></td><td>roda uma vez, na criação</td></tr>
+</table>
+</div>
+
+<p>A última linha merece atenção: no React, passar uma função para <code>useState</code> significa "calcule só na primeira vez". Em Svelte, <code>$state(caro())</code> já roda uma vez só, porque o script do componente é executado uma vez por instância — não a cada mudança, como a função do React.</p>
+
+<p>O hábito de criar um valor novo a cada mudança não é errado no Svelte: funciona perfeitamente. Só é mais código. A exceção é <code>$state.raw</code>, que exige a troca do valor inteiro para avisar a tela.</p>
+
+<div class="trysvelte" data-goal="digitar:input=Bia;;out:Bia">
+<p class="try-task"><strong>Missão:</strong> o código escuta o evento mas esquece de guardar o valor, como um <code>onChange</code> do React sem <code>setState</code>. Faça o parágrafo acompanhar o campo.</p>
+<pre class="script" data-file="Nome.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  function aoDigitar(evento) {
+    evento.target.value;
+  }
+&lt;/script&gt;
+
+&lt;input oninput={aoDigitar} /&gt;
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Nome.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value={nome} /&gt;
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+</div>
+
+<p>A solução não tem função nenhuma: <code>bind:value</code> já escreve no estado a cada tecla. É a diferença de mentalidade — em vez de "escuto e atualizo", você diz "estes dois andam juntos".</p>
+
+<hr>
+
+<h2>3. De React: <code>useMemo</code> e <code>useEffect</code></h2>
+
+<p>Valor calculado e efeito colateral são duas coisas que o React trata com funções e arrays de dependência. No Svelte, são duas runas e o compilador cuida das dependências.</p>
+
+<pre class="file">// React
+const total = useMemo(() =&gt; preco * qtd, [preco, qtd]);
+
+useEffect(() =&gt; {
+  document.title = `Total: ${total}`;
+}, [total]);</pre>
+
+<p>No Svelte, a conta vira <code>$derived</code> e o efeito vira <code>$effect</code>. Nenhum array de dependência:</p>
+
+<pre class="file" data-file="src/Efeito.svelte">&lt;script&gt;
+  let total = $state(0);
+  $effect(() =&gt; {
+    document.title = `Total: ${total}`;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{total}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;0&lt;/p&gt;</pre>
+
+<p>O efeito não desenha nada: a saída é só o parágrafo. No navegador, o título da aba muda quando <code>total</code> muda, e o compilador sabe que a dependência é <code>total</code> porque ele lê o código. Se você escrever uma leitura condicional, o compilador acompanha o que foi lido naquela execução — mais preciso do que a lista fixa do React.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>React</th><th>Svelte 5</th><th>Observação</th></tr>
+<tr><td><code>useMemo(fn, [deps])</code></td><td><code>$derived(expr)</code></td><td>a conta é refeita quando preciso, com cache</td></tr>
+<tr><td><code>useMemo</code> com laço</td><td><code>$derived.by(() =&gt; { … })</code></td><td>quando a conta tem mais de uma linha</td></tr>
+<tr><td><code>useEffect(fn, [])</code></td><td><code>onMount(fn)</code></td><td>só no navegador, uma vez</td></tr>
+<tr><td><code>useEffect(fn, [x])</code></td><td><code>$effect(() =&gt; { … x … })</code></td><td>dependência lida do código</td></tr>
+<tr><td><code>useEffect(() =&gt; {…; return cleanup}, [])</code></td><td><code>$effect(() =&gt; { …; return cleanup })</code></td><td>a limpeza continua sendo retorno</td></tr>
+<tr><td><code>useLayoutEffect</code></td><td><code>$effect.pre(fn)</code></td><td>roda antes do desenho</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Total: R\$ 2\.70">
+<p class="try-task"><strong>Missão:</strong> a conta é feita uma vez só, como uma variável comum. Faça o total acompanhar a quantidade — usando um valor derivado, sem efeito.</p>
+<pre class="script" data-file="Total.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let preco = 0.9;
+  let total = preco * qtd;
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;somar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="Total.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let preco = 0.9;
+  let total = $derived(preco * qtd);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; qtd++}&gt;somar&lt;/button&gt;</pre>
+</div>
+
+<p>Quem vem do React costuma resolver isso com efeito: "quando <code>qtd</code> mudar, recalcule <code>total</code>". Funciona e é o caminho errado — cria um segundo dono do dado e uma rodada extra de desenho. Derivado não é efeito; é conta.</p>
+
+<hr>
+
+<h2>4. De React: props, <code>children</code> e listas</h2>
+
+<p>Props em React chegam como objeto da função; em Svelte, chegam por <code>$props()</code> desestruturado. O conteúdo entre as tags (o <code>children</code> do React) é um snippet, renderizado com <code>{@render}</code>.</p>
+
+<pre class="file">// React
+function Cartao({ titulo = 'Pão francês', children }) {
+  return (
+    &lt;section&gt;
+      &lt;h2&gt;{titulo}&lt;/h2&gt;
+      {children}
+    &lt;/section&gt;
+  );
+}</pre>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { titulo = 'Pão francês', children } = $props();
+&lt;/script&gt;
+
+&lt;section&gt;
+  &lt;h2&gt;{titulo}&lt;/h2&gt;
+  {@render children?.()}
+&lt;/section&gt;</pre>
+
+<pre class="out">&lt;section&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;/section&gt;</pre>
+
+<p>Repare que o cartão sozinho mostra o título e nada mais: o conteúdo não existe, e o <code>?.</code> evita a chamada. Com <code>&lt;Cartao&gt;&lt;p&gt;Feito na hora.&lt;/p&gt;&lt;/Cartao&gt;</code>, o parágrafo aparece no lugar de <code>{@render children()}</code>.</p>
+
+<p>Listas seguem a mesma lógica, com uma diferença de sintaxe importante: no React, a chave vai no elemento (<code>key={item.id}</code>); no Svelte, vai no bloco (<code>(item.id)</code>, entre parênteses, depois do item).</p>
+
+<pre class="file" data-file="src/Lista.svelte">&lt;script&gt;
+  let tarefas = $state([
+    { id: 1, nome: 'assar o pão' },
+    { id: 2, nome: 'abrir a caixa' }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each tarefas as tarefa (tarefa.id)}
+    &lt;li&gt;{tarefa.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;assar o pão&lt;/li&gt;&lt;li&gt;abrir a caixa&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>React</th><th>Svelte 5</th></tr>
+<tr><td><code>function X({ a, b = 1 })</code></td><td><code>let { a, b = 1 } = $props()</code></td></tr>
+<tr><td><code>{children}</code></td><td><code>{@render children?.()}</code></td></tr>
+<tr><td><code>props.onSave(v)</code></td><td><code>onSave(v)</code> — prop de função</td></tr>
+<tr><td><code>key={item.id}</code></td><td><code>{#each l as item (item.id)}</code></td></tr>
+<tr><td><code>{cond &amp;&amp; &lt;p&gt;…&lt;/p&gt;}</code></td><td><code>{#if cond}&lt;p&gt;…&lt;/p&gt;{/if}</code></td></tr>
+<tr><td><code>dangerouslySetInnerHTML</code></td><td><code>{@html texto}</code></td></tr>
+<tr><td><code>className="x"</code></td><td><code>class="x"</code> e <code>class:ativo</code></td></tr>
+<tr><td><code>style={{ color }}</code></td><td><code>style:color={cor}</code></td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="out:pão quentinho">
+<p class="try-task"><strong>Missão:</strong> a tela mostra as tags escritas. Faça o navegador desenhar o negrito de verdade — o equivalente ao <code>dangerouslySetInnerHTML</code> do React.</p>
+<pre class="script" data-file="Recado.svelte">&lt;script&gt;
+  let texto = $state('&lt;b&gt;pão quentinho&lt;/b&gt;');
+&lt;/script&gt;
+
+&lt;p&gt;{texto}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Recado.svelte">&lt;script&gt;
+  let texto = $state('&lt;b&gt;pão quentinho&lt;/b&gt;');
+&lt;/script&gt;
+
+&lt;p&gt;{@html texto}&lt;/p&gt;</pre>
+</div>
+
+<p>O aviso é o mesmo nos dois mundos: <code>{@html}</code> é porta aberta para injeção. Só use com texto que você gerou; nunca com o que veio digitado por outra pessoa sem limpeza antes.</p>
+
+<hr>
+
+<h2>5. De Vue: <code>ref</code>, <code>computed</code> e <code>watch</code></h2>
+
+<p>Quem vem de Vue tem uma vantagem: o modelo mental é parecido. A composição de funções, o valor reativo e o cálculo derivado existem nos dois. O que muda é o nome e o <code>.value</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Vue 3</th><th>Svelte 5</th><th>Diferença</th></tr>
+<tr><td><code>ref(0)</code> e <code>n.value++</code></td><td><code>$state(0)</code> e <code>n++</code></td><td>sem <code>.value</code></td></tr>
+<tr><td><code>reactive({})</code></td><td><code>$state({})</code></td><td>um só jeito para tudo</td></tr>
+<tr><td><code>computed(() =&gt; a * b)</code></td><td><code>$derived(a * b)</code></td><td>sem <code>.value</code> na leitura</td></tr>
+<tr><td><code>watch(x, fn)</code></td><td><code>$effect(() =&gt; { … x … })</code></td><td>dependência automática</td></tr>
+<tr><td><code>watchEffect(fn)</code></td><td><code>$effect(fn)</code></td><td>praticamente igual</td></tr>
+<tr><td><code>onMounted(fn)</code></td><td><code>onMount(fn)</code></td><td>mesmo nome, mesma ideia</td></tr>
+<tr><td><code>onUnmounted(fn)</code></td><td><code>onDestroy(fn)</code> ou retorno do efeito</td><td>limpeza explícita</td></tr>
+<tr><td><code>props</code> / <code>defineProps</code></td><td><code>$props()</code></td><td>desestruturação direta</td></tr>
+<tr><td><code>provide</code> / <code>inject</code></td><td><code>setContext</code> / <code>getContext</code></td><td>chave como endereço</td></tr>
+</table>
+</div>
+
+<p>A diferença que mais rende linha de código é o <code>.value</code>. Em Vue, dentro do script, todo ref precisa dele; no template, não. Em Svelte, a variável é sempre ela mesma, e não há dois mundos para lembrar. Quem programa em Vue sabe o tempo que se perde com um <code>.value</code> esquecido.</p>
+
+<pre class="file">// Vue 3 — script setup
+import { ref, computed } from 'vue';
+const qtd = ref(2);
+const preco = 0.9;
+const total = computed(() =&gt; preco * qtd.value);</pre>
+
+<pre class="file" data-file="src/Total.svelte">&lt;script&gt;
+  let qtd = $state(2);
+  let preco = 0.9;
+  let total = $derived(preco * qtd);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 1.80&lt;/p&gt;</pre>
+
+<hr>
+
+<h2>6. De Vue: <code>v-if</code>, <code>v-for</code>, <code>v-model</code> e slots</h2>
+
+<p>As diretivas de template do Vue têm primos próximos no Svelte. <code>v-if</code> vira <code>{#if}</code>, <code>v-for</code> vira <code>{#each}</code>, <code>v-model</code> vira <code>bind:value</code> e slot vira snippet.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Vue 3</th><th>Svelte 5</th><th>Tipo</th></tr>
+<tr><td><code>v-if="aberta"</code></td><td><code>{#if aberta}</code></td><td>bloco</td></tr>
+<tr><td><code>v-else-if</code> / <code>v-else</code></td><td><code>{:else if}</code> / <code>{:else}</code></td><td>seção de bloco</td></tr>
+<tr><td><code>v-for="x in lista"</code></td><td><code>{#each lista as x}</code></td><td>bloco</td></tr>
+<tr><td><code>:key="x.id"</code></td><td><code>{#each lista as x (x.id)}</code></td><td>chave no bloco</td></tr>
+<tr><td><code>v-model="nome"</code></td><td><code>bind:value={nome}</code></td><td>ligação</td></tr>
+<tr><td><code>:class="{ ativo }"</code></td><td><code>class:ativo</code></td><td>diretiva</td></tr>
+<tr><td><code>:style="{ color }"</code></td><td><code>style:color={cor}</code></td><td>diretiva</td></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td><td>conteúdo</td></tr>
+<tr><td><code>&lt;slot name="topo" /&gt;</code></td><td><code>{@render topo()}</code></td><td>snippet nomeado</td></tr>
+</table>
+</div>
+
+<p>Um detalhe de <code>v-for</code> que confunde: em Vue, <code>v-for="x in lista"</code> aceita lista, objeto e número. Em Svelte, <code>{#each}</code> precisa de algo iterável; um número não é lista. Se você tem o número 5 e quer cinco itens, gere a lista antes: <code>{#each Array.from({ length: 5 }, (_, i) =&gt; i) as i}</code>.</p>
+
+<hr>
+
+<h2>7. As três diferenças de modelo</h2>
+
+<p>Depois da tradução de sintaxe, restam três diferenças que mudam decisões de projeto. Elas aparecem em entrevista e em discussão de arquitetura, e é melhor conhecê-las antes de defender o Svelte numa reunião.</p>
+
+<p><strong>Primeira: quem sabe das dependências.</strong> Em React, você declara o array e o hook compara; em Vue, a reatividade é por proxy em tempo de execução; em Svelte, o compilador lê o código e gera a lista. A consequência é que erros de dependência faltando praticamente não existem no Svelte — e, em troca, o arquivo precisa ser compilado.</p>
+
+<p><strong>Segunda: quando o componente roda.</strong> Em React, a função do componente roda muitas vezes; em Svelte, o script roda uma vez e o compilador atualiza pedaços. Isso significa que código no topo do <code>&lt;script&gt;</code> é executado uma vez — o que dispensa <code>useMemo</code>, mas exige cuidado com trabalho caro no corpo do componente: ele não repete, mas também não se atualiza.</p>
+
+<p><strong>Terceira: o CSS.</strong> React não tem opinião sobre estilo: CSS Modules, styled-components, Tailwind, global. Vue tem <code>&lt;style scoped&gt;</code>. Svelte já entrega escopo por padrão, com o selo no seletor. Se você vem de React e usava CSS global, vai estranhar no começo: o estilo do componente não alcança o que está fora, e é preciso <code>:global(…)</code> quando a intenção é global.</p>
+
+<hr>
+
+<h2>8. O que não tem equivalente direto</h2>
+
+<p>Nem tudo traduz. Estes são os pontos em que o Svelte resolveu o problema de outro jeito, e você precisa reaprender em vez de traduzir:</p>
+
+<p><strong>Eventos de componente.</strong> React passa <code>onSave</code> como prop desde sempre; Vue emite eventos com <code>emit</code>. No Svelte 5, é prop de função — igual ao React. O <code>createEventDispatcher</code> do Svelte 4 continua existindo por compatibilidade, mas não é o caminho novo.</p>
+
+<p><strong>Slots.</strong> O Vue tem slots nomeados e com escopo; o Svelte 5 trocou por snippets, que são funções de marcação. A vantagem é que um snippet pode ser passado como qualquer prop, inclusive para componentes que não são filhos diretos.</p>
+
+<p><strong>Portais, <code>useContext</code>, <code>provide/inject</code>.</strong> Contexto existe nos três, com nomes diferentes. O que não existe no Svelte é o portal como componente embutido: para desenhar fora da árvore, use uma ação ou <code>mount</code> num elemento separado.</p>
+
+<p><strong>Hooks com regras.</strong> Não há regra de "só no topo" para runas — há regra de lugar: <code>$state</code> na declaração, <code>$props</code> no topo, <code>$effect</code> na inicialização. O compilador recusa o resto, e a mensagem diz onde a runa pode morar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Conceito</th><th>React</th><th>Vue</th><th>Svelte 5</th></tr>
+<tr><td>estado local</td><td><code>useState</code></td><td><code>ref</code></td><td><code>$state</code></td></tr>
+<tr><td>valor derivado</td><td><code>useMemo</code></td><td><code>computed</code></td><td><code>$derived</code></td></tr>
+<tr><td>efeito colateral</td><td><code>useEffect</code></td><td><code>watchEffect</code></td><td><code>$effect</code></td></tr>
+<tr><td>ao montar</td><td><code>useEffect(fn, [])</code></td><td><code>onMounted</code></td><td><code>onMount</code></td></tr>
+<tr><td>props</td><td>parâmetro da função</td><td><code>defineProps</code></td><td><code>$props()</code></td></tr>
+<tr><td>conteúdo filho</td><td><code>children</code></td><td><code>&lt;slot /&gt;</code></td><td><code>children</code> + <code>{@render}</code></td></tr>
+<tr><td>contexto</td><td><code>createContext</code></td><td><code>provide/inject</code></td><td><code>setContext/getContext</code></td></tr>
+<tr><td>lista</td><td><code>map</code> com <code>key</code></td><td><code>v-for</code> com <code>:key</code></td><td><code>{#each … (chave)}</code></td></tr>
+<tr><td>condição</td><td><code>&amp;&amp;</code> / ternário</td><td><code>v-if</code></td><td><code>{#if}</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>Quem traz hábito antigo costuma encontrar estas três mensagens. Todas saíram do compilador desta versão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — prop no estilo antigo</strong>
+<p><code>export let</code> era o jeito do Svelte 4. Em componente com runa, ele não vale mais.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let nome = 'Ana';
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+<p>O equivalente ao parâmetro de props do React é <code>let { nome = 'Ana' } = $props();</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>{@render}</code> como se fosse slot</strong>
+<p>Em Vue, o slot aparece sozinho no template. No Svelte, o trecho é uma função e precisa ser chamado.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;div&gt;{@render children}&lt;/div&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 14): `{@render ...}` tags can only contain call expressions</pre>
+<p>"Só podem conter chamadas": <code>{@render children()}</code>. Com conteúdo opcional, <code>{@render children?.()}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — runa sem declaração</strong>
+<p>Quem vem de React escreve <code>cliques = 0</code> pensando em atribuição, e quem vem de Vue escreve <code>$state(0)</code> solto.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  contador = $state(0);
+&lt;/script&gt;
+
+&lt;button&gt;{contador}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 13): `$state(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+<p>A runa precisa de uma declaração: <code>let contador = $state(0)</code>.</p>
+</div>
+
+<hr>
+
+<h2>10. O que você deixa de precisar</h2>
+
+<p>A lista do que sai é tão útil quanto a do que entra, porque metade do código de um projeto React existe para contornar o modelo de execução:</p>
+
+<p><strong>Arrays de dependência.</strong> Não existem. O compilador lê as dependências no código e o aviso de "exhaustive-deps" nunca aparece, porque não há lista para ficar incompleta.</p>
+
+<p><strong><code>useCallback</code> e <code>useMemo</code> para evitar render.</strong> Não há render do componente inteiro para evitar: só o pedaço que usa o valor é atualizado. Função criada no script roda uma vez.</p>
+
+<p><strong><code>key</code> para forçar remontagem.</strong> Existe, mas com nome próprio: <code>{#key}</code>. E é usado quando a identidade do conteúdo muda, não como desculpa para "atualizar".</p>
+
+<p><strong>Biblioteca de CSS-in-JS.</strong> O <code>&lt;style&gt;</code> do componente já tem escopo. Você pode continuar usando Tailwind se quiser; só não precisa de solução para vazamento.</p>
+
+<p><strong>Provider para tudo.</strong> Contexto existe, mas a maioria dos casos se resolve com props e callbacks. Publicar contexto é para valor que atravessa muitos níveis.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>A tabela final é a que você mantém aberta na primeira semana: lado esquerdo é o hábito antigo, lado direito é o que escrever no arquivo novo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você pensa em…</th><th>Escreva</th><th>Não escreva</th></tr>
+<tr><td>estado</td><td><code>let x = $state(v)</code></td><td><code>useState</code>, <code>ref</code></td></tr>
+<tr><td>valor calculado</td><td><code>let y = $derived(x * 2)</code></td><td><code>useMemo</code>, <code>computed</code></td></tr>
+<tr><td>efeito</td><td><code>$effect(() =&gt; {})</code></td><td><code>useEffect</code>, <code>watch</code></td></tr>
+<tr><td>ao montar</td><td><code>onMount(() =&gt; {})</code></td><td><code>useEffect(fn, [])</code></td></tr>
+<tr><td>props</td><td><code>let { a } = $props()</code></td><td><code>export let</code></td></tr>
+<tr><td>conteúdo filho</td><td><code>{@render children()}</code></td><td><code>&lt;slot /&gt;</code></td></tr>
+<tr><td>evento</td><td><code>onclick={fn}</code></td><td><code>on:click</code>, <code>onClick</code></td></tr>
+<tr><td>campo ligado</td><td><code>bind:value={x}</code></td><td><code>value</code> + <code>oninput</code></td></tr>
+<tr><td>lista</td><td><code>{#each l as x (x.id)}</code></td><td><code>map</code> com <code>key</code></td></tr>
+<tr><td>condição</td><td><code>{#if}</code> / <code>{:else}</code></td><td><code>&amp;&amp;</code>, <code>v-if</code></td></tr>
+<tr><td>HTML cru</td><td><code>{@html t}</code></td><td><code>dangerouslySetInnerHTML</code></td></tr>
+<tr><td>classe condicional</td><td><code>class:ativo</code></td><td><code>className={…}</code></td></tr>
+<tr><td>estilo inline</td><td><code>style:color={c}</code></td><td><code>style={{…}}</code></td></tr>
+<tr><td>valor do elemento</td><td><code>bind:this={no}</code></td><td><code>useRef</code></td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Um exercício que vale a pena na primeira semana: pegue um componente React pequeno do seu projeto e reescreva em Svelte. A diferença de tamanho costuma ser de 30% a 50% menos linha, e a maior parte da redução vem dos imports e dos arrays de dependência.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 1.67s</pre>
+
+<p>O tamanho final conta a mesma história: o runtime do Svelte é pequeno porque o trabalho pesado foi feito na compilação. Não há biblioteca de comparação de árvore para carregar — o código que atualiza cada pedaço já foi gerado sob medida.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O compilador do Svelte gera atualizações por pedaço; React e Vue decidem em tempo de execução.</li>
+  <li><code>useState</code> e <code>ref</code> viram <code>$state</code>, sem setter e sem <code>.value</code>.</li>
+  <li><code>useMemo</code> e <code>computed</code> viram <code>$derived</code>; com laço, <code>$derived.by</code>.</li>
+  <li><code>useEffect</code> e <code>watch</code> viram <code>$effect</code>; sem array de dependências.</li>
+  <li>Props viram <code>$props()</code>; <code>children</code> vira <code>{@render children()}</code>.</li>
+  <li><code>key</code> vai no bloco do each, entre parênteses, e não no elemento.</li>
+  <li><code>v-model</code> vira <code>bind:value</code>; <code>v-if</code> vira <code>{#if}</code>; <code>v-for</code> vira <code>{#each}</code>.</li>
+  <li>Não existem arrays de dependência, regras de hooks nem <code>useCallback</code>.</li>
+  <li>O CSS já tem escopo; <code>:global()</code> é a saída explícita.</li>
+  <li>Hábito antigo vira erro claro: <code>export let</code>, <code>{@render}</code> sem chamada e runa sem <code>let</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

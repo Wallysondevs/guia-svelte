@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Depuração — achar o bug sem adivinhar | Guia Svelte</title>
+<meta name="description" content="Como depurar um componente Svelte 5: console, $inspect, $state.snapshot, erro na tela, erro no console, svelte:boundary, bisseção e os bugs invisíveis de reatividade.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Depuração</span></h1>
+
+<p class="intro">A Ana tem uma balança antiga que às vezes marca errado. Ela não troca a balança: coloca um peso de meio quilo em cima e vê o que o ponteiro diz. Depois põe um quilo, depois dois. Em três tentativas ela sabe se o erro é fixo, se cresce com o peso ou se aparece só em certo intervalo. Depurar é isso: fazer perguntas cuja resposta você consegue observar. Esta página é a caixa de pesos da Ana — as janelas, os comandos e as técnicas para achar o bug sem adivinhar.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As três janelas onde o erro aparece: terminal, console e rede.</li>
+  <li>Como ler o painel de erro do Vite sem se perder.</li>
+  <li><code>console.log</code>, <code>console.table</code> e quando cada um ajuda.</li>
+  <li><code>$inspect</code> e <code>$inspect.trace</code>: o log que sai da produção.</li>
+  <li><code>$state.snapshot</code> para ver o valor de verdade.</li>
+  <li>Como ler um erro de execução e achar a linha que causou.</li>
+  <li><code>&lt;svelte:boundary&gt;</code> como teste de falha.</li>
+  <li>A técnica de reduzir pela metade até sobrar uma linha.</li>
+  <li>Os três bugs invisíveis: variável sem runa, <code>raw</code> mutado, lista sem chave.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: perguntar "onde" antes de "por quê"</h2>
+
+<p>Quem está começando tenta entender o bug inteiro de uma vez. Quem já depurou muito faz outra coisa: localiza. "O valor está certo antes do clique? Está certo depois? A tela não mudou ou o valor não mudou?" Cada pergunta elimina metade das hipóteses, e em quatro ou cinco você chega à linha.</p>
+
+<p>Para isso você precisa de lugares onde olhar. Um componente Svelte tem pelo menos três: o <strong>terminal</strong>, onde o compilador reclama; o <strong>console do navegador</strong>, onde o JavaScript reclama; e a <strong>tela</strong>, onde o resultado aparece. A quarta janela, a de rede, serve para quando o problema é dado que não chegou — e é a que quase todo mundo esquece.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Janela</th><th>O que aparece</th><th>Como abrir</th></tr>
+<tr><td>terminal</td><td>erro de compilação, avisos, resultado do build</td><td>o terminal onde rodou <code>npm run dev</code></td></tr>
+<tr><td>console do navegador</td><td>erro de execução, <code>console.log</code>, <code>$inspect</code></td><td><code>F12</code> e a aba Console</td></tr>
+<tr><td>tela</td><td>o componente desenhado, ou a sobreposição do Vite</td><td>o navegador em <code>localhost:5173</code></td></tr>
+<tr><td>rede</td><td>requisições, status, resposta</td><td><code>F12</code> e a aba Network</td></tr>
+<tr><td>fontes</td><td>o código compilado, com ponto de parada</td><td><code>F12</code> e a aba Sources</td></tr>
+</table>
+</div>
+
+<p>Uma regra que economiza muito tempo: se a página nem abriu, o problema é de compilação e está no terminal. Se a página abriu e algo não funciona, o problema é de execução e está no console. Procurar erro de execução no terminal é o mesmo que procurar a chave na geladeira.</p>
+
+<hr>
+
+<h2>2. O painel do Vite: o erro na cara</h2>
+
+<p>Durante o desenvolvimento, o Vite toma a tela quando o arquivo não compila. O texto é o mesmo do terminal, com o código em volta e a linha sublinhada. A mensagem abaixo é a de um bloco aberto — a mais comum de todas:</p>
+
+<div class="cenario">
+<strong>Bloco sem fechamento</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#if nome === 'Ana'}
+  &lt;p&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>A linha 5 é a do <code>{#if}</code>, não a do fim do arquivo. A correção é acrescentar <code>{/if}</code> no fim. Enquanto o erro existir, a página não atualiza — o Vite mantém a última versão que funcionava por baixo da sobreposição.</p>
+</div>
+
+<p>O painel do Vite tem duas informações que o terminal não dá: o trecho de código em volta e, em muitos casos, a indicação de qual arquivo está com problema quando o projeto tem vários. Se a sobreposição não aparecer, olhe o terminal: ele nunca esconde o erro.</p>
+
+<hr>
+
+<h2>3. <code>console.log</code>: a ferramenta que sempre funciona</h2>
+
+<p>Antes de qualquer ferramenta sofisticada, o bom e velho log. A diferença entre um log útil e um log inútil é o rótulo: <code>console.log(total)</code> mostra um número solto; <code>console.log('total', total)</code> mostra o nome junto. Com vários logs na tela, o rótulo é o que permite saber qual é qual.</p>
+
+<pre class="file" data-file="src/Log.svelte">&lt;script&gt;
+  let itens = $state([{ nome: 'pão', preco: 0.9 }]);
+
+  function adicionar() {
+    itens = [...itens, { nome: 'leite', preco: 4.5 }];
+    console.log('itens depois de adicionar', itens.length);
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+&lt;p&gt;{itens.length} itens&lt;/p&gt;</pre>
+
+<p>O log aparece no console do navegador, não na tela. O HTML gerado continua sendo só o botão e o parágrafo — o log não desenha nada. Se você precisa que o valor apareça para quem está usando a página, isso não é log: é tela.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>Para que serve</th><th>Cuidado</th></tr>
+<tr><td><code>console.log(rótulo, valor)</code></td><td>ver um valor no console</td><td>esquecer de apagar depois</td></tr>
+<tr><td><code>console.table(lista)</code></td><td>ver uma lista de objetos em tabela</td><td>listas enormes travam o console</td></tr>
+<tr><td><code>console.warn(…)</code></td><td>destacar um aviso</td><td>confundir com erro</td></tr>
+<tr><td><code>console.error(…)</code></td><td>mostrar erro em vermelho, com pilha</td><td>usar para mensagem comum</td></tr>
+<tr><td><code>console.assert(cond, msg)</code></td><td>só reclama se a condição for falsa</td><td>ninguém vê se ninguém abrir o console</td></tr>
+<tr><td><code>console.time(rótulo)</code></td><td>medir tempo entre início e fim</td><td>mede o que você envolveu, não o resto</td></tr>
+</table>
+</div>
+
+<p>Um detalhe importante no Svelte 5: o valor de um estado é um objeto especial. <code>console.log(pedido)</code> pode mostrar o valor atual mesmo que você tenha logado antes de mudar — o console guarda a referência e atualiza a prévia. Para ver o retrato do momento, use <code>$state.snapshot</code>, assunto da seção 5.</p>
+
+<hr>
+
+<h2>4. <code>$inspect</code>: o log que não vai para produção</h2>
+
+<p><code>$inspect</code> é uma runa de depuração. Ela mostra o valor no console sempre que ele muda e, na build de produção, o compilador remove a linha. É a diferença entre um <code>console.log</code> que você precisa lembrar de apagar e um que se apaga sozinho.</p>
+
+<pre class="file" data-file="src/Inspect.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  $inspect(nome);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana&lt;/p&gt;</pre>
+
+<p>A saída na tela não muda: a runa não desenha. No navegador, com o console aberto, cada mudança de <code>nome</code> imprime uma linha marcada como inspeção. Existem duas variantes úteis: <code>$inspect(nome).with(fn)</code> troca o <code>console.log</code> por uma função sua, e <code>$inspect.trace()</code>, chamada dentro de uma função, imprime a pilha de quem chamou.</p>
+
+<p>O <code>$inspect</code> só funciona em modo de desenvolvimento. Se você rodar o build de produção e não vir nada no console, não é bug: é o compilador fazendo o trabalho dele. Essa é a razão de o guia preferir <code>$inspect</code> a <code>console.log</code> quando o log é temporário.</p>
+
+<hr>
+
+<h2>5. <code>$state.snapshot</code>: ver o valor de verdade</h2>
+
+<p>Um objeto criado com <code>$state</code> é cheio de ligações internas. Ao mandar esse objeto para o console, você vê as ligações, não o dado. <code>$state.snapshot</code> tira uma cópia comum, que o console mostra como você espera e que o <code>JSON.stringify</code> aceita.</p>
+
+<pre class="file" data-file="src/Snapshot.svelte">&lt;script&gt;
+  let pedido = $state({ cliente: 'Ana', itens: ['pão', 'leite'] });
+  let copia = $state.snapshot(pedido);
+  console.log('cópia', copia);
+&lt;/script&gt;
+
+&lt;p&gt;{copia.cliente}: {copia.itens.length}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana: 2&lt;/p&gt;</pre>
+
+<p>O compilador avisa quando a foto é tirada na hora errada: se você usar o snapshot para alimentar a tela, ele congela no primeiro desenho. O aviso tem nome próprio e aparece no terminal:</p>
+
+<div class="cenario">
+<strong>O aviso real</strong>
+<pre class="out">state_referenced_locally: This reference only captures the initial value of `nome`. Did you mean to reference it inside a closure instead?</pre>
+<p>Tradução: "esta referência só captura o valor inicial". Para depurar, o congelamento é justamente o que você quer; para a tela, não. Se o aviso aparecer num valor que deveria acompanhar mudanças, troque por <code>$derived</code>.</p>
+</div>
+
+<hr>
+
+<h2>6. Erros de execução: a mensagem sem linha</h2>
+
+<p>Quando o componente compila e quebra ao desenhar, a mensagem vem do JavaScript e não tem linha do arquivo <code>.svelte</code>. Ela tem três partes: o tipo do erro, a mensagem e a pilha. A pilha aponta para o código compilado, o que assusta — mas o começo dela costuma bastar.</p>
+
+<div class="cenario">
+<strong>Nome que não existe</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;{naoExiste}&lt;/h1&gt;</pre>
+<pre class="out">naoExiste is not defined</pre>
+<p>A mensagem diz o nome exato que falhou. Na dúvida entre dois nomes parecidos, é a resposta: <code>naoExiste</code> não foi declarado em lugar nenhum.</p>
+</div>
+
+<dl class="anatomy">
+  <dt>naoExiste</dt><dd>o <strong>nome</strong> que falhou. É a primeira coisa a procurar no arquivo, letra por letra.</dd>
+  <dt>is not defined</dt><dd>o <strong>tipo do problema</strong>: o nome não existe no escopo. Compare com "is not a function", que é outro problema.</dd>
+  <dt>pilha</dt><dd>a <strong>lista de chamadas</strong> que levou até ali. O primeiro item é onde o erro estourou; os seguintes mostram quem chamou.</dd>
+  <dt>arquivo compilado</dt><dd>o <strong>mapa</strong> entre o seu <code>.svelte</code> e o JavaScript gerado. Em desenvolvimento, a aba Sources mostra o original.</dd>
+</dl>
+
+<p>Três mensagens de execução cobrem a maioria dos casos: <code>X is not defined</code> (nome inexistente), <code>Cannot read properties of undefined</code> (valor vazio usado como objeto) e <code>X is not a function</code> (parênteses em algo que não é função). A tradução de cada uma está no <a href="ref-erros.html">Catálogo de Erros</a>.</p>
+
+<hr>
+
+<h2>7. <code>&lt;svelte:boundary&gt;</code>: teste de falha</h2>
+
+<p>Um jeito de descobrir onde o erro nasce é isolar: coloque um pedaço do componente dentro de um <code>&lt;svelte:boundary&gt;</code> com um snippet <code>failed</code>. Se a alternativa aparecer, o erro está naquele pedaço. É a versão Svelte do "tira uma peça e vê se continua quebrado".</p>
+
+<pre class="file" data-file="src/Limite.svelte">&lt;script&gt;
+  function risco() {
+    throw new Error('sem estoque');
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;{risco()}&lt;/p&gt;
+  {#snippet failed(erro)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;</pre>
+
+<pre class="out">Erro ao renderizar: sem estoque</pre>
+
+<p>Na renderização do servidor, o boundary não segura: o processo falha com a mensagem do erro. No navegador, o mesmo componente mostra <code>Deu erro: sem estoque</code> e o resto da página continua. Isso significa que o boundary é ótimo para isolar durante a depuração no navegador e não serve como rede de proteção do HTML gerado no servidor.</p>
+
+<div class="trysvelte" data-goal="out:Deu erro: sem estoque">
+<p class="try-task"><strong>Missão:</strong> a função <code>risco</code> sempre lança. Isole o parágrafo num <code>&lt;svelte:boundary&gt;</code> com o snippet <code>failed</code> mostrando <code>Deu erro: sem estoque</code>.</p>
+<pre class="script" data-file="Limite.svelte">&lt;script&gt;
+  function risco() {
+    throw new Error('sem estoque');
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{risco()}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Limite.svelte">&lt;script&gt;
+  function risco() {
+    throw new Error('sem estoque');
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;{risco()}&lt;/p&gt;
+  {#snippet failed(erro)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;</pre>
+</div>
+
+<hr>
+
+<h2>8. A técnica: reduzir pela metade</h2>
+
+<p>Com muitas linhas e nenhuma pista, o método mais rápido é a bisseção. Apague metade do componente e rode. Se o erro sumir, ele estava na metade apagada; se continuar, está na outra. Repita. Em sete rodadas você sai de cem linhas para uma.</p>
+
+<p>Três variações que valem a pena:</p>
+
+<p><strong>Desconfie do que mudou.</strong> Bug que aparece do nada quase sempre veio de uma edição — sua ou de outra pessoa. Volte uma versão no Git, ou desfaça a última mudança no editor, e veja se volta a funcionar. Se voltar, você já sabe onde está.</p>
+
+<p><strong>Troque o dado por um fixo.</strong> Se o componente funciona com um valor escrito à mão e falha com o valor real, o problema é no dado (formato, tipo, campo faltando), não na tela. Essa é a pergunta que mais rápido separa as duas metades do problema.</p>
+
+<p><strong>Faça funcionar sozinho.</strong> Copie o componente para uma caixa "Experimente" deste guia e apague as importações. Se ele funciona ali e falha no projeto, o problema é de contexto — prop faltando, provider ausente, ordem de carregamento.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Primeira pergunta</th><th>Onde olhar</th></tr>
+<tr><td>a página não abre</td><td>o arquivo compila?</td><td>terminal e sobreposição do Vite</td></tr>
+<tr><td>abre e fica em branco</td><td>há erro no console?</td><td>console do navegador</td></tr>
+<tr><td>abre, mas o valor está errado</td><td>o valor está errado ou a tela?</td><td><code>$inspect</code>, <code>console.log</code></td></tr>
+<tr><td>o clique não faz nada</td><td>a função foi chamada?</td><td>log dentro da função</td></tr>
+<tr><td>a tela não acompanha</td><td>a variável tem runa?</td><td>terminal, aviso <code>non_reactive_update</code></td></tr>
+<tr><td>o dado não chega</td><td>a requisição respondeu?</td><td>aba Network</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>9. Os três bugs invisíveis</h2>
+
+<p>Existe uma categoria de bug que não gera erro nenhum: a página abre, o console fica limpo e a tela mostra a coisa errada. São os mais caros, porque não há mensagem para seguir. Três deles aparecem toda semana no projeto da Ana.</p>
+
+<p><strong>Primeiro: variável sem runa.</strong> O valor muda no script, mas ninguém avisa a tela. O compilador avisa no terminal com <code>non_reactive_update</code>, mas só quando o componente já usa alguma runa. Se o componente inteiro estiver no modo antigo, <code>let</code> volta a ser reativo e o bug desaparece — o que confunde ainda mais.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o clique soma no script e a tela não muda. Ache a variável que não é estado e conserte para aparecer <code>Cliques: 1</code>.</p>
+<pre class="script" data-file="Contador.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let cliques = 0;
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="Contador.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<p><strong>Segundo: <code>$state.raw</code> mutado.</strong> A lista recebe um item novo com <code>push</code>, mas a runa só avisa quando o valor inteiro é trocado. A tela continua mostrando o tamanho antigo, sem erro nenhum.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Itens: 2">
+<p class="try-task"><strong>Missão:</strong> o botão empurra um item e a tela continua em <code>Itens: 1</code>. Faça chegar a <code>Itens: 2</code> sem trocar a runa.</p>
+<pre class="script" data-file="Lista.svelte">&lt;script&gt;
+  let itens = $state.raw(['pão']);
+  function adicionar() {
+    itens.push('leite');
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar&lt;/button&gt;
+&lt;p&gt;Itens: {itens.length}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Lista.svelte">&lt;script&gt;
+  let itens = $state.raw(['pão']);
+  function adicionar() {
+    itens = [...itens, 'leite'];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar&lt;/button&gt;
+&lt;p&gt;Itens: {itens.length}&lt;/p&gt;</pre>
+</div>
+
+<p><strong>Terceiro: lista sem chave.</strong> A lista é ordenada ou filtrada e os elementos se confundem: o texto de um aparece no lugar do outro, o cursor do campo pula. Aqui não há erro nem valor errado no script — o problema é que o compilador reaproveitou o elemento pela posição. A correção é a chave: <code>{#each lista as item (item.id)}</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Bug invisível</th><th>Como aparece</th><th>Como confirmar</th></tr>
+<tr><td>variável sem runa</td><td>valor certo no script, tela parada</td><td>aviso <code>non_reactive_update</code></td></tr>
+<tr><td><code>raw</code> mutado</td><td>lista muda, contagem não</td><td>log do <code>length</code> antes e depois</td></tr>
+<tr><td>lista sem chave</td><td>itens trocados ao reordenar</td><td>adicionar <code>(item.id)</code> e comparar</td></tr>
+<tr><td>efeito que não roda</td><td>nada acontece no navegador</td><td>o efeito está no servidor? está fora do componente?</td></tr>
+<tr><td>total congelado</td><td>conta feita uma vez</td><td>trocar por <code>$derived</code></td></tr>
+</table>
+</div>
+
+<p>O quarto item da tabela engana muito: <code>$effect</code> e <code>onMount</code> só rodam no navegador. Se o valor aparece no HTML do servidor e o efeito nunca age, confira se o componente está sendo renderizado no servidor e não hidratado no cliente — nesse caso, não há navegador para rodar o efeito.</p>
+
+<hr>
+
+<h2>10. Um roteiro de cinco minutos</h2>
+
+<p>Quando o bug não tem cara, siga a ordem. Ela é chata de propósito: cada passo elimina hipóteses.</p>
+
+<p><strong>1. Leia o erro inteiro.</strong> Terminal primeiro. Se houver mensagem de compilação, o resto é consequência dela: conserte e rode de novo.</p>
+
+<p><strong>2. Abra o console.</strong> Se houver erro de execução, a mensagem diz o nome que falhou. Procure esse nome no arquivo antes de mexer em qualquer outra coisa.</p>
+
+<p><strong>3. Verifique o valor.</strong> Sem erro, o problema é de valor. Coloque um <code>$inspect</code> na variável suspeita e olhe se ela muda quando você interage. Se não muda, o problema está no evento; se muda, o problema está na tela.</p>
+
+<p><strong>4. Reduza.</strong> Apague metade. Rode. Repita. Em poucas rodadas, sobra a linha culpada.</p>
+
+<p><strong>5. Conserte e trave o bug.</strong> Depois de consertar, escreva um teste ou uma caixa "Experimente" que reproduza o caso. Bug que não deixa teste volta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ferramenta</th><th>Quando usar</th><th>Quando não usar</th></tr>
+<tr><td><code>$inspect</code></td><td>suspeita de valor que não muda</td><td>quando precisa do valor na tela</td></tr>
+<tr><td><code>console.log</code></td><td>saber se a função rodou</td><td>como substituto de depurador</td></tr>
+<tr><td>ponto de parada</td><td>precisa ver o estado passo a passo</td><td>quando o bug é visual</td></tr>
+<tr><td><code>svelte:boundary</code></td><td>isolar qual pedaço falha</td><td>para esconder erro em produção</td></tr>
+<tr><td>aba Network</td><td>dado que não chega</td><td>quando o valor local está certo</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>As duas tabelas finais resumem onde olhar e o que cada ferramenta faz. Se você levar uma coisa desta página, leve a primeira linha: erro de compilação no terminal, erro de execução no console.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Quero…</th><th>Use</th><th>Resultado</th></tr>
+<tr><td>ver um valor no console</td><td><code>$inspect(x)</code></td><td>log em desenvolvimento, nada em produção</td></tr>
+<tr><td>ver o valor agora</td><td><code>$state.snapshot(x)</code></td><td>cópia comum, sem ligações</td></tr>
+<tr><td>saber quem chamou</td><td><code>$inspect.trace()</code></td><td>pilha de chamadas</td></tr>
+<tr><td>saber se a função rodou</td><td><code>console.log('rótulo', x)</code></td><td>linha no console</td></tr>
+<tr><td>ver uma lista de objetos</td><td><code>console.table(lista)</code></td><td>tabela no console</td></tr>
+<tr><td>isolar um erro</td><td><code>&lt;svelte:boundary&gt;</code> com <code>failed</code></td><td>alternativa em vez da página vazia</td></tr>
+<tr><td>parar a execução</td><td>ponto de parada na aba Sources</td><td>estado no momento exato</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Onde aparece</th><th>Primeira ação</th></tr>
+<tr><td><code>Block was left open</code></td><td>terminal / Vite</td><td>fechar o bloco da linha indicada</td></tr>
+<tr><td><code>X is not defined</code></td><td>console</td><td>declarar ou corrigir o nome</td></tr>
+<tr><td><code>Cannot read properties of undefined</code></td><td>console</td><td>dar valor inicial ou usar <code>?.</code></td></tr>
+<tr><td><code>non_reactive_update</code></td><td>terminal</td><td>trocar <code>let</code> por <code>$state</code></td></tr>
+<tr><td><code>state_referenced_locally</code></td><td>terminal</td><td>usar <code>$derived</code> se precisa acompanhar</td></tr>
+<tr><td><code>element_implicitly_closed</code></td><td>terminal</td><td>fechar a tag antes da próxima</td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O servidor de desenvolvimento mantém os logs do compilador no terminal. Deixe o terminal visível ao lado do navegador: os dois juntos são o ambiente de depuração completo, sem instalar nada.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 1.67s</pre>
+
+<p>O build é o último teste de fumaça: se ele passa e a página quebra no navegador, o problema é de execução ou de ambiente (caminho de arquivo, variável de ambiente, dado). Se ele falha, o problema é do compilador e a mensagem está na saída acima.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Erro de compilação aparece no terminal e na sobreposição do Vite; erro de execução, no console do navegador.</li>
+  <li><code>console.log('rótulo', valor)</code> é mais útil do que o valor solto, porque diz o que é.</li>
+  <li><code>$inspect</code> mostra o valor em desenvolvimento e some na produção; <code>$inspect.trace()</code> mostra a pilha.</li>
+  <li><code>$state.snapshot</code> tira a foto do valor; usado na tela, congela — e o compilador avisa.</li>
+  <li>Erro de execução nomeia o que falhou: <code>is not defined</code>, <code>Cannot read properties</code>, <code>is not a function</code>.</li>
+  <li><code>&lt;svelte:boundary&gt;</code> isola o pedaço que falha no navegador, mas não no servidor.</li>
+  <li>Reduza pela metade, compare com o que funcionava, troque o dado por um fixo.</li>
+  <li>Três bugs invisíveis: variável sem runa, <code>raw</code> mutado e lista sem chave.</li>
+  <li><code>$effect</code> e <code>onMount</code> só rodam no navegador; no servidor, não há DOM.</li>
+  <li>Depois de consertar, escreva o caso que reproduz o bug — bug sem teste volta.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
