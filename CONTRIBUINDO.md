@@ -264,6 +264,17 @@ escrita na página de que aquele bloco é composição de dois arquivos).
 - **Um `pre.out` de pai + filho** não passa no conferidor (ele compila um arquivo só, com
   `props: {}`): nesse caso use `pre.term` e diga na página que a saída é de dois arquivos juntos.
 
+- **Cada `pre.file` precisa da sua própria saída logo em seguida.** O conferidor casa cada `pre.file`
+  com o **próximo** `pre.out`, mesmo com prosa no meio: um `pre.file` sem saída "rouba" o `pre.out`
+  do bloco seguinte e a página passa a divergir. Se o bloco é só ilustração, não use `pre.file`
+  (use `pre.script` ou `code`).
+- **CSS gerado** (o que sai de `render.js --css`) é `pre.out` do **mesmo** `pre.file` que tem o
+  `<style>` — não é bloco solto no meio do texto.
+- **`div.cenario` aceita erro de execução também**: mensagem do compilador, do navegador
+  (`naoExiste is not defined`) ou do servidor (`EADDRINUSE`) — o que importa é ser copiada de verdade.
+- **Meta `html:` com aspas dentro** usa aspas simples no atributo:
+  `data-goal='html:&lt;p class="ok"&gt;…&lt;/p&gt;'`.
+
 ## 7. Privacidade
 
 Proibido: o nome do dono da máquina, o home real, o caminho de root, o IP da VPS, o IP da rede
