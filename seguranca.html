@@ -201,7 +201,7 @@ Cross-site POST form submissions are forbidden</pre>
 
 <h2>8. Segredo que não sai do servidor</h2>
 
-<p>A quarta porta é a mais silenciosa. Uma variável privada importada num componente <code>.svelte</code> seria enviada ao navegador junto com o resto do código, e qualquer visitante leria. O SvelteKit trata isso como erro de build, não como aviso:</p>
+<p>A quarta porta é a mais silenciosa. Uma variável privada importada num componente <code>.svelte</code> seria enviada ao navegador junto com o resto do código, e qualquer visitante leria. O SvelteKit trata isso como erro de build, não como aviso — e os milissegundos do build são a medição daquela execução, o erro é sempre o mesmo:</p>
 
 <pre class="term">Building app
 vite v8.4.0 building client environment for production...

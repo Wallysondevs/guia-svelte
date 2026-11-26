@@ -278,7 +278,7 @@ https://svelte.dev/e/kit/redirect_external_not_allowed</pre>
 
 <p>Nem todo erro é uma placa. Existem os que você previu — produto inexistente, acesso negado, campo inválido — e os que você não previu: banco fora do ar, variável nula, função que não existe. O SvelteKit trata os dois de forma diferente, e o hook <code>handleError</code> recebe os dois.</p>
 
-<p>Um erro previsto tem status escolhido por você e mensagem escrita por você. Um erro não previsto é qualquer exceção solta: o status vira 500 e a mensagem padrão é “Internal Error”. O terminal registra a pilha:</p>
+<p>Um erro previsto tem status escolhido por você e mensagem escrita por você. Um erro não previsto é qualquer exceção solta: o status vira 500 e a mensagem padrão é “Internal Error”. O terminal registra a pilha — os milissegundos mudam a cada execução, o status não:</p>
 
 <pre class="term">TypeError: Cannot read properties of null (reading 'nome')
     at eval (src/routes/quebra-locals/+page.svelte:5:29)
