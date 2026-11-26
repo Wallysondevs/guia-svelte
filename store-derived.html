@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>derived e get — a conta que ninguém digita | Guia Svelte</title>
+<meta name="description" content="derived() cria stores calculados a partir de outros e get() lê o valor uma vez só: saída real do compilador, do terminal da Ana e três caixas que rodam de verdade.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">derived e get</span></h1>
+
+<p class="intro">Na padaria da Ana existe uma placa com o número de pães e outra com o total da compra. O total nunca é digitado: ele é sempre a conta dos pães mais os bolos. Se a Ana anota o total à mão, mais cedo ou mais tarde os dois números discordam — e é o cliente que descobre. O Svelte resolve isso com <code>derived</code>: um store que não guarda valor nenhum, ele <strong>calcula</strong> a partir de outros. E resolve a outra metade do problema com <code>get</code>: ler o valor de um store uma vez, na hora, sem virar visor.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um store derivado e por que ele não guarda valor.</li>
+  <li>Criar um com <code>derived(origem, fn)</code> e ler com o cifrão.</li>
+  <li>Juntar dois ou mais stores numa conta só.</li>
+  <li>Por que o derivado é <strong>somente leitura</strong> e o que acontece se você tentar escrever.</li>
+  <li>A diferença entre <code>derived</code> (biblioteca) e <code>$derived</code> (runa).</li>
+  <li>Guardar o derivado num módulo e usar em vários componentes.</li>
+  <li>Ler o valor na hora com <code>get()</code> e por que ele não é reativo.</li>
+  <li>O derivado assíncrono e o terceiro argumento (valor inicial).</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador ou do navegador.</li>
+  <li>O que o terminal da Ana mostra ao ler um derivado sem abrir o navegador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a conta que ninguém digita</h2>
+
+<p>A Ana tem um caderno com duas colunas: a quantidade de pães e o total a pagar. Durante anos ela preencheu as duas à mão. O problema é óbvio: quando o preço do pão muda, ela corrige uma coluna e esquece a outra. O número que sobra no caderno está errado, e ninguém percebe até o cliente reclamar.</p>
+
+<p>Um store derivado é a coluna que se preenche sozinha. Você não escreve nela; você escreve a <em>regra</em> dela. "O total é a quantidade de pães vezes noventa centavos, mais os bolos vezes doze reais." Toda vez que a quantidade de pães ou de bolos muda, a regra roda de novo e o total aparece atualizado. Não existe um momento em que o total esteja desatualizado, porque ele nunca foi guardado: ele é sempre o resultado de uma conta feita agora.</p>
+
+<p>Isso muda o jeito de pensar. Com um store comum (<code>writable</code>) você guarda um valor e corre atrás dele: alguém precisa lembrar de escrever o valor novo. Com um derivado você guarda uma <strong>dependência</strong>: basta saber de quem ele depende. A conta é sempre refeita a partir das fontes, e as fontes são a única verdade.</p>
+
+<p>O <code>get</code> é o oposto filosófico: ele não acompanha nada. Ele é a foto do número naquele instante, para quando você precisa do valor dentro de uma função — e não de um visor que se atualiza. As duas ferramentas parecem primas, mas resolvem problemas diferentes, e a aula inteira é sobre essa diferença.</p>
+
+<hr>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No Svelte</th></tr>
+<tr><td>A coluna do total, que se preenche sozinha</td><td><code>derived(paes, fn)</code></td></tr>
+<tr><td>A regra escrita no cabeçalho da coluna</td><td>a função <code>(n) =&gt; n / 12</code></td></tr>
+<tr><td>Duas colunas que entram na mesma conta</td><td><code>derived([paes, bolos], fn)</code></td></tr>
+<tr><td>Passar o dedo e ler o número de agora</td><td><code>get(total)</code></td></tr>
+<tr><td>Tirar uma foto da coluna</td><td><code>get()</code> devolve o valor e não acompanha mais nada</td></tr>
+<tr><td>Escrever à mão numa coluna calculada</td><td><code>total.set(…)</code> — não existe, o derivado é só leitura</td></tr>
+</table>
+</div>
+
+<p>Repare na terceira linha: um derivado pode depender de <strong>vários</strong> stores. É aí que ele economiza mais código, porque a regra fica num lugar só em vez de espalhada por cada botão que muda um dos valores.</p>
+
+<hr>
+
+<h2>3. <code>derived</code>: um store que nasce de outro</h2>
+
+<p>O primeiro derivado da Ana transforma pães em dúzias. Ele não guarda o número de dúzias: ele sabe que dúzia é pão dividido por doze.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, derived } from 'svelte/store';
+
+  const paes = writable(2);
+  const duzias = derived(paes, (n) =&gt; n / 12);
+&lt;/script&gt;
+
+&lt;p&gt;{$paes} pães são {$duzias.toFixed(2)} dúzias&lt;/p&gt;</pre>
+
+<p>A saída real do renderizador:</p>
+
+<pre class="out">&lt;p&gt;2 pães são 0.17 dúzias&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>derived(paes, …)</dt><dd>o primeiro argumento é a <strong>fonte</strong>: o store que será observado. Pode ser um store só ou uma lista deles.</dd>
+  <dt>(n) =&gt; n / 12</dt><dd>a <strong>regra</strong>. Ela recebe o valor atual da fonte e devolve o valor do derivado. Roda de novo a cada mudança da fonte.</dd>
+  <dt>const duzias</dt><dd>o resultado é outro store, com <code>subscribe</code> igual a qualquer um. Por isso aceita o cifrão.</dd>
+  <dt>{$duzias.toFixed(2)}</dt><dd>o valor derivado tem os mesmos métodos do tipo que você devolveu — aqui, um número com <code>toFixed</code>.</dd>
+</dl>
+
+<p>O detalhe que vale ouro: <code>derived</code> devolve um objeto com <strong>só</strong> o <code>subscribe</code>. Ele não tem <code>set</code> nem <code>update</code>, porque escrever nele não faria sentido — na próxima mudança da fonte, o valor seria recalculado e a sua escrita sumiria. Isso não é uma limitação, é o que garante que o número esteja sempre certo.</p>
+
+<div class="trysvelte" data-goal="out:Pães: 7 · caixas: 1">
+<p class="try-task"><strong>Missão:</strong> a fábrica de derivados esqueceu de aplicar a regra — <code>caixas</code> mostra <code>7</code> em vez de <code>1</code>. Faça a conta passar pela função <code>fn</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function derivar(origem, fn) {
+    return {
+      subscribe(cb) {
+        return origem.subscribe(cb);
+      }
+    };
+  }
+
+  function caixa(inicial) {
+    let valor = inicial;
+    const inscritos = new Set();
+    return {
+      subscribe(fn) {
+        fn(valor);
+        inscritos.add(fn);
+        return () =&gt; inscritos.delete(fn);
+      },
+      set(novo) {
+        valor = novo;
+        inscritos.forEach((fn) =&gt; fn(valor));
+      }
+    };
+  }
+
+  const paes = caixa(7);
+  const caixas = derivar(paes, (n) =&gt; Math.floor(n / 6));
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {$paes} · caixas: {$caixas}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function derivar(origem, fn) {
+    return {
+      subscribe(cb) {
+        return origem.subscribe((v) =&gt; cb(fn(v)));
+      }
+    };
+  }
+
+  function caixa(inicial) {
+    let valor = inicial;
+    const inscritos = new Set();
+    return {
+      subscribe(fn) {
+        fn(valor);
+        inscritos.add(fn);
+        return () =&gt; inscritos.delete(fn);
+      },
+      set(novo) {
+        valor = novo;
+        inscritos.forEach((fn) =&gt; fn(valor));
+      }
+    };
+  }
+
+  const paes = caixa(7);
+  const caixas = derivar(paes, (n) =&gt; Math.floor(n / 6));
+&lt;/script&gt;
+
+&lt;p&gt;Pães: {$paes} · caixas: {$caixas}&lt;/p&gt;</pre>
+</div>
+
+<p>Como nas outras caixas do guia, o <code>svelte/store</code> não é importável aqui: cada caixa compila um componente só, sem módulos extras. O <code>caixa()</code> do exemplo é o <code>writable</code> escrito à mão, e <code>derivar()</code> é o <code>derived</code> escrito à mão. A solução mostra o coração do <code>derived</code>: assinar a fonte e entregar <code>fn(valor)</code> para quem está olhando.</p>
+
+<hr>
+
+<h2>4. O derivado acompanha a fonte</h2>
+
+<p>Para ver o derivado mudar, basta um botão que escreve na fonte. Repare que ninguém toca em <code>duzias</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, derived } from 'svelte/store';
+
+  const paes = writable(2);
+  const duzias = derived(paes, (n) =&gt; n / 12);
+&lt;/script&gt;
+
+&lt;p&gt;{$paes} pães são {$duzias.toFixed(2)} dúzias&lt;/p&gt;
+&lt;button onclick={() =&gt; $paes += 1}&gt;mais um pão&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;2 pães são 0.17 dúzias&lt;/p&gt; &lt;button&gt;mais um pão&lt;/button&gt;</pre>
+
+<p>No navegador, cada clique soma um pão e as dúzias aparecem recalculadas. A ordem é sempre a mesma: o clique escreve em <code>paes</code>, o <code>paes</code> avisa quem assinou, o <code>duzias</code> está entre os que assinaram, ele roda a regra e avisa os seus próprios inscritos. É uma corrente de avisos, e o componente está no fim dela.</p>
+
+<p>Essa corrente tem um custo: a regra roda <strong>a cada</strong> mudança da fonte, mesmo que o componente que mostra o derivado esteja fora da tela. Se a regra for uma conta de três números, ninguém sente. Se ela varrer uma lista de dez mil pedidos, você sente — e a solução é guardar o resultado num <code>$derived</code> dentro do componente que precisa, ou recalcular só quando a lista mudar de verdade.</p>
+
+<div class="tip">
+<strong>Regra prática</strong>
+<p>Uma conta que qualquer componente pode querer, feita de stores compartilhados: <code>derived</code> no módulo. Uma conta que só uma tela mostra, feita de valores que só ela tem: <code>$derived</code> no componente. As duas formas convivem no mesmo projeto sem briga.</p>
+</div>
+
+<hr>
+
+<h2>5. Dois stores, uma conta</h2>
+
+<p>O total do pedido depende de pães e de bolos. Passe uma <strong>lista</strong> de stores como primeiro argumento e a regra recebe uma lista de valores, na mesma ordem:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, derived } from 'svelte/store';
+
+  const pao = writable(2);
+  const bolo = writable(1);
+  const total = derived([pao, bolo], ([$pao, $bolo]) =&gt; $pao * 0.9 + $bolo * 12);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {$total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 13.80&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>[pao, bolo]</dt><dd>a lista de fontes. O derivado assina todas e só roda a regra quando alguma muda.</dd>
+  <dt>([$pao, $bolo]) =&gt; …</dt><dd>a regra recebe <strong>uma lista</strong>, não dois argumentos. Os parênteses em volta são a desestruturação: é o mesmo truque de <code>const [a, b] = lista</code>.</dd>
+  <dt>$pao * 0.9 + $bolo * 12</dt><dd>a conta. Os valores dentro dos colchetes são valores comuns; o cifrão aqui é só parte do nome que você escolheu.</dd>
+</dl>
+
+<p>Errar a desestruturação é fácil: <code>derived([pao, bolo], ($pao, $bolo) =&gt; …)</code> compila sem reclamar, mas o primeiro parâmetro recebe a <strong>lista inteira</strong> e o segundo recebe o <code>set</code>. A conta vira <code>NaN</code> e a tela mostra lixo. Quando um derivado de várias fontes der número errado, o primeiro lugar para olhar é a forma dos parâmetros.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Total: R$ 25.80 mais um bolo">
+<p class="try-task"><strong>Missão:</strong> o total só enxerga os pães e mostra <code>NaN</code> depois de um bolo a mais. Faça a conta receber <strong>os dois</strong> valores e o clique mostrar <code>Total: R$ 25.80</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function derivarDois(a, b, fn) {
+    return {
+      subscribe(cb) {
+        let va = 0;
+        let vb = 0;
+        const paraA = a.subscribe((v) =&gt; {
+          va = v;
+          cb(fn(va));
+        });
+        const paraB = b.subscribe((v) =&gt; {
+          vb = v;
+        });
+        return () =&gt; {
+          paraA();
+          paraB();
+        };
+      }
+    };
+  }
+
+  function caixa(inicial) {
+    let valor = inicial;
+    const inscritos = new Set();
+    return {
+      subscribe(fn) {
+        fn(valor);
+        inscritos.add(fn);
+        return () =&gt; inscritos.delete(fn);
+      },
+      set(novo) {
+        valor = novo;
+        inscritos.forEach((fn) =&gt; fn(valor));
+      }
+    };
+  }
+
+  const pao = caixa(2);
+  const bolo = caixa(1);
+  const total = derivarDois(pao, bolo, (paes, bolos) =&gt; paes * 0.9 + bolos * 12);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {$total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; bolo.set($bolo + 1)}&gt;mais um bolo&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function derivarDois(a, b, fn) {
+    return {
+      subscribe(cb) {
+        let va = 0;
+        let vb = 0;
+        const paraA = a.subscribe((v) =&gt; {
+          va = v;
+          cb(fn(va, vb));
+        });
+        const paraB = b.subscribe((v) =&gt; {
+          vb = v;
+          cb(fn(va, vb));
+        });
+        return () =&gt; {
+          paraA();
+          paraB();
+        };
+      }
+    };
+  }
+
+  function caixa(inicial) {
+    let valor = inicial;
+    const inscritos = new Set();
+    return {
+      subscribe(fn) {
+        fn(valor);
+        inscritos.add(fn);
+        return () =&gt; inscritos.delete(fn);
+      },
+      set(novo) {
+        valor = novo;
+        inscritos.forEach((fn) =&gt; fn(valor));
+      }
+    };
+  }
+
+  const pao = caixa(2);
+  const bolo = caixa(1);
+  const total = derivarDois(pao, bolo, (paes, bolos) =&gt; paes * 0.9 + bolos * 12);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {$total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; bolo.set($bolo + 1)}&gt;mais um bolo&lt;/button&gt;</pre>
+</div>
+
+<p>A solução guarda o último valor de cada fonte e recalcula quando qualquer uma avisa. É por isso que o <code>derived</code> de verdade recebe uma lista: ele precisa manter um valor por fonte, e a regra só roda quando todos já têm valor. Antes de o segundo store entregar o primeiro valor, a conta não roda — e é disso que o terceiro argumento desta aula trata.</p>
+
+<hr>
+
+<h2>6. O derivado é somente leitura</h2>
+
+<p>Não existe <code>total.set(…)</code> num store derivado. A tentativa falha na hora, com uma mensagem curta e direta, como você vai ver na seção 11. O motivo é o mesmo de não escrever a lápis numa coluna que se preenche sozinha: na próxima mudança das fontes, o número seria recalculado e a sua escrita desapareceria sem aviso.</p>
+
+<p>Se você precisa de um valor que seja calculado <em>e</em> ajustável, o caminho é outro: guarde o ajuste num store comum (um desconto, por exemplo) e inclua esse store na conta do derivado. Assim o ajuste tem <code>set</code>, a conta tem a regra, e cada um cuida do seu papel:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, derived } from 'svelte/store';
+
+  const subtotal = writable(13.8);
+  const desconto = writable(0);
+  const total = derived([subtotal, desconto], ([$subtotal, $desconto]) =&gt; $subtotal - $desconto);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {$total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 13.80&lt;/p&gt;</pre>
+
+<p>Sempre que a Ana dá desconto, ela escreve em <code>desconto</code>; o total se ajusta. O derivado continua sem <code>set</code>, e ninguém precisa lembrar de refazer a subtração em cada botão. Esse é o padrão que escala: quanto mais entradas viram stores próprios, menos casos especiais a regra precisa prever.</p>
+
+<hr>
+
+<h2>7. <code>$derived</code> × <code>derived</code>: qual usar</h2>
+
+<p>Os dois têm "derived" no nome e fazem contas, mas vivem em mundos diferentes. A tabela abaixo é o resumo honesto:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>derived</code></th><th><code>$derived</code></th></tr>
+<tr><td>Onde mora</td><td>num módulo <code>.js</code> ou no <code>&lt;script&gt;</code></td><td>dentro do componente, sempre</td></tr>
+<tr><td>De quem depende</td><td>de outros stores</td><td>de qualquer valor reativo: <code>$state</code>, <code>$props</code> ou <code>$store</code></td></tr>
+<tr><td>Quem pode ler</td><td>qualquer componente que importar</td><td>só o componente onde foi declarado (ou quem o receber)</td></tr>
+<tr><td>Tem <code>set</code>?</td><td>não</td><td>não (é uma constante reativa)</td></tr>
+<tr><td>Melhor uso</td><td>regra de negócio compartilhada</td><td>formatação e conta de tela</td></tr>
+</table>
+</div>
+
+<p>Na prática, o projeto da Ana tem os dois. O total do pedido é <code>derived</code>, porque o caixa e a vitrine precisam do mesmo número. Já o texto "R$ 1,80" com vírgula é <code>$derived</code>, porque é uma preocupação de quem desenha a tela. E o detalhe que pega todo mundo: dentro de <code>$derived</code> você não usa o <strong>store</strong>, usa o <strong>valor</strong> dele. O cifrão continua ali, mas ele é do store, não da runa:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, derived } from 'svelte/store';
+
+  const pao = writable(2);
+  const total = derived(pao, (n) =&gt; n * 0.9);
+  const precoNaTela = $derived($total.toFixed(2).replace('.', ','));
+&lt;/script&gt;
+
+&lt;p&gt;R$ {precoNaTela}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;R$ 1,80&lt;/p&gt;</pre>
+
+<p>O <code>$total</code> assina o derivado e o <code>$derived</code> recalcula o texto a cada mudança. Dois mecanismos, um resultado: o preço na tela sempre acompanha a quantidade de pães, e a conta do dinheiro continua num lugar só. Se você escrever <code>$derived(total.toFixed(2))</code>, sem o cifrão do store, a runa não tem nada para observar e o texto nunca muda — é o erro silencioso mais comum desta seção.</p>
+
+<hr>
+
+<h2>8. O derivado num módulo</h2>
+
+<p>Quando a regra é do negócio e não da tela, ela vai para <code>src/lib</code>, junto com as fontes. O arquivo fica assim:</p>
+
+<pre class="file" data-file="src/lib/total.js">import { writable, derived } from 'svelte/store';
+
+export const paes = writable(2);
+export const bolos = writable(1);
+
+// o total não é guardado: ele é recalculado a cada mudança de pães ou bolos
+export const total = derived([paes, bolos], ([$paes, $bolos]) =&gt; $paes * 0.9 + $bolos * 12);</pre>
+
+<p>E o componente só consome. Aqui o mesmo derivado aparece dentro de <code>&lt;script module&gt;</code>, que roda uma vez por arquivo — é a forma de mostrar o padrão sem criar três arquivos:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  import { writable, derived } from 'svelte/store';
+
+  export const paes = writable(2);
+  export const duzias = derived(paes, (n) =&gt; n / 12);
+&lt;/script&gt;
+
+&lt;p&gt;{$paes} pães são {$duzias.toFixed(2)} dúzias&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;2 pães são 0.17 dúzias&lt;/p&gt;</pre>
+
+<p>O terminal da Ana mostra o outro lado: o módulo é JavaScript puro, então dá para exercitá-lo sem navegador. O <code>cat</code> primeiro, para lembrar o que está lá:</p>
+
+<pre class="term">ana@notebook:~/loja$ cat src/lib/total.js
+import { writable, derived } from 'svelte/store';
+
+export const paes = writable(2);
+export const bolos = writable(1);
+
+// o total não é guardado: ele é recalculado a cada mudança de pães ou bolos
+export const total = derived([paes, bolos], ([$paes, $bolos]) => $paes * 0.9 + $bolos * 12);</pre>
+
+<hr>
+
+<h2>9. <code>get()</code>: a foto do valor</h2>
+
+<p><code>get</code> lê o valor de qualquer store — inclusive de um derivado — e devolve na hora. Por dentro, ele assina e cancela a assinatura imediatamente, o que dá exatamente o valor atual sem deixar ninguém inscrito:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, derived, get } from 'svelte/store';
+
+  const paes = writable(2);
+  const duzias = derived(paes, (n) =&gt; n / 12);
+  const comecou = get(duzias);
+&lt;/script&gt;
+
+&lt;p&gt;Começou em {comecou.toFixed(2)} dúzias&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Começou em 0.17 dúzias&lt;/p&gt;</pre>
+
+<p>A variável <code>comecou</code> guarda <code>0.1666…</code> e não muda nunca. Se os pães forem para quatro, <code>comecou</code> continua <code>0.1666…</code> e a tela continua mostrando <code>0.17</code> — enquanto <code>{$duzias}</code> mostraria <code>0.33</code>. Isso é uma foto, e uma foto não é um espelho.</p>
+
+<p>O uso certo de <code>get</code> é dentro de funções, onde você quer o valor do momento e não uma assinatura. O botão da Ana soma um ao valor que está no store naquele instante, mesmo que outro componente tenha mudado o valor no meio do caminho:</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;out:Cliques: 2 +1">
+<p class="try-task"><strong>Missão:</strong> cada clique escreve <code>1</code> no store, então dois cliques mostram <code>1</code>. Use a leitura do valor atual (<code>ler</code>) para o segundo clique mostrar <code>Cliques: 2</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function caixa(inicial) {
+    let valor = inicial;
+    const inscritos = new Set();
+    return {
+      subscribe(fn) {
+        fn(valor);
+        inscritos.add(fn);
+        return () =&gt; inscritos.delete(fn);
+      },
+      set(novo) {
+        valor = novo;
+        inscritos.forEach((fn) =&gt; fn(valor));
+      }
+    };
+  }
+
+  const cliques = caixa(0);
+
+  function somar() {
+    cliques.set(1);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function caixa(inicial) {
+    let valor = inicial;
+    const inscritos = new Set();
+    return {
+      subscribe(fn) {
+        fn(valor);
+        inscritos.add(fn);
+        return () =&gt; inscritos.delete(fn);
+      },
+      set(novo) {
+        valor = novo;
+        inscritos.forEach((fn) =&gt; fn(valor));
+      }
+    };
+  }
+
+  function ler(store) {
+    let valor;
+    const parar = store.subscribe((v) =&gt; {
+      valor = v;
+    });
+    parar();
+    return valor;
+  }
+
+  const cliques = caixa(0);
+
+  function somar() {
+    cliques.set(ler(cliques) + 1);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;</pre>
+</div>
+
+<p>O <code>ler</code> da solução é o <code>get</code> com outro nome: assina, guarda o valor que chega, cancela a assinatura e devolve. São quatro linhas que você não escreve quando importa <code>get</code> de <code>svelte/store</code>.</p>
+
+<p>E aqui está a prova de que o módulo funciona fora do componente, no terminal, sem navegador nenhum:</p>
+
+<pre class="term">ana@notebook:~/loja$ node --input-type=module -e "import { get } from 'svelte/store'; import { paes, total } from './src/lib/total.js'; console.log('total:', get(total)); paes.set(4); console.log('com 4 paes:', get(total));"
+total: 13.8
+com 4 paes: 15.6</pre>
+
+<p>Duas leituras, dois valores diferentes, e nenhum componente envolvido. O primeiro <code>get</code> calculou o total com dois pães; depois o <code>set</code> mudou a fonte; o segundo <code>get</code> recalculou com quatro. O derivado não "lembra" nada entre as duas chamadas: ele só sabe fazer a conta com o que está nas fontes agora.</p>
+
+<hr>
+
+<h2>10. Derivado assíncrono e o valor inicial</h2>
+
+<p>Uma regra pode depender de algo lento: uma consulta, um arquivo, uma promessa. Nesse caso a função pode ser <code>async</code> e recebe um <code>set</code> como segundo argumento para entregar o resultado quando estiver pronto. O problema é o intervalo: o que aparece na tela enquanto a conta não termina? É para isso que existe o terceiro argumento, o <strong>valor inicial</strong>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, derived } from 'svelte/store';
+
+  const paes = writable(2);
+  const conta = derived(paes, async ($paes, set) =&gt; {
+    await new Promise((r) =&gt; setTimeout(r, 10));
+    set($paes * 10);
+  }, 'calculando...');
+&lt;/script&gt;
+
+&lt;p&gt;{$conta}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;calculando...&lt;/p&gt;</pre>
+
+<p>A renderização no servidor mostra o valor inicial, porque a conta ainda não terminou. No navegador, dez milissegundos depois, o parágrafo passa a mostrar <code>20</code>. A sequência de valores que os inscritos recebem é <code>["calculando...", 20]</code> — primeiro o inicial, depois o resultado. Sem o terceiro argumento, o primeiro valor seria <code>undefined</code> e a tela mostraria um buraco.</p>
+
+<pre class="term">ana@notebook:~/loja$ node --input-type=module -e 'import { writable, derived } from "svelte/store"; const p = writable(2); const c = derived(p, async ($v, set) => { await new Promise((r) => setTimeout(r, 10)); set($v * 10); }, "calculando..."); const vistos = []; c.subscribe((v) => vistos.push(v)); await new Promise((r) => setTimeout(r, 50)); console.log(JSON.stringify(vistos));'
+["calculando...",20]</pre>
+
+<div class="warning">
+<strong>Assíncrono muda a ordem das coisas</strong>
+<p>Com uma regra assíncrona, o derivado pode entregar um valor velho depois de um novo, se duas contas demorarem tempos diferentes. Para telas simples isso não aparece; quando aparecer, a solução é cancelar a conta antiga dentro da função de retorno do <code>derived</code> — o mesmo lugar onde o <code>subscribe</code> devolve a função de cancelamento.</p>
+</div>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador e do renderizador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — escrever num derivado</strong>
+<p>O derivado não tem <code>set</code>. Chamar o método que não existe quebra na primeira execução:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, derived } from 'svelte/store';
+
+  const paes = writable(2);
+  const duzias = derived(paes, (n) =&gt; n / 12);
+
+  duzias.set(5);
+&lt;/script&gt;
+
+&lt;p&gt;{$duzias}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: duzias.set is not a function</pre>
+<p>Repare que a mensagem traz o <strong>nome da sua variável</strong>: <code>duzias.set is not a function</code>. Ela não é um erro de sintaxe — o código compila. É o JavaScript dizendo que a propriedade <code>set</code> não existe naquele objeto. A correção é escrever na fonte (<code>paes.set(60)</code>) e deixar o derivado recalcular.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — regra que não é função</strong>
+<p>O segundo argumento de <code>derived</code> tem de ser uma função. Um número ali parece inofensivo e quebra na hora de calcular:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, derived } from 'svelte/store';
+
+  const paes = writable(2);
+  const dobro = derived(paes, 5);
+&lt;/script&gt;
+
+&lt;p&gt;{$dobro}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: fn is not a function</pre>
+<p><code>fn</code> é o nome interno que a biblioteca dá ao segundo argumento. A mensagem é seca porque o erro é de tipo, não de intenção: onde o Svelte esperava <code>(n) =&gt; n * 2</code>, encontrou o número <code>5</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — importar do lugar errado</strong>
+<p><code>derived</code> não mora em <code>svelte</code>; ele mora em <code>svelte/store</code>. Trocar um pelo outro produz um erro de módulo, não de sintaxe:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { derived } from 'svelte';
+  import { writable } from 'svelte/store';
+
+  const paes = writable(2);
+  const dobro = derived(paes, (n) =&gt; n * 2);
+&lt;/script&gt;
+
+&lt;p&gt;{$dobro}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: The requested module 'svelte' does not provide an export named 'derived'</pre>
+<p>"O módulo <code>svelte</code> não fornece uma exportação chamada <code>derived</code>." As runas (<code>$state</code>, <code>$derived</code>) são do compilador e não precisam de import; as funções de store precisam, e vêm de <code>svelte/store</code>. Guarde os dois endereços: <code>svelte</code> para <code>setContext</code>, <code>getContext</code>, <code>onMount</code> e <code>tick</code>; <code>svelte/store</code> para <code>writable</code>, <code>readable</code>, <code>derived</code>, <code>get</code> e <code>readonly</code>.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>Devolve</th><th>Quando usar</th></tr>
+<tr><td><code>derived(store, (v) =&gt; …)</code></td><td>store só leitura</td><td>uma conta a partir de um store</td></tr>
+<tr><td><code>derived([a, b], ([$a, $b]) =&gt; …)</code></td><td>store só leitura</td><td>uma conta a partir de vários</td></tr>
+<tr><td><code>derived(store, fn, inicial)</code></td><td>store só leitura</td><td>regra assíncrona, com valor enquanto carrega</td></tr>
+<tr><td><code>derived(store, async (v, set) =&gt; …)</code></td><td>store só leitura</td><td>conta que depende de promessa</td></tr>
+<tr><td><code>get(store)</code></td><td>o valor de agora</td><td>ler dentro de uma função, uma vez</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>duzias.set is not a function</code></td><td>tentou escrever num derivado; escreva na fonte</td></tr>
+<tr><td><code>fn is not a function</code></td><td>o segundo argumento não é função</td></tr>
+<tr><td><code>NaN</code> numa conta de várias fontes</td><td>faltou desestruturar: <code>([$a, $b]) =&gt; …</code></td></tr>
+<tr><td>o texto não muda quando o store muda</td><td>usou <code>get()</code> no lugar de <code>$store</code> ou de <code>$derived</code></td></tr>
+<tr><td>o valor inicial nunca aparece</td><td>a regra é síncrona e já rodou antes de a tela ler</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>O que tem dentro</th></tr>
+<tr><td><code>src/lib/total.js</code></td><td>as fontes (<code>writable</code>) e o derivado com <code>export</code></td></tr>
+<tr><td><code>src/App.svelte</code></td><td>importa o derivado e mostra <code>{$total}</code></td></tr>
+<tr><td><code>src/lib/contador.js</code></td><td>o store comum da aula anterior, para comparar</td></tr>
+</table>
+</div>
+
+<div class="tip">
+<strong>Para não esquecer</strong>
+<p><code>derived</code> é uma <strong>função</strong> importada de <code>svelte/store</code> que devolve um store; <code>$derived</code> é uma <strong>runa</strong> que declara uma constante reativa dentro do componente. Se você precisa que outro componente leia a conta, é <code>derived</code>. Se a conta só existe para montar o texto daquela tela, é <code>$derived</code>.</p>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>derived(paes, (n) =&gt; n / 12)</code> devolve?</p>
+<label><input type="radio" name="q1"> um número com o resultado da conta</label>
+<label><input type="radio" name="q1"> um store só leitura, que recalcula quando <code>paes</code> muda</label>
+<label><input type="radio" name="q1"> uma função que precisa ser chamada no HTML</label>
+<label><input type="radio" name="q1"> um store gravável com o valor inicial zero</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que <code>derived</code> não tem <code>set</code>?</p>
+<label><input type="radio" name="q1"> porque o Svelte ainda não implementou</label>
+<label><input type="radio" name="q1"> porque o valor é sempre texto</label>
+<label><input type="radio" name="q1"> porque a próxima mudança das fontes recalcularia o valor e apagaria a escrita</label>
+<label><input type="radio" name="q1"> porque <code>set</code> só existe em componentes</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>get(store)</code> faz?</p>
+<label><input type="radio" name="q1"> lê o valor atual assinando e cancelando a assinatura na hora</label>
+<label><input type="radio" name="q1"> assina o store para sempre e redesenha a tela</label>
+<label><input type="radio" name="q1"> escreve um valor novo no store</label>
+<label><input type="radio" name="q1"> transforma o store num <code>$state</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { writable, <input data-answer="derived"> } from 'svelte/store';<br><br>const pao = writable(2);<br>const bolo = writable(1);<br><br>const total = derived(<input data-answer="[pao, bolo]">, ([$pao, $bolo]) =&gt; $pao * 0.9 + $bolo * 12);</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>derived(origem, regra)</code> cria um store que <strong>calcula</strong> o valor a partir de outros stores.</li>
+  <li>A regra roda de novo a cada mudança das fontes; o derivado nunca guarda o resultado.</li>
+  <li>Várias fontes vão numa lista: <code>derived([a, b], ([$a, $b]) =&gt; …)</code> — e a regra recebe <strong>uma</strong> lista.</li>
+  <li>O derivado é somente leitura: <code>set</code> e <code>update</code> não existem nele.</li>
+  <li>Para um valor calculado e ajustável, guarde o ajuste num store comum e inclua na conta.</li>
+  <li><code>derived</code> vem de <code>svelte/store</code>; <code>$derived</code> é runa e vive dentro do componente.</li>
+  <li>O terceiro argumento é o valor inicial, usado enquanto a regra assíncrona não terminou.</li>
+  <li><code>get(store)</code> assina, lê e cancela: devolve uma foto do valor, não um visor.</li>
+  <li>Use <code>get</code> dentro de funções; no HTML, use <code>$store</code> ou <code>$derived</code>.</li>
+  <li>Os erros desta aula: <code>set</code> num derivado, regra que não é função e importar de <code>svelte</code> em vez de <code>svelte/store</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

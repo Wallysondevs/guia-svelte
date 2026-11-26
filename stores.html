@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stores — o valor que mora no quadro de avisos | Guia Svelte</title>
+<meta name="description" content="Stores no Svelte 5: writable, readable, o cifrão $, set, update e get, com a saída real do compilador e do terminal da Ana, do zero.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Stores</span></h1>
+
+<p class="intro">A Ana tem seis placas na parede da padaria e cada uma mostra um número que também aparece em outra placa: o preço do pão na vitrine, o mesmo preço no cardápio do balcão, o total do pedido no caixa. Quando o preço muda, ela precisa lembrar de todas as placas — e sempre esquece uma. O sobrinho dela sugeriu um <strong>quadro de avisos</strong> no fundo da loja: as placas passam a ser uma janela para o quadro, e quem muda o número muda uma vez só. No Svelte esse quadro tem nome: <strong>store</strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um store e por que ele existe quando <code>$state</code> não resolve.</li>
+  <li>Criar um store com <code>writable</code> e ler o valor no HTML com o cifrão <code>$</code>.</li>
+  <li>As quatro formas de escrever num store: <code>set</code>, <code>update</code>, <code>$x = …</code> e <code>$x += …</code>.</li>
+  <li>Guardar o store num módulo <code>.js</code> para dois componentes verem o mesmo valor.</li>
+  <li>O contrato que todo store cumpre: um <code>subscribe</code> que avisa quem está olhando.</li>
+  <li>Como fazer uma conta acompanhar o store com <code>$derived</code>.</li>
+  <li>A diferença entre <code>writable</code>, <code>readable</code> e <code>readonly</code>.</li>
+  <li>Ler o valor de fora do HTML com <code>get()</code> — e por que isso não é reativo.</li>
+  <li>Os três erros reais desta aula, com a mensagem que o compilador ou o navegador mostra.</li>
+  <li>O que o terminal da Ana imprime quando ela procura onde o store é usado.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: um quadro de avisos no fundo da padaria</h2>
+
+<p>Imagine que a Ana trocou as seis placas por um quadro grande no fundo da loja. Cada placa da parede deixou de ter um número escrito à mão: agora ela tem um <em>visor</em>, e o visor mostra o que está escrito no quadro. Quando o preço do pão sobe, a Ana escreve uma vez no quadro com um giz. Todas as placas que mostram aquele campo do quadro mudam no mesmo instante, sem ninguém passar de placa em placa.</p>
+
+<p>Essa é a ideia inteira de um store. Ele é um valor que mora <strong>fora</strong> do componente — num arquivo separado, normalmente — e os componentes não guardam uma cópia dele: eles <em>assinam</em> o quadro. Quem assina é avisado toda vez que alguém escreve. O componente que mostra o número se redesenha sozinho; o componente que escreve nem sabe quem está olhando.</p>
+
+<p>Por que não usar <code>$state</code> para tudo, então? Porque <code>$state</code> mora <strong>dentro</strong> de um componente. Se a placa da vitrine e o painel do caixa são componentes diferentes, um não enxerga o estado do outro: para o número chegar lá, alguém teria que passar o valor de pai para filho, prop por prop, por cada andar da árvore. O store resolve isso tirando o valor de dentro da árvore e colocando ao lado dela. É a diferença entre um caderno que fica na gaveta de um funcionário e o quadro na parede, que todos leem.</p>
+
+<p>Repare no vocabulário, porque ele volta o guia inteiro: <em>store</em> é o quadro; <em>assinar</em> (<code>subscribe</code>) é pendurar um visor no quadro; <em>escrever</em> (<code>set</code>) é usar o giz; e o <strong>cifrão</strong> <code>$</code> é o atalho do Svelte para "mostre aqui o que está no quadro agora".</p>
+
+<hr>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No Svelte</th></tr>
+<tr><td>O quadro de avisos no fundo da loja</td><td>O store: <code>writable(0)</code></td></tr>
+<tr><td>O giz que escreve no quadro</td><td><code>cliques.set(3)</code> ou <code>$cliques = 3</code></td></tr>
+<tr><td>O visor pendurado na placa</td><td><code>subscribe</code> — o Svelte faz isso por você quando você usa <code>$cliques</code></td></tr>
+<tr><td>Olhar o quadro na hora de mostrar</td><td><code>{$cliques}</code> no HTML</td></tr>
+<tr><td>Um funcionário que só pode ler, nunca escrever</td><td><code>readable</code> ou <code>readonly</code></td></tr>
+<tr><td>Uma cópia do número na gaveta do funcionário</td><td><code>get(cliques)</code> — uma foto do valor, sem acompanhar mudanças</td></tr>
+</table>
+</div>
+
+<p>A última linha é a que mais confunde. <code>get()</code> não pendura visor nenhum: ele lê o quadro uma vez e devolve o que estava escrito naquele instante. Se o valor mudar depois, a sua variável continua com o número velho. Guarde essa frase, porque ela volta na seção 9.</p>
+
+<hr>
+
+<h2>3. O primeiro store da Ana</h2>
+
+<p>Um store se cria com uma função chamada <code>writable</code> — "escrevível", em inglês — importada de <code>svelte/store</code>. O argumento é o valor inicial. Uma vez criado, o valor é lido no HTML com um cifrão na frente do nome:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable } from 'svelte/store';
+
+  const cliques = writable(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;
+&lt;button onclick={() =&gt; $cliques = $cliques + 1}&gt;+1&lt;/button&gt;</pre>
+
+<p>O compilador do guia renderiza esse componente e devolve exatamente isto:</p>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt;</pre>
+
+<p>Duas coisas para notar. Primeiro: o valor aparece como <code>0</code>, o valor inicial que você passou para <code>writable</code>. Segundo: o botão não tem nenhum código de atualização na saída, porque esse código roda no navegador, no clique. O HTML mostra o <em>estado de agora</em>; quem faz o resto é o JavaScript que o compilador gerou.</p>
+
+<dl class="anatomy">
+  <dt>import { writable } from 'svelte/store'</dt><dd><code>svelte/store</code> é um módulo separado do <code>svelte</code>. Store não é runa: é uma biblioteca pequena que vem junto com o Svelte.</dd>
+  <dt>const cliques</dt><dd>o <strong>nome do store</strong>. Note que é <code>const</code>, não <code>let</code>: você nunca troca o store, só o valor dentro dele.</dd>
+  <dt>writable(0)</dt><dd>cria o store com o <strong>valor inicial</strong> <code>0</code>. Pode ser número, texto, lista, objeto — qualquer coisa.</dd>
+  <dt>{$cliques}</dt><dd>o cifrão pede ao Svelte: "assine esse store e mostre o valor". Quando o valor muda, este pedaço do HTML se redesenha.</dd>
+  <dt>$cliques = $cliques + 1</dt><dd>lê o valor atual, soma um e escreve de volta. O Svelte traduz isso para <code>cliques.set(…)</code>.</dd>
+</dl>
+
+<p>O cifrão é o único lugar do guia em que uma variável começa com <code>$</code> e isso é permitido. Ele não faz parte do nome do store: o store se chama <code>cliques</code>; <code>$cliques</code> é a <em>leitura assinada</em> dele. É por isso que a linha <code>const cliques = writable(0)</code> não tem cifrão nenhum.</p>
+
+<div class="tip">
+<strong>Por que const e não let</strong>
+<p>Um erro comum de quem começa é escrever <code>let cliques = writable(0)</code> pensando que vai "trocar o valor". O valor não é trocado: ele é escrito <em>dentro</em> do store, com <code>set</code>. A caixinha continua a mesma a vida inteira. <code>let</code> aqui não dá erro, mas sugere uma troca que não existe — e trocar a caixinha no meio do caminho faz os componentes antigos continuarem olhando para a caixa velha.</p>
+</div>
+
+<hr>
+
+<h2>4. Escrever: <code>set</code>, <code>update</code> e o cifrão</h2>
+
+<p>Existem quatro formas de escrever num store <code>writable</code>, e todas terminam no mesmo lugar. A diferença está em quanto você precisa saber sobre o valor atual:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable } from 'svelte/store';
+
+  const cliques = writable(0);
+
+  function zerar() {
+    cliques.set(0);
+  }
+
+  function somar() {
+    cliques.update((n) =&gt; n + 1);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;
+&lt;button onclick={zerar}&gt;zerar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt;</pre>
+
+<p><code>set</code> recebe o valor novo e pronto. <code>update</code> recebe uma <strong>função</strong> que transforma o valor velho no novo — e o Svelte passa o valor atual para ela. Usar <code>update</code> evita o bug clássico de ler um valor que já mudou: a conta é feita com o valor de dentro do store, no momento da escrita, não com o que estava na tela quando o clique começou.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>O que você escreve</th><th>Quando usar</th></tr>
+<tr><td><code>set</code></td><td><code>cliques.set(0)</code></td><td>quando o valor novo não depende do velho</td></tr>
+<tr><td><code>update</code></td><td><code>cliques.update((n) =&gt; n + 1)</code></td><td>quando o valor novo depende do velho</td></tr>
+<tr><td>cifrão com <code>=</code></td><td><code>$cliques = 0</code></td><td>atalho de <code>set</code>, dentro do componente</td></tr>
+<tr><td>cifrão com <code>+=</code></td><td><code>$cliques += 1</code></td><td>atalho de <code>update</code>, dentro do componente</td></tr>
+</table>
+</div>
+
+<p>As duas últimas linhas só existem dentro de um componente <code>.svelte</code>: o compilador reconhece a atribuição e a traduz. Num arquivo <code>.js</code> comum não há <code>$cliques</code> para atribuir — lá você usa <code>set</code> e <code>update</code>, que são métodos do próprio store e funcionam em qualquer lugar.</p>
+
+<hr>
+
+<h2>5. O store mora fora do componente</h2>
+
+<p>Store dentro de um componente só serve para aquele componente — e para isso <code>$state</code> já bastava. O ganho aparece quando o store vai para um lugar que não é de ninguém: um módulo <code>.js</code>, importado por quem precisa. A padaria da Ana tem dois lugares que mostram a contagem de cliques: o placar da vitrine e o painel do caixa. Os dois leem o mesmo store.</p>
+
+<pre class="file" data-file="src/lib/contador.js">import { writable } from 'svelte/store';
+
+export const cliques = writable(0);</pre>
+
+<pre class="file" data-file="src/lib/Placar.svelte">&lt;script&gt;
+  import { cliques } from './contador.js';
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;</pre>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Placar from './Placar.svelte';
+&lt;/script&gt;
+
+&lt;Placar /&gt;
+&lt;Placar /&gt;</pre>
+
+<p>Três arquivos, um valor. Cada <code>Placar</code> que monta assina o mesmo store, e o <code>App</code> não precisa passar prop nenhuma de um para o outro. Quando um clique acontecer, os dois vão mostrar o mesmo número, porque não existem dois valores: existe uma lista de funções inscritas dentro do store, e cada <code>Placar</code> colocou a sua lá.</p>
+
+<p>Para você ver o efeito sem montar um projeto de três arquivos, o Svelte permite declarar o store dentro de <code>&lt;script module&gt;</code>. Esse bloco roda <strong>uma vez</strong> para o arquivo inteiro, e não uma vez por componente. Aqui o mesmo componente lê o store em dois lugares diferentes:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  import { writable } from 'svelte/store';
+
+  export const cliques = writable(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;
+&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;p&gt;Cliques: 0&lt;/p&gt;</pre>
+
+<p>Os dois parágrafos mostram o mesmo número porque leem o mesmo store. No projeto da Ana, esses dois parágrafos estão em arquivos diferentes — um em <code>Placar.svelte</code>, que aparece duas vezes — e a saída é idêntica, porque o que está no <code>&lt;script module&gt;</code> não é copiado junto com o componente. Esse bloco é o assunto de uma aula inteira mais adiante.</p>
+
+<dl class="anatomy">
+  <dt>export const cliques</dt><dd>o <code>export</code> é o que torna o store visível para outros arquivos. Sem ele, o módulo existe mas ninguém alcança o valor.</dd>
+  <dt>./contador.js</dt><dd>caminho <strong>relativo</strong> ao arquivo que importa. <code>./</code> quer dizer "na mesma pasta"; <code>../</code> sobe uma pasta.</dd>
+  <dt>src/lib/</dt><dd>a convenção do Svelte: código que não é componente (módulos, stores, funções) fica em <code>lib</code>; componentes em <code>lib</code> também.</dd>
+  <dt>import { cliques } from './contador.js'</dt><dd>traga só o que está exportado com esse nome. Se o nome não bater, o navegador reclama na hora.</dd>
+</dl>
+
+<p>Para saber onde o store é usado, a Ana usa o terminal. Este é o comando e a saída de verdade no projeto dela:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "cliques" src
+src/lib/contador.js:3:// o valor começa em zero; qualquer componente que usar $cliques acompanha
+src/lib/contador.js:4:export const cliques = writable(0);
+src/App.svelte:2:  import { cliques } from './lib/contador.js';
+src/App.svelte:6:<p>Cliques: {$cliques}</p>
+src/App.svelte:7:<button onclick={() => $cliques = $cliques + 1}>+1</button></pre>
+
+<p>O <code>grep -rn</code> procura um texto em todos os arquivos de uma pasta e mostra <em>arquivo:linha</em>. O <code>-r</code> é de "recursivo" (entra nas subpastas) e o <code>-n</code> mostra o número da linha. Ler essa saída é o jeito mais rápido de descobrir quem depende do store antes de mudar o valor inicial dele.</p>
+
+<hr>
+
+<h2>6. O contrato: um <code>subscribe</code> que avisa</h2>
+
+<p>Aqui vai a parte que separa quem decora de quem entende. Um store não é uma classe mágica do Svelte: é <strong>um objeto com um método <code>subscribe</code></strong>. É só isso que o compilador exige para aceitar o cifrão. O <code>writable</code> que você importa é uma fábrica que monta esse objeto com três peças: o valor guardado, o conjunto de quem está inscrito, e os métodos para escrever e avisar.</p>
+
+<p>Veja o mesmo store escrito à mão. Ele não importa nada e cumpre o contrato:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let valor = 0;
+  const inscritos = new Set();
+
+  const contador = {
+    subscribe(fn) {
+      fn(valor);
+      inscritos.add(fn);
+      return () =&gt; inscritos.delete(fn);
+    },
+    set(novo) {
+      valor = novo;
+      inscritos.forEach((fn) =&gt; fn(valor));
+    }
+  };
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$contador}&lt;/p&gt;
+&lt;button onclick={() =&gt; contador.set($contador + 1)}&gt;+1&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>subscribe(fn)</dt><dd>quem quer ser avisado chama este método e entrega uma função <code>fn</code>. O store guarda essa função na lista de inscritos.</dd>
+  <dt>fn(valor)</dt><dd>o primeiro aviso é imediato: o store entrega o valor atual na hora, para o visor não nascer vazio.</dd>
+  <dt>return () =&gt; inscritos.delete(fn)</dt><dd>o <code>subscribe</code> devolve uma função para <em>desassinar</em>. O Svelte chama essa função quando o componente sai da tela, e assim não fica ninguém inscrito num componente que não existe mais.</dd>
+  <dt>inscritos.forEach((fn) =&gt; fn(valor))</dt><dd>a parte que quase todo mundo esquece: escrever não basta, é preciso <strong>avisar</strong> cada inscrito com o valor novo.</dd>
+</dl>
+
+<div class="warning">
+<strong>As caixas deste guia e o <code>svelte/store</code></strong>
+<p>Cada caixa "Experimente" compila <strong>um</strong> componente no seu navegador, sem módulos extras: o import de <code>svelte/store</code> não funciona ali. Por isso, nas caixas desta aula, o store é escrito à mão como acima — é o mesmo contrato que o <code>writable</code> cumpre. As saídas de arquivo e de terminal vêm do <code>writable</code> de verdade, com o compilador de verdade.</p>
+</div>
+
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1 +1">
+<p class="try-task"><strong>Missão:</strong> o botão chama <code>set</code>, mas a tela não muda: ninguém é avisado. Faça o valor escritor chegar aos inscritos e o clique mostrar <code>Cliques: 1</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let valor = 0;
+  const contador = {
+    subscribe(fn) {
+      fn(valor);
+      return () =&gt; {};
+    },
+    set(novo) {
+      valor = novo;
+    }
+  };
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$contador}&lt;/p&gt;
+&lt;button onclick={() =&gt; contador.set($contador + 1)}&gt;+1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let valor = 0;
+  const inscritos = new Set();
+  const contador = {
+    subscribe(fn) {
+      fn(valor);
+      inscritos.add(fn);
+      return () =&gt; inscritos.delete(fn);
+    },
+    set(novo) {
+      valor = novo;
+      inscritos.forEach((fn) =&gt; fn(valor));
+    }
+  };
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$contador}&lt;/p&gt;
+&lt;button onclick={() =&gt; contador.set($contador + 1)}&gt;+1&lt;/button&gt;</pre>
+</div>
+
+<p>A solução tem três linhas a mais que o código inicial, e são exatamente as três que o <code>writable</code> já traz prontas. Guardar os inscritos, avisar cada um e devolver a função de cancelamento: esse é o trabalho que você não precisa escrever quando importa <code>writable</code>.</p>
+
+<hr>
+
+<h2>7. A conta que acompanha o store</h2>
+
+<p>Mostrar <code>$contador</code> é fácil: o compilador sabe assinar. O problema aparece quando você quer mostrar <em>uma conta</em> feita com o valor do store. Uma variável comum calculada uma vez não acompanha nada:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable } from 'svelte/store';
+
+  const cliques = writable(0);
+  let dobro = $cliques * 2;
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques} · dobro: {dobro}&lt;/p&gt;</pre>
+
+<p>Aqui <code>dobro</code> é uma variável normal: ela recebe <code>0 * 2</code> no momento em que o componente é montado e nunca mais é recalculada. O <code>$cliques</code> dentro do HTML se atualiza; o <code>dobro</code> fica congelado no primeiro valor. A correção é pedir a conta de novo a cada mudança, com <code>$derived</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable } from 'svelte/store';
+
+  const cliques = writable(0);
+  const dobro = $derived($cliques * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques} · dobro: {dobro}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0 · dobro: 0&lt;/p&gt;</pre>
+
+<p><code>$derived</code> marca a conta como dependente: quando <code>$cliques</code> avisa que mudou, a conta é refeita e o HTML se redesenha. O store continua sendo a fonte da verdade; o <code>$derived</code> é só o cálculo que olha para ela. A diferença entre <code>let dobro</code> e <code>const dobro = $derived(…)</code> é a diferença entre uma foto e um espelho.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1 · dobro: 2 +1">
+<p class="try-task"><strong>Missão:</strong> o clique muda o contador, mas o dobro fica em <code>0</code>. Faça a conta acompanhar o store para o clique mostrar <code>Cliques: 1 · dobro: 2</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let valor = 0;
+  const inscritos = new Set();
+  const contador = {
+    subscribe(fn) {
+      fn(valor);
+      inscritos.add(fn);
+      return () =&gt; inscritos.delete(fn);
+    },
+    set(novo) {
+      valor = novo;
+      inscritos.forEach((fn) =&gt; fn(valor));
+    }
+  };
+
+  let dobro = $contador * 2;
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$contador} · dobro: {dobro}&lt;/p&gt;
+&lt;button onclick={() =&gt; contador.set($contador + 1)}&gt;+1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let valor = 0;
+  const inscritos = new Set();
+  const contador = {
+    subscribe(fn) {
+      fn(valor);
+      inscritos.add(fn);
+      return () =&gt; inscritos.delete(fn);
+    },
+    set(novo) {
+      valor = novo;
+      inscritos.forEach((fn) =&gt; fn(valor));
+    }
+  };
+
+  const dobro = $derived($contador * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$contador} · dobro: {dobro}&lt;/p&gt;
+&lt;button onclick={() =&gt; contador.set($contador + 1)}&gt;+1&lt;/button&gt;</pre>
+</div>
+
+<hr>
+
+<h2>8. <code>readable</code>: o valor que só o dono escreve</h2>
+
+<p>Nem todo valor deve poder ser escrito por qualquer um. O horário de abertura da padaria é decidido pela Ana, não pelo componente que mostra a placa. Para esses casos existe <code>readable</code>: um store que nasce com um valor e não tem <code>set</code> nem <code>update</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, readable } from 'svelte/store';
+
+  const abertura = readable('06:00');
+  const fila = writable([]);
+&lt;/script&gt;
+
+&lt;p&gt;Abre às {$abertura}&lt;/p&gt;
+{#each $fila as pedido}
+  &lt;p&gt;{pedido}&lt;/p&gt;
+{:else}
+  &lt;p&gt;fila vazia&lt;/p&gt;
+{/each}</pre>
+
+<pre class="out">&lt;p&gt;Abre às 06:00&lt;/p&gt; &lt;p&gt;fila vazia&lt;/p&gt;</pre>
+
+<p>O <code>readable</code> também aceita uma <strong>função de início</strong> como segundo argumento. Ela roda na primeira vez que alguém assina o store e devolve uma função de limpeza, que roda quando o último inscrito vai embora. É o lugar certo para um relógio, um <code>setInterval</code> ou uma conexão que só deve existir enquanto alguém está olhando. Os dois argumentos bastam: o valor inicial é o primeiro, e é ele que aparece antes de a função de início escrever outra coisa.</p>
+
+<p>Existe ainda <code>readonly</code>, que embrulha um store existente e entrega só a parte de leitura: um componente recebe esse embrulho e não consegue escrever no valor original, mesmo que queira. A chamada a <code>set</code> num store <code>readonly</code> falha com <code>r.set is not a function</code> — a propriedade simplesmente não existe no objeto.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Quem escreve</th><th>Uso típico</th></tr>
+<tr><td><code>writable(valor)</code></td><td>qualquer um que tenha o store</td><td>carrinho, filtro, contador, lista de pedidos</td></tr>
+<tr><td><code>readable(valor, início?)</code></td><td>ninguém, depois de criado</td><td>hora do dia, tamanho da janela, posição do mouse</td></tr>
+<tr><td><code>readonly(store)</code></td><td>o dono do store original</td><td>entregar leitura para um componente filho</td></tr>
+<tr><td><code>derived(store, fn)</code></td><td>ninguém: é sempre calculado</td><td>total do carrinho, quantidade de itens (próxima aula)</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>9. <code>get()</code>: ler o valor sem o cifrão</h2>
+
+<p>Dentro do HTML, o cifrão resolve. Mas e quando você precisa do valor dentro de uma função, de um cálculo no <code>&lt;script&gt;</code> ou de um arquivo <code>.js</code> que nem é componente? Aí entra <code>get()</code>, também de <code>svelte/store</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable, get } from 'svelte/store';
+
+  const cliques = writable(0);
+  const comecou = get(cliques);
+&lt;/script&gt;
+
+&lt;p&gt;Começou em {comecou}; agora: {$cliques}&lt;/p&gt;
+&lt;button onclick={() =&gt; $cliques = $cliques + 1}&gt;+1&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Começou em 0; agora: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt;</pre>
+
+<p>No projeto da Ana o store vem de <code>./contador.js</code>, e não daqui: o <code>get</code> funciona igual, porque ele só precisa do objeto. Aqui o store nasce no próprio arquivo para a saída caber num exemplo só.</p>
+
+<p><code>get(cliques)</code> devolve o valor que está no quadro naquele instante e <strong>não</strong> cria nenhuma ligação. Se o valor mudar depois, <code>comecou</code> continua <code>0</code>: é uma foto, não um visor. Isso é uma qualidade, não um defeito — dentro de uma função você quase sempre quer o valor de agora, não uma assinatura que dispara renderizações.</p>
+
+<p>O lugar em que <code>get()</code> brilha é fora do componente. Veja a Ana testando o store direto no terminal, sem abrir o navegador:</p>
+
+<pre class="term">ana@notebook:~/loja$ node --input-type=module -e "import { get } from 'svelte/store'; import { cliques } from './src/lib/contador.js'; cliques.set(3); console.log('get:', get(cliques));"
+get: 3</pre>
+
+<p>Três coisas aconteceram nessa linha comprida. O <code>node</code> rodou um módulo ES direto (<code>--input-type=module</code>), importou o <code>svelte/store</code> do projeto, escreveu <code>3</code> no store com <code>set</code> e leu de volta com <code>get</code>. O store funciona sem componente nenhum, porque ele é só JavaScript. É por isso que ele é um bom lugar para guardar dados que precisam durar mais do que uma tela.</p>
+
+<div class="tip">
+<strong><code>get()</code> dentro do componente raramente é o que você quer</strong>
+<p>Se o valor precisa acompanhar mudanças no HTML, use <code>$cliques</code>. Se precisa acompanhar dentro do script, use <code>$derived</code>. <code>get()</code> é para ler uma vez: número inicial, checagem, teste, arquivo que não é componente.</p>
+</div>
+
+<hr>
+
+<h2>10. Store com objeto e com lista</h2>
+
+<p>Um store guarda qualquer valor, inclusive objetos e listas. O acesso é o de sempre, com o cifrão antes do nome e o ponto depois:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable } from 'svelte/store';
+
+  const pedido = writable({ pao: 2, bolo: 1 });
+&lt;/script&gt;
+
+&lt;p&gt;{$pedido.pao} pães e {$pedido.bolo} bolo&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;2 pães e 1 bolo&lt;/p&gt;</pre>
+
+<p>Aqui mora a pegadinha mais cara desta aula. Quando o valor do store é uma lista, <strong>mexer na lista não avisa ninguém</strong>. O store só sabe que algo mudou quando <code>set</code> ou <code>update</code> é chamado; um <code>push</code> no array muda o array e deixa todos os visores mostrando a lista velha. A regra é: para mudar uma lista, monte uma lista nova.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:pão bolo adicionar">
+<p class="try-task"><strong>Missão:</strong> o botão usa <code>push</code> e a tela continua com um pão só. Faça a lista mostrar os dois itens — <code>pão</code> e <code>bolo</code> — avisando quem está inscrito.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = ['pão'];
+  const inscritos = new Set();
+  const lista = {
+    subscribe(fn) {
+      fn(itens);
+      inscritos.add(fn);
+      return () =&gt; inscritos.delete(fn);
+    },
+    set(novo) {
+      itens = novo;
+      inscritos.forEach((fn) =&gt; fn(itens));
+    }
+  };
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each $lista as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; $lista.push('bolo')}&gt;adicionar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = ['pão'];
+  const inscritos = new Set();
+  const lista = {
+    subscribe(fn) {
+      fn(itens);
+      inscritos.add(fn);
+      return () =&gt; inscritos.delete(fn);
+    },
+    set(novo) {
+      itens = novo;
+      inscritos.forEach((fn) =&gt; fn(itens));
+    }
+  };
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each $lista as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; lista.set([...$lista, 'bolo'])}&gt;adicionar&lt;/button&gt;</pre>
+</div>
+
+<p>A solução troca <code>$lista.push('bolo')</code> por <code>lista.set([...$lista, 'bolo'])</code>. Os três pontinhos espalham os itens antigos dentro de uma lista nova, e o <code>'bolo'</code> entra no fim. Como é uma lista nova, o <code>set</code> avisa todo mundo e a tela se redesenha. Com o <code>update</code> do <code>writable</code> a ideia é a mesma: <code>lista.update((l) =&gt; [...l, 'bolo'])</code>.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são reais. As duas primeiras vêm do compilador e a terceira, do renderizador que executa o componente. Elas não foram reescritas: é esse o texto que aparece.</p>
+
+<div class="cenario">
+<strong>Erro 1 — cifrão no nome da variável</strong>
+<p>Declarar o store já com <code>$</code> no nome é o engano mais comum de quem traduz "ler com cifrão" para "declarar com cifrão". O compilador reserva o prefixo:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { writable } from 'svelte/store';
+  let $contador = writable(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$contador}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 6): The $ prefix is reserved, and cannot be used for variables and imports</pre>
+<p>"O prefixo $ é reservado e não pode ser usado para variáveis e imports." A tradução prática: o nome do store é <code>contador</code>, sem cifrão. O cifrão só aparece onde o valor é <em>lido</em>, e o compilador cuida da assinatura sozinho.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — o cifrão dentro de <code>&lt;script module&gt;</code></strong>
+<p>O bloco <code>&lt;script module&gt;</code> roda uma vez, fora do componente, e não tem onde pendurar um visor. Um <code>$contador</code> ali é recusado:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  import { writable } from 'svelte/store';
+  export const contador = writable(0);
+  const dobro = $contador * 2;
+&lt;/script&gt;
+
+&lt;p&gt;{$contador}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 16): Cannot reference store value inside `&lt;script module&gt;`</pre>
+<p>"Não é possível referenciar o valor de um store dentro de <code>&lt;script module&gt;</code>." O valor muda com o tempo, e o bloco de módulo não tem um componente para redesenhar. Ali dentro, use <code>get(contador)</code> — e saiba que essa leitura não acompanha nada.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — cifrão num valor que não é store</strong>
+<p>O compilador aceita <code>$contador</code> em qualquer nome; quem confere se aquilo é um store é o tempo de execução. Este componente compila e quebra ao desenhar:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let contador = 0;
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$contador}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: store.subscribe is not a function</pre>
+<p>"<code>store.subscribe</code> não é uma função." O cifrão supõe um objeto com <code>subscribe</code>; um número não tem esse método. Quando essa mensagem aparecer, procure a declaração do nome: quase sempre é um <code>let valor = 0</code> que deveria ser <code>writable(0)</code> — ou um store que não foi importado.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Para que serve</th><th>Exemplo</th></tr>
+<tr><td><code>writable</code></td><td>store que qualquer um pode escrever</td><td><code>const c = writable(0)</code></td></tr>
+<tr><td><code>readable</code></td><td>store que só nasce, não muda por fora</td><td><code>const h = readable('06:00')</code></td></tr>
+<tr><td><code>readonly</code></td><td>embrulho de leitura em volta de outro store</td><td><code>readonly(c)</code></td></tr>
+<tr><td><code>get</code></td><td>ler o valor uma vez, sem assinar</td><td><code>get(c)</code></td></tr>
+<tr><td><code>set</code></td><td>escrever um valor pronto</td><td><code>c.set(3)</code></td></tr>
+<tr><td><code>update</code></td><td>escrever a partir do valor atual</td><td><code>c.update((n) =&gt; n + 1)</code></td></tr>
+<tr><td><code>$</code></td><td>ler assinando, dentro do componente</td><td><code>{$c}</code> e <code>$c = 3</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que usar</th></tr>
+<tr><td>Valor que só um componente usa</td><td><code>$state</code>, sem store nenhum</td></tr>
+<tr><td>Valor compartilhado entre componentes distantes</td><td>store num módulo <code>.js</code></td></tr>
+<tr><td>Valor que um filho só pode ler</td><td><code>readonly(store)</code> ou <code>readable</code></td></tr>
+<tr><td>Conta feita a partir de um store</td><td><code>$derived($store * 2)</code></td></tr>
+<tr><td>Ler o valor dentro de uma função</td><td><code>get(store)</code></td></tr>
+<tr><td>Mudar uma lista guardada no store</td><td><code>store.update((l) =&gt; [...l, novo])</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>O que tem dentro</th></tr>
+<tr><td><code>src/lib/contador.js</code></td><td>o store criado e exportado</td></tr>
+<tr><td><code>src/lib/Placar.svelte</code></td><td>quem mostra <code>{$cliques}</code></td></tr>
+<tr><td><code>src/App.svelte</code></td><td>quem monta os componentes e, às vezes, escreve no store</td></tr>
+</table>
+</div>
+
+<p>Para conferir o que mudou no projeto depois de juntar os arquivos, o comando de build continua sendo o juiz:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 114 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CZPRagr9.js  37.70 kB │ gzip: 14.54 kB
+✓ built in 1.31s</pre>
+
+<p>Eram 111 módulos antes de o store entrar no projeto; com o módulo novo e o componente que o importa, o Vite conta 114. Cada arquivo importado é um módulo transformado — e o tamanho final subiu porque o <code>svelte/store</code> agora faz parte do pacote.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Por que usar um store em vez de <code>$state</code>?</p>
+<label><input type="radio" name="q1"> porque o store é mais rápido</label>
+<label><input type="radio" name="q1"> porque <code>$state</code> não funciona com listas</label>
+<label><input type="radio" name="q1"> porque o store pode morar fora do componente e ser lido por vários componentes</label>
+<label><input type="radio" name="q1"> porque o store é obrigatório em qualquer componente</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que o cifrão em <code>{$cliques}</code> faz?</p>
+<label><input type="radio" name="q1"> cria uma cópia do valor que nunca muda</label>
+<label><input type="radio" name="q1"> assina o store e mostra o valor atual, redesenhando quando ele muda</label>
+<label><input type="radio" name="q1"> escreve o valor inicial no store</label>
+<label><input type="radio" name="q1"> transforma o store em <code>$state</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual é o mínimo que um objeto precisa ter para o Svelte aceitar o cifrão?</p>
+<label><input type="radio" name="q1"> um método <code>subscribe</code></label>
+<label><input type="radio" name="q1"> um método <code>set</code></label>
+<label><input type="radio" name="q1"> uma propriedade <code>value</code></label>
+<label><input type="radio" name="q1"> ser criado por <code>writable</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { <input data-answer="writable"> } from 'svelte/store';<br><br>const cliques = writable(<input data-answer="0">);<br><br>&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;<br><br>// o store começa em zero e qualquer componente que usar $cliques acompanha</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><strong>Store</strong> é um valor que mora fora do componente e avisa quem está inscrito quando muda.</li>
+  <li><code>writable(valor)</code> cria um store que aceita escrita; <code>readable</code> cria um que só o dono muda.</li>
+  <li>O <strong>cifrão</strong> assina: <code>{$cliques}</code> mostra o valor atual e se redesenha quando ele muda.</li>
+  <li><code>set(valor)</code> escreve um valor pronto; <code>update((velho) =&gt; novo)</code> escreve a partir do valor atual.</li>
+  <li>Dentro do componente, <code>$cliques = 0</code> e <code>$cliques += 1</code> são atalhos para <code>set</code> e <code>update</code>.</li>
+  <li>Para compartilhar, crie o store num módulo <code>.js</code> com <code>export</code> e importe onde precisar.</li>
+  <li>O contrato é só um: <code>subscribe(fn)</code> entrega o valor atual, guarda <code>fn</code> e devolve a função de cancelamento.</li>
+  <li><code>$derived($store * 2)</code> refaz a conta a cada mudança; um <code>let</code> comum calcula uma vez e congela.</li>
+  <li><code>get(store)</code> lê o valor naquele instante, sem assinar: é uma foto, não um visor.</li>
+  <li>Para mudar lista ou objeto guardado, escreva um valor novo (<code>[...lista, item]</code>); <code>push</code> não avisa ninguém.</li>
+  <li>Os erros desta aula: cifrão no nome, cifrão dentro de <code>&lt;script module&gt;</code> e cifrão num valor que não tem <code>subscribe</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

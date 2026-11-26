@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>setContext e getContext — o recado que desce sozinho | Guia Svelte</title>
+<meta name="description" content="setContext e getContext no Svelte 5: passar dados para os filhos sem props, chaves, hasContext e reatividade, com a saída real do compilador e do terminal da Ana.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">setContext e getContext</span></h1>
+
+<p class="intro">A Ana pendurou um quadro no corredor da padaria com um recado só: "a cor das placas deste mês é verde". Não é um envelope entregue na mão de cada funcionário — é um aviso na parede, que qualquer um que passe por ali lê. No Svelte, esse quadro se chama <strong>contexto</strong>: o componente de cima escreve com <code>setContext</code>, e qualquer componente abaixo dele lê com <code>getContext</code>, sem precisar de prop em cada andar. Esta aula é sobre quando o recado resolve o problema — e quando ele só cria confusão.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é contexto e por que ele existe quando há muitos andares de componentes.</li>
+  <li>Escrever com <code>setContext(chave, valor)</code> e ler com <code>getContext(chave)</code>.</li>
+  <li>Por que a <strong>chave</strong> é um contrato entre quem escreve e quem lê.</li>
+  <li>Descobrir se o recado existe com <code>hasContext</code> antes de ler.</li>
+  <li>Como o contexto desce sozinho, sem prop em cada componente do caminho.</li>
+  <li>Contexto com objeto: o que é reativo e o que não é.</li>
+  <li>Contexto × props × store: o custo e o uso de cada um.</li>
+  <li>Boas chaves: texto, símbolo e o risco de duas chaves iguais.</li>
+  <li>Os três erros reais desta aula, com a mensagem que aparece.</li>
+  <li>Como o terminal mostra quem escreve e quem lê o contexto no projeto.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o recado no quadro do corredor</h2>
+
+<p>A padaria da Ana tem três níveis de gente: ela, o caixa e os atendentes do balcão. Quando ela decide que as placas do mês são verdes, ela não sai entregando um papel para cada pessoa — ela escreve no quadro do corredor e quem precisa lê. Quem está no corredor lê; quem está no depósito, fechado, não lê nada.</p>
+
+<p>É exatamente assim que o contexto do Svelte funciona. Um componente escreve um valor com uma <strong>chave</strong>; qualquer componente <em>abaixo</em> dele na árvore consegue ler aquele valor pela mesma chave. Os componentes que não estão abaixo — irmãos, primos, gente de outro galho — não veem nada. O recado desce pela árvore, nunca sobe e nunca atravessa para o lado.</p>
+
+<p>A vantagem aparece quando a distância é grande. Imagine que o painel do caixa mostre uma etiqueta lá no fundo, cinco componentes abaixo. Passar a cor por prop exigiria que cada um dos quatro componentes do caminho recebesse a prop e a repassasse — quatro assinaturas mudadas para um valor que nenhum deles usa. Com contexto, o painel escreve uma vez e a etiqueta lê direto. Os quatro do caminho não sabem que o recado existe.</p>
+
+<p>O preço é que o contexto é invisível. Uma prop aparece na assinatura do componente; um contexto não aparece em lugar nenhum. Quem lê um componente isolado não tem como adivinhar que ele depende de um recado escrito três andares acima. É por isso que o guia trata contexto como ferramenta para problemas específicos — tema, sessão, carrinho — e não como substituto de prop.</p>
+
+<hr>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No Svelte</th></tr>
+<tr><td>O quadro no corredor</td><td>o contexto do componente</td></tr>
+<tr><td>O assunto escrito no topo: "cor das placas"</td><td>a chave: <code>'cor'</code></td></tr>
+<tr><td>Pregar o recado no quadro</td><td><code>setContext('cor', 'verde')</code></td></tr>
+<tr><td>Ler o recado</td><td><code>getContext('cor')</code></td></tr>
+<tr><td>Perguntar "tem recado sobre cor?"</td><td><code>hasContext('cor')</code></td></tr>
+<tr><td>Envelope entregue na mão de um funcionário</td><td>uma prop: <code>&lt;Cartao cor="verde" /&gt;</code></td></tr>
+<tr><td>O mural da cidade, que todos leem</td><td>um store num módulo <code>.js</code></td></tr>
+</table>
+</div>
+
+<p>A última linha merece atenção porque é a confusão mais comum. Contexto e store guardam valores compartilhados, mas o alcance é diferente: o store vale para o projeto inteiro, o contexto vale só para a subárvore de quem escreveu. Se dois painéis independentes precisam de cores diferentes, contexto resolve; se todos precisam do mesmo carrinho, store.</p>
+
+<hr>
+
+<h2>3. <code>setContext</code> e <code>getContext</code>: a mesma chave nos dois lados</h2>
+
+<p>As duas funções vêm de <code>svelte</code> — não de <code>svelte/store</code>. Quem escreve chama <code>setContext</code> no corpo do componente, durante a inicialização; quem lê chama <code>getContext</code> com a mesma chave.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { setContext, getContext } from 'svelte';
+
+  setContext('cor', 'verde');
+  const cor = getContext('cor');
+&lt;/script&gt;
+
+&lt;p&gt;Cor: {cor}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cor: verde&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>setContext('cor', 'verde')</dt><dd>escreve no quadro: a chave <code>'cor'</code> passa a valer <code>'verde'</code> para todo mundo que estiver abaixo deste componente.</dd>
+  <dt>getContext('cor')</dt><dd>lê o recado. Se ninguém escreveu essa chave em nenhum ancestral, o resultado é <code>undefined</code> — sem erro, sem aviso.</dd>
+  <dt>'cor'</dt><dd>a chave. Ela é a única ligação entre quem escreve e quem lê: nomes diferentes, recados diferentes.</dd>
+  <dt>+ svelte</dt><dd>as duas funções vêm do pacote <code>svelte</code>. Elas não são runas: precisam de <code>import</code>.</dd>
+</dl>
+
+<p>Neste exemplo os dois lados estão no mesmo arquivo, e a leitura devolve o que acabou de ser escrito. Isso ajuda a entender o mecanismo, mas o ganho real aparece quando o leitor está em outro componente, mais abaixo — é o que a seção 5 mostra.</p>
+
+<div class="tip">
+<strong>Quando chamar <code>setContext</code></strong>
+<p>No corpo do <code>&lt;script&gt;</code>, no nível de cima, junto com as declarações. O Svelte só aceita escrever no contexto durante a inicialização do componente; tentar escrever depois, dentro de um <code>$effect</code> ou de um clique, produz o erro que aparece na seção 10.</p>
+</div>
+
+<hr>
+
+<h2>4. <code>hasContext</code>: quando o recado pode não existir</h2>
+
+<p><code>getContext</code> sempre devolve alguma coisa: o valor, se a chave existir, ou <code>undefined</code>, se não existir. Como <code>undefined</code> é um valor legítimo, o componente não tem como saber se o recado não foi escrito ou se foi escrito como "nada". Para isso existe <code>hasContext</code>, que responde sim ou não sem ler:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { setContext, hasContext, getContext } from 'svelte';
+
+  setContext('cor', 'verde');
+  const tem = hasContext('cor');
+  const temTamanho = hasContext('tamanho');
+  const tamanho = getContext('tamanho') ?? 'padrão';
+&lt;/script&gt;
+
+&lt;p&gt;cor? {tem} · tamanho? {temTamanho} · tamanho: {tamanho}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;cor? true · tamanho? false · tamanho: padrão&lt;/p&gt;</pre>
+
+<p>O padrão que escala é este: o componente que lê decide o que fazer quando não há recado. Um valor padrão com <code>??</code> resolve a maioria dos casos; <code>hasContext</code> serve quando a ausência muda o comportamento — por exemplo, um componente de cartão que, sem contexto de tema, desenha o estilo antigo.</p>
+
+<div class="trysvelte" data-goal="out:cor: verde">
+<p class="try-task"><strong>Missão:</strong> o quadro diz <code>'cor'</code> e o leitor procura <code>'color'</code>. Faça a leitura achar o recado e a tela mostrar <code>cor: verde</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  import { setContext, getContext, hasContext } from 'svelte';
+
+  setContext('cor', 'verde');
+  const cor = getContext('color');
+
+&lt;/script&gt;
+
+&lt;p&gt;cor: {cor ?? 'sem cor'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { setContext, getContext, hasContext } from 'svelte';
+
+  setContext('cor', 'verde');
+  const cor = getContext('cor');
+
+&lt;/script&gt;
+
+&lt;p&gt;cor: {cor ?? 'sem cor'}&lt;/p&gt;</pre>
+</div>
+
+<p>A missão parece boba e é a que mais acontece na vida real: o erro não é de sintaxe, é de <strong>combinado</strong>. Uma chave escrita à mão de um lado e digitada de outro jeito do outro lado não dá erro nenhum — dá <code>undefined</code> e uma tela vazia. A defesa é ter a chave num lugar só, e o próximo bloco mostra como.</p>
+
+<div class="trysvelte" data-goal="out:borda: sem borda">
+<p class="try-task"><strong>Missão:</strong> ninguém escreveu a chave <code>'borda'</code> e a tela mostra <code>borda:</code> vazio. Use <code>hasContext</code> para escrever <code>sem borda</code> quando o recado não existir.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  import { setContext, getContext, hasContext } from 'svelte';
+
+  setContext('cor', 'verde');
+  const borda = getContext('borda');
+
+&lt;/script&gt;
+
+&lt;p&gt;borda: {borda}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { setContext, getContext, hasContext } from 'svelte';
+
+  setContext('cor', 'verde');
+  const borda = hasContext('borda') ? getContext('borda') : 'sem borda';
+
+&lt;/script&gt;
+
+&lt;p&gt;borda: {borda}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que a solução não usa <code>??</code>: ela pergunta antes. As duas formas funcionam quando o valor ausente é <code>undefined</code>; a diferença aparece quando o recado existe e vale <code>null</code> de propósito — aí <code>??</code> trocaria por <code>'sem borda'</code> e <code>hasContext</code> respeitaria o <code>null</code>.</p>
+
+<hr>
+
+<h2>5. O contexto desce sozinho, sem props</h2>
+
+<p>Agora o caso real da Ana. O painel define a cor e monta um cartão; o cartão lê a cor. São dois arquivos, e o segundo não recebe prop nenhuma:</p>
+
+<pre class="file" data-file="src/lib/Painel.svelte">&lt;script&gt;
+  import { setContext } from 'svelte';
+  import Cartao from './Cartao.svelte';
+
+  setContext('cor', 'verde');
+&lt;/script&gt;
+
+&lt;section&gt;
+  &lt;Cartao /&gt;
+&lt;/section&gt;</pre>
+
+<pre class="file" data-file="src/lib/Cartao.svelte">&lt;script&gt;
+  import { getContext } from 'svelte';
+
+  const cor = getContext('cor');
+&lt;/script&gt;
+
+&lt;p&gt;Cor: {cor}&lt;/p&gt;</pre>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Painel from './Painel.svelte';
+&lt;/script&gt;
+
+&lt;Painel /&gt;</pre>
+
+<p>Some da assinatura do <code>Cartao</code> qualquer menção à cor. Ele não recebe prop, não recebe argumento, não sabe quem escreveu — só sabe que existe um recado com a chave <code>'cor'</code>. O <code>App</code> também não sabe: ele só monta o painel. Se um dia o painel mudar a cor para azul, o cartão acompanha sem uma linha alterada.</p>
+
+<p>Para caber num arquivo só, dá para escrever e ler no mesmo componente. O resultado é idêntico ao da composição dos três arquivos:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { setContext, getContext } from 'svelte';
+
+  setContext('cor', 'verde');
+  const cor = getContext('cor');
+&lt;/script&gt;
+
+&lt;section&gt;
+  &lt;p&gt;Cor: {cor}&lt;/p&gt;
+&lt;/section&gt;</pre>
+
+<pre class="out">&lt;section&gt;&lt;p&gt;Cor: verde&lt;/p&gt;&lt;/section&gt;</pre>
+
+<p>O <code>&lt;section&gt;</code> na saída não é enfeite: é a prova de que houve dois componentes no caminho. No projeto da Ana, quem desenha a <code>section</code> é o <code>Painel</code> e quem desenha o <code>p</code> é o <code>Cartao</code>. A tag externa vem de fora, o texto vem de dentro, e o valor atravessou a fronteira pelo contexto.</p>
+
+<div class="warning">
+<strong>Contexto não é "variável global"</strong>
+<p>Cada instância de <code>Painel</code> tem o seu contexto. Se a tela mostrar dois painéis, um com verde e outro com azul, cada <code>Cartao</code> lê o recado do seu painel — porque a leitura sobe pela árvore, e cada galho tem o seu quadro. Um store não faria isso: seria um valor só para todos.</p>
+</div>
+
+<hr>
+
+<h2>6. Contexto com objeto e reatividade</h2>
+
+<p>Contexto carrega qualquer valor: texto, número, função, objeto. Quando o valor precisa <strong>mudar</strong> com o tempo, a pergunta é outra: esse objeto é reativo? Um objeto comum guardado no contexto não avisa ninguém quando muda; um objeto com <code>$state</code> avisa.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { setContext, getContext } from 'svelte';
+
+  const carrinho = $state({ itens: [], total: 0 });
+  setContext('carrinho', carrinho);
+
+  const mesmo = getContext('carrinho');
+&lt;/script&gt;
+
+&lt;p&gt;{mesmo.itens.length} itens · R$ {mesmo.total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; mesmo.itens.push('pão')}&gt;adicionar pão&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;0 itens · R$ 0.00&lt;/p&gt; &lt;button&gt;adicionar pão&lt;/button&gt;</pre>
+
+<p>Aqui o contexto carrega a <strong>referência</strong> de um objeto com estado. Quem lê recebe a mesma referência, não uma cópia: quando o cartão empurra um pão na lista, o objeto é o mesmo que o painel conhece, e todos os componentes que mostram <code>itens.length</code> se redesenham. Se o objeto fosse comum (<code>const carrinho = { itens: [] }</code>), o <code>push</code> mudaria a lista e ninguém seria avisado — mesma armadilha da aula de stores.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Itens: 1 adicionar">
+<p class="try-task"><strong>Missão:</strong> o clique empurra um pão, mas a tela continua em <code>Itens: 0</code>. Faça o objeto do carrinho ser reativo para o clique mostrar <code>Itens: 1</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  import { setContext, getContext, hasContext } from 'svelte';
+
+  const carrinho = { itens: [] };
+  setContext('carrinho', carrinho);
+
+  const lido = getContext('carrinho');
+
+&lt;/script&gt;
+
+&lt;p&gt;Itens: {lido.itens.length}&lt;/p&gt;
+&lt;button onclick={() =&gt; lido.itens.push('pão')}&gt;adicionar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { setContext, getContext, hasContext } from 'svelte';
+
+  const carrinho = $state({ itens: [] });
+  setContext('carrinho', carrinho);
+
+  const lido = getContext('carrinho');
+
+&lt;/script&gt;
+
+&lt;p&gt;Itens: {lido.itens.length}&lt;/p&gt;
+&lt;button onclick={() =&gt; lido.itens.push('pão')}&gt;adicionar&lt;/button&gt;</pre>
+</div>
+
+<p>A mudança é de três caracteres — <code>$state(</code> em volta do objeto — e o comportamento é outro. Não é mágica do contexto: é o <code>$state</code> fazendo o trabalho de sempre, agora num objeto que vários componentes compartilham. O contexto só foi o veículo.</p>
+
+<hr>
+
+<h2>7. Contexto × props × store: quando usar cada um</h2>
+
+<p>As três formas levam dados de um lugar para outro, e escolher errado custa caro em manutenção. O critério é sempre o mesmo: <strong>quem precisa do valor</strong> e <strong>quem pode mudá-lo</strong>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Alcance</th><th>Quando é a certa</th></tr>
+<tr><td>prop</td><td>um filho direto</td><td>valor que o pai escolhe por filho e que muda de instância para instância</td></tr>
+<tr><td>contexto</td><td>a subárvore inteira</td><td>valor que todos os filhos daquele galho compartilham: tema, formulário, sessão, carrinho</td></tr>
+<tr><td>store</td><td>o projeto inteiro</td><td>valor que atravessa galhos diferentes ou vive fora da árvore</td></tr>
+</table>
+</div>
+
+<p>O sinal de que você devia usar contexto é o "repasse de prop": um componente que recebe <code>cor</code> e não usa <code>cor</code> para nada, só para entregar ao filho. Quando o mesmo repasse aparece em dois ou três andares, o contexto paga o custo de ser invisível.</p>
+
+<p>O sinal contrário, de que contexto é exagero: um componente que tem <strong>um</strong> filho direto e um valor só dele. Aí a prop é mais clara, porque o valor aparece na assinatura e quem lê o arquivo sabe de onde ele vem. Contexto esconde a dependência de propósito — e esconder tem preço.</p>
+
+<hr>
+
+<h2>8. Chaves: um nome combinado, não um apelido</h2>
+
+<p>A chave é o que liga os dois lados, então ela merece cuidado. Três regras práticas:</p>
+
+<p><strong>Um arquivo com a chave, importado pelos dois lados.</strong> Em vez de digitar <code>'cor'</code> em dois lugares, exporte a chave de um módulo e importe:</p>
+
+<pre class="file" data-file="src/lib/chaves.js">export const COR = Symbol('cor');
+export const CARRINHO = Symbol('carrinho');</pre>
+
+<p>Um <code>Symbol</code> é um valor único e impronunciável, perfeito para não colidir com a chave de outra pessoa. Com texto, duas bibliotecas diferentes podem usar <code>'theme'</code> e uma sobrescrever a outra; com símbolo, isso não acontece. O custo é que a chave deixa de ser legível no DevTools — você vê o nome do símbolo, não o valor.</p>
+
+<p><strong>Texto quando é simples.</strong> Para um projeto pequeno, <code>'cor'</code> é mais legível e não dá problema. A regra é: se duas partes do projeto escrevem contexto, prefira símbolos.</p>
+
+<p><strong>A última escrita vence.</strong> Se o mesmo componente chamar <code>setContext('cor', 'verde')</code> e depois <code>setContext('cor', 'azul')</code>, quem ler recebe <code>'azul'</code>. Não há aviso, não há erro — é sobrescrita. Isso é útil quando um componente quer trocar o recado do pai para os seus próprios filhos, e perigoso quando é engano.</p>
+
+<p>E há o caso que mais confunde: o componente que escreve contexto e <strong>também</strong> lê a mesma chave recebe o que ele mesmo escreveu. O contexto que ele lê é o da subárvore dele, não o do pai. Se você quiser ler o recado do pai e passar um novo para os filhos, leia antes de escrever:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { setContext, getContext } from 'svelte';
+
+  setContext('cor', 'verde');
+  const corDoPai = getContext('cor');
+  setContext('cor', 'azul');
+&lt;/script&gt;
+
+&lt;p&gt;pai: {corDoPai}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;pai: verde&lt;/p&gt;</pre>
+
+<p>A saída mostra <code>verde</code>, e não <code>azul</code>. A leitura aconteceu <strong>antes</strong> da segunda escrita, então pegou o valor daquele instante; um filho que lesse depois veria <code>azul</code>. Contexto não tem "antes" e "depois" guardados: tem o valor que está no quadro na hora em que cada um olha. E o componente que escreve também lê o próprio quadro — por isso o <code>getContext</code> devolveu <code>verde</code>, o que ele mesmo tinha acabado de escrever, e não um valor de um pai distante.</p>
+
+<hr>
+
+<h2>9. O recado vive enquanto o pai vive</h2>
+
+<p>O contexto não é guardado num lugar central: ele pertence à instância do componente que escreveu. Quando o painel sai da tela, o recado vai com ele. Se o painel voltar, o recado é escrito de novo, do zero, com o valor daquele momento.</p>
+
+<p>Isso tem duas consequências práticas. A primeira: não tente guardar dados que precisam durar mais que a tela no contexto — para isso existe o store, que vive no módulo e não morre com o componente. A segunda: o valor escrito no contexto é o valor da <strong>inicialização</strong>. Se você escrever <code>setContext('cor', cor)</code> onde <code>cor</code> é uma variável comum, o recado fica com o valor de quando o componente nasceu; mudanças depois não chegam aos filhos.</p>
+
+<p>Para o recado acompanhar mudanças, o valor precisa ser reativo por dentro: um objeto com <code>$state</code> (como o carrinho da seção 6), um store, ou uma função que os filhos chamam para obter o valor atual. O contexto em si é só o fio: ele não observa nada.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que você guarda</th><th>Os filhos acompanham mudanças?</th></tr>
+<tr><td>texto ou número (<code>'verde'</code>, <code>3</code>)</td><td>não: é uma cópia do valor daquele instante</td></tr>
+<tr><td>objeto comum</td><td>não: mudar uma propriedade não avisa ninguém</td></tr>
+<tr><td>objeto com <code>$state</code></td><td>sim: as propriedades são reativas</td></tr>
+<tr><td>store (<code>writable</code>)</td><td>sim: o filho usa <code>$store</code> normalmente</td></tr>
+<tr><td>função</td><td>sim, se a função ler algo reativo ao ser chamada</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são reais, copiadas da execução. As duas primeiras vêm do renderizador e a terceira também — nenhuma delas é erro de sintaxe, e é isso que as torna traiçoeiras.</p>
+
+<div class="cenario">
+<strong>Erro 1 — contexto dentro de <code>&lt;script module&gt;</code></strong>
+<p>O bloco de módulo roda uma vez, fora de qualquer componente, e não tem quadro onde pendurar recado:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  import { setContext } from 'svelte';
+  setContext('cor', 'verde');
+&lt;/script&gt;
+
+&lt;p&gt;ok&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: https://svelte.dev/e/lifecycle_outside_component</pre>
+<p>O Svelte 5 identifica os erros de ciclo de vida por um endereço de documentação: <code>lifecycle_outside_component</code> quer dizer "esta função só pode ser chamada dentro da inicialização de um componente". A correção é mover a chamada para o <code>&lt;script&gt;</code> normal — o contexto é por instância, e o módulo não tem instância.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — importar de <code>svelte/store</code></strong>
+<p><code>setContext</code> não é uma função de store. Trocar o módulo no <code>import</code> produz um erro de exportação:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { setContext } from 'svelte/store';
+
+  setContext('cor', 'verde');
+&lt;/script&gt;
+
+&lt;p&gt;ok&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: The requested module 'svelte/store' does not provide an export named 'setContext'</pre>
+<p>"O módulo <code>svelte/store</code> não fornece uma exportação chamada <code>setContext</code>." Guarde o mapa: <code>setContext</code>, <code>getContext</code>, <code>hasContext</code>, <code>onMount</code> e <code>tick</code> vêm de <code>svelte</code>; <code>writable</code>, <code>readable</code>, <code>derived</code> e <code>get</code> vêm de <code>svelte/store</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — o recado que não chegou</strong>
+<p>Este é o clássico. Ninguém escreveu a chave <code>'carrinho'</code> acima deste componente, então <code>getContext</code> devolveu <code>undefined</code> e o primeiro acesso a uma propriedade quebrou:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { getContext } from 'svelte';
+
+  const carrinho = getContext('carrinho');
+&lt;/script&gt;
+
+&lt;p&gt;{carrinho.itens.length} itens&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'itens')</pre>
+<p>"Não é possível ler propriedades de <code>undefined</code> (lendo <code>'itens'</code>)." Três causas possíveis, em ordem de frequência: a chave digitada diferente nos dois lados; o componente que lê não está abaixo de quem escreve; e o <code>setContext</code> foi chamado dentro de uma função que ainda não rodou. Comece conferindo a chave, letra por letra.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>De onde vem</th></tr>
+<tr><td><code>setContext(chave, valor)</code></td><td>escreve o recado para a subárvore</td><td><code>svelte</code></td></tr>
+<tr><td><code>getContext(chave)</code></td><td>lê o recado; <code>undefined</code> se não existe</td><td><code>svelte</code></td></tr>
+<tr><td><code>hasContext(chave)</code></td><td>diz se o recado existe</td><td><code>svelte</code></td></tr>
+<tr><td><code>getContext(chave) ?? padrão</code></td><td>lê com valor de reserva</td><td>JavaScript puro</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>undefined</code> na tela</td><td>chave diferente, ou leitor fora da subárvore</td></tr>
+<tr><td><code>lifecycle_outside_component</code></td><td><code>setContext</code> em <code>&lt;script module&gt;</code> ou depois da inicialização</td></tr>
+<tr><td>valor certo na montagem, errado depois</td><td>o recado guardou uma cópia; use <code>$state</code> ou store</td></tr>
+<tr><td>um contexto sobrescreveu o outro</td><td>duas partes usando a mesma chave de texto; use <code>Symbol</code></td></tr>
+</table>
+</div>
+
+<p>No projeto da Ana, o terminal mostra o mapa do contexto em duas linhas de <code>grep</code>. Quem escreve e quem lê aparece de uma vez:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "Context" src
+src/lib/Cartao.svelte:2:  import { getContext } from 'svelte';
+src/lib/Cartao.svelte:4:  const cor = getContext('cor');
+src/lib/Painel.svelte:2:  import { setContext } from 'svelte';
+src/lib/Painel.svelte:5:  setContext('cor', 'verde');</pre>
+
+<p>Duas linhas em <code>Cartao.svelte</code> e duas em <code>Painel.svelte</code>: o cartão lê, o painel escreve. Quando um contexto não chega, esse é o primeiro comando a rodar — ele responde "quem escreve essa chave?" sem você abrir arquivo por arquivo.</p>
+
+<p>O outro comando do dia a dia é só para lembrar onde ficam as peças. A pasta <code>src/lib</code> da Ana tem, no momento, quatro arquivos:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls -1 src/lib
+Cartao.svelte
+Painel.svelte
+contador.js
+total.js</pre>
+
+<p>Dois componentes (<code>Cartao</code> e <code>Painel</code>) e dois módulos de store (<code>contador</code> e <code>total</code>). O <code>-1</code> é o que manda o <code>ls</code> listar um por linha, que é como a saída fica legível quando ela vai para um texto em vez de uma tela de terminal larga.</p>
+
+<div class="tip">
+<strong>Um contexto, um módulo</strong>
+<p>Se mais de um componente escreve ou lê a mesma chave, coloque a chave num arquivo só (<code>src/lib/contexto.js</code>) e importe nos dois lados. Além de evitar erro de digitação, o arquivo vira a documentação do recado: qualquer pessoa que procure a chave encontra a explicação no mesmo lugar.</p>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Quem consegue ler um contexto escrito por um componente?</p>
+<label><input type="radio" name="q1"> qualquer componente do projeto</label>
+<label><input type="radio" name="q1"> só o filho direto</label>
+<label><input type="radio" name="q1"> os componentes abaixo dele na árvore, em qualquer profundidade</label>
+<label><input type="radio" name="q1"> só quem importa o mesmo arquivo</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. O que <code>getContext('cor')</code> devolve quando ninguém escreveu essa chave?</p>
+<label><input type="radio" name="q1"> <code>undefined</code>, sem erro</label>
+<label><input type="radio" name="q1"> uma mensagem de erro de compilação</label>
+<label><input type="radio" name="q1"> uma string vazia</label>
+<label><input type="radio" name="q1"> o contexto do componente mais próximo, seja qual for a chave</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. Um objeto comum guardado no contexto faz os filhos se redesenhandem quando uma propriedade muda?</p>
+<label><input type="radio" name="q1"> sim, contexto é sempre reativo</label>
+<label><input type="radio" name="q1"> não; para acompanhar mudanças o objeto precisa ser <code>$state</code> ou um store</label>
+<label><input type="radio" name="q1"> sim, desde que o objeto tenha mais de uma propriedade</label>
+<label><input type="radio" name="q1"> só se o filho usar <code>hasContext</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { setContext, getContext } from 'svelte';<br><br>// quem escreve, no componente de cima<br><input data-answer="setContext">('cor', 'verde');<br><br>// quem lê, num componente abaixo<br>const cor = <input data-answer="getContext">('cor');</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><strong>Contexto</strong> é um valor que um componente deixa disponível para toda a sua subárvore, sem passar props.</li>
+  <li><code>setContext(chave, valor)</code> escreve; <code>getContext(chave)</code> lê; <code>hasContext(chave)</code> responde se existe.</li>
+  <li>As três vêm de <code>svelte</code> — não de <code>svelte/store</code>.</li>
+  <li>A <strong>chave</strong> é o contrato: nomes diferentes nos dois lados devolvem <code>undefined</code> sem aviso.</li>
+  <li>O contexto desce pela árvore e não sobe nem atravessa para os lados.</li>
+  <li>Cada instância tem o seu contexto: dois painéis podem ter cores diferentes.</li>
+  <li>O recado guarda o valor da inicialização; para acompanhar mudanças, guarde um objeto com <code>$state</code> ou um store.</li>
+  <li><code>setContext</code> só pode ser chamado durante a inicialização; em <code>&lt;script module&gt;</code> dá <code>lifecycle_outside_component</code>.</li>
+  <li>Use contexto para tema, sessão, formulário e carrinho; use prop para o filho direto; use store para o projeto inteiro.</li>
+  <li>Com duas ou mais partes usando a mesma chave, prefira um <code>Symbol</code> exportado de um módulo.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
