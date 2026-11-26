@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checklist de Publicação — o que conferir antes de anunciar | Guia Svelte</title>
+<meta name="description" content="A lista de conferência da Ana antes de publicar o site: título e descrição, títulos, alt, links externos, status HTTP, 404, robots.txt, peso e variáveis de ambiente.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Checklist de Publicação</span></h1>
+
+<p class="intro">Na véspera da inauguração, a Ana varreu a loja, conferiu o troco, testou a cafeteira e esqueceu o cartaz do preço na porta. Site é igual: o código compila, o build passa, e ainda assim alguém publica uma página sem título, um link quebrado e uma imagem sem descrição. Esta aula é a lista que ela pendura atrás do balcão: dez conferências, cada uma com um comando ou um teste que dá para repetir em dois minutos. Nada aqui é opinião — o que aparece é a resposta real do servidor e do terminal.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que conferir antes de dizer que o site está pronto.</li>
+  <li>Como escrever <code>title</code> e <code>description</code> com <code>&lt;svelte:head&gt;</code>.</li>
+  <li>Por que uma página tem um <code>h1</code> só e uma escada de títulos.</li>
+  <li>Como dar nome a imagens e a botões de ícone.</li>
+  <li>Por que link com <code>target="_blank"</code> pede <code>rel="noopener"</code>.</li>
+  <li>Como ler os cabeçalhos e os códigos de status com <code>curl</code>.</li>
+  <li>O que fazer com a página 404 e com o <code>robots.txt</code>.</li>
+  <li>Como interpretar o tamanho que o build imprime.</li>
+  <li>Por que uma variável de ambiente ausente quebra o build.</li>
+  <li>Os três erros reais que esta lista pega.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a lista que impede o esquecimento</h2>
+
+<p>Uma lista de conferência não serve para quem não sabe; serve para quem sabe e está cansado. Na padaria, a Ana sabe untar a forma, mas no dia de produção grande ela esquece uma. A lista não ensina a untar: ela garante que a forma untada não seja o passo pulado às seis da manhã.</p>
+
+<p>Publicar um site tem o mesmo problema. O build passa, a página abre, e o título da aba continua "SvelteKit". A descrição que o Google mostra é vazia. A imagem do pão não tem texto alternativo. Nenhum desses problemas impede o site de funcionar — e é por isso que eles sobrevivem tanto tempo. Só uma conferência chata e repetível os pega.</p>
+
+<p>O custo de fazer a lista é baixo: cada item tem um comando ou uma olhada de dez segundos. O custo de não fazer é o que a Ana já viveu: descobrir no dia seguinte que o link do cardápio estava quebrado desde a publicação. O resto desta aula é a lista, com a saída de cada conferência.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>Na publicação do site</th></tr>
+<tr><td>Conferir se o cartaz tem o preço</td><td>Conferir se a página tem <code>title</code> e <code>description</code></td></tr>
+<tr><td>Conferir se a placa está na altura dos olhos</td><td>Conferir um <code>h1</code> por página</td></tr>
+<tr><td>Conferir se o pão está identificado</td><td>Conferir <code>alt</code> nas imagens</td></tr>
+<tr><td>Conferir se a porta abre</td><td>Conferir o status <code>200</code> e a página 404</td></tr>
+<tr><td>Conferir se o cartaz não voou</td><td>Conferir links e <code>robots.txt</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. A lista inteira, em uma tabela</h2>
+
+<p>Antes de detalhar, a lista completa. Cada linha vira uma seção adiante, com o comando que prova o resultado:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>#</th><th>O que conferir</th><th>Como conferir</th><th>Pronto quando</th></tr>
+<tr><td>1</td><td>Título e descrição</td><td>abrir a aba e ver o texto; <code>curl</code> no HTML</td><td>cada página tem os seus, sem repetir</td></tr>
+<tr><td>2</td><td>Um <code>h1</code> por página</td><td><code>npm run check</code> e leitura do HTML</td><td>há um só, e os subtítulos são <code>h2</code></td></tr>
+<tr><td>3</td><td><code>alt</code> em imagem e nome em botão de ícone</td><td><code>npm run check</code></td><td>zero aviso de acessibilidade</td></tr>
+<tr><td>4</td><td>Link externo com <code>rel="noopener"</code></td><td>busca no código</td><td>todo <code>target="_blank"</code> tem o par</td></tr>
+<tr><td>5</td><td>Status e tipo da página</td><td><code>curl -sI</code></td><td><code>200</code> e <code>text/html</code></td></tr>
+<tr><td>6</td><td>Página 404 e <code>robots.txt</code></td><td><code>curl</code> num endereço errado</td><td>404 de verdade, com mensagem</td></tr>
+<tr><td>7</td><td>Peso do que o navegador baixa</td><td>saída do <code>npm run build</code></td><td>gzip abaixo do que você combinou</td></tr>
+<tr><td>8</td><td>Variáveis de ambiente</td><td><code>npm run build</code> na máquina de produção</td><td>o build passa sem variável faltando</td></tr>
+</table>
+</div>
+
+<p>Oito linhas, não dez. A lista encurta quando você percebe que algumas conferências são automáticas: o <code>svelte-check</code> cobre os itens 2 e 3; o build cobre o 7 e o 8. Sobram quatro que exigem olho humano — e é aí que a lista ganha o salário.</p>
+
+<hr>
+
+<h2>3. Título e descrição: o cartão de visita no Google</h2>
+
+<p>O <code>title</code> é o texto da aba e a primeira linha azul do resultado de busca. A <code>description</code> é o resumo embaixo. O projeto da Ana, como sai do gerador, não tem nenhum dos dois. O comando confirma:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/ | grep -o '&lt;title&gt;[^&lt;]*&lt;/title&gt;'
+ana@notebook:~/loja/kit$ </pre>
+
+<p>A resposta vazia é o diagnóstico. O <code>grep</code> não achou a tag, então a aba mostra o nome do arquivo ou o endereço, e o Google inventa um título com o primeiro texto que encontrar. Para consertar, o título e a descrição entram com <code>&lt;svelte:head&gt;</code>, que coloca a tag no <code>&lt;head&gt;</code> da página:</p>
+
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+  let titulo = $state('Pães frescos toda manhã');
+&lt;/script&gt;
+
+&lt;svelte:head&gt;
+  &lt;title&gt;{titulo} | Padaria da Ana&lt;/title&gt;
+  &lt;meta name="description" content="Pão francês, pão de queijo e bolo de cenoura saindo do forno às 6h, no centro de São Paulo." /&gt;
+&lt;/svelte:head&gt;
+
+&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;p&gt;{titulo}.&lt;/p&gt;</pre>
+
+<p>O componente mostra um <code>h1</code> e um parágrafo; o título e a descrição não aparecem na tela, mas viajam no HTML. Quando a Ana muda o texto do título, o da aba muda junto — o valor é o mesmo estado.</p>
+
+<h3>A anatomia do <code>svelte:head</code></h3>
+
+<dl class="anatomy">
+  <dt>&lt;svelte:head&gt;</dt><dd>um bloco especial que manda o conteúdo para o <code>&lt;head&gt;</code> do documento, mesmo estando no meio do componente. Ele não desenha nada no corpo.</dd>
+  <dt>&lt;title&gt;</dt><dd>o texto da aba e do resultado de busca. O ideal é de 50 a 60 caracteres; acima disso o Google corta com reticências.</dd>
+  <dt>&lt;meta name="description"&gt;</dt><dd>o resumo de 120 a 155 caracteres. Não é fator de posição, mas é o anúncio: é o que a cliente lê antes de clicar.</dd>
+  <dt>{titulo}</dt><dd>o valor do estado entra no título como em qualquer outro lugar. O <code>| Padaria da Ana</code> fica fixo para dar contexto.</dd>
+</dl>
+
+<p>Duas regras práticas. Primeira: o título e a descrição são de cada página, não do site inteiro. O layout pode ter um padrão, mas a página de contato não deve anunciar "pães frescos". Segunda: a descrição promete o que a página entrega. Prometer "cardápio completo" e abrir uma página com três linhas é o tipo de coisa que o visitante não perdoa.</p>
+
+<p>Depois da correção, o mesmo comando imprime a tag. O HTML que o servidor manda é o mesmo que a aula de <a href="load.html">+page.js</a> usa para conferir o conteúdo:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/ | grep -o '&lt;title&gt;[^&lt;]*&lt;/title&gt;'
+&lt;title&gt;Pães frescos toda manhã | Padaria da Ana&lt;/title&gt;</pre>
+
+<hr>
+
+<h2>4. Um <code>h1</code> por página e a escada dos títulos</h2>
+
+<p>O <code>h1</code> é o título da página, e deve existir um só. Os <code>h2</code> são as seções, os <code>h3</code> são as subseções. Essa ordem não é estética: o leitor de tela usa os títulos para montar um índice, e o navegador usa a hierarquia para entender o conteúdo. Dois <code>h1</code> fazem o índice começar duas vezes.</p>
+
+<p>O erro comum é usar o título pelo tamanho da letra. Se o texto precisa ficar menor, o lugar de resolver isso é o CSS, não a tag. O componente abaixo tem dois títulos do mesmo nível — e o segundo deveria ser um subtítulo:</p>
+
+<div class="trysvelte" data-goal="html:<h1>Padaria da Ana</h1> <h2>Pães de hoje</h2> <p>Pão francês e pão de queijo.</p>">
+<p class="try-task"><strong>Missão:</strong> a página tem dois <code>h1</code>, e o segundo deveria ser um subtítulo. Transforme <em>Pães de hoje</em> no nível seguinte, sem mudar o texto.</p>
+<pre class="script" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;h1&gt;Pães de hoje&lt;/h1&gt;
+&lt;p&gt;Pão francês e pão de queijo.&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;h2&gt;Pães de hoje&lt;/h2&gt;
+&lt;p&gt;Pão francês e pão de queijo.&lt;/p&gt;</pre>
+</div>
+
+<p>A correção é uma letra: <code>h1</code> vira <code>h2</code>. O tamanho na tela muda, e se você quiser o tamanho antigo de volta, o caminho é uma regra de CSS para <code>h2</code> — não voltar a tag errada. Essa separação entre significado e aparência é a mesma que o guia repete desde o primeiro componente.</p>
+
+<hr>
+
+<h2>5. Imagens com <code>alt</code> e botões com nome</h2>
+
+<p>Toda imagem precisa de um texto alternativo. Ele aparece quando a imagem não carrega e é o que o leitor de tela anuncia. A regra é descrever a <em>função</em> da imagem: "foto do pão francês na vitrine" ajuda; "imagem1.jpg" não ajuda ninguém.</p>
+
+<p>Imagem decorativa é a exceção: se ela não acrescenta informação, use <code>alt=""</code>. O atributo vazio diz ao leitor de tela "pule isto", e é diferente de não ter atributo, que faz o leitor anunciar o nome do arquivo.</p>
+
+<p>O <code>svelte-check</code> pega a falta do atributo antes de você publicar. O aviso real é este:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run check
+
+> kit@0.0.1 check
+> svelte-kit sync && svelte-check --tsconfig ./jsconfig.json
+
+Getting Svelte diagnostics...
+
+src/routes/vitrine/+page.svelte:2:1
+Warn: `<img>` element should have an alt attribute
+https://svelte.dev/e/a11y_missing_attribute (svelte)
+<h1>Vitrine</h1>
+<img src="/paes/frances.jpg">
+<p>Pão francês quentinho.</p>
+
+====================================
+svelte-check found 0 errors and 1 warning in 1 file</pre>
+
+<p>Repare nas três informações: o arquivo e a linha (<code>src/routes/vitrine/+page.svelte:2:1</code>), o nome da regra (<code>a11y_missing_attribute</code>) e o trecho do código. O total no fim é <code>0 errors and 1 warning</code>: o projeto compila, mas não está pronto para publicar.</p>
+
+<p>Botão de ícone tem o mesmo problema por outro caminho. Um botão com <code>×</code> não tem texto útil; o leitor de tela anuncia "x". O nome vai em <code>aria-label</code>:</p>
+
+<div class="trysvelte" data-goal="html:<h1>Padaria da Ana</h1> <button aria-label=&quot;fechar&quot;>×</button>">
+<p class="try-task"><strong>Missão:</strong> o botão só tem um <code>×</code> e nenhum nome acessível. Dê a ele o nome <em>fechar</em>, do jeito que um leitor de tela anuncia.</p>
+<pre class="script" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;button&gt;×&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;button aria-label="fechar"&gt;×&lt;/button&gt;</pre>
+</div>
+
+<p>O <code>aria-label</code> não muda nada na tela; ele só existe para quem não vê o ícone. É a diferença entre um botão que a Ana reconhece pela posição e um botão que qualquer pessoa consegue anunciar.</p>
+
+<hr>
+
+<h2>6. Links que abrem em outra aba</h2>
+
+<p>Quando um link usa <code>target="_blank"</code>, a página nova recebe uma referência à antiga em <code>window.opener</code>. Em tese, a página nova poderia usar essa referência para trocar o endereço da aba da Ana. Os navegadores modernos já bloqueiam o caso mais óbvio, mas o atributo continua sendo a defesa explícita — e o aviso do validador.</p>
+
+<p>O par é <code>rel="noopener"</code>. Se você também quer que a página nova não saiba de onde veio, acrescente <code>noreferrer</code>. Para link externo em nova aba, o pacote completo é <code>rel="noopener noreferrer"</code>.</p>
+
+<div class="trysvelte" data-goal="html:<h1>Padaria da Ana</h1> <a href=&quot;https://exemplo.com&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;>cardápio do fornecedor</a>">
+<p class="try-task"><strong>Missão:</strong> o link abre em outra aba e não avisa a nova página que ela não deve mexer na antiga. Acrescente o atributo <code>rel="noopener"</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;a href="https://exemplo.com" target="_blank"&gt;cardápio do fornecedor&lt;/a&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;a href="https://exemplo.com" target="_blank" rel="noopener"&gt;cardápio do fornecedor&lt;/a&gt;</pre>
+</div>
+
+<p>Link interno não precisa de nada disso: <code>/paes</code> abre na mesma aba e o SvelteKit cuida da navegação. O atributo é para o que sai do site — o fornecedor, o mapa, o Instagram da padaria.</p>
+
+<hr>
+
+<h2>7. O que o servidor devolve</h2>
+
+<p>O navegador não vê o seu código; vê a resposta HTTP. Antes de anunciar, peça a resposta do endereço principal e leia as primeiras linhas:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run preview
+
+> kit@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose
+
+ana@notebook:~/loja/kit$ curl -sI localhost:4173/ | head -6
+HTTP/1.1 200 OK
+Vary: Origin
+content-length: 4308
+content-type: text/html
+etag: "1cwvzn4"
+x-sveltekit-page: true</pre>
+
+<p>O que importa nessa resposta: <code>200</code> diz que a página existe; <code>content-type: text/html</code> diz que o navegador deve desenhar, e não baixar; <code>etag</code> é a impressão digital do conteúdo, usada para responder "não mudou" numa segunda visita. O <code>x-sveltekit-page</code> é um cabeçalho do próprio Kit, que confirma que a resposta veio da aplicação e não de um arquivo estático.</p>
+
+<p>O que <em>não</em> aparece também informa: não há <code>content-security-policy</code>, nem <code>x-frame-options</code>, nem <code>strict-transport-security</code>. Para uma padaria, tudo bem; para uma página com login, esses cabeçalhos são parte da lista. Eles entram num <code>hooks.server.js</code>, que a aula de <a href="hooks.html">hooks.server.js</a> explica — e você confere com o mesmo <code>curl -sI</code>.</p>
+
+<div class="warning">
+<strong>Confira no build, não no desenvolvimento</strong>
+<p>O servidor de desenvolvimento responde com cabeçalhos diferentes e sem compressão. A conferência vale na porta <code>4173</code>, que serve o resultado do <code>npm run build</code>. É a mesma ressalva da aula de <a href="deploy.html">Build e Deploy</a>.</p>
+</div>
+
+<hr>
+
+<h2>8. A página 404 e o <code>robots.txt</code></h2>
+
+<p>Todo site tem endereços que não existem, e o visitante chega neles por link velho, por erro de digitação ou por um cartão impresso com uma letra trocada. O que ele vê nesse momento é a página 404. Se você não escreveu uma, o SvelteKit mostra a dele:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -sI localhost:4173/contatoo | head -6
+HTTP/1.1 404 Not Found
+Vary: Origin
+content-length: 4369
+content-type: text/html
+etag: "umhs6s"
+x-sveltekit-page: true
+
+ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '<h1>[^<]*</h1>'
+<h1>404</h1>
+
+ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '<p>[^<]*</p>'
+<p>Not Found</p></pre>
+
+<p>O status <code>404</code> é o que importa para o buscador: ele entende que a página não existe e não a indexa. Um site que devolve <code>200</code> com o texto "não encontrado" engana o robô e aparece na busca com o endereço errado. Para trocar a mensagem, crie <code>src/routes/+error.svelte</code> — a aula de <a href="pagina-de-erro.html">+error.svelte</a> mostra o caminho.</p>
+
+<p>O outro arquivo é o <code>robots.txt</code>, que fica em <code>static/</code> e diz aos buscadores o que visitar. O projeto da Ana vem com um permissivo:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s localhost:4173/robots.txt
+# allow crawling everything by default
+User-agent: *
+Disallow:</pre>
+
+<p><code>User-agent: *</code> vale para todos os robôs; <code>Disallow:</code> vazio quer dizer "não bloqueie nada". Se o site tiver uma área administrativa, ela entra em <code>Disallow: /admin</code>. E não coloque segredo no <code>robots.txt</code>: ele é público, e esconder um endereço ali é o contrário de proteger.</p>
+
+<hr>
+
+<h2>9. Desempenho: o que o build diz</h2>
+
+<p>O build imprime o tamanho de cada arquivo e o tamanho comprimido com gzip. A segunda coluna é a que conta, porque é o que viaja pela rede na maioria dos servidores:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run build 2>&1 | tail -16
+.svelte-kit/output/client/_app/immutable/entry/start.C6e1yStS.js     0.52 kB │ gzip:  0.30 kB
+.svelte-kit/output/client/_app/immutable/chunks/Beqi9dRN.js          1.32 kB │ gzip:  0.65 kB
+.svelte-kit/output/client/_app/immutable/chunks/DUTjbZNf.js          1.73 kB │ gzip:  0.88 kB
+.svelte-kit/output/client/_app/immutable/entry/app.BUm6XxkF.js       1.86 kB │ gzip:  0.74 kB
+.svelte-kit/output/client/_app/immutable/nodes/0.RdujkD-t.js         2.74 kB │ gzip:  1.14 kB
+.svelte-kit/output/client/_app/immutable/chunks/Cs3aoLG-.js          4.43 kB │ gzip:  1.98 kB
+.svelte-kit/output/client/_app/immutable/chunks/MOz-gQIu.js         37.38 kB │ gzip: 13.82 kB
+.svelte-kit/output/client/_app/immutable/chunks/DIWTmQqg.js         43.78 kB │ gzip: 16.95 kB
+
+✓ built in 214ms
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app for the platform of your choosing
+✔ done</pre>
+
+<p>Os dois arquivos maiores são o JavaScript do Svelte e o do roteador: <code>16.95 kB</code> e <code>13.82 kB</code> comprimidos. O resto é pequeno. Numa página como a da padaria, isso é um bom começo; o que costuma estourar o orçamento não é o framework, e sim as imagens e as fontes.</p>
+
+<p>Três decisões resolvem a maior parte do peso: imagens no formato certo e no tamanho em que aparecem, <code>loading="lazy"</code> no que está abaixo da dobra, e fonte do sistema em vez de baixar três famílias. Nenhuma delas precisa de biblioteca. O número do build não é uma nota: é um teto que você combina com você mesmo e confere a cada publicação.</p>
+
+<div class="tip">
+<strong>Meça no celular, não no notebook</strong>
+<p>O DevTools tem o modo de rede lenta e o de CPU reduzida. A página que abre em 200 ms no seu computador pode levar quatro segundos no 3G do ponto de ônibus. A lista da Ana é feita para a cliente, não para o notebook dela.</p>
+</div>
+
+<hr>
+
+<h2>10. Variáveis de ambiente: o build que quebra</h2>
+
+<p>Segredo não entra no código. A senha do painel, a chave do serviço de e-mail e o endereço do banco ficam em variáveis de ambiente, e o SvelteKit as expõe por <code>$env/static/private</code> ou <code>$env/dynamic/private</code>. O problema aparece quando a variável existe no notebook e não existe na máquina de produção:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run build 2>&1 | grep -A6 "MISSING_EXPORT"
+[MISSING_EXPORT] "SENHA_DO_PAINEL" is not exported by "node_modules/@sveltejs/kit/src/runtime/env/static/private.js".
+   ╭─[ src/routes/painel/+page.server.js:1:10 ]
+   │
+ 1 │ import { SENHA_DO_PAINEL } from '$env/static/private';
+   │          ───────┬───────
+   │                 ╰───────── Missing export
+───╯</pre>
+
+<p>A mensagem <code>MISSING_EXPORT</code> quer dizer que o módulo não exporta o nome que você pediu — e o motivo é que a variável não estava definida na hora do build. O conserto é criar a variável no ambiente de publicação (ou no arquivo <code>.env</code>, que não vai para o repositório) e rodar o build de novo.</p>
+
+<p>A diferença entre os dois módulos importa. <code>$env/static/private</code> é lido e embutido no build: se a variável mudar, você precisa publicar de novo. <code>$env/dynamic/private</code> é lido em tempo de execução: muda sem build, ao custo de uma leitura a cada requisição. A aula de <a href="env.html">$env</a> detalha os dois; para a lista, o que importa é que a conferência é feita na máquina certa.</p>
+
+<div class="warning">
+<strong>Nunca confirme o <code>.env</code></strong>
+<p>O arquivo com os segredos fica fora do Git. O que entra no repositório é o <code>.env.example</code>, com os nomes das variáveis e valores de mentira. Se um segredo já foi commitado, trocar a senha é mais importante do que apagar o commit.</p>
+</div>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três saídas abaixo vieram de execuções reais no projeto da Ana. Elas são os itens da lista que mais aparecem na prática.</p>
+
+<div class="cenario">
+<strong>Erro 1 — a imagem sem <code>alt</code></strong>
+<p>O build passa; a conferência de tipos e acessibilidade não. O aviso aponta o arquivo, a linha e a regra.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run check
+
+> kit@0.0.1 check
+> svelte-kit sync && svelte-check --tsconfig ./jsconfig.json
+
+Getting Svelte diagnostics...
+
+src/routes/vitrine/+page.svelte:2:1
+Warn: `<img>` element should have an alt attribute
+https://svelte.dev/e/a11y_missing_attribute (svelte)
+<h1>Vitrine</h1>
+<img src="/paes/frances.jpg">
+<p>Pão francês quentinho.</p>
+
+====================================
+svelte-check found 0 errors and 1 warning in 1 file</pre>
+<p>Como o total é <code>0 errors and 1 warning</code>, é fácil ignorar. Não ignore: o mesmo comando pega <code>on:click</code> antigo, <code>href="#"</code> em link e botão sem tipo. Um projeto que chega no dia da publicação com zero avisos é um projeto em que o aviso seguinte vai ser levado a sério.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — variável de ambiente ausente</strong>
+<p>O build da máquina de produção não conhece a variável que existe no notebook. O erro não diz "falta a variável"; diz que o módulo não exporta aquele nome.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build 2>&1 | grep -A6 "MISSING_EXPORT"
+[MISSING_EXPORT] "SENHA_DO_PAINEL" is not exported by "node_modules/@sveltejs/kit/src/runtime/env/static/private.js".
+   ╭─[ src/routes/painel/+page.server.js:1:10 ]
+   │
+ 1 │ import { SENHA_DO_PAINEL } from '$env/static/private';
+   │          ───────┬───────
+   │                 ╰───────── Missing export
+───╯</pre>
+<p>A pista está no caminho: <code>src/routes/painel/+page.server.js</code> importa <code>SENHA_DO_PAINEL</code> de <code>$env/static/private</code>. Se a variável estivesse definida, o módulo teria o export. Confira o ambiente antes de suspeitar do código.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — o endereço que não existe</strong>
+<p>Um link com uma letra a mais leva à página 404. O <code>curl</code> mostra o status e o corpo:</p>
+<pre class="term">ana@notebook:~/loja/kit$ curl -sI localhost:4173/contatoo | head -6
+HTTP/1.1 404 Not Found
+Vary: Origin
+content-length: 4369
+content-type: text/html
+etag: "umhs6s"
+x-sveltekit-page: true
+
+ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '<h1>[^<]*</h1>'
+<h1>404</h1>
+
+ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '<p>[^<]*</p>'
+<p>Not Found</p></pre>
+<p>O teste rápido é <code>curl -sI</code> em cada endereço que você divulgou: o site, o cardápio, o contato. Se um deles devolver <code>404</code>, o link está errado ou a rota não foi criada. Melhor descobrir com o comando do que com a cliente.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que confere</th></tr>
+<tr><td><code>npm run check</code></td><td>tipos, acessibilidade e avisos do compilador</td></tr>
+<tr><td><code>npm run build</code></td><td>o pacote de produção e o peso de cada arquivo</td></tr>
+<tr><td><code>npm run preview</code></td><td>serve o build em <code>localhost:4173</code></td></tr>
+<tr><td><code>curl -sI endereço</code></td><td>status, tipo e cabeçalhos, sem baixar o corpo</td></tr>
+<tr><td><code>curl -s endereço | grep -o '&lt;title&gt;[^&lt;]*&lt;/title&gt;'</code></td><td>o título que o buscador vê</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Status</th><th>Significado</th><th>Quando aparece</th></tr>
+<tr><td><code>200</code></td><td>tudo certo</td><td>a página existe e foi entregue</td></tr>
+<tr><td><code>307</code></td><td>redirecionamento temporário</td><td><code>redirect(307, …)</code> no load</td></tr>
+<tr><td><code>404</code></td><td>não encontrado</td><td>rota que não existe</td></tr>
+<tr><td><code>500</code></td><td>erro do servidor</td><td>exceção não tratada no load</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Item</th><th>Regra curta</th></tr>
+<tr><td>Título</td><td>50 a 60 caracteres, diferente em cada página</td></tr>
+<tr><td>Descrição</td><td>120 a 155 caracteres, prometendo o que a página entrega</td></tr>
+<tr><td><code>h1</code></td><td>um por página; subtítulo é <code>h2</code></td></tr>
+<tr><td>Imagem</td><td><code>alt</code> descrevendo a função; decorativa usa <code>alt=""</code></td></tr>
+<tr><td>Botão de ícone</td><td><code>aria-label</code> com o nome da ação</td></tr>
+<tr><td>Link externo em nova aba</td><td><code>rel="noopener noreferrer"</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual é o lugar certo para o título e a descrição de uma página?</p>
+<label><input type="radio" name="q1"> dentro de um parágrafo no fim da página</label>
+<label><input type="radio" name="q1"> no <code>vite.config.js</code></label>
+<label><input type="radio" name="q1"> num bloco <code>&lt;svelte:head&gt;</code> do componente da página</label>
+<label><input type="radio" name="q1"> no <code>robots.txt</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. O que o aviso <code>a11y_missing_attribute</code> está pedindo?</p>
+<label><input type="radio" name="q1"> que a imagem tenha um texto alternativo em <code>alt</code></label>
+<label><input type="radio" name="q1"> que o botão tenha um <code>type</code></label>
+<label><input type="radio" name="q1"> que o link abra em outra aba</label>
+<label><input type="radio" name="q1"> que a página tenha mais de um <code>h1</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">3. Para que serve o <code>rel="noopener"</code> num link com <code>target="_blank"</code>?</p>
+<label><input type="radio" name="q1"> para o link abrir mais rápido</label>
+<label><input type="radio" name="q1"> para o buscador não indexar a página</label>
+<label><input type="radio" name="q1"> para a página nova abrir em outra janela</label>
+<label><input type="radio" name="q1"> para a página nova não receber uma referência à aba que a abriu</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;svelte:head&gt;<br>&nbsp;&nbsp;&lt;title&gt;{titulo} | Padaria da Ana&lt;/title&gt;<br>&nbsp;&nbsp;&lt;meta name="<input data-answer="description">" content="Pão fresquinho às 6h."&gt;<br>&lt;/svelte:head&gt;<br><br>// o resumo que aparece embaixo do título no resultado de busca</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>A lista existe para o dia cansado: cada item tem um comando ou uma olhada que prova o resultado.</li>
+  <li><code>title</code> e <code>description</code> são de cada página e entram por <code>&lt;svelte:head&gt;</code>.</li>
+  <li>Um <code>h1</code> por página; a escada segue com <code>h2</code> e <code>h3</code>, e o tamanho se resolve no CSS.</li>
+  <li><code>alt</code> descreve a função da imagem; imagem decorativa usa <code>alt=""</code>.</li>
+  <li>Botão de ícone precisa de <code>aria-label</code> com o nome da ação.</li>
+  <li>Link externo em nova aba leva <code>rel="noopener noreferrer"</code>.</li>
+  <li><code>npm run check</code> pega acessibilidade e tipos; <code>npm run build</code> mostra peso e variável faltando.</li>
+  <li><code>curl -sI</code> mostra status e tipo; o build de produção responde na porta <code>4173</code>.</li>
+  <li>O 404 precisa devolver <code>404</code> de verdade; o <code>robots.txt</code> é público e não guarda segredo.</li>
+  <li>Variável de ambiente ausente quebra o build na máquina de produção, não no seu notebook.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
