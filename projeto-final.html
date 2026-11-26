@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O Projeto Final — juntando tudo num app | Guia Svelte</title>
+<meta name="description" content="O app de pedidos da padaria em três versões: componente com estado, load e action no servidor, hook de sessão e endpoint JSON. Com respostas HTTP e build reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projetos · <span class="hl">O Projeto Final</span></h1>
+
+<p class="intro">Chegou a hora de juntar as peças. A Ana já sabe fazer componente, guardar estado, listar e filtrar, validar formulário e pedir dados ao servidor. O que falta é um <strong>app inteiro</strong>: uma página inicial, uma área de pedidos, um login e um endereço que devolve dados para outros programas. Nesta aula o app nasce em <strong>três versões</strong> — a primeira cabe num arquivo só, a última tem seis — e cada versão é conferida com o código HTTP que o servidor devolveu. O build final também é real, com os números que saíram do terminal.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre uma tela que funciona e um app que lembra.</li>
+  <li>Por que o estado do componente desaparece quando o servidor responde.</li>
+  <li>Como transformar um formulário em <em>action</em> com validação no servidor.</li>
+  <li>Como um <code>load</code> entrega a lista e um <code>fail</code> devolve a mensagem.</li>
+  <li>Onde os dados moram enquanto não existe banco de dados.</li>
+  <li>Como proteger rotas e API com um único <code>hooks.server.js</code>.</li>
+  <li>O que um <code>+server.js</code> devolve e para quem serve.</li>
+  <li>A árvore de arquivos de um app pronto e o endereço de cada um.</li>
+  <li>O que o build de produção mostra no fim do projeto.</li>
+  <li>As três falhas que este app provoca de verdade.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. O mapa antes da obra</h2>
+
+<p>Um app é um conjunto de endereços com uma regra de acesso. A padaria precisa de cinco: a vitrine, o login, os pedidos, a API dos pedidos e a página de erro. Cada um é uma pasta em <code>src/routes</code>, e o que aparece nela depende de dois arquivos — o que desenha (<code>+page.svelte</code>) e o que busca os dados (<code>+page.server.js</code>).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Endereço</th><th>Quem entra</th><th>O que mostra</th></tr>
+<tr><td><code>/</code></td><td>qualquer pessoa</td><td>a vitrine e o link para os pedidos</td></tr>
+<tr><td><code>/login</code></td><td>qualquer pessoa</td><td>o formulário de entrada</td></tr>
+<tr><td><code>/pedidos</code></td><td>só com sessão</td><td>a lista do dia e o formulário de novo pedido</td></tr>
+<tr><td><code>/api/pedidos</code></td><td>só com sessão</td><td>os mesmos dados em JSON</td></tr>
+<tr><td><code>/qualquer-coisa</code></td><td>qualquer pessoa</td><td>a página de erro 404</td></tr>
+</table>
+</div>
+
+<p>A regra de acesso é o que separa um projeto de exercício de um projeto de verdade. Sem ela, a lista de pedidos de todos os clientes fica aberta para quem digitar o endereço. É por isso que as versões desta aula terminam numa aplicação com sessão, e não numa tela bonita.</p>
+
+<hr>
+
+<h2>2. Versão 1 — tudo num arquivo</h2>
+
+<p>A primeira versão é a que você já sabe escrever: um componente com uma lista, um formulário e três estados. Ela roda, mostra os pedidos e aceita um novo — enquanto a página está aberta.</p>
+
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { id: 1, cliente: 'Dona Bia', item: 'Bolo de chocolate', retirada: '8:30' },
+    { id: 2, cliente: 'Firma São José', item: '30 pães franceses', retirada: '10:00' }
+  ]);
+  let cliente = $state('');
+  let item = $state('');
+&lt;/script&gt;
+
+&lt;h1&gt;Pedidos de hoje&lt;/h1&gt;
+
+&lt;form onsubmit={(e) =&gt; {
+  e.preventDefault();
+  pedidos = [...pedidos, { id: Date.now(), cliente, item, retirada: '12:00' }];
+  cliente = '';
+  item = '';
+}}&gt;
+  &lt;input bind:value={cliente} placeholder="Cliente"&gt;
+  &lt;input bind:value={item} placeholder="Pedido"&gt;
+  &lt;button&gt;Adicionar&lt;/button&gt;
+&lt;/form&gt;
+
+&lt;p&gt;{pedidos.length} pedido(s)&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido (pedido.id)}
+    &lt;li&gt;{pedido.retirada} — {pedido.cliente}: {pedido.item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O compilador entrega a lista com dois pedidos e o contador:</p>
+
+<pre class="out">&lt;h1&gt;Pedidos de hoje&lt;/h1&gt; &lt;form&gt;&lt;input value="" placeholder="Cliente"/&gt; &lt;input value="" placeholder="Pedido"/&gt; &lt;button&gt;Adicionar&lt;/button&gt;&lt;/form&gt; &lt;p&gt;2 pedido(s)&lt;/p&gt; &lt;ul&gt;&lt;li&gt;8:30 — Dona Bia: Bolo de chocolate&lt;/li&gt;&lt;li&gt;10:00 — Firma São José: 30 pães franceses&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>let pedidos = $state([...])</dt><dd>a lista vive na memória da página. Some ao recarregar, e cada visitante tem a sua.</dd>
+  <dt>onsubmit com preventDefault()</dt><dd>impede o envio ao servidor. O pedido novo nunca sai do navegador.</dd>
+  <dt>pedidos = [...pedidos, novo]</dt><dd>cria uma lista nova com o item no fim. É o que avisa a tela para redesenhar.</dd>
+  <dt>{pedidos.length} pedido(s)</dt><dd>o contador lido da lista, sempre coerente com o que aparece.</dd>
+  <dt>{#each pedidos as pedido (pedido.id)}</dt><dd>uma linha por pedido, com chave estável para o Svelte saber o que mudou.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="outre:^Total: 75">
+<p class="try-task"><strong>Missão:</strong> o resumo do dia mostra "Total: 0" e nunca muda. Faça ele mostrar a soma dos valores: <strong>"Total: 75"</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { id: 1, item: 'Bolo de chocolate', valor: 45 },
+    { id: 2, item: 'Pães franceses', valor: 30 }
+  ]);
+&lt;/script&gt;
+
+&lt;p&gt;Total: 0&lt;/p&gt;
+&lt;ul&gt;
+  {#each pedidos as p (p.id)}
+    &lt;li&gt;{p.item} — R$ {p.valor}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { id: 1, item: 'Bolo de chocolate', valor: 45 },
+    { id: 2, item: 'Pães franceses', valor: 30 }
+  ]);
+
+  let total = $derived(pedidos.reduce((soma, p) =&gt; soma + p.valor, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;
+&lt;ul&gt;
+  {#each pedidos as p (p.id)}
+    &lt;li&gt;{p.item} — R$ {p.valor}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<hr>
+
+<h2>3. O que o servidor não sabe</h2>
+
+<p>Abra a versão 1, adicione um pedido, aperte F5. A lista volta a ter dois. Isso não é um defeito do Svelte: é a natureza da web. O servidor não guarda nada do que aconteceu na tela, e cada pedido HTTP começa do zero.</p>
+
+<p>Dá para provar com o <code>curl</code>, que não tem JavaScript nem memória de página. Ele pede a mesma página duas vezes e recebe sempre os dois pedidos iniciais:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | grep -o "<p>[0-9]* pedido[^<]*</p>"
+&lt;p&gt;2 pedido(s)&lt;/p&gt;
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | grep -o "<li>[^<]*</li>"
+&lt;li&gt;8:30 — Dona Bia: Bolo de chocolate&lt;/li&gt;
+&lt;li&gt;10:00 — Firma São José: 30 pães franceses&lt;/li&gt;</pre>
+
+<p>A conclusão é a que muda o projeto de patamar: se o pedido precisa sobreviver, ele tem de ser <strong>enviado ao servidor</strong>. E se ele vai para o servidor, alguém precisa decidir o que fazer com ele lá — validar, guardar, responder.</p>
+
+<hr>
+
+<h2>4. Versão 2 — o pedido vira dado do servidor</h2>
+
+<p>A segunda versão move a lista para um módulo e coloca a validação numa <em>action</em>. O formulário passa a ter <code>method="POST"</code>, e o SvelteKit procura a action no <code>+page.server.js</code> ao lado.</p>
+
+<pre class="file" data-file="src/routes/+page.server.js">import { fail } from '@sveltejs/kit';
+import { pedidos, adicionar } from '#lib/pedidos.js';
+
+export function load() {
+  return { pedidos };
+}
+
+export const actions = {
+  default: async ({ request }) =&gt; {
+    const dados = await request.formData();
+    const cliente = dados.get('cliente')?.trim() ?? '';
+    const item = dados.get('item')?.trim() ?? '';
+
+    if (cliente === '' || item === '') {
+      return fail(400, { cliente, item, erro: 'Cliente e pedido são obrigatórios' });
+    }
+
+    adicionar({ cliente, item, retirada: '12:00' });
+    return { ok: true };
+  }
+};</pre>
+
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+  let { data, form } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Pedidos de hoje&lt;/h1&gt;
+
+&lt;form method="POST"&gt;
+  &lt;input name="cliente" placeholder="Cliente" value={form?.cliente ?? ''}&gt;
+  &lt;input name="item" placeholder="Pedido" value={form?.item ?? ''}&gt;
+  &lt;button&gt;Adicionar&lt;/button&gt;
+&lt;/form&gt;
+
+{#if form?.erro}
+  &lt;p class="erro"&gt;{form.erro}&lt;/p&gt;
+{/if}
+
+&lt;p&gt;{data.pedidos.length} pedido(s)&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each data.pedidos as pedido (pedido.id)}
+    &lt;li&gt;{pedido.retirada} — {pedido.cliente}: {pedido.item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;style&gt;
+  .erro { color: #b3261e; font-weight: 600; }
+&lt;/style&gt;</pre>
+
+<p>Três coisas passaram a acontecer no servidor. O <code>load</code> entrega a lista a cada pedido. A action confere os campos e, quando falta algo, responde 400 com a mensagem. E o pedido novo entra no módulo compartilhado, então aparece para qualquer pessoa que pedir a página depois.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -X POST -d 'cliente=&amp;item=' http://localhost:5173/ | grep -o '<p class="erro[^>]*>[^&lt;]*</p>'
+&lt;p class="erro svelte-1uha8ag"&gt;Cliente e pedido são obrigatórios&lt;/p&gt;
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -X POST -d 'cliente=Seu João&amp;item=12 pães de queijo' -o /dev/null -w "%{http_code}\n" http://localhost:5173/
+200
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5173/ | grep -o "<li>[^<]*</li>"
+&lt;li&gt;8:30 — Dona Bia: Bolo de chocolate&lt;/li&gt;
+&lt;li&gt;10:00 — Firma São José: 30 pães franceses&lt;/li&gt;
+&lt;li&gt;12:00 — Seu João: 12 pães de queijo&lt;/li&gt;</pre>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>export function load()</dt><dd>roda no servidor a cada pedido e devolve o que a página precisa. O resultado chega em <code>data</code>.</dd>
+  <dt>export const actions</dt><dd>recebe o POST do formulário. Sem <code>actions</code>, o POST responde 405.</dd>
+  <dt>request.formData()</dt><dd>lê os campos pelo <code>name</code>. Campo sem <code>name</code> não chega.</dd>
+  <dt>fail(400, { … })</dt><dd>resposta de erro com dados: a página redesenha com <code>form.erro</code> preenchido.</dd>
+  <dt>#lib/pedidos.js</dt><dd>o módulo onde a lista mora. Importar de lá é o que faz a action e o <code>load</code> verem os mesmos dados.</dd>
+  <dt>{data.pedidos.length}</dt><dd>o contador agora vem do servidor, e não de um estado do navegador.</dd>
+</dl>
+
+<hr>
+
+<h2>5. Onde os dados moram de verdade</h2>
+
+<p>O módulo <code>#lib/pedidos.js</code> guarda a lista numa variável. Isso funciona enquanto o servidor está de pé: reiniciou, voltou aos dois pedidos de exemplo. E se o site roda em duas máquinas ao mesmo tempo, cada uma tem a sua lista. Não é um banco de dados — é um ensaio dele.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde guardar</th><th>Sobrevive a</th><th>Custo</th></tr>
+<tr><td>Estado do componente</td><td>nada — some ao recarregar</td><td>zero</td></tr>
+<tr><td>Módulo no servidor</td><td>a navegação; some ao reiniciar</td><td>zero, mas engana</td></tr>
+<tr><td>Arquivo JSON no servidor</td><td>a reinicialização</td><td>simples, sem consultas</td></tr>
+<tr><td>Banco de dados</td><td>tudo, inclusive várias máquinas</td><td>instalar, modelar, migrar</td></tr>
+</table>
+</div>
+
+<p>Para o tamanho deste projeto, o módulo é honesto: o objetivo da aula é o caminho do dado, não a persistência. Quando você trocar por um banco, o <code>load</code> e a action continuam iguais — só o conteúdo de <code>#lib/pedidos.js</code> muda. Esse é o sinal de que a separação foi bem feita.</p>
+
+<div class="trysvelte" data-goal="clique:input;;outre:^1 pronto">
+<p class="try-task"><strong>Missão:</strong> a caixinha "só os prontos" não filtra nada e o contador mostra sempre 2. Faça a lista e o número mostrarem <strong>1</strong> quando a caixinha for marcada.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = [
+    { id: 1, item: 'Bolo', pronto: true },
+    { id: 2, item: 'Pães', pronto: false }
+  ];
+  let soProntos = $state(false);
+&lt;/script&gt;
+
+&lt;p&gt;{pedidos.length} pronto(s)&lt;/p&gt;
+&lt;label&gt;&lt;input type="checkbox" bind:checked={soProntos}&gt; só os prontos&lt;/label&gt;
+&lt;ul&gt;
+  {#each pedidos as p (p.id)}
+    &lt;li&gt;{p.item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = [
+    { id: 1, item: 'Bolo', pronto: true },
+    { id: 2, item: 'Pães', pronto: false }
+  ];
+  let soProntos = $state(false);
+
+  let visiveis = $derived(pedidos.filter((p) =&gt; (soProntos ? p.pronto : true)));
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.length} pronto(s)&lt;/p&gt;
+&lt;label&gt;&lt;input type="checkbox" bind:checked={soProntos}&gt; só os prontos&lt;/label&gt;
+&lt;ul&gt;
+  {#each visiveis as p (p.id)}
+    &lt;li&gt;{p.item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>O mesmo <code>$derived</code> que resolve o filtro resolve o contador: os dois leem <code>visiveis</code>. Quando a regra de negócio muda ("só os prontos"), ela muda num lugar só e a tela inteira acompanha.</p>
+
+<hr>
+
+<h2>6. Versão 3 — o porteiro e a API</h2>
+
+<p>A versão final cresce: os pedidos ganham endereço próprio (<code>/pedidos</code>), a vitrine fica em <code>/</code>, entra o <code>/login</code> e nasce o <code>/api/pedidos</code>. Com mais rotas, proteger cada uma por conta própria vira erro garantido. O <code>hooks.server.js</code> centraliza a decisão.</p>
+
+<pre class="file" data-file="src/hooks.server.js">import { redirect } from '@sveltejs/kit';
+
+const PROTEGIDAS = ['/pedidos', '/api/pedidos'];
+
+export async function handle({ event, resolve }) {
+  event.locals.usuario = event.cookies.get('sessao') ?? null;
+
+  const precisaEntrar =
+    !event.locals.usuario &amp;&amp; PROTEGIDAS.some((p) =&gt; event.url.pathname.startsWith(p));
+
+  if (precisaEntrar) redirect(303, '/login');
+
+  return resolve(event);
+}</pre>
+
+<p>O hook roda em todo pedido, inclusive nos da API. É por isso que o <code>curl</code> sem cookie recebe 303 até quando pede JSON:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -H 'Accept: text/html' http://localhost:5173/pedidos
+303 http://localhost:5173/login
+ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -H 'Accept: text/html' http://localhost:5173/api/pedidos
+303 http://localhost:5173/login
+ana@notebook:~/loja$ curl -s -H 'Cookie: sessao=ana@padaria.com' http://localhost:5173/pedidos | grep -o "<p[^>]*>[0-9]* pedido[^<]*</p>"
+&lt;p class="svelte-1ld628l"&gt;2 pedido(s)&lt;/p&gt;</pre>
+
+<p>Com a sessão, a página responde 200 e a API devolve o mesmo conteúdo em JSON — é o endereço que um aplicativo de celular usaria:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -H 'Cookie: sessao=ana@padaria.com' http://localhost:5173/api/pedidos
+{"usuario":"ana@padaria.com","pedidos":[{"id":1,"cliente":"Dona Bia","item":"Bolo de chocolate","retirada":"8:30"},{"id":2,"cliente":"Firma São José","item":"30 pães franceses","retirada":"10:00"}]}</pre>
+
+<p>E o pedido novo, enviado pelo formulário com a sessão, muda o que os dois endereços mostram:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' -X POST -d 'cliente=Seu João&amp;item=12 pães de queijo' -o /dev/null -w "%{http_code}\n" http://localhost:5173/pedidos
+200
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' http://localhost:5173/pedidos | grep -o "<p[^>]*>[0-9]* pedido[^<]*</p>"
+&lt;p class="svelte-1ld628l"&gt;3 pedido(s)&lt;/p&gt;</pre>
+
+<p>O <code>+server.js</code> da API é curto porque não desenha nada: recebe o pedido, lê <code>locals</code> e devolve JSON. O hook já garantiu que existe sessão antes de chegar aqui.</p>
+
+<pre class="file" data-file="src/routes/api/pedidos/+server.js">import { json } from '@sveltejs/kit';
+import { pedidos } from '#lib/pedidos.js';
+
+export function GET({ locals }) {
+  return json({
+    usuario: locals.usuario,
+    pedidos: pedidos.map(({ id, cliente, item, retirada }) =&gt; ({ id, cliente, item, retirada }))
+  });
+}</pre>
+
+<h3>A anatomia da versão 3</h3>
+
+<dl class="anatomy">
+  <dt>handle({ event, resolve })</dt><dd>roda antes de qualquer rota. O que ele decide vale para o site inteiro, API incluída.</dd>
+  <dt>event.url.pathname.startsWith(p)</dt><dd>compara o começo do caminho. <code>/pedidos/hoje</code> também cai na proteção.</dd>
+  <dt>event.locals.usuario</dt><dd>o resultado da checagem, disponível para a rota daquele pedido.</dd>
+  <dt>resolve(event)</dt><dd>continua o atendimento. Sem essa chamada, nenhuma página é desenhada.</dd>
+  <dt>export function GET({ locals })</dt><dd>responde ao verbo GET no endereço da pasta. Um <code>POST</code> aqui precisaria da sua própria função.</dd>
+  <dt>json({ … })</dt><dd>transforma o objeto em resposta JSON, com o tipo de conteúdo certo.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o botão "Entrar" não entra: a pessoa continua vendo "Entre para ver os pedidos". Faça o clique mostrar <strong>"Olá, Ana"</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let usuario = $state(null);
+&lt;/script&gt;
+
+{#if usuario}
+  &lt;p&gt;Olá, {usuario}&lt;/p&gt;
+{:else}
+  &lt;p&gt;Entre para ver os pedidos&lt;/p&gt;
+  &lt;button onclick={() =&gt; (usuario = null)}&gt;Entrar&lt;/button&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let usuario = $state(null);
+&lt;/script&gt;
+
+{#if usuario}
+  &lt;p&gt;Olá, {usuario}&lt;/p&gt;
+{:else}
+  &lt;p&gt;Entre para ver os pedidos&lt;/p&gt;
+  &lt;button onclick={() =&gt; (usuario = 'Ana')}&gt;Entrar&lt;/button&gt;
+{/if}</pre>
+</div>
+
+<p>Aqui o login é de mentira, para você ver o mecanismo do <code>{#if}</code> — trocar <code>null</code> por um nome. No app de verdade, quem decide isso é o cookie, lido no hook. A tela só reflete a decisão que já veio pronta do servidor, dentro de <code>data</code>.</p>
+
+<hr>
+
+<h2>7. A árvore do app pronto</h2>
+
+<p>O projeto final tem sete arquivos em <code>src</code>, e cada um tem um papel. Esta é a listagem real da pasta:</p>
+
+<pre class="term">ana@notebook:~/loja$ find src -type f | sort
+src/app.html
+src/hooks.server.js
+src/lib/assets/favicon.svg
+src/lib/index.js
+src/lib/pedidos.js
+src/routes/+layout.svelte
+src/routes/+page.svelte
+src/routes/api/pedidos/+server.js
+src/routes/login/+page.server.js
+src/routes/login/+page.svelte
+src/routes/pedidos/+page.server.js
+src/routes/pedidos/+page.svelte</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Papel no app</th></tr>
+<tr><td><code>app.html</code></td><td>o molde da página: idioma, cabeçalho e o lugar onde o SvelteKit injeta</td></tr>
+<tr><td><code>hooks.server.js</code></td><td>o porteiro: descobre a sessão e barra as rotas protegidas</td></tr>
+<tr><td><code>lib/pedidos.js</code></td><td>os dados e a regra de adicionar pedido</td></tr>
+<tr><td><code>routes/+layout.svelte</code></td><td>o cabeçalho com os links, em volta de toda página</td></tr>
+<tr><td><code>routes/pedidos/+page.server.js</code></td><td><code>load</code> + action dos pedidos</td></tr>
+<tr><td><code>routes/login/+page.server.js</code></td><td>a action que confere a senha e grava o cookie</td></tr>
+<tr><td><code>routes/api/pedidos/+server.js</code></td><td>a mesma informação em JSON</td></tr>
+</table>
+</div>
+
+<p>Nada aí é decorativo. Cada arquivo com <code>.server.js</code> promete não ir para o navegador; cada <code>+page.svelte</code> é um endereço; cada <code>+layout</code> envolve o que está abaixo. Quando você abre o projeto depois de um mês, é essa árvore que responde "onde fica o quê".</p>
+
+<hr>
+
+<h2>8. Terminal: rodando e publicando</h2>
+
+<p>O servidor de desenvolvimento sobe na porta padrão e imprime cada pedido com o código de resposta:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite dev
+
+5:47:55 PM [vite] (ssr) connected.
+
+  VITE v8.4.0  ready in 1521 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help</pre>
+
+<p>E o build do projeto completo mostra os dois ambientes e os módulos de cada um:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 145 modules transformed.
+...
+✓ built in 679ms
+Analysing routes
+Building app
+vite v8.4.0 building client environment for production...
+transforming...
+✓ 181 modules transformed.
+...
+✓ built in 446ms
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app to run on the platform of your choosing
+✔ done</pre>
+
+<p>Compare com os projetos anteriores: a agenda em Svelte puro compilava 112 módulos e gerava um arquivo de 45 kB; o app completo tem 145 no servidor e 181 no navegador. O crescimento é o preço do que foi acrescentado — rotas, actions, hook e API. A mensagem do adaptador continua ali, e continua sendo o último passo antes de publicar: escolher onde o app vai rodar.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — campo sem <code>name</code></strong>
+<p>A action lê o formulário pelos nomes. Sem <code>name</code>, o valor chega vazio e a validação reprova tudo — o formulário parece quebrado.</p>
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+  let { data, form } = $props();
+&lt;/script&gt;
+
+&lt;form method="POST"&gt;
+  &lt;input placeholder="Cliente"&gt;
+  &lt;input placeholder="Pedido"&gt;
+  &lt;button&gt;Adicionar&lt;/button&gt;
+&lt;/form&gt;
+
+{#if form?.erro}
+  &lt;p&gt;{form.erro}&lt;/p&gt;
+{/if}
+
+&lt;p&gt;{data.pedidos.length} pedido(s)&lt;/p&gt;</pre>
+<p>Depois do POST, a resposta é 400 e a mensagem aparece:</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -X POST -d 'cliente=Seu João&amp;item=12 pães' http://localhost:5173/ | grep -o '<p class="erro[^>]*>[^&lt;]*</p>'
+&lt;p class="erro svelte-1uha8ag"&gt;Cliente e pedido são obrigatórios&lt;/p&gt;</pre>
+<p>A mensagem está certa; o problema é o HTML. O <code>curl</code> manda os campos pelos nomes, mas a página sem <code>name</code> não os envia quando um navegador faz o POST.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — a página lê <code>data</code> que ninguém entregou</strong>
+<p>Se o <code>+page.server.js</code> for apagado ou renomeado, o <code>data</code> chega vazio e o componente quebra ao desenhar.</p>
+<pre class="file" data-file="src/routes/pedidos/+page.svelte">&lt;script&gt;
+  let { data, form } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Pedidos de hoje&lt;/h1&gt;
+
+&lt;p&gt;{data.pedidos.length} pedido(s)&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'pedidos')</pre>
+<p>O erro parece de JavaScript, mas a causa é de estrutura: o arquivo que deveria entregar os dados não está lá. Confira se o <code>+page.server.js</code> existe na mesma pasta do <code>+page.svelte</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — POST sem corpo de formulário</strong>
+<p>Uma action exige conteúdo de formulário. Um POST vazio, sem <code>content-type</code>, é recusado antes de chegar ao seu código.</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -i -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' -X POST "http://localhost:5173/pedidos" | head -3
+HTTP/1.1 415 Unsupported Media Type
+Vary: Origin
+content-length: 1271</pre>
+<p>O 415 é "tipo de conteúdo não suportado". Com <code>-d ''</code>, o <code>curl</code> passa a mandar um corpo de formulário vazio e a action roda — foi assim que o logout funcionou na aula de login.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida e checklist</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça do app</th><th>Para que serve</th><th>Arquivo</th></tr>
+<tr><td>lista na tela</td><td>mostrar o que veio do servidor</td><td><code>+page.svelte</code></td></tr>
+<tr><td>buscar dados</td><td>entregar <code>data</code> a cada pedido</td><td><code>+page.server.js</code></td></tr>
+<tr><td>receber formulário</td><td>validar e gravar no servidor</td><td><code>actions</code></td></tr>
+<tr><td>sessão</td><td>saber quem está pedindo</td><td><code>hooks.server.js</code></td></tr>
+<tr><td>JSON</td><td>servir outros programas</td><td><code>+server.js</code></td></tr>
+<tr><td>cabeçalho e menu</td><td>o que se repete em toda página</td><td><code>+layout.svelte</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Significado no app</th></tr>
+<tr><td><code>200</code></td><td>a página ou o JSON foram entregues</td></tr>
+<tr><td><code>303</code></td><td>vá para outro endereço (login, logout, rota protegida)</td></tr>
+<tr><td><code>400</code></td><td>o formulário chegou incompleto; a página volta com a mensagem</td></tr>
+<tr><td><code>404</code></td><td>o endereço não existe</td></tr>
+<tr><td><code>405</code></td><td>o verbo não é aceito ali: POST numa rota sem <code>actions</code></td></tr>
+<tr><td><code>415</code></td><td>POST sem corpo de formulário</td></tr>
+<tr><td><code>500</code></td><td>alguma coisa no <code>load</code>, na action ou no componente quebrou</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Antes de publicar</th><th>Pergunta a fazer</th></tr>
+<tr><td>sessão</td><td>o cookie tem <code>HttpOnly</code>, <code>SameSite</code> e <code>Secure</code>?</td></tr>
+<tr><td>dados</td><td>alguma rota mostra pedido de outra pessoa?</td></tr>
+<tr><td>formulário</td><td>toda action valida no servidor, e não só na tela?</td></tr>
+<tr><td>erro</td><td>existe <code>+error.svelte</code> com uma saída clara?</td></tr>
+<tr><td>build</td><td>o adaptador escolhido combina com a hospedagem?</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Por que um pedido adicionado na versão 1 desaparece ao recarregar?</p>
+<label><input type="radio" name="pf1"> porque o Svelte limpa o estado ao atualizar a página</label>
+<label><input type="radio" name="pf1"> porque falta <code>$derived</code> na lista</label>
+<label><input type="radio" name="pf1"> porque o pedido nunca saiu do navegador: o servidor não tem como saber dele</label>
+<label><input type="radio" name="pf1"> porque o formulário não tem <code>method="POST"</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. O que o <code>hooks.server.js</code> garante neste app?</p>
+<label><input type="radio" name="pf2"> que a checagem de sessão acontece em todo pedido, antes de qualquer rota, inclusive a API</label>
+<label><input type="radio" name="pf2"> que o CSS carrega antes do HTML</label>
+<label><input type="radio" name="pf2"> que os formulários são validados no navegador</label>
+<label><input type="radio" name="pf2"> que o build usa o adaptador certo</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. Para que serve o <code>+server.js</code> em <code>/api/pedidos</code>?</p>
+<label><input type="radio" name="pf3"> para desenhar a página de pedidos em HTML</label>
+<label><input type="radio" name="pf3"> para devolver os dados em JSON, sem marcação, para outros programas</label>
+<label><input type="radio" name="pf3"> para guardar os pedidos num banco de dados</label>
+<label><input type="radio" name="pf3"> para substituir o <code>+page.server.js</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">export const actions = {<br>&nbsp;&nbsp;default: async ({ request }) =&gt; {<br>&nbsp;&nbsp;&nbsp;&nbsp;const dados = await request.<input data-answer="formData">();<br>&nbsp;&nbsp;&nbsp;&nbsp;const cliente = dados.get('cliente') ?? '';<br>&nbsp;&nbsp;&nbsp;&nbsp;if (cliente === '') return fail(400, { erro: 'Cliente obrigatório' });<br>&nbsp;&nbsp;}<br>};</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um app é um conjunto de endereços com uma regra de acesso — não uma tela com estado.</li>
+  <li>Estado de componente não sobrevive ao recarregamento: o servidor não sabe dele.</li>
+  <li>Para o dado durar, ele precisa ser enviado ao servidor por uma action.</li>
+  <li><code>load</code> entrega <code>data</code>; <code>fail</code> entrega <code>form</code> com a mensagem de erro.</li>
+  <li>Campo sem <code>name</code> não chega ao <code>formData</code>.</li>
+  <li>Módulo no servidor guarda dados em memória: some ao reiniciar e não serve para várias máquinas.</li>
+  <li><code>hooks.server.js</code> centraliza a sessão e protege rotas e API de uma vez.</li>
+  <li><code>locals</code> leva o resultado do hook até a rota daquele pedido.</li>
+  <li><code>+server.js</code> devolve JSON para outros programas, com a mesma sessão.</li>
+  <li>O build de produção compila dois ambientes e termina pedindo um adaptador.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

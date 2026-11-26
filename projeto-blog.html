@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blog com SvelteKit — rotas, load e JSON | Guia Svelte</title>
+<meta name="description" content="O blog de receitas da Ana em SvelteKit: +page.svelte, +layout.svelte, +page.server.js, rota [slug], error(404) e +server.js. Com respostas HTTP reais do servidor.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projetos · <span class="hl">Blog com SvelteKit</span></h1>
+
+<p class="intro">A Ana escreve receitas num caderno e quer publicá-las na internet. Ela já sabe fazer componentes, mas um blog não é um componente: são <strong>endereços</strong>. Cada receita precisa de um link próprio, que funcione quando alguém colar no WhatsApp e abrir dias depois — inclusive com o JavaScript desligado. É exatamente para isso que existe o SvelteKit. Nesta aula o blog é construído em <strong>três versões</strong>, e cada uma é conferida com um pedido HTTP de verdade, com o código de resposta que o servidor devolveu.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que muda quando o projeto deixa de ser um componente e vira um site.</li>
+  <li>Como o <code>+page.svelte</code> vira o endereço <code>/</code>.</li>
+  <li>O papel do <code>+layout.svelte</code> e do <code>children</code>.</li>
+  <li>Como carregar dados no servidor com <code>+page.server.js</code>.</li>
+  <li>Como uma pasta com colchetes, <code>[slug]</code>, vira endereço variável.</li>
+  <li>Como responder 404 com <code>error()</code> e uma página de erro própria.</li>
+  <li>Como ler a query string (<code>?categoria=bolos</code>) no <code>load</code>.</li>
+  <li>Como criar um endpoint JSON com <code>+server.js</code>.</li>
+  <li>O que o servidor devolve em HTML e por que aparecem marcadores de comentário.</li>
+  <li>As mensagens reais de 500 e de <code>$lib</code> removido.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. Um blog não é uma tela, são endereços</h2>
+
+<p>Um componente Svelte vive dentro de uma página. Um site precisa de mais: cada conteúdo tem um <strong>endereço</strong> que pode ser copiado, guardado nos favoritos e aberto direto. O SvelteKit resolve isso ligando <em>arquivos</em> a <em>endereços</em>. Uma pasta dentro de <code>src/routes</code> é um pedaço do caminho, e o arquivo <code>+page.svelte</code> é o que aparece naquele endereço.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo no projeto</th><th>Endereço no navegador</th></tr>
+<tr><td><code>src/routes/+page.svelte</code></td><td><code>/</code></td></tr>
+<tr><td><code>src/routes/post/+page.svelte</code></td><td><code>/post</code></td></tr>
+<tr><td><code>src/routes/post/[slug]/+page.svelte</code></td><td><code>/post/qualquer-coisa</code></td></tr>
+<tr><td><code>src/routes/api/receitas/+server.js</code></td><td><code>/api/receitas</code> (JSON, sem HTML)</td></tr>
+</table>
+</div>
+
+<p>Essa ligação tem uma consequência prática: o servidor recebe o pedido, monta o HTML e devolve. O navegador recebe uma página pronta e só depois o JavaScript assume. Se o JavaScript falhar, o texto ainda está lá. É por isso que a Ana consegue compartilhar uma receita e ela abrir no celular de quem nunca visitou o site.</p>
+
+<hr>
+
+<h2>2. Versão 1 — um componente com a lista</h2>
+
+<p>A primeira versão é a menor coisa que já é um site: uma página na raiz, com três receitas escritas no próprio arquivo e um link para cada uma.</p>
+
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+  let posts = [
+    {
+      slug: 'pao-de-fermentacao-natural',
+      titulo: 'Pão de fermentação natural',
+      resumo: 'Como alimentar o fermento e assar um pão de casca grossa.'
+    },
+    {
+      slug: 'bolo-de-cenoura',
+      titulo: 'Bolo de cenoura da padaria',
+      resumo: 'A receita que sai às terças, com cobertura de chocolate.'
+    },
+    {
+      slug: 'pao-de-queijo',
+      titulo: 'Pão de queijo mineiro',
+      resumo: 'Polvilho azedo, queijo meia-cura e forno bem quente.'
+    }
+  ];
+&lt;/script&gt;
+
+&lt;h1&gt;Receitas da padaria&lt;/h1&gt;
+
+&lt;ul&gt;
+  {#each posts as post (post.slug)}
+    &lt;li&gt;
+      &lt;a href="/post/{post.slug}"&gt;{post.titulo}&lt;/a&gt;
+      &lt;p&gt;{post.resumo}&lt;/p&gt;
+    &lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O compilador não precisa do SvelteKit para montar este componente; ele devolve o HTML abaixo. Repare no <code>href</code>: o endereço de cada receita saiu do <code>slug</code>.</p>
+
+<pre class="out">&lt;h1&gt;Receitas da padaria&lt;/h1&gt; &lt;ul&gt;&lt;li&gt;&lt;a href="/post/pao-de-fermentacao-natural"&gt;Pão de fermentação natural&lt;/a&gt; &lt;p&gt;Como alimentar o fermento e assar um pão de casca grossa.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;a href="/post/bolo-de-cenoura"&gt;Bolo de cenoura da padaria&lt;/a&gt; &lt;p&gt;A receita que sai às terças, com cobertura de chocolate.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;a href="/post/pao-de-queijo"&gt;Pão de queijo mineiro&lt;/a&gt; &lt;p&gt;Polvilho azedo, queijo meia-cura e forno bem quente.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Nesta versão os dados moram no componente. É a decisão mais simples e a que envelhece pior: para marcar uma receita como publicada, seria preciso editar o arquivo e recompilar o site. Note também que <code>let posts = [...]</code> não tem <code>$state</code> — a lista não muda enquanto a página está aberta, então não há estado nenhum ali.</p>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>src/routes/+page.svelte</dt><dd>o endereço <code>/</code>. O <code>+</code> no começo do nome é o que diz ao SvelteKit "este arquivo é uma página".</dd>
+  <dt>let posts = [...]</dt><dd>uma lista de objetos. Cada objeto tem <code>slug</code> (o pedaço do endereço), <code>titulo</code> e <code>resumo</code>.</dd>
+  <dt>{#each posts as post (post.slug)}</dt><dd>um item por receita, com a chave no <code>slug</code> — a mesma chave que identifica a receita no endereço.</dd>
+  <dt>href="/post/{post.slug}"</dt><dd>texto e variável misturados dentro de um atributo. O resultado é o endereço completo, montado para cada item.</dd>
+  <dt>&lt;ul&gt; e &lt;li&gt;</dt><dd>uma lista de verdade, não uma sequência de <code>div</code>. O navegador e os leitores de tela sabem que estes itens são um conjunto.</dd>
+</dl>
+
+<hr>
+
+<h2>3. O layout que se repete em toda página</h2>
+
+<p>Todo site tem pedaços que aparecem em todas as páginas: o cabeçalho, o menu, o rodapé. No SvelteKit eles moram no <code>+layout.svelte</code>, e a parte que muda entra no lugar de <code>{@render children()}</code>.</p>
+
+<pre class="file" data-file="src/routes/+layout.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;header&gt;
+  &lt;a href="/"&gt;Padaria da Ana · receitas&lt;/a&gt;
+&lt;/header&gt;
+
+&lt;main&gt;
+  {@render children()}
+&lt;/main&gt;
+
+&lt;style&gt;
+  header { padding: 8px 0; border-bottom: 1px solid #ddd; margin-bottom: 16px; }
+  main { max-width: 40rem; }
+&lt;/style&gt;</pre>
+
+<p>O <code>children</code> é uma propriedade especial: ela chega como uma função que desenha o conteúdo da página. Não é um <code>&lt;slot&gt;</code>, que era o jeito antigo. E o <code>&lt;style&gt;</code> do layout vale para o layout — o escopo não vaza para a página filha.</p>
+
+<p>Com o layout no lugar, a versão 1 já tem cabeçalho, e o endereço <code>/</code> responde com o HTML montado no servidor. O terminal confirma o código 200 e o título:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5174/
+200
+ana@notebook:~/loja$ curl -s http://localhost:5174/ | grep -o "&lt;h1&gt;[^&lt;]*&lt;/h1&gt;"
+&lt;h1&gt;Receitas da padaria&lt;/h1&gt;</pre>
+
+<p>O <code>curl</code> é um programa que pede uma página e mostra a resposta, sem navegador. O primeiro comando descarta o corpo (<code>-o /dev/null</code>) e imprime só o código; o segundo pega o corpo e filtra a linha do <code>h1</code>. Se você abrir o mesmo endereço no navegador, o resultado é o mesmo HTML — só que com a página desenhada.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^2 receitas">
+<p class="try-task"><strong>Missão:</strong> o botão apaga uma receita, mas o contador continua dizendo 3. Faça o número <strong>acompanhar a lista</strong> e mostrar "2 receitas" depois do clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let posts = $state([
+    { slug: 'a', titulo: 'Pão' },
+    { slug: 'b', titulo: 'Bolo' },
+    { slug: 'c', titulo: 'Queijo' }
+  ]);
+&lt;/script&gt;
+
+&lt;p&gt;3 receitas&lt;/p&gt;
+&lt;button onclick={() =&gt; (posts = posts.slice(1))}&gt;apagar a primeira&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each posts as p (p.slug)}
+    &lt;li&gt;{p.titulo}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let posts = $state([
+    { slug: 'a', titulo: 'Pão' },
+    { slug: 'b', titulo: 'Bolo' },
+    { slug: 'c', titulo: 'Queijo' }
+  ]);
+&lt;/script&gt;
+
+&lt;p&gt;{posts.length} receitas&lt;/p&gt;
+&lt;button onclick={() =&gt; (posts = posts.slice(1))}&gt;apagar a primeira&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each posts as p (p.slug)}
+    &lt;li&gt;{p.titulo}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>A lição desta caixa vale para o blog inteiro: número escrito à mão envelhece na primeira mudança. <code>posts.length</code> nunca mente, porque é lido da lista no momento de desenhar.</p>
+
+<hr>
+
+<h2>4. Versão 2 — os dados vêm do servidor</h2>
+
+<p>Na segunda versão a lista sai do componente e vai para um módulo compartilhado. Quem entrega os dados para a página é um arquivo com um nome específico: <code>+page.server.js</code>. Ele exporta uma função <code>load</code>, e o que ela devolve chega ao <code>+page.svelte</code> como a propriedade <code>data</code>.</p>
+
+<pre class="file" data-file="src/routes/+page.server.js">import { posts } from '#lib/posts.js';
+
+export function load() {
+  return {
+    posts: posts.map(({ slug, titulo, resumo }) =&gt; ({ slug, titulo, resumo }))
+  };
+}</pre>
+
+<p>Três coisas para observar. O sufixo <code>.server.js</code> promete que este arquivo <strong>nunca</strong> vai para o navegador — pode ler banco de dados, senha, arquivo. O <code>#lib</code> é o atalho para <code>src/lib</code> nesta versão do SvelteKit (o antigo <code>$lib</code> foi removido). E o <code>map</code> no fim existe para não mandar o texto inteiro da receita na listagem: só o que a lista mostra.</p>
+
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+  let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Receitas da padaria&lt;/h1&gt;
+
+&lt;ul&gt;
+  {#each data.posts as post (post.slug)}
+    &lt;li&gt;
+      &lt;a href="/post/{post.slug}"&gt;{post.titulo}&lt;/a&gt;
+      &lt;p&gt;{post.resumo}&lt;/p&gt;
+    &lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>export function load()</dt><dd>a função que o SvelteKit chama antes de desenhar a página. Ela roda no servidor.</dd>
+  <dt>return { posts: ... }</dt><dd>o objeto devolvido vira o <code>data</code> da página. Precisa ser dado simples: texto, número, lista, objeto.</dd>
+  <dt>#lib/posts.js</dt><dd>atalho para <code>src/lib/posts.js</code>, definido em <code>package.json</code>. Serve para não escrever caminho relativo cheio de <code>../../</code>.</dd>
+  <dt>let { data } = $props()</dt><dd>a página recebe o resultado do <code>load</code> como propriedade. Sem <code>export let</code>, que é o modo antigo.</dd>
+  <dt>posts.map(({ slug, titulo, resumo }) =&gt; ...)</dt><dd>monta um objeto novo com só três campos. O que não é listado não viaja para o navegador.</dd>
+</dl>
+
+<hr>
+
+<h2>5. A rota <code>[slug]</code> e o 404</h2>
+
+<p>Para cada receita ter endereço próprio, a pasta ganha colchetes: <code>src/routes/post/[slug]/</code>. O nome entre colchetes é o pedaço variável do caminho, e ele chega ao <code>load</code> dentro de <code>params</code>.</p>
+
+<pre class="file" data-file="src/routes/post/[slug]/+page.server.js">import { error } from '@sveltejs/kit';
+import { posts } from '#lib/posts.js';
+
+export function load({ params }) {
+  const post = posts.find((p) =&gt; p.slug === params.slug);
+  if (!post) error(404, 'Receita não encontrada');
+  return { post };
+}</pre>
+
+<p>O <code>find</code> devolve o primeiro item que casa, ou <code>undefined</code>. É esse <code>undefined</code> que precisa de tratamento: sem o <code>error(404, ...)</code>, a próxima linha tentaria ler uma propriedade de nada e o servidor devolveria 500 — um erro de programação disfarçado de página. Com o <code>error</code>, a resposta é 404 e o SvelteKit desenha o <code>+error.svelte</code> que você escreveu.</p>
+
+<pre class="file" data-file="src/routes/+error.svelte">&lt;script&gt;
+  import { page } from '$app/state';
+&lt;/script&gt;
+
+&lt;h1&gt;{page.status} — {page.error.message}&lt;/h1&gt;
+&lt;a href="/"&gt;voltar para as receitas&lt;/a&gt;</pre>
+
+<p>E o resultado, pedido por pedido, direto do servidor de desenvolvimento:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s http://localhost:5174/post/bolo-de-cenoura | grep -o "&lt;h1&gt;[^&lt;]*&lt;/h1&gt;"
+&lt;h1&gt;Bolo de cenoura da padaria&lt;/h1&gt;
+ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5174/post/sem-receita
+404
+ana@notebook:~/loja$ curl -s http://localhost:5174/post/sem-receita | grep -o "&lt;h1&gt;[^&lt;]*&lt;/h1&gt;"
+&lt;h1&gt;404 — Receita não encontrada&lt;/h1&gt;</pre>
+
+<div class="trysvelte" data-goal="outre:^2026-03-09">
+<p class="try-task"><strong>Missão:</strong> a lista de receitas sai na ordem em que foi escrita, e a mais nova aparece no meio. Faça a mais recente aparecer <strong>primeiro</strong>: o texto tem de começar com <code>2026-03-09</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let posts = $state([
+    { id: 1, data: '2026-02-10', titulo: 'Pão de queijo' },
+    { id: 2, data: '2026-03-09', titulo: 'Bolo de cenoura' },
+    { id: 3, data: '2026-01-20', titulo: 'Fermentação natural' }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each posts as p (p.id)}
+    &lt;li&gt;{p.data} — {p.titulo}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let posts = $state([
+    { id: 1, data: '2026-02-10', titulo: 'Pão de queijo' },
+    { id: 2, data: '2026-03-09', titulo: 'Bolo de cenoura' },
+    { id: 3, data: '2026-01-20', titulo: 'Fermentação natural' }
+  ]);
+
+  let recentes = $derived([...posts].sort((a, b) =&gt; b.data.localeCompare(a.data)));
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each recentes as p (p.id)}
+    &lt;li&gt;{p.data} — {p.titulo}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Datas no formato <code>ano-mês-dia</code> têm uma propriedade útil: comparadas como texto, elas já ficam na ordem do calendário. É por isso que o <code>localeCompare</code> basta aqui — com <code>10/03/2026</code> a mesma comparação erraria, porque "10" vem antes de "9".</p>
+
+<hr>
+
+<h2>6. Versão 3 — o filtro na URL e o endpoint JSON</h2>
+
+<p>A terceira versão deixa o visitante escolher uma categoria. O detalhe importante: a escolha vai para a <strong>URL</strong>, não para um estado do componente. Assim o endereço <code>/?categoria=bolos</code> pode ser compartilhado e mostra a mesma coisa para qualquer pessoa.</p>
+
+<pre class="file" data-file="src/routes/+page.server.js">import { posts } from '#lib/posts.js';
+
+export function load({ url }) {
+  const categoria = url.searchParams.get('categoria') ?? 'todas';
+  const lista = posts
+    .filter((p) =&gt; categoria === 'todas' || p.categoria === categoria)
+    .map(({ slug, titulo, resumo }) =&gt; ({ slug, titulo, resumo }));
+
+  return {
+    categoria,
+    categorias: ['todas', 'pães', 'bolos'],
+    posts: lista
+  };
+}</pre>
+
+<p>No componente, o filtro é um <code>&lt;form method="GET"&gt;</code> comum. Sem JavaScript, o botão recarrega a página com <code>?categoria=...</code> no endereço, e o <code>load</code> roda de novo no servidor. Com JavaScript, o SvelteKit intercepta e atualiza sem recarregar. O mesmo formulário serve nos dois casos.</p>
+
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+  let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Receitas da padaria&lt;/h1&gt;
+
+&lt;form method="GET"&gt;
+  &lt;select name="categoria" value={data.categoria}&gt;
+    {#each data.categorias as c}
+      &lt;option value={c}&gt;{c}&lt;/option&gt;
+    {/each}
+  &lt;/select&gt;
+  &lt;button&gt;Filtrar&lt;/button&gt;
+&lt;/form&gt;
+
+&lt;p&gt;{data.posts.length} receita(s) em {data.categoria}&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each data.posts as post (post.slug)}
+    &lt;li&gt;
+      &lt;a href="/post/{post.slug}"&gt;{post.titulo}&lt;/a&gt;
+      &lt;p&gt;{post.resumo}&lt;/p&gt;
+    &lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O <code>?? 'todas'</code> é o valor padrão: quando ninguém escolheu categoria, o parâmetro não existe na URL e <code>get</code> devolve <code>null</code>. O <code>??</code> troca <code>null</code> por <code>'todas'</code>.</p>
+
+<p>Ainda na versão 3, o blog ganha um endereço que devolve <strong>dados</strong> em vez de página: um <code>+server.js</code>. Ele serve para outro programa consumir as receitas — um aplicativo, uma planilha, uma futura busca.</p>
+
+<pre class="file" data-file="src/routes/api/receitas/+server.js">import { json } from '@sveltejs/kit';
+import { posts } from '#lib/posts.js';
+
+export function GET() {
+  return json(posts.map(({ slug, titulo, categoria }) =&gt; ({ slug, titulo, categoria })));
+}</pre>
+
+<pre class="term">ana@notebook:~/loja$ curl -s "http://localhost:5174/?categoria=bolos" | grep -o "&lt;p&gt;[0-9]* receita[^&lt;]*&lt;/p&gt;"
+&lt;p&gt;1 receita(s) em bolos&lt;/p&gt;
+ana@notebook:~/loja$ curl -s http://localhost:5174/api/receitas
+[{"slug":"pao-de-fermentacao-natural","titulo":"Pão de fermentação natural","categoria":"pães"},{"slug":"bolo-de-cenoura","titulo":"Bolo de cenoura da padaria","categoria":"bolos"},{"slug":"pao-de-queijo","titulo":"Pão de queijo mineiro","categoria":"pães"}]</pre>
+
+<h3>A anatomia da versão 3</h3>
+
+<dl class="anatomy">
+  <dt>load({ url })</dt><dd>recebe um objeto com informações do pedido. <code>url</code> traz o endereço completo, incluindo o que vem depois do <code>?</code>.</dd>
+  <dt>url.searchParams.get('categoria')</dt><dd>lê um parâmetro da query string. Devolve <code>null</code> quando ele não está no endereço.</dd>
+  <dt>?? 'todas'</dt><dd>o valor padrão para quando o parâmetro não veio. Diferente de <code>||</code>: só troca <code>null</code> e <code>undefined</code>.</dd>
+  <dt>form method="GET"</dt><dd>manda os campos pelo endereço. É o que faz o filtro funcionar sem uma linha de JavaScript.</dd>
+  <dt>export function GET()</dt><dd>no <code>+server.js</code>, a função que responde a um pedido GET. O nome do arquivo define o endereço.</dd>
+  <dt>json(...)</dt><dd>transforma o valor em resposta JSON, com o cabeçalho de tipo certo.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Nenhuma receita publicada">
+<p class="try-task"><strong>Missão:</strong> quando todas as receitas são apagadas, a área da lista fica em branco, sem explicação. Mostre a frase <strong>"Nenhuma receita publicada."</strong> nesse caso.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let posts = $state([{ slug: 'a', titulo: 'Pão' }]);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (posts = [])}&gt;apagar tudo&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each posts as p (p.slug)}
+    &lt;li&gt;{p.titulo}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let posts = $state([{ slug: 'a', titulo: 'Pão' }]);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (posts = [])}&gt;apagar tudo&lt;/button&gt;
+
+{#if posts.length === 0}
+  &lt;p&gt;Nenhuma receita publicada.&lt;/p&gt;
+{:else}
+  &lt;ul&gt;
+    {#each posts as p (p.slug)}
+      &lt;li&gt;{p.titulo}&lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}</pre>
+</div>
+
+<hr>
+
+<h2>7. O HTML que o servidor devolve</h2>
+
+<p>Este é o começo da resposta do endereço <code>/</code>, copiado do <code>curl</code>. Vale ler linha por linha, porque é aqui que o SvelteKit se revela:</p>
+
+<pre class="term">&lt;!doctype html&gt;
+&lt;html lang="pt-BR"&gt;
+	&lt;head&gt;
+		&lt;meta charset="utf-8" /&gt;
+		&lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;
+		&lt;meta name="text-scale" content="scale" /&gt;
+		
+		&lt;style data-sveltekit&gt;
+  header.svelte-12qhfyh { padding: 8px 0; border-bottom: 1px solid #ddd; margin-bottom: 16px; }
+  main.svelte-12qhfyh { max-width: 40rem; }
+ .svelte-12qhfyh{}&lt;/style&gt;
+	&lt;/head&gt;
+	&lt;body data-sveltekit-preload-data="hover"&gt;</pre>
+
+<p>Três detalhes. Primeiro: o CSS do layout já vem dentro do <code>&lt;head&gt;</code>, numa tag <code>&lt;style data-sveltekit&gt;</code> — não há arquivo externo para o navegador buscar antes de pintar a tela. Segundo: o selo <code>svelte-12qhfyh</code> aparece igual ao que você viu em componente, porque é o mesmo mecanismo de escopo. Terceiro: o <code>&lt;body&gt;</code> traz <code>data-sveltekit-preload-data="hover"</code>, que faz o SvelteKit começar a buscar a próxima página quando o mouse passa por cima de um link.</p>
+
+<p>Mais abaixo, dentro do <code>&lt;select&gt;</code>, aparecem marcadores de comentário:</p>
+
+<pre class="term">&lt;form method="GET"&gt;&lt;select name="categoria"&gt;&lt;!--[--&gt;&lt;option value="todas" selected=""&gt;todas&lt;/option&gt;&lt;option value="pães"&gt;pães&lt;/option&gt;&lt;option value="bolos"&gt;bolos&lt;/option&gt;&lt;!--]--&gt;&lt;/select&gt; &lt;button&gt;Filtrar&lt;/button&gt;&lt;/form&gt;</pre>
+
+<p>Os <code>&lt;!--[--&gt;</code> e <code>&lt;!--]--&gt;</code> marcam o começo e o fim de um bloco dinâmico. Eles não aparecem na tela; existem para o JavaScript, quando assume a página, saber exatamente onde estão os pedaços que podem mudar. É o preço de entregar HTML pronto e continuar interativo depois.</p>
+
+<hr>
+
+<h2>8. Terminal: servidor e build</h2>
+
+<p>O projeto foi criado com o gerador oficial, que monta a estrutura de pastas e as dependências:</p>
+
+<pre class="term">ana@notebook:~/loja$ npx sv create . --template minimal --no-types --no-add-ons --no-install
+
+HINT: Run "sv --help" to get the full list of commands, add-ons, and examples to one-shot and skip interactive prompts.
+┌  Welcome to the Svelte CLI! (v1.7.1)
+│
+◆  Project created
+│
+│  To skip prompts next time, run:
+●  npx sv@1.7.1 create --template minimal --no-types --no-install .
+│
+◇  What's next? ───────────────────────────────╮
+│                                              │
+│  📁 Project steps                            │
+│                                              │
+│    1: npm i                                  │
+│    2: npm run dev -- --open                  │
+│                                              │
+│  To close the dev server, hit Ctrl-C         │
+│                                              │
+│  Stuck? Visit us at https://svelte.dev/chat  │
+│                                              │
+├──────────────────────────────────────────────╯
+│
+└  You're all set!</pre>
+
+<p>Depois do <code>npm i</code>, o servidor de desenvolvimento sobe. Repare na linha <code>(ssr) connected</code>: o SvelteKit roda dois ambientes ao mesmo tempo, um para o HTML do servidor e outro para o JavaScript do navegador.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite dev
+
+5:34:56 PM [vite] (ssr) connected.
+Port 5173 is in use, trying another one...
+
+  VITE v8.4.0  ready in 3115 ms
+
+  ➜  Local:   http://localhost:5174/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help</pre>
+
+<p>A porta 5173 estava ocupada, então o servidor subiu na 5174 — e todos os <code>curl</code> desta aula usam esse endereço. Quando o site está pronto para publicar, o comando é o mesmo de antes, mas o resultado é bem maior:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 142 modules transformed.
+...
+✓ built in 650ms
+Analysing routes
+Building app
+vite v8.4.0 building client environment for production...
+transforming...
+✓ 178 modules transformed.
+...
+✓ built in 389ms
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app to run on the platform of your choosing
+✔ done</pre>
+
+<p>Dois builds, não um: primeiro o do servidor (142 módulos), depois o do navegador (178). A última mensagem é a mais importante para quem vai publicar: o <code>adapter-auto</code> não reconheceu o ambiente e não sabe gerar o pacote final. Em uma hospedagem de verdade, você troca por um adaptador específico — é ele que decide se o resultado vira arquivos estáticos, um servidor Node ou uma função na nuvem.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — a página lê <code>data</code> que ninguém entregou</strong>
+<p>Sem <code>+page.server.js</code>, o <code>data</code> chega vazio. O componente compila e quebra na hora de desenhar, porque <code>data.posts</code> não existe.</p>
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+  let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{data.posts.length} receitas&lt;/h1&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'posts')</pre>
+<p>No servidor de desenvolvimento, o mesmo problema aparece como resposta 500:</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5174/
+500
+ana@notebook:~/loja$ curl -s http://localhost:5174/ | grep -o "&lt;h1&gt;[^&lt;]*&lt;/h1&gt;"
+&lt;h1&gt;500 — Internal Error&lt;/h1&gt;</pre>
+<p>O 500 é o aviso de que o problema é seu, não do visitante: a página não deveria depender de um dado que pode não vir.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>load</code> sem o tratamento de "não achei"</strong>
+<p>Este é o bug que o <code>error(404)</code> evita. Sem ele, o <code>find</code> devolve <code>undefined</code> e a linha seguinte estoura.</p>
+<pre class="file" data-file="src/routes/post/[slug]/+page.server.js">import { posts } from '#lib/posts.js';
+
+export function load({ params }) {
+  const post = posts.find((p) =&gt; p.slug === params.slug);
+  return { post: post.titulo };
+}</pre>
+<p>A resposta do servidor para um endereço que não existe:</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5174/post/sem-receita
+500
+ana@notebook:~/loja$ curl -s http://localhost:5174/post/sem-receita | grep -o "&lt;h1&gt;[^&lt;]*&lt;/h1&gt;"
+&lt;h1&gt;500 — Internal Error&lt;/h1&gt;</pre>
+<p>Um endereço que não existe deveria responder 404. O 500 diz "eu quebrei", e isso confunde quem procura: o visitante acha que o site caiu, o buscador entende que a página é um erro temporário.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>$lib</code> não existe mais</strong>
+<p>Quem aprendeu SvelteKit em material antigo escreve <code>$lib/posts.js</code>. Nesta versão o atalho foi renomeado, e o erro só aparece quando a página é pedida — o servidor responde 500 e o terminal mostra a mensagem abaixo (as linhas de plugin e de caminho de arquivo ficam de fora aqui).</p>
+<pre class="term">Internal server error: module_removed_lib
+`$lib` has been removed. Use `#lib` instead: https://svelte.dev/docs/kit/$lib. To keep using `$lib`, add `alias: { '$lib': 'src/lib' }` to your SvelteKit config.
+https://svelte.dev/e/kit/module_removed_lib</pre>
+<p>A mensagem já dá as duas saídas: trocar por <code>#lib</code>, que é o atalho novo, ou declarar o <code>alias</code> na configuração para manter o nome antigo. O <code>package.json</code> gerado pelo <code>sv create</code> já traz <code>"imports": { "#lib": "./src/lib/index.js", "#lib/*": "./src/lib/*" }</code> — é de lá que o atalho vem.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Roda onde</th><th>Para que serve</th></tr>
+<tr><td><code>+page.svelte</code></td><td>servidor e navegador</td><td>a marcação da página</td></tr>
+<tr><td><code>+page.server.js</code></td><td>só no servidor</td><td>buscar dados com acesso a segredos</td></tr>
+<tr><td><code>+page.js</code></td><td>servidor e navegador</td><td>dados que podem vir dos dois lados</td></tr>
+<tr><td><code>+layout.svelte</code></td><td>servidor e navegador</td><td>o que se repete em volta das páginas</td></tr>
+<tr><td><code>+error.svelte</code></td><td>servidor e navegador</td><td>a tela de erro da rota</td></tr>
+<tr><td><code>+server.js</code></td><td>só no servidor</td><td>resposta crua: JSON, texto, arquivo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th><th>Onde aparece</th></tr>
+<tr><td><code>load({ params, url })</code></td><td>lê o pedido e devolve dados para a página</td><td><code>+page.server.js</code></td></tr>
+<tr><td><code>let { data } = $props()</code></td><td>recebe o que o <code>load</code> devolveu</td><td><code>+page.svelte</code></td></tr>
+<tr><td><code>error(404, '…')</code></td><td>interrompe o <code>load</code> com um erro de verdade</td><td><code>+page.server.js</code></td></tr>
+<tr><td><code>{@render children()}</code></td><td>desenha a página dentro do layout</td><td><code>+layout.svelte</code></td></tr>
+<tr><td><code>json(dado)</code></td><td>devolve o dado como JSON</td><td><code>+server.js</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código HTTP</th><th>Significado</th><th>Quem gera</th></tr>
+<tr><td><code>200</code></td><td>deu tudo certo</td><td>a página normal</td></tr>
+<tr><td><code>404</code></td><td>esse endereço não existe</td><td><code>error(404, …)</code></td></tr>
+<tr><td><code>500</code></td><td>o código quebrou</td><td>uma exceção no <code>load</code> ou no componente</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual arquivo pode ler um segredo sem risco de mandá-lo ao navegador?</p>
+<label><input type="radio" name="pb1"> <code>+page.svelte</code></label>
+<label><input type="radio" name="pb1"> <code>+page.server.js</code></label>
+<label><input type="radio" name="pb1"> <code>+layout.svelte</code></label>
+<label><input type="radio" name="pb1"> qualquer um, desde que a variável comece com <code>$</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. A pasta <code>src/routes/post/[slug]/</code> atende qual endereço?</p>
+<label><input type="radio" name="pb2"> só <code>/post</code></label>
+<label><input type="radio" name="pb2"> só <code>/post/slug</code>, com a palavra "slug" no caminho</label>
+<label><input type="radio" name="pb2"> <code>/post/</code> seguido de qualquer valor, que chega em <code>params.slug</code></label>
+<label><input type="radio" name="pb2"> qualquer endereço do site</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que o <code>error(404, 'Receita não encontrada')</code> faz?</p>
+<label><input type="radio" name="pb3"> interrompe o <code>load</code> e responde 404, desenhando o <code>+error.svelte</code></label>
+<label><input type="radio" name="pb3"> mostra a mensagem como um parágrafo no meio da lista</label>
+<label><input type="radio" name="pb3"> redireciona para a página inicial</label>
+<label><input type="radio" name="pb3"> registra o erro no console e continua normalmente</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">export function load({ params }) {<br>&nbsp;&nbsp;const post = posts.find((p) =&gt; p.slug === <input data-answer="params.slug">);<br>&nbsp;&nbsp;if (!post) error(404, 'Receita não encontrada');<br>&nbsp;&nbsp;return { post };<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>No SvelteKit, cada pasta em <code>src/routes</code> é um pedaço do endereço, e o <code>+page.svelte</code> é o que aparece nele.</li>
+  <li><code>+page.server.js</code> roda só no servidor e entrega dados pelo <code>load</code>.</li>
+  <li>A página recebe esses dados como <code>data</code>: <code>let { data } = $props()</code>.</li>
+  <li><code>+layout.svelte</code> envolve as páginas e desenha o conteúdo com <code>{@render children()}</code>.</li>
+  <li>Uma pasta com colchetes, <code>[slug]</code>, aceita qualquer valor no caminho e o entrega em <code>params</code>.</li>
+  <li><code>error(404, …)</code> responde 404 de verdade; sem ele, o erro de programação vira 500.</li>
+  <li>O filtro mora na URL (<code>?categoria=bolos</code>), o que faz o endereço ser compartilhável.</li>
+  <li><code>+server.js</code> devolve dados crus, como JSON, no endereço da pasta.</li>
+  <li>O HTML do servidor traz o CSS do layout embutido e marcadores <code>&lt;!--[--&gt;</code> para a hidratação.</li>
+  <li>Nesta versão o atalho é <code>#lib</code>; escrever <code>$lib</code> gera o erro <code>module_removed_lib</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

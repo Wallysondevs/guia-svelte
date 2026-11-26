@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login e Sessão — quem é você em cada pedido | Guia Svelte</title>
+<meta name="description" content="Login de verdade com SvelteKit: form actions, fail(), redirect(), cookie HttpOnly e hooks.server.js protegendo rotas. Respostas HTTP reais, com códigos e cabeçalhos.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projetos · <span class="hl">Login e Sessão</span></h1>
+
+<p class="intro">A Ana quer uma área do cliente onde cada pessoa vê as próprias encomendas. O problema não é a tela de senha — é que a internet não tem memória. Cada pedido chega ao servidor como se fosse a primeira vez: ele não sabe que você acabou de entrar na página anterior. Quem resolve isso é um <strong>cookie</strong>, e é ele que faz o login existir de verdade. Nesta aula o login é construído em <strong>três versões</strong>, e cada passo é conferido com o cabeçalho HTTP que o servidor devolveu.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que "estar logado" não é um estado do componente.</li>
+  <li>A diferença entre um login que só troca a tela e um login que o servidor reconhece.</li>
+  <li>Como escrever uma <em>action</em> de formulário com <code>+page.server.js</code>.</li>
+  <li>O que <code>fail(400, …)</code> devolve e como a página usa isso.</li>
+  <li>Como <code>redirect(303, …)</code> muda o endereço depois do login.</li>
+  <li>O que cada atributo do cookie significa: <code>HttpOnly</code>, <code>SameSite</code>, <code>Max-Age</code>.</li>
+  <li>Como o <code>hooks.server.js</code> lê o cookie em <strong>todo</strong> pedido.</li>
+  <li>Como proteger uma rota inteira sem repetir a checagem em cada página.</li>
+  <li>Como apagar o cookie no botão "Sair" com <code>cookies.delete</code>.</li>
+  <li>As mensagens reais de <code>invalid_export_location</code> e <code>action_data_not_serializable</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A internet não tem memória</h2>
+
+<p>Quando você abre uma página, o navegador manda um pedido e o servidor responde. O pedido seguinte é uma conversa nova: nada do anterior sobrevive. Se o servidor não fizer nada a mais, ele não tem como saber que os dois pedidos vieram da mesma pessoa. É por isso que "estar logado" precisa ser provado em <em>cada</em> pedido.</p>
+
+<p>A prova viaja num <strong>cookie</strong>: um pedacinho de texto que o servidor manda na resposta, o navegador guarda, e devolve em todo pedido para o mesmo site. O cookie não diz "sou a Ana" — ele diz "esta conversa já foi autenticada", e o servidor confere isso antes de entregar qualquer dado.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>Na aplicação</th></tr>
+<tr><td>A pessoa diz o nome no balcão</td><td>O formulário de login</td></tr>
+<tr><td>O crachá que ela recebe</td><td>O cookie de sessão</td></tr>
+<tr><td>Mostrar o crachá a cada pedido</td><td>O navegador devolvendo o cookie</td></tr>
+<tr><td>O porteiro que olha o crachá na porta</td><td>O <code>hooks.server.js</code></td></tr>
+<tr><td>Devolver o crachá ao sair</td><td><code>cookies.delete</code></td></tr>
+</table>
+</div>
+
+<p>Repare que o crachá não é a pessoa. Ele é uma prova que o servidor emitiu e reconhece. Se alguém copiar o crachá, entra no lugar dela — e é por isso que o cookie de sessão precisa de cuidados: <code>HttpOnly</code> impede o JavaScript da página de ler, e <code>SameSite</code> limita quando ele é enviado.</p>
+
+<hr>
+
+<h2>2. Versão 1 — o login que mora na tela</h2>
+
+<p>A primeira versão é a que todo mundo escreve primeiro: um componente com dois campos e um <code>$state</code> dizendo se a pessoa entrou.</p>
+
+<pre class="file" data-file="src/routes/login/+page.svelte">&lt;script&gt;
+  let logado = $state(false);
+  let email = $state('');
+&lt;/script&gt;
+
+&lt;h1&gt;Entrar&lt;/h1&gt;
+
+{#if logado}
+  &lt;p&gt;Bem-vinda, {email}!&lt;/p&gt;
+  &lt;a href="/painel"&gt;ir para o painel&lt;/a&gt;
+{:else}
+  &lt;form onsubmit={(e) =&gt; { e.preventDefault(); logado = true; }}&gt;
+    &lt;label&gt;E-mail &lt;input bind:value={email} type="email"&gt;&lt;/label&gt;
+    &lt;label&gt;Senha &lt;input type="password"&gt;&lt;/label&gt;
+    &lt;button&gt;Entrar&lt;/button&gt;
+  &lt;/form&gt;
+{/if}</pre>
+
+<p>Na primeira visita, o compilador entrega o formulário vazio:</p>
+
+<pre class="out">&lt;h1&gt;Entrar&lt;/h1&gt; &lt;form&gt;&lt;label&gt;E-mail &lt;input value="" type="email"/&gt;&lt;/label&gt; &lt;label&gt;Senha &lt;input type="password"/&gt;&lt;/label&gt; &lt;button&gt;Entrar&lt;/button&gt;&lt;/form&gt;</pre>
+
+<p>Funciona na tela e não funciona no mundo. Dois motivos, e os dois são graves. O primeiro: a senha não é conferida em lugar nenhum — qualquer texto passa. O segundo: o servidor nunca soube de nada. Se o visitante clicar em "ir para o painel", o pedido chega sem prova nenhuma, e a página do painel vai mostrar o que estiver escrito nela, para qualquer pessoa.</p>
+
+<p>O terminal mostra esse segundo problema sem rodeios: o painel responde 200 para quem nunca entrou.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -H 'Accept: text/html' http://localhost:5175/painel
+200
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' http://localhost:5175/painel | grep -o "<h1>[^<]*</h1>"
+&lt;h1&gt;Área do cliente&lt;/h1&gt;</pre>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>let logado = $state(false)</dt><dd>um booleano que só existe na memória da página. Recarregar apaga.</dd>
+  <dt>onsubmit com preventDefault()</dt><dd>impede o envio de verdade ao servidor. É justamente esse envio que faria o login existir.</dd>
+  <dt>bind:value={email}</dt><dd>guarda o e-mail digitado, para a mensagem de boas-vindas.</dd>
+  <dt>type="password"</dt><dd>esconde os caracteres na tela. Não é segurança: quem quiser lê o valor no inspetor do navegador.</dd>
+  <dt>{#if logado}</dt><dd>troca o formulário pela saudação. Puro desenho, nenhuma verificação.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Informe o e-mail">
+<p class="try-task"><strong>Missão:</strong> o botão entra sem e-mail nenhum e a saudação fica "Bem-vinda, !". Faça ele recusar e mostrar <strong>"Informe o e-mail"</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let email = $state('');
+  let logado = $state(false);
+&lt;/script&gt;
+
+{#if logado}
+  &lt;p&gt;Bem-vinda, {email}&lt;/p&gt;
+{:else}
+  &lt;input bind:value={email} placeholder="E-mail"&gt;
+  &lt;button onclick={() =&gt; (logado = true)}&gt;Entrar&lt;/button&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let email = $state('');
+  let logado = $state(false);
+  let erro = $state('');
+
+  function entrar() {
+    if (email.trim() === '') {
+      erro = 'Informe o e-mail';
+      return;
+    }
+    erro = '';
+    logado = true;
+  }
+&lt;/script&gt;
+
+{#if logado}
+  &lt;p&gt;Bem-vinda, {email}&lt;/p&gt;
+{:else}
+  &lt;input bind:value={email} placeholder="E-mail"&gt;
+  &lt;button onclick={entrar}&gt;Entrar&lt;/button&gt;
+  {#if erro}
+    &lt;p&gt;{erro}&lt;/p&gt;
+  {/if}
+{/if}</pre>
+</div>
+
+<p>Mesmo com essa validação, a versão 1 continua sendo só a tela. Conferir no navegador serve para avisar o usuário; conferir no servidor serve para proteger os dados. As duas coisas são necessárias, e a segunda é obrigatória.</p>
+
+<hr>
+
+<h2>3. Versão 2 — a ação do formulário no servidor</h2>
+
+<p>Agora o formulário ganha <code>method="POST"</code>, e o SvelteKit procura uma <em>action</em> no arquivo ao lado. A action recebe o formulário, confere a senha e, se estiver tudo certo, grava o cookie e manda o navegador para outra página.</p>
+
+<pre class="file" data-file="src/routes/login/+page.server.js">import { fail, redirect } from '@sveltejs/kit';
+
+const USUARIOS = {
+  'ana@padaria.com': { nome: 'Ana', senha: 'pao123' }
+};
+
+export const actions = {
+  default: async ({ request, cookies }) =&gt; {
+    const dados = await request.formData();
+    const email = dados.get('email')?.trim() ?? '';
+    const senha = dados.get('senha') ?? '';
+    const usuario = USUARIOS[email];
+
+    if (!usuario || usuario.senha !== senha) {
+      return fail(400, { email, erro: 'E-mail ou senha incorretos' });
+    }
+
+    cookies.set('sessao', email, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60
+    });
+
+    redirect(303, '/painel');
+  }
+};</pre>
+
+<p>Leia a ordem: buscar os campos, procurar o usuário, errar cedo com <code>fail</code>, gravar o cookie, sair com <code>redirect</code>. O <code>redirect</code> não é um <code>return</code> — ele interrompe a função lançando um aviso que o SvelteKit captura. Por isso não há nada depois dele.</p>
+
+<p>E a página que usa a action:</p>
+
+<pre class="file" data-file="src/routes/login/+page.svelte">&lt;script&gt;
+  let { form } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Entrar&lt;/h1&gt;
+
+&lt;form method="POST"&gt;
+  &lt;label&gt;E-mail &lt;input name="email" type="email" value={form?.email ?? ''}&gt;&lt;/label&gt;
+  &lt;label&gt;Senha &lt;input name="senha" type="password"&gt;&lt;/label&gt;
+  &lt;button&gt;Entrar&lt;/button&gt;
+&lt;/form&gt;
+
+{#if form?.erro}
+  &lt;p class="erro"&gt;{form.erro}&lt;/p&gt;
+{/if}
+
+&lt;style&gt;
+  .erro { color: #b3261e; font-weight: 600; }
+&lt;/style&gt;</pre>
+
+<p>Duas coisas mudaram no HTML. Cada campo agora tem <code>name</code> — é esse nome que chega ao <code>formData</code> do outro lado. E o e-mail volta preenchido quando o login falha, porque a action devolveu o valor em <code>{ email }</code>: ninguém quer digitar o e-mail de novo só porque errou a senha.</p>
+
+<p>O compilador, ao desenhar a página sem nenhuma resposta de action, produz:</p>
+
+<pre class="out">&lt;h1&gt;Entrar&lt;/h1&gt; &lt;form method="POST"&gt;&lt;label&gt;E-mail &lt;input name="email" type="email" value=""/&gt;&lt;/label&gt; &lt;label&gt;Senha &lt;input name="senha" type="password"/&gt;&lt;/label&gt; &lt;button&gt;Entrar&lt;/button&gt;&lt;/form&gt;</pre>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>export const actions</dt><dd>o dicionário de ações da rota. <code>default</code> é o nome da ação que roda num <code>&lt;form method="POST"&gt;</code> sem endereço especial.</dd>
+  <dt>request.formData()</dt><dd>lê o corpo do pedido como formulário. Devolve um objeto do qual se puxa cada campo pelo <code>name</code>.</dd>
+  <dt>fail(400, { … })</dt><dd>responde 400 e devolve esses dados para a página, na propriedade <code>form</code>. Não é exceção: é uma resposta.</dd>
+  <dt>cookies.set(nome, valor, opções)</dt><dd>manda o <code>Set-Cookie</code> na resposta. As opções decidem quem pode ler, por quanto tempo e em que pedidos ele vai.</dd>
+  <dt>redirect(303, '/painel')</dt><dd>responde "veja outro endereço". O 303 é o código certo depois de um POST: o navegador refaz o pedido como GET.</dd>
+</dl>
+
+<hr>
+
+<h2>4. O cookie, por dentro</h2>
+
+<p>Quando o login dá certo, o servidor responde assim. Copiado do terminal, sem edição:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i -H 'Accept: text/html' -X POST -d 'email=ana@padaria.com&senha=pao123' http://localhost:5175/login | head -4
+HTTP/1.1 303 See Other
+Vary: Origin
+location: /painel
+set-cookie: sessao=ana@padaria.com; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax</pre>
+
+<p>Cada pedaço da última linha tem uma função. <code>sessao</code> é o nome escolhido por você; <code>ana@padaria.com</code> é o valor; <code>Max-Age=3600</code> diz que o navegador guarda por uma hora; <code>Path=/</code> diz que ele vale para o site inteiro; <code>HttpOnly</code> proíbe o JavaScript de ler; <code>SameSite=Lax</code> evita que outro site use o cookie num formulário escondido.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Atributo</th><th>O que faz</th><th>Se faltar</th></tr>
+<tr><td><code>HttpOnly</code></td><td>o JavaScript da página não lê o cookie</td><td>um script malicioso pode copiar a sessão</td></tr>
+<tr><td><code>SameSite=Lax</code></td><td>o cookie só vai em pedidos do próprio site</td><td>outro site pode disparar pedidos autenticados</td></tr>
+<tr><td><code>Max-Age=3600</code></td><td>expira em uma hora</td><td>vira cookie de sessão: some ao fechar o navegador</td></tr>
+<tr><td><code>Path=/</code></td><td>vale para todas as rotas</td><td>só vale para a rota que o emitiu</td></tr>
+<tr><td><code>Secure</code></td><td>só vai por https</td><td>viaja em texto claro numa rede aberta</td></tr>
+</table>
+</div>
+
+<p>Aqui está o custo desta versão: o cookie guarda o <strong>e-mail em texto</strong>. Quem conseguir ler o cookie vira a Ana. Num app de verdade, o valor seria um identificador aleatório, e o servidor guardaria numa tabela o que aquele identificador significa. O mecanismo é o mesmo; muda o conteúdo.</p>
+
+<hr>
+
+<h2>5. A área do cliente</h2>
+
+<p>Com o cookie gravado, o painel pode perguntar ao servidor quem está pedindo. A checagem fica no <code>+page.server.js</code> da rota, e o <code>redirect</code> expulsa quem não tem cookie.</p>
+
+<pre class="file" data-file="src/routes/painel/+page.server.js">import { redirect } from '@sveltejs/kit';
+
+export function load({ cookies }) {
+  const usuario = cookies.get('sessao');
+  if (!usuario) redirect(303, '/login');
+  return { usuario };
+}</pre>
+
+<p>O resultado, com e sem o cookie, muda completamente o que o servidor devolve:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -H 'Accept: text/html' http://localhost:5175/painel
+303 http://localhost:5175/login
+ana@notebook:~/loja$ curl -s -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' http://localhost:5175/painel | grep -o "<p>Olá[^<]*</p>"
+&lt;p&gt;Olá, ana@padaria.com. Suas encomendas aparecem aqui.&lt;/p&gt;</pre>
+
+<p>O primeiro comando não tem cookie e recebe 303 com o endereço do login no cabeçalho <code>location</code>. O segundo manda o cookie na mão (<code>-H 'Cookie: …'</code>) e recebe a página com o nome. É exatamente o que o navegador faz sozinho: guarda o cookie e o envia em cada pedido ao mesmo site.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;clique:button;;outre:Muitas tentativas">
+<p class="try-task"><strong>Missão:</strong> a tela conta as tentativas e não faz nada com o número. Mostre o aviso <strong>"Muitas tentativas"</strong> a partir da terceira.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let tentativas = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;tentativas: {tentativas}&lt;/p&gt;
+&lt;button onclick={() =&gt; (tentativas += 1)}&gt;Entrar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let tentativas = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;tentativas: {tentativas}&lt;/p&gt;
+&lt;button onclick={() =&gt; (tentativas += 1)}&gt;Entrar&lt;/button&gt;
+
+{#if tentativas &gt;= 3}
+  &lt;p&gt;Muitas tentativas. Espere um minuto.&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Contar no navegador é só a metade fácil. Quem quiser tentar senhas em sequência usa um programa, e ele não passa pela sua tela. O limite de verdade mora no servidor, junto com a checagem da senha — a versão 3 não resolve isso; ela resolve o próximo problema, que é repetir a checagem em cada rota.</p>
+
+<hr>
+
+<h2>6. Versão 3 — o porteiro na porta</h2>
+
+<p>A versão 2 protege o painel dentro do próprio <code>+page.server.js</code>. Com dez rotas protegidas, seriam dez cópias da mesma checagem — e basta esquecer uma. O <code>hooks.server.js</code> existe para rodar <strong>antes</strong> de qualquer rota, em todo pedido.</p>
+
+<pre class="file" data-file="src/hooks.server.js">import { redirect } from '@sveltejs/kit';
+
+const PROTEGIDAS = ['/painel'];
+
+export async function handle({ event, resolve }) {
+  event.locals.usuario = event.cookies.get('sessao') ?? null;
+
+  const precisaEntrar =
+    !event.locals.usuario &amp;&amp; PROTEGIDAS.some((p) =&gt; event.url.pathname.startsWith(p));
+
+  if (precisaEntrar) redirect(303, '/login');
+
+  return resolve(event);
+}</pre>
+
+<p>Duas ideias novas. A primeira é <code>locals</code>: um objeto por pedido, onde o hook deixa o que as rotas vão precisar. A segunda é <code>resolve(event)</code>: a função que continua o caminho normal e devolve a resposta da rota. Entre uma coisa e outra, o hook decide se deixa passar.</p>
+
+<p>Com o hook no lugar, o <code>load</code> do painel fica curto, e o <code>+page.svelte</code> só mostra o que recebeu. O botão "Sair" é outra action, e ela apaga o cookie:</p>
+
+<pre class="file" data-file="src/routes/painel/+page.server.js">import { redirect } from '@sveltejs/kit';
+
+export function load({ locals }) {
+  return { usuario: locals.usuario };
+}
+
+export const actions = {
+  logout: async ({ cookies }) =&gt; {
+    cookies.delete('sessao', { path: '/' });
+    redirect(303, '/login');
+  }
+};</pre>
+
+<p>No formulário, o <code>action="?/logout"</code> escolhe a action pelo nome. Sem esse pedaço, o SvelteKit procuraria a ação <code>default</code>, que não existe nesta rota. O resultado do clique, conferido no terminal:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i -H 'Accept: text/html' -H 'Cookie: sessao=ana@padaria.com' -X POST -d '' "http://localhost:5175/painel?/logout" | head -4
+HTTP/1.1 303 See Other
+Vary: Origin
+location: /login
+set-cookie: sessao=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax</pre>
+
+<p>O <code>Max-Age=0</code> é o jeito de apagar um cookie: o navegador recebe a mesma linha de antes, com validade zero, e joga fora o que tinha guardado. O <code>-d ''</code> no comando não é detalhe: sem corpo, o servidor responde <strong>415</strong> porque uma action de formulário exige conteúdo de formulário.</p>
+
+<h3>A anatomia da versão 3</h3>
+
+<dl class="anatomy">
+  <dt>handle({ event, resolve })</dt><dd>a função que roda em todo pedido, antes da rota. Tudo o que ela fizer vale para o site inteiro.</dd>
+  <dt>event.cookies.get('sessao')</dt><dd>lê o cookie que o navegador mandou. Devolve <code>undefined</code> quando ele não veio.</dd>
+  <dt>event.locals.usuario</dt><dd>um valor por pedido, criado no hook e lido pelas rotas. Não é global: cada pedido tem o seu.</dd>
+  <dt>PROTEGIDAS.some(...)</dt><dd>uma lista de prefixos e um teste para cada. <code>startsWith</code> cobre também as rotas filhas.</dd>
+  <dt>resolve(event)</dt><dd>continua o atendimento normal. Se o hook não chamar, nada é respondido.</dd>
+  <dt>action="?/logout"</dt><dd>aponta para a action chamada <code>logout</code> na rota atual, em vez da <code>default</code>.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Entre para continuar">
+<p class="try-task"><strong>Missão:</strong> clicar em "Sair" apaga a saudação e deixa a tela vazia. Faça aparecer a frase <strong>"Entre para continuar"</strong> depois de sair.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let logado = $state(true);
+&lt;/script&gt;
+
+{#if logado}
+  &lt;p&gt;Olá, Ana&lt;/p&gt;
+  &lt;button onclick={() =&gt; (logado = false)}&gt;Sair&lt;/button&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let logado = $state(true);
+&lt;/script&gt;
+
+{#if logado}
+  &lt;p&gt;Olá, Ana&lt;/p&gt;
+  &lt;button onclick={() =&gt; (logado = false)}&gt;Sair&lt;/button&gt;
+{:else}
+  &lt;p&gt;Entre para continuar&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>O <code>{:else}</code> parece enfeite, mas é o que fecha o ciclo: todo estado tem de ter uma tela para cada valor. Sem ele, o usuário sai e fica olhando para o vazio, sem saber se a página quebrou ou se ele saiu.</p>
+
+<hr>
+
+<h2>7. Terminal: cada pedido registrado</h2>
+
+<p>Uma vantagem do servidor de desenvolvimento: ele imprime cada pedido com o código de resposta. Dá para acompanhar o login inteiro sem abrir o inspetor do navegador.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite dev
+
+5:41:48 PM [vite] (ssr) connected.
+Port 5173 is in use, trying another one...
+Port 5174 is in use, trying another one...
+
+  VITE v8.4.0  ready in 1918 ms
+
+  ➜  Local:   http://localhost:5175/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+
+303 GET /painel
+400 POST /login
+400 POST /login (x2)
+303 POST /login
+200 GET /painel
+303 POST /painel?/logout</pre>
+
+<p>As seis linhas contam a história da aula: o painel sem cookie manda para o login (303), duas tentativas erradas recebem 400, a certa recebe 303, o painel com cookie responde 200, e o "Sair" manda de volta ao login. O <code>(x2)</code> é a repetição do mesmo pedido — o Vite não repete a linha inteira, só conta.</p>
+
+<p>O build da versão 3 mostra quanto código o site carrega:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 142 modules transformed.
+...
+✓ built in 1.34s
+Analysing routes
+Building app
+vite v8.4.0 building client environment for production...
+transforming...
+✓ 180 modules transformed.
+...
+✓ built in 1.38s
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app to run on the platform of your choosing
+✔ done</pre>
+
+<p>O primeiro build é o do servidor, onde moram as actions e o hook; o segundo é o do navegador, que só precisa do suficiente para hidratar as páginas. O cookie nunca aparece em nenhum dos dois — ele existe no pedido, não no código.</p>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — <code>actions</code> no arquivo errado</strong>
+<p>A action precisa estar em <code>+page.server.js</code>. Colocada em <code>+page.js</code>, o SvelteKit recusa com uma mensagem que diz onde ela deveria estar.</p>
+<pre class="term">SvelteKit error: invalid_export_location
+Invalid export `actions` in `src/routes/login/+page.js` (`actions` is a valid export in +page.server.js)
+https://svelte.dev/e/kit/invalid_export_location</pre>
+<p>A resposta para a página foi 500. O sufixo <code>.server.js</code> não é decoração: ele decide o que pode rodar no servidor e o que pode ir para o navegador.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — devolver algo que não vira texto</strong>
+<p>O que a action devolve precisa ser serializável: texto, número, booleano, lista, objeto simples. Uma função no meio quebra a resposta.</p>
+<pre class="term">SvelteKit error: action_data_not_serializable
+Data returned from action inside `/login` is not serializable: Cannot stringify a function (`data.fn`)
+https://svelte.dev/e/kit/action_data_not_serializable
+
+DevalueError: Cannot stringify a function</pre>
+<p>A mensagem aponta o campo exato: <code>data.fn</code>. Função não atravessa a fronteira entre servidor e navegador — só dados.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — a página lê <code>data</code> sem <code>load</code></strong>
+<p>Sem o <code>load</code> que devolve o usuário, o <code>data</code> chega vazio. O componente compila e quebra ao desenhar.</p>
+<pre class="file" data-file="src/routes/painel/+page.svelte">&lt;script&gt;
+  let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Área do cliente&lt;/h1&gt;
+&lt;p&gt;Olá, {data.usuario}. Suas encomendas aparecem aqui.&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'usuario')</pre>
+<p>O painel da versão 3 nunca chega a esse erro porque o hook barra o pedido antes — mas qualquer rota nova sem <code>load</code> cai na mesma armadilha.</p>
+</div>
+
+<hr>
+
+<h2>9. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th><th>Onde mora</th></tr>
+<tr><td><code>export const actions</code></td><td>recebe o formulário enviado</td><td><code>+page.server.js</code></td></tr>
+<tr><td><code>fail(400, dados)</code></td><td>responde erro e devolve dados para a página</td><td>dentro da action</td></tr>
+<tr><td><code>redirect(303, url)</code></td><td>manda o navegador para outro endereço</td><td>action ou <code>load</code></td></tr>
+<tr><td><code>cookies.set / get / delete</code></td><td>grava, lê e apaga o cookie da sessão</td><td>servidor</td></tr>
+<tr><td><code>export async function handle</code></td><td>roda antes de toda rota</td><td><code>hooks.server.js</code></td></tr>
+<tr><td><code>event.locals</code></td><td>leva dados do hook para as rotas</td><td>em todo pedido</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Código</th><th>Quando aparece neste projeto</th><th>O que o navegador faz</th></tr>
+<tr><td><code>200</code></td><td>a página carregou com sessão válida</td><td>mostra o conteúdo</td></tr>
+<tr><td><code>303</code></td><td>login certo, logout, rota protegida sem cookie</td><td>refaz o pedido no endereço do <code>location</code></td></tr>
+<tr><td><code>400</code></td><td>senha errada (<code>fail</code>)</td><td>mostra a mesma página com a mensagem</td></tr>
+<tr><td><code>415</code></td><td>POST sem corpo de formulário</td><td>mostra erro; é sinal de pedido malformado</td></tr>
+<tr><td><code>500</code></td><td>erro no <code>load</code>, na action ou no componente</td><td>vê a página de erro do SvelteKit</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Por que o login da versão 1 não protege nada?</p>
+<label><input type="radio" name="pl1"> porque a senha tem poucos caracteres</label>
+<label><input type="radio" name="pl1"> porque o estado vive só na memória da página: o servidor não recebe prova nenhuma</label>
+<label><input type="radio" name="pl1"> porque falta <code>type="password"</code> no campo</label>
+<label><input type="radio" name="pl1"> porque o formulário não tem <code>name</code> nos campos</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>redirect(303, '/painel')</code> faz dentro da action?</p>
+<label><input type="radio" name="pl2"> desenha a página do painel na mesma resposta</label>
+<label><input type="radio" name="pl2"> recarrega o formulário com os dados preenchidos</label>
+<label><input type="radio" name="pl2"> responde 303 com o novo endereço, e o navegador refaz o pedido lá</label>
+<label><input type="radio" name="pl2"> apaga o cookie da sessão</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual atributo do cookie impede o JavaScript da página de lê-lo?</p>
+<label><input type="radio" name="pl3"> <code>HttpOnly</code></label>
+<label><input type="radio" name="pl3"> <code>SameSite=Lax</code></label>
+<label><input type="radio" name="pl3"> <code>Max-Age=3600</code></label>
+<label><input type="radio" name="pl3"> <code>Path=/</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">export async function handle({ event, resolve }) {<br>&nbsp;&nbsp;event.locals.usuario = event.<input data-answer="cookies">.get('sessao') ?? null;<br>&nbsp;&nbsp;return resolve(event);<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Cada pedido HTTP é uma conversa nova; a sessão precisa ser provada em todos eles.</li>
+  <li>O cookie é a prova: o servidor emite, o navegador devolve em cada pedido ao mesmo site.</li>
+  <li>Login de verdade acontece numa <em>action</em>, com <code>+page.server.js</code> — nunca só no componente.</li>
+  <li><code>fail(400, dados)</code> é resposta, não exceção: os dados chegam à página em <code>form</code>.</li>
+  <li><code>redirect(303, …)</code> interrompe a função e manda o navegador para outro endereço.</li>
+  <li><code>HttpOnly</code>, <code>SameSite</code> e <code>Secure</code> são o mínimo para um cookie de sessão.</li>
+  <li>Apagar um cookie é mandá-lo de novo com <code>Max-Age=0</code>.</li>
+  <li><code>hooks.server.js</code> roda antes de toda rota e evita repetir a checagem em cada página.</li>
+  <li><code>locals</code> carrega o resultado do hook até o <code>load</code> da rota.</li>
+  <li>Uma action de formulário exige corpo de formulário: sem ele, a resposta é 415.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
