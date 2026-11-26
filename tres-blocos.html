@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Os Três Blocos — script, HTML e estilo | Guia Svelte</title>
+<meta name="description" content="Os três blocos de um componente Svelte: script com JavaScript, HTML que aparece na tela e style com CSS escopado. Saídas reais do compilador, com erros comuns.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Os Três Blocos</span></h1>
+
+<p class="intro">A Ana tem três cadernos na padaria: um com os números do dia (quanto entrou, quanto saiu), um quadro na parede com o que o cliente lê e uma lata de tinta para deixar tudo apresentável. Ela não mistura os três: número fica no caderno, recado fica no quadro, tinta fica na parede. Um componente Svelte tem exatamente essa divisão, em blocos com nomes: <code>&lt;script&gt;</code>, o HTML e <code>&lt;style&gt;</code>. Nesta aula você vê o que pode entrar em cada um, o que acontece quando um bloco vaza para o outro e por que o estilo não pinta a página inteira.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Quais são os três blocos e o que cada um faz.</li>
+  <li>Qual bloco é obrigatório e quais são opcionais.</li>
+  <li>Por que o <code>&lt;script&gt;</code> não aparece na tela e para onde ele vai.</li>
+  <li>Como o compilador transforma o HTML do componente em marcação final.</li>
+  <li>O que é CSS escopado e de onde vem o selo <code>svelte-xxxxxx</code>.</li>
+  <li>Quando usar <code>:global()</code> e qual é o custo disso.</li>
+  <li>Que um componente só com HTML é válido — e quando isso basta.</li>
+  <li>Que a ordem dos blocos não muda o resultado, mas muda a leitura.</li>
+  <li>Os erros reais: dois estilos, script fechado com a tag errada e CSS querendo ler variável.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: caderno, quadro e tinta</h2>
+
+<p>Pense no trabalho da Ana em três camadas. A primeira é o que ela <em>sabe</em>: o preço do pão hoje, quantos pães sobraram, se a farinha acabou. A segunda é o que o cliente <em>vê</em>: a placa com o preço, o cardápio, o aviso de "fechado". A terceira é a <em>aparência</em>: a cor da placa, o tamanho da letra, a moldura. As três camadas conversam, mas cada uma tem o seu lugar.</p>
+
+<p>No componente, essas camadas são os blocos. O <code>&lt;script&gt;</code> é o caderno: guarda os valores e as funções. O HTML solto no arquivo é o quadro: é o que aparece na tela. O <code>&lt;style&gt;</code> é a tinta: cuida de cor, espaçamento, tamanho. O compilador lê os três, resolve os valores do caderno e entrega ao navegador um quadro já pintado.</p>
+
+<p>A vantagem de separar é a mesma da padaria: quando o preço muda, a Ana não repinta a placa. Ela muda o número no caderno, e o quadro se atualiza. Quando quer mudar a cor da placa, não mexe no número. Cada mudança tem um lugar certo, e isso reduz o tempo que você perde procurando onde alterar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Bloco</th><th>Na padaria</th><th>No componente</th></tr>
+<tr><td><code>&lt;script&gt;</code></td><td>o caderno de números e contas</td><td>variáveis, funções, importações</td></tr>
+<tr><td>HTML</td><td>o quadro que o cliente lê</td><td>as tags que aparecem na tela</td></tr>
+<tr><td><code>&lt;style&gt;</code></td><td>a tinta e a moldura</td><td>CSS com escopo do componente</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Os três blocos, na ordem</h2>
+
+<p>Este é um componente completo, com os três blocos. O <code>&lt;script&gt;</code> vem primeiro, o HTML no meio, o <code>&lt;style&gt;</code> no fim — a ordem que o guia usa em todos os exemplos.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let titulo = 'Pão francês';
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{titulo}&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;
+
+&lt;style&gt;
+  article {
+    border: 1px solid #ddd;
+    padding: 8px;
+  }
+  h2 {
+    color: #2e7d32;
+  }
+&lt;/style&gt;</pre>
+
+<p>O HTML gerado já vem com um atributo a mais em cada tag que o CSS atinge:</p>
+
+<pre class="out">&lt;article class="svelte-1n46o8q"&gt;&lt;h2 class="svelte-1n46o8q"&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;&lt;/article&gt;</pre>
+
+<p>O <code>&lt;script&gt;</code> desapareceu: os valores foram resolvidos e escritos na marcação. O <code>svelte-1n46o8q</code> é o selo deste componente — o compilador inventou esse código para que o CSS de <code>article</code> e <code>h2</code> valha só aqui. O <code>&lt;p&gt;</code> não recebeu o selo porque nenhuma regra do estilo aponta para ele.</p>
+
+<dl class="anatomy">
+  <dt>&lt;script&gt; … &lt;/script&gt;</dt><dd>o bloco de <strong>JavaScript</strong>. Roda uma vez, quando o componente é criado, e não aparece na tela. É onde ficam variáveis, funções e importações.</dd>
+  <dt>&lt;article&gt; … &lt;/article&gt;</dt><dd>o <strong>HTML</strong>, único bloco obrigatório. Tudo o que está aqui aparece na página; as chaves <code>{ }</code> trazem valores do script.</dd>
+  <dt>&lt;style&gt; … &lt;/style&gt;</dt><dd>o <strong>CSS</strong>. O compilador acrescenta o selo em cada seletor e nas tags correspondentes, então a regra não vaza para outros componentes.</dd>
+</dl>
+
+<hr>
+
+<h2>3. O bloco <code>&lt;script&gt;</code></h2>
+
+<p>Dentro do script roda JavaScript comum. Você pode declarar variáveis, escrever funções, importar arquivos, fazer contas. A diferença é que o compilador observa o que é usado no HTML e prepara a atualização automática para aqueles valores.</p>
+
+<p>Uma coisa que confunde: o script <em>não</em> é o lugar de escrever texto na tela. Se você colocar um <code>console.log</code> ali, a mensagem vai para o console do navegador, não para a página. Quem escreve na tela é o HTML. O script prepara os valores; o HTML os mostra. Misturar os dois papéis é a origem de muitos "não aparece nada".</p>
+
+<p>O script também é o lugar das importações. Quando um componente usa outro, é aqui que a ligação acontece: <code>import Cartao from './Cartao.svelte'</code>. Tudo o que vem de fora entra por esse bloco, e é por isso que ele fica no topo: quem lê o arquivo vê primeiro do que o componente depende.</p>
+
+<div class="trysvelte" data-goal="outre:^Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o nome da variável começa com um número e o compilador recusa o arquivo. Renomeie a variável para <code>nome</code>, nos dois lugares em que ela aparece.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let 2nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {2nome}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+</div>
+
+<p>Nome de variável em JavaScript não pode começar com número, nem ter espaço, nem acento. As regras são as mesmas do JavaScript, porque é JavaScript de verdade: letras, números e sublinhado, começando por letra ou sublinhado. A mensagem do compilador fala de "identificador diretamente depois de número" — é a tradução técnica do mesmo problema.</p>
+
+<hr>
+
+<h2>4. O HTML: o que aparece</h2>
+
+<p>O bloco do meio é o único obrigatório. Um componente com uma linha de texto é um componente válido:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;Pão fresquinho, todo dia.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pão fresquinho, todo dia.&lt;/p&gt;</pre>
+
+<p>Esse componente não tem script nem estilo. Ele é útil do mesmo jeito: pode ser importado por outro componente para não repetir a mesma frase em cinco lugares. Se amanhã a Ana quiser mudar o slogan, muda em um arquivo só. Essa é a primeira vantagem de componentizar, antes de qualquer reatividade.</p>
+
+<p>No HTML do componente, as chaves são a porta de entrada dos valores. Elas podem conter uma variável, uma conta, uma chamada de função, um texto entre aspas. O que não cabe dentro das chaves é uma declaração: <code>{let x = 1}</code> não declara nada — o compilador ignora e a expressão vale vazio. Declaração é coisa do script.</p>
+
+<p>E o HTML do componente não precisa de <code>html</code>, <code>head</code> ou <code>body</code>. Essas tags ficam no <code>index.html</code>. O componente é um pedaço de tela que será encaixado dentro da página; escrever a página inteira aqui gera HTML dentro de HTML, como vimos na aula de estrutura.</p>
+
+<hr>
+
+<h2>5. O bloco <code>&lt;style&gt;</code> e o escopo</h2>
+
+<p>O terceiro bloco é CSS normal, com uma diferença que muda a vida: ele vale só para este componente. O compilador faz isso renomeando os seletores com um selo. Veja o CSS que ele gerou para o componente do início da aula:</p>
+
+<pre class="out">article.svelte-1n46o8q {
+    border: 1px solid #ddd;
+    padding: 8px;
+  }
+  h2.svelte-1n46o8q {
+    color: #2e7d32;
+  }</pre>
+
+<p>Cada seletor ganhou <code>.svelte-1n46o8q</code>. Como o mesmo selo foi colocado nas tags do HTML gerado, a regra só encontra os elementos deste componente. Um <code>h2</code> de outro componente, mesmo que apareça na mesma página, não é atingido: ele tem outro selo, ou nenhum.</p>
+
+<p>O preço dessa proteção é que às vezes você <em>quer</em> atingir algo de fora — o <code>body</code>, por exemplo, para mudar a cor de fundo da página inteira. Para isso existe <code>:global()</code>, que desliga o escopo naquele seletor:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;Pão fresquinho&lt;/p&gt;
+
+&lt;style&gt;
+  p { color: #2e7d32; }
+  :global(body) { background: #fff8e1; }
+&lt;/style&gt;</pre>
+
+<pre class="out">p.svelte-1n46o8q { color: #2e7d32; }
+  body { background: #fff8e1; }</pre>
+
+<p>O <code>p</code> continua com selo; o <code>body</code> saiu sem. Cada <code>:global</code> é uma porta que você abre no isolamento: use quando precisar, sabendo que a regra passa a valer para a página toda. Em excesso, você perde a principal vantagem do CSS escopado, que é nunca precisar inventar nome de classe para evitar conflito.</p>
+
+<div class="trysvelte" data-goal="outre:^Pão francês R\$ 0.90">
+<p class="try-task"><strong>Missão:</strong> o componente tem dois blocos <code>&lt;style&gt;</code> e o compilador recusa. Junte as duas regras num bloco só, mantendo o título "Pão francês" e o preço "R$ 0.90".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;h1&gt;Pão francês&lt;/h1&gt;
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+
+&lt;style&gt;
+  h1 { color: #2e7d32; }
+&lt;/style&gt;
+
+&lt;style&gt;
+  p { padding: 4px; }
+&lt;/style&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;h1&gt;Pão francês&lt;/h1&gt;
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+
+&lt;style&gt;
+  h1 { color: #2e7d32; }
+  p { padding: 4px; }
+&lt;/style&gt;</pre>
+</div>
+
+<p>Um bloco de cada tipo, sempre. Se você tem duas listas de regras, junte: o compilador precisa de uma ordem única para saber em que momento aplicar cada coisa. É a mesma razão pela qual dois scripts não são aceitos.</p>
+
+<hr>
+
+<h2>6. Só HTML também é componente</h2>
+
+<p>Já vimos esse caso, mas vale olhar a saída com atenção: o componente de uma linha produz exatamente uma linha de HTML, sem selo nenhum. Sem <code>&lt;style&gt;</code>, não há o que escopar.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;Pão fresquinho&lt;/p&gt;
+
+&lt;style&gt;
+  p { color: #2e7d32; }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;p class="svelte-1n46o8q"&gt;Pão fresquinho&lt;/p&gt;</pre>
+
+<p>Agora com estilo, a mesma frase ganha o selo — e o CSS correspondente aparece no bundle com o mesmo código:</p>
+
+<pre class="out">p.svelte-1n46o8q { color: #2e7d32; }</pre>
+
+<p>Repare que o texto não mudou. O estilo não altera o conteúdo, só a apresentação. É por isso que o guia mostra as duas saídas separadas: uma é o que a tela diz, outra é como a tela se pinta. Quando você depurar, pergunte primeiro "o texto está certo?" e só depois "o estilo está aplicado?".</p>
+
+<div class="trysvelte" data-goal="outre:^Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o <code>&lt;script&gt;</code> foi escrito dentro da <code>div</code> e o componente quebra. Tire o script de dentro da marcação e coloque no topo do arquivo.</p>
+<pre class="script" data-file="App.svelte">&lt;div&gt;
+  &lt;script&gt;
+    let nome = 'Ana';
+  &lt;/script&gt;
+  &lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;/div&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = 'Ana';
+&lt;/script&gt;
+
+&lt;div&gt;
+  &lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;/div&gt;</pre>
+</div>
+
+<p>Um <code>&lt;script&gt;</code> dentro de uma <code>div</code> é apenas uma tag de HTML: o navegador não executa o conteúdo dela como código do componente. Por isso a variável não existe no momento de desenhar. Os blocos do Svelte são de nível superior, soltos no arquivo, não aninhados na marcação.</p>
+
+<hr>
+
+<h2>7. A ordem dos blocos</h2>
+
+<p>A convenção é script no topo, HTML no meio, estilo no fim. O compilador, porém, não exige essa ordem: ele lê os três blocos onde estiverem e monta o resultado. Este componente tem o estilo no meio e o HTML depois dele — e funciona:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;Pão&lt;/p&gt;
+
+&lt;style&gt;
+  p { color: green; }
+&lt;/style&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+
+<pre class="out">&lt;p class="svelte-1n46o8q"&gt;Pão&lt;/p&gt; &lt;h1&gt;Olá, Ana&lt;/h1&gt;</pre>
+
+<p>Funciona, mas não é uma boa ideia. A convenção existe para quem lê: com o estilo sempre no fim, você sabe onde procurar a cor de um elemento sem varrer o arquivo. Em um projeto com dezenas de componentes, padronizar a leitura economiza mais tempo do que qualquer otimização. Use a ordem do guia.</p>
+
+<p>Existe uma exceção legítima: o <code>&lt;script module&gt;</code>, que roda uma vez para todos os usos do componente, pode vir antes ou depois do <code>&lt;script&gt;</code> comum. Ele é usado para estado compartilhado e tem aula própria no Nível 2. Por enquanto, um script comum basta.</p>
+
+<p>Outro detalhe de leitura: o HTML pode ter comentários, mas eles somem da saída. Isso é assunto da próxima aula, com calma — só saiba que o compilador limpa o que é comentário antes de entregar a página.</p>
+
+<hr>
+
+<h2>8. O que vai para o navegador</h2>
+
+<p>Depois de compilar, o navegador recebe três coisas: o HTML com os valores já resolvidos, o JavaScript que sabe atualizar esse HTML quando o estado muda, e o CSS com os selos. Nada de <code>&lt;script&gt;</code> com o seu código-fonte e nada de <code>&lt;style&gt;</code> no meio da marcação: o compilador separa e organiza.</p>
+
+<p>Isso explica um comportamento que assusta: quando você inspeciona a página no navegador e procura a sua variável, não encontra. Ela virou um valor dentro de uma função fechada, com nome gerado pelo compilador. Você depura pelo comportamento — clicar, digitar, ver o que muda — e não lendo o HTML final como se fosse o seu arquivo.</p>
+
+<p>Explica também por que o CSS aparece com um nome estranho no bundle: é o mesmo CSS que você escreveu, com o selo aplicado. Se você procurar <code>p.svelte-1n46o8q</code> no arquivo gerado, encontra a regra. Se procurar <code>p { color: #2e7d32 }</code> puro, não encontra — e não é erro.</p>
+
+<p>O build deixa isso visível. Rodando o build do componente com estilo, aparece um arquivo <code>.css</code> separado, do lado do JavaScript:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-DLaq2RGq.css   0.09 kB │ gzip:  0.10 kB
+dist/assets/index-CR6zW06n.js   35.92 kB │ gzip: 13.86 kB
+✓ built in 2.09s</pre>
+
+<p>Dois arquivos com hash: um para o JavaScript, outro para o CSS. O Vite junta o estilo de todos os componentes em um arquivo só, porque o navegador baixa mais rápido um arquivo grande do que dez pequenos. O nome tem hash pelo mesmo motivo de sempre: conteúdo novo, nome novo, cache seguro.</p>
+
+<pre class="term">ana@notebook:~/loja$ cat dist/assets/index-DLaq2RGq.css
+article.svelte-1n46o8q{border:1px solid #ddd;padding:8px}h2.svelte-1n46o8q{color:#2e7d32}</pre>
+
+<p>Eis o CSS compilado: minificado (sem espaços nem quebras) e com o selo em cada seletor. É o mesmo conteúdo que você escreveu no bloco <code>&lt;style&gt;</code>, em outra forma. Se você procurar a regra no JavaScript também encontra o selo, porque o HTML gerado precisa dele para casar com o CSS:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -o "svelte-[a-z0-9]*" dist/assets/*.js | sort -u
+svelte-1n46o8q
+svelte-trusted</pre>
+
+<p>Duas linhas. A primeira é o selo deste componente. A segunda, <code>svelte-trusted</code>, não é um selo de componente: é um nome interno do motor do Svelte, que apareceu na busca porque começa com as mesmas letras. Detalhe bobo que assusta na primeira vez — e que vale saber para não sair caçando componente fantasma.</p>
+
+<hr>
+
+<h2>9. Quando o bloco vaza</h2>
+
+<p>O erro clássico de quem está começando é escrever texto dentro do bloco de estilo, ou CSS dentro do bloco de script. Os dois não compilam, e as mensagens não são óbvias na primeira leitura. O teste é simples: se tem chave de CSS (<code>seletor { propriedade: valor }</code>), é estilo; se tem JavaScript, é script; se tem tag, é HTML.</p>
+
+<p>Também é comum tentar usar uma variável dentro do CSS:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cor = 'green';
+&lt;/script&gt;
+
+&lt;h1&gt;Pão&lt;/h1&gt;
+
+&lt;style&gt;
+  h1 { color: {cor}; }
+&lt;/style&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 8, coluna 13): Expected a valid CSS identifier</pre>
+
+<p>O CSS é compilado antes de o componente rodar: ele não tem acesso a valores que só existem na hora da execução. Para mudar cor dinamicamente, o caminho é o atributo <code>style</code> com chaves, ou a diretiva <code>style:</code> — assuntos da aula de atributos dinâmicos e de estilo por condição. O bloco <code>&lt;style&gt;</code> é para o que não muda.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas são de confusão entre blocos.</p>
+
+<div class="cenario">
+<strong>Erro 1 — script fechado com a tag errada</strong>
+<p>A pressa faz fechar o <code>&lt;script&gt;</code> com <code>&lt;/style&gt;</code>. O compilador continua esperando o fim do script até o arquivo acabar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/style&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 20): `&lt;script&gt;` was left open</pre>
+<p>"Ficou aberto" é literal: o compilador não achou <code>&lt;/script&gt;</code> em lugar nenhum. A posição aponta para o fim do arquivo, onde ele desistiu. Confira a tag de fechamento antes de qualquer outra coisa.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — variável dentro do CSS</strong>
+<p>O bloco de estilo não enxerga variáveis. As chaves ali não são expressão: são parte da sintaxe do CSS, e o valor não é um identificador válido.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cor = 'green';
+&lt;/script&gt;
+
+&lt;h1&gt;Pão&lt;/h1&gt;
+
+&lt;style&gt;
+  h1 { color: {cor}; }
+&lt;/style&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 13): Expected a valid CSS identifier</pre>
+<p>Para cor dinâmica, use <code>&lt;h1 style="color: {cor}"&gt;</code> ou <code>style:color={cor}</code>. O bloco <code>&lt;style&gt;</code> fica com o que é fixo: espaçamento, borda, tipografia.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — texto dentro do estilo</strong>
+<p>Uma frase solta no meio das regras CSS não é declaração válida. O compilador tenta ler como seletor e para no primeiro caractere.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;Pão&lt;/p&gt;
+
+&lt;style&gt;
+  p { color: green; }
+  Pão fresquinho
+&lt;/style&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 0): Expected a valid CSS identifier</pre>
+<p>A linha apontada é a da frase. Mova o texto para fora do <code>&lt;style&gt;</code>, dentro de uma tag de HTML. Na dúvida, conte as chaves: dentro do estilo, tudo tem de estar entre <code>{ }</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>O resumo dos três blocos e do que pode aparecer em cada um.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Bloco</th><th>Obrigatório?</th><th>O que cabe</th><th>O que não cabe</th></tr>
+<tr><td><code>&lt;script&gt;</code></td><td>não</td><td>variáveis, funções, importações</td><td>tags de HTML, regras de CSS</td></tr>
+<tr><td>HTML</td><td><strong>sim</strong></td><td>tags e <code>{expressões}</code></td><td>declarações como <code>let</code></td></tr>
+<tr><td><code>&lt;style&gt;</code></td><td>não</td><td>CSS com <code>:global()</code> quando precisar</td><td>variáveis, texto solto</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No arquivo compilado</th><th>De onde veio</th></tr>
+<tr><td><code>&lt;article class="svelte-1n46o8q"&gt;</code></td><td>o HTML do componente mais o selo do escopo</td></tr>
+<tr><td><code>article.svelte-1n46o8q { … }</code></td><td>o seu CSS com o seletor renomeado</td></tr>
+<tr><td><code>body { … }</code></td><td>a regra que estava dentro de <code>:global()</code></td></tr>
+<tr><td>o texto do <code>&lt;h2&gt;</code></td><td>o valor de <code>{titulo}</code>, resolvido na compilação</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Qual bloco é obrigatório em um componente?</p>
+<label><input type="radio" name="q1"> o <code>&lt;script&gt;</code></label>
+<label><input type="radio" name="q1"> o <code>&lt;style&gt;</code></label>
+<label><input type="radio" name="q1"> o HTML, que é o que aparece na tela</label>
+<label><input type="radio" name="q1"> os três, sempre</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. De onde vem o <code>svelte-1n46o8q</code> que aparece nas tags?</p>
+<label><input type="radio" name="q1"> de uma classe que você escreveu no HTML</label>
+<label><input type="radio" name="q1"> do compilador, para limitar o CSS a este componente</label>
+<label><input type="radio" name="q1"> do navegador, que numera os componentes</label>
+<label><input type="radio" name="q1"> do npm, durante a instalação</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. O que <code>:global(body)</code> faz dentro de um <code>&lt;style&gt;</code>?</p>
+<label><input type="radio" name="q1"> apaga todos os estilos da página</label>
+<label><input type="radio" name="q1"> aplica a regra só quando o componente é o principal</label>
+<label><input type="radio" name="q1"> cria uma variável global de CSS</label>
+<label><input type="radio" name="q1"> desliga o escopo naquele seletor, valendo para a página toda</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;let preco = $state(0.9);<br>&lt;/script&gt;<br><br>&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;<br><br>&lt;<input data-answer="style">&gt;<br>&nbsp;&nbsp;p { color: #2e7d32; }<br>&lt;/style&gt;<br><br>// o bloco que guarda o CSS do componente</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O componente tem até três blocos: <code>&lt;script&gt;</code>, HTML e <code>&lt;style&gt;</code>.</li>
+  <li>Só o HTML é obrigatório; um componente com uma frase é válido.</li>
+  <li>O <code>&lt;script&gt;</code> guarda valores e funções e não aparece na tela.</li>
+  <li>As chaves <code>{ }</code> no HTML trazem valores do script.</li>
+  <li>O <code>&lt;style&gt;</code> é escopado: o compilador renomeia os seletores com um selo.</li>
+  <li><code>:global(seletor)</code> desliga o escopo naquele seletor, com custo para o isolamento.</li>
+  <li>A ordem script → HTML → estilo é convenção de leitura; o compilador aceita outra.</li>
+  <li>Um bloco de cada tipo por arquivo: dois <code>&lt;style&gt;</code> não compilam.</li>
+  <li>Os erros desta aula: script fechado com <code>&lt;/style&gt;</code>, variável dentro do CSS e texto dentro do estilo.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

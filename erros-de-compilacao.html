@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quando Não Compila — ler a mensagem e consertar | Guia Svelte</title>
+<meta name="description" content="Como ler os erros de compilação do Svelte: linha, coluna, mensagem e código; diferença entre erro e aviso; os casos reais mais comuns e como corrigir cada um.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Quando Não Compila</span></h1>
+
+<p class="intro">A Ana tem uma tia que revisa receitas. Ela lê a ficha antes de ir para a cozinha e anota na margem: "aqui falta a quantidade de açúcar", "esta linha não faz sentido". Nada é assado até a ficha passar pela revisão — e é melhor assim, porque errar na ficha custa uma canetada, errar no forno custa a tarde. O compilador do Svelte é essa tia: ele lê o arquivo antes de qualquer coisa e devolve uma mensagem quando algo não fecha. Nesta aula você aprende a ler essas mensagens sem pânico.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre erro de compilação e erro de execução.</li>
+  <li>Como ler uma mensagem por partes: linha, coluna e texto.</li>
+  <li>Onde a mensagem aparece: terminal, navegador, editor e as caixas do guia.</li>
+  <li>Por que às vezes a mensagem parece falar de outro assunto.</li>
+  <li>O que é um aviso e por que ele não impede o build.</li>
+  <li>Um roteiro de cinco passos para corrigir qualquer erro.</li>
+  <li>Os hábitos que evitam a maior parte dos erros de sintaxe.</li>
+  <li>Uma tabela das mensagens mais comuns e o que cada uma quer dizer.</li>
+  <li>Três erros reais, com a mensagem do compilador desta versão.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o revisor antes do forno</h2>
+
+<p>Existem dois momentos em que uma receita pode dar errado. No primeiro, a ficha está ilegível ou incompleta: falta a quantidade, a palavra está cortada, a linha não termina. Quem revisa percebe antes de acender o forno. No segundo, a ficha está perfeita, mas o forno está frio ou a farinha venceu — o problema aparece durante o preparo.</p>
+
+<p>Programação tem os mesmos dois momentos, e eles têm nomes. O <strong>erro de compilação</strong> acontece antes de a página rodar: o compilador lê o arquivo e não consegue transformá-lo em JavaScript. O <strong>erro de execução</strong> acontece depois, quando o componente já está na tela e alguma conta dá errado. As mensagens são diferentes, e o caminho para corrigir também.</p>
+
+<p>A vantagem do primeiro tipo é que ele é barato: nada foi publicado, ninguém viu a página quebrada. O compilador aponta o lugar e você conserta. A desvantagem é que a mensagem nem sempre é clara — ela fala a língua de quem escreveu o compilador, não a de quem está começando. Traduzir essa língua é o assunto desta aula.</p>
+
+<hr>
+
+<h2>2. Erro de compilação × erro de execução</h2>
+
+<p>Vale fixar a diferença com um exemplo de cada. No erro de compilação, o arquivo nem chega a virar componente: uma chave aberta sem fechar, uma tag esquecida, uma runa no lugar errado. O compilador para e devolve a mensagem. No erro de execução, o componente compila, é montado, e quebra ao tentar usar um valor que não existe.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Erro de compilação</th><th>Erro de execução</th></tr>
+<tr><td>Quando acontece?</td><td>antes de a página abrir</td><td>com a página já rodando</td></tr>
+<tr><td>Quem avisa?</td><td>o compilador</td><td>o navegador (ou o renderizador)</td></tr>
+<tr><td>Como começa a mensagem?</td><td>"Erro de compilação (linha x, coluna y)"</td><td>"Erro ao renderizar" ou o nome do erro</td></tr>
+<tr><td>O que corrigir?</td><td>a sintaxe do arquivo</td><td>o valor ou a lógica</td></tr>
+<tr><td>A página aparece?</td><td>não: fica a sobreposição de erro</td><td>às vezes sim, quebrada no meio</td></tr>
+</table>
+</div>
+
+<p>Na prática, os dois pedem abordagens diferentes. Compilação é caça ao caractere: quase sempre é uma chave, uma aspa, uma tag. Execução é caça ao valor: uma variável vazia, um tipo trocado, uma conta que devia ser feita antes. Misturar os dois na cabeça faz você procurar chave onde o problema é dado — e vice-versa.</p>
+
+<hr>
+
+<h2>3. A anatomia de uma mensagem</h2>
+
+<p>Toda mensagem de compilação deste guia tem a mesma forma. Aprender a lê-la é metade do trabalho:</p>
+
+<pre class="out">Erro de compilação (linha 5, coluna 15): Unterminated regular expression</pre>
+
+<dl class="anatomy">
+  <dt>Erro de compilação</dt><dd>o <strong>tipo</strong>. Se dissesse "Erro ao renderizar", o problema seria de execução, e a estratégia mudaria.</dd>
+  <dt>linha 5</dt><dd>onde o compilador <strong>parou</strong>. Nem sempre é onde o erro começou: um bloco aberto na linha 5 só é notado no fim do arquivo.</dd>
+  <dt>coluna 15</dt><dd>o caractere dentro da linha, contando do começo. Serve para achar o ponto exato em linhas compridas.</dd>
+  <dt>a mensagem</dt><dd>o texto em inglês, curto, escrito por quem fez o compilador. É diagnóstico, não instrução.</dd>
+  <dt>o código</dt><dd>em algumas saídas aparece também um endereço como <code>svelte.dev/e/js_parse_error</code>. É o código do erro, útil para procurar a explicação.</dd>
+</dl>
+
+<p>O detalhe mais importante é o primeiro: linha e coluna apontam onde o compilador <em>desistiu</em>, não necessariamente onde o erro está. Um <code>{#if}</code> sem fechamento é detectado no fim do arquivo. Uma aspa que abre e não fecha é detectada até o fim da linha. Ler "linha 40" em um arquivo de 40 linhas costuma significar "o problema começou bem antes".</p>
+
+<hr>
+
+<h2>4. Onde a mensagem aparece</h2>
+
+<p>O mesmo erro pode aparecer em quatro lugares, com roupas diferentes. O primeiro é o terminal, quando o servidor de desenvolvimento tenta compilar o arquivo. O segundo é o navegador, em uma sobreposição que cobre a página e mostra o texto do erro. O terceiro é o editor, com um sublinhado vermelho. O quarto são as caixas deste guia, que compilam o seu código de verdade.</p>
+
+<p>Antes de investigar qualquer erro, vale conferir a versão do compilador. Um erro que não existe na documentação pode ser de outra versão:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log(require('svelte/compiler').VERSION)"
+5.59.2</pre>
+
+<p>E aqui está o compilador falando sozinho, sem o embrulho do guia. O comando tenta compilar o arquivo e imprime a mensagem crua quando falha:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "try { require('svelte/compiler').compile(require('fs').readFileSync('src/App.svelte','utf8'),{filename:'src/App.svelte'}) } catch (e) { console.log(e.message) }"
+Unterminated regular expression
+https://svelte.dev/e/js_parse_error</pre>
+
+<p>A mensagem crua é só a frase, sem linha nem coluna. O endereço no fim é o código do erro: <code>js_parse_error</code> quer dizer "o JavaScript dentro do arquivo não pôde ser lido". O guia acrescenta a posição porque ela é a informação mais útil — e é por isso que as caixas mostram o formato completo.</p>
+
+<hr>
+
+<h2>5. Erro × aviso</h2>
+
+<p>Nem tudo o que o compilador fala é erro. Existe uma categoria intermediária: o <strong>aviso</strong>. Ele não impede o build, não quebra a página e não aparece para o usuário. Aponta algo suspeito, que funciona mas provavelmente não é o que você queria. Este componente compila e roda:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;div /&gt;
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;div&gt;&lt;/div&gt; &lt;p&gt;Ana&lt;/p&gt;</pre>
+
+<p>E, junto com a saída, vem um aviso no terminal:</p>
+
+<pre class="out">aviso: element_invalid_self_closing_tag (linha 5): Self-closing HTML tags for non-void elements are ambiguous — use `&lt;div ...&gt;&lt;/div&gt;` rather than `&lt;div ... /&gt;`
+https://svelte.dev/e/element_invalid_self_closing_tag</pre>
+
+<p>A tradução: "tags HTML que não são vazias não devem se fechar sozinhas". O <code>&lt;div /&gt;</code> funcionou porque o compilador foi generoso, mas a forma correta é <code>&lt;div&gt;&lt;/div&gt;</code>. Em HTML, só alguns elementos podem se fechar sozinhos — <code>img</code>, <code>input</code>, <code>br</code>, <code>hr</code> — porque não têm conteúdo dentro.</p>
+
+<p>A regra prática: erro impede, aviso aconselha. Um aviso ignorado hoje vira um problema na semana que vem, quando alguém menos experiente mexer no arquivo. Se o aviso aponta algo que você não entende, vale investigar antes de seguir; se aponta algo que você decidiu de propósito, o <code>svelte-ignore</code> documenta a decisão.</p>
+
+<div class="trysvelte" data-goal="outre:^R\$ 0.90">
+<p class="try-task"><strong>Missão:</strong> falta fechar a chave da expressão e o compilador reclama de "expressão regular sem fim". Feche a chave no lugar certo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare na mensagem que a caixa mostra: <code>Unterminated regular expression</code>. Ela fala de "expressão regular", que é um recurso de JavaScript para buscar padrões em texto — nada a ver com o seu preço. O compilador tentou interpretar o que veio depois da chave como código JavaScript e, não achando fechamento, chutou o que estava mais próximo na gramática dele.</p>
+
+<hr>
+
+<h2>6. Por que a mensagem parece falar de outra coisa</h2>
+
+<p>O compilador não lê o seu arquivo como um humano lê. Ele segue uma gramática: cada caractere pode iniciar certas construções e não outras. Quando encontra algo que não esperava, precisa escolher a interpretação mais próxima — e às vezes escolhe uma que não tem nada a ver com a sua intenção.</p>
+
+<p>É o caso do "Unterminated regular expression". Em JavaScript, a barra <code>/</code> pode abrir uma expressão regular; o compilador viu uma expressão aberta e procurou o fechamento. A sua intenção era só fechar uma chave. O resultado é uma mensagem tecnicamente correta e praticamente inútil — e é por isso que a posição vale mais do que a frase.</p>
+
+<p>A lição geral: quando a mensagem não fizer sentido, vá pela posição. Olhe a linha apontada e as três ou quatro linhas acima. Procure caracteres de abertura sem par: chave, parêntese, colchete, aspa, tag. Na maioria dos casos, o erro está nessa janela, e não no fim do arquivo.</p>
+
+<hr>
+
+<h2>7. O roteiro de cinco passos</h2>
+
+<p>Com o tempo você cria intuição, mas um roteiro ajuda nos primeiros meses. Cinco passos, na ordem:</p>
+
+<p><strong>Primeiro: leia o tipo.</strong> "Erro de compilação" ou "Erro ao renderizar"? Isso decide se você vai caçar sintaxe ou valor. Se for compilação, siga os passos abaixo; se for execução, pule para o valor.</p>
+
+<p><strong>Segundo: vá à posição.</strong> Abra o arquivo na linha indicada. Se a linha apontada for o fim do arquivo, olhe o arquivo inteiro procurando um par aberto: <code>{#if}</code> sem <code>{/if}</code>, <code>&lt;script&gt;</code> sem <code>&lt;/script&gt;</code>, <code>&lt;!--</code> sem <code>--&gt;</code>.</p>
+
+<p><strong>Terceiro: reduza.</strong> Se não achar, comente metade do arquivo. Compilou? O erro está na metade comentada. Não compilou? Está na outra. Repita até sobrar uma linha. Esse método de dividir ao meio acha qualquer erro em poucos minutos, mesmo em arquivos grandes.</p>
+
+<p><strong>Quarto: compare com o que funciona.</strong> Pegue um componente que compila e vá mudando uma coisa de cada vez até ele se parecer com o quebrado. A diferença que fizer parar de compilar é o erro. É mais rápido do que reler o arquivo quebrado dez vezes.</p>
+
+<p><strong>Quinto: escreva de novo, não conserte.</strong> Quando o trecho estiver muito embaralhado, apague e digite de novo, devagar. Digitar força você a passar por cada caractere — e é aí que a aspa que faltava aparece.</p>
+
+<div class="trysvelte" data-goal="out:pão">
+<p class="try-task"><strong>Missão:</strong> o <code>{@html}</code> está sem valor e o compilador reclama de espaço. Passe a variável <code>texto</code> para dentro da expressão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let texto = '&lt;b&gt;pão&lt;/b&gt;';
+&lt;/script&gt;
+
+&lt;p&gt;{@html}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let texto = '&lt;b&gt;pão&lt;/b&gt;';
+&lt;/script&gt;
+
+&lt;p&gt;{@html texto}&lt;/p&gt;</pre>
+</div>
+
+<p>A mensagem aqui é <code>Expected whitespace</code> — "esperava um espaço". O compilador leu <code>{@html</code> e esperava, depois do nome, um espaço e uma expressão. Como encontrou a chave de fechamento, reclamou do espaço que falta. Outra mensagem que só faz sentido quando você sabe o que ele esperava encontrar.</p>
+
+<hr>
+
+<h2>8. Prevenindo: hábitos que evitam a maior parte dos erros</h2>
+
+<p>Quase todo erro de compilação vem de um punhado de causas. Fechar as tags na hora em que abre é o primeiro hábito: escrever <code>&lt;h1&gt;&lt;/h1&gt;</code> e depois preencher o meio evita o "was left open". O mesmo vale para chaves de bloco e para aspas.</p>
+
+<p>O segundo hábito é salvar antes de rodar. Parece bobo, mas metade dos "não funciona" em aula ao vivo é arquivo não salvo. O servidor de desenvolvimento recompila quando o arquivo muda no disco; se o editor está com a alteração só na tela, o Vite não vê nada.</p>
+
+<p>O terceiro é não copiar blocos grandes de lugares diferentes. Cada exemplo da internet foi escrito para um contexto: uma versão do Svelte, um tipo de arquivo, uma configuração. Colar dois exemplos no mesmo componente cria o erro de "dois scripts" ou de runa misturada com sintaxe antiga, que já apareceram em aulas anteriores.</p>
+
+<p>O quarto hábito é ler a mensagem em voz alta. Sério: dizer "expected token, expected whitespace, unexpected token" em voz alta obriga o cérebro a processar a frase, em vez de pular direto para o pânico. Depois de três ou quatro leituras, você começa a reconhecer os padrões.</p>
+
+<p>Existe um quinto hábito que parece detalhe e não é: mantenha o terminal visível. O servidor de desenvolvimento imprime o erro no instante em que você salva, com a posição. Se o terminal está escondido atrás do navegador, você vê a página quebrada sem saber por quê e começa a procurar no lugar errado. Duas janelas lado a lado — editor e terminal — economizam mais tempo do que qualquer atalho de teclado.</p>
+
+<p>Por último: deixe o arquivo em um estado que compila antes de parar. Se você precisa sair no meio de uma alteração, comente o trecho em construção ou desfaça. Voltar a um projeto que não compila, sem lembrar onde parou, é o pior jeito de começar o dia.</p>
+
+<hr>
+
+<h2>9. As mensagens que você vai ver</h2>
+
+<p>Uma tabela para consultar com o terminal aberto. A coluna da direita é a tradução prática, não a literal.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que costuma ser</th></tr>
+<tr><td><code>Expected token }</code></td><td>um bloco <code>{#if}</code> ou <code>{#each}</code> sem o fechamento correspondente</td></tr>
+<tr><td><code>… was left open</code></td><td>uma tag aberta e não fechada</td></tr>
+<tr><td><code>Unexpected token</code></td><td>sintaxe de outro bloco, ou um caractere que não podia estar ali</td></tr>
+<tr><td><code>Attributes need to be unique</code></td><td>o mesmo atributo escrito duas vezes na mesma tag</td></tr>
+<tr><td><code>Attribute values containing `{...}` must be enclosed in quote marks</code></td><td>faltaram as aspas em um valor que mistura texto e expressão</td></tr>
+<tr><td><code>Cannot use rune without parentheses</code></td><td><code>$state</code> ou <code>$derived</code> escritos sem os parênteses</td></tr>
+<tr><td><code>Unterminated regular expression</code></td><td>uma chave <code>{</code> sem o <code>}</code> correspondente</td></tr>
+</table>
+</div>
+
+<p>Guarde também a diferença entre <code>Expected</code> e <code>Unexpected</code>. "Expected" quer dizer "eu esperava encontrar isto aqui e não encontrei" — geralmente falta algo. "Unexpected" quer dizer "encontrei isto, mas aqui não cabia" — geralmente sobra algo ou está no lugar errado. A pista muda o que você procura.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>Os três casos abaixo saíram do compilador desta versão, copiados como estão. São os erros mais comuns de quem está começando com Svelte.</p>
+
+<div class="cenario">
+<strong>Erro 1 — chave sem fechar</strong>
+<p>Faltou o <code>}</code> da expressão. O compilador tentou ler o resto como código e desistiu.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 15): Unterminated regular expression</pre>
+<p>Conte os pares: cada <code>{</code> precisa de um <code>}</code>. A posição aponta o fim da linha, onde ele parou de entender. A correção é escrever <code>{nome}</code> antes do <code>&lt;/p&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — atributo repetido</strong>
+<p>A mesma tag com dois atributos de mesmo nome. O compilador não sabe qual vale e recusa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p class="preco" class="destaque"&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 17): Attributes need to be unique</pre>
+<p>Junte os dois valores em um atributo só: <code>class="preco destaque"</code>. A coluna 17 é o começo do segundo <code>class</code>, que é o que sobra.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — evento escrito como texto</strong>
+<p><code>onclick</code> espera uma função, não uma string. Escrever o código dentro de aspas não faz o navegador executá-lo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;button onclick="alert('oi')"&gt;comprar&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 8): Event attribute must be a JavaScript expression, not a string</pre>
+<p>Use chaves e uma função: <code>onclick={() =&gt; alert('oi')}</code>. A mensagem é literal: "atributo de evento tem de ser uma expressão JavaScript, não uma string".</p>
+</div>
+
+<div class="trysvelte" data-goal="outre:^Preço: R\$ 2">
+<p class="try-task"><strong>Missão:</strong> sobrou um <code>&lt;/p&gt;</code> no fim do arquivo e o compilador reclama. Apague a tag que não tem abertura.</p>
+<pre class="script" data-file="App.svelte">&lt;p&gt;Preço: &lt;strong&gt;R$ 2&lt;/strong&gt;&lt;/p&gt;
+&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;p&gt;Preço: &lt;strong&gt;R$ 2&lt;/strong&gt;&lt;/p&gt;</pre>
+</div>
+
+<p>Esse erro aparece quando você apaga um parágrafo e esquece o fechamento, ou copia um trecho pela metade. A mensagem <code>attempted to close an element that was not open</code> é generosa: ela diz que a tag tentou fechar algo que não estava aberto. É só apagar a sobra.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>Duas tabelas para o dia a dia: onde olhar e o que fazer.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde a mensagem aparece</th><th>Vantagem</th></tr>
+<tr><td>terminal do <code>npm run dev</code></td><td>mostra o erro completo e a hora</td></tr>
+<tr><td>sobreposição no navegador</td><td>mostra o erro junto da página, sem trocar de janela</td></tr>
+<tr><td>editor com extensão do Svelte</td><td>sublinha antes de salvar</td></tr>
+<tr><td>caixa "Experimente" do guia</td><td>compila e roda na hora, sem instalar nada</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Primeiro passo</th></tr>
+<tr><td>mensagem fala de "expected"</td><td>procurar o que falta: chave, aspa, tag</td></tr>
+<tr><td>mensagem fala de "unexpected"</td><td>procurar o que sobra ou está no lugar errado</td></tr>
+<tr><td>linha apontada é o fim do arquivo</td><td>procurar bloco aberto sem fechamento</td></tr>
+<tr><td>mensagem incompreensível</td><td>comentar metade do arquivo e compilar de novo</td></tr>
+<tr><td>só um aviso</td><td>decidir: corrigir ou documentar com <code>svelte-ignore</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que a posição "linha 5, coluna 15" indica?</p>
+<label><input type="radio" name="q1"> a linha onde o erro começou, sempre</label>
+<label><input type="radio" name="q1"> a linha do arquivo que será apagada</label>
+<label><input type="radio" name="q1"> onde o compilador parou ao tentar entender o arquivo</label>
+<label><input type="radio" name="q1"> o número de erros encontrados</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. Qual é a diferença entre erro e aviso?</p>
+<label><input type="radio" name="q1"> o aviso não impede o build; o erro impede</label>
+<label><input type="radio" name="q1"> o aviso é mais grave que o erro</label>
+<label><input type="radio" name="q1"> os dois impedem a página de abrir</label>
+<label><input type="radio" name="q1"> não existe diferença prática</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. Apareceu <code>Unterminated regular expression</code>. O que provavelmente falta?</p>
+<label><input type="radio" name="q1"> um ponto e vírgula no fim do script</label>
+<label><input type="radio" name="q1"> uma tag de fechamento de HTML</label>
+<label><input type="radio" name="q1"> uma aspa no texto do parágrafo</label>
+<label><input type="radio" name="q1"> a chave <code>}</code> de uma expressão</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;button onclick=<input data-answer="{() =&gt; alert('oi')}">&gt;comprar&lt;/button&gt;<br><br>// a mensagem é: Event attribute must be a JavaScript expression, not a string</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Erro de compilação acontece antes de a página abrir; erro de execução, durante.</li>
+  <li>A mensagem tem tipo, linha, coluna e texto — e às vezes um código de documentação.</li>
+  <li>A posição aponta onde o compilador parou, não necessariamente onde o erro começou.</li>
+  <li>"Expected" costuma indicar falta; "Unexpected", sobra ou lugar errado.</li>
+  <li>Aviso não impede o build; erro impede.</li>
+  <li>Quando a mensagem não fizer sentido, vá pela posição e procure pares abertos.</li>
+  <li>Comentar metade do arquivo é o método mais rápido para achar o erro.</li>
+  <li>Os casos desta aula: chave sem fechar, atributo repetido e evento escrito como texto.</li>
+  <li>Salvar o arquivo antes de testar evita uma boa parte dos falsos alarmes.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

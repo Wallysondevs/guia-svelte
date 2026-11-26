@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O Arquivo .svelte — um texto que vira componente | Guia Svelte</title>
+<meta name="description" content="O que é um arquivo .svelte por dentro: texto UTF-8, nome que entra no hash do CSS, compilação em uma função e o que o compilador gera, com saídas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">O Arquivo .svelte</span></h1>
+
+<p class="intro">A Ana guarda as receitas em fichas de um tamanho só, sempre com o mesmo cabeçalho: nome, rendimento, tempo de forno. O formato é dela, não é página de livro nem receita de revista — e é justamente por ter formato próprio que ela acha qualquer coisa em segundos. O arquivo <code>.svelte</code> é a ficha do guia: um formato próprio, que nenhum navegador conhece e que o compilador transforma em JavaScript. Nesta aula você abre essa ficha, vê o que o compilador faz com ela e descobre por que o nome do arquivo aparece no CSS.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que existe dentro de um arquivo <code>.svelte</code>: texto, e nada além de texto.</li>
+  <li>Por que o navegador não abre o arquivo direto e o que o compilador faz no lugar.</li>
+  <li>Como o nome do arquivo entra no hash do CSS e por que isso importa.</li>
+  <li>Que o componente compilado vira uma função JavaScript.</li>
+  <li>De onde vem o <code>export default</code> — e por que você não deve escrevê-lo.</li>
+  <li>Como ler o JavaScript gerado para entender o que o Svelte otimizou.</li>
+  <li>O que um arquivo vazio faz e quando isso é útil.</li>
+  <li>As variações do bloco de script: <code>lang</code> e <code>module</code>.</li>
+  <li>Os erros reais: <code>return</code> no topo, variável repetida e palavra reservada.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a ficha com formato próprio</h2>
+
+<p>Uma ficha de receita não é um livro nem um cartaz: é um formato inventado para um uso. Tem campos fixos, na ordem que interessa a quem cozinha. Quem não conhece o formato estranha; quem conhece acha tudo rápido. O arquivo <code>.svelte</code> segue a mesma lógica: um formato inventado para descrever um pedaço de tela.</p>
+
+<p>Esse formato tem três partes possíveis — o script, o HTML e o estilo — e uma regra de leitura: o compilador entra no arquivo, separa as partes, executa o que dá para executar naquele momento e gera JavaScript. O navegador nunca vê a ficha; vê o resultado dela.</p>
+
+<p>Por isso a extensão é diferente de <code>.html</code>. Se fosse HTML, o navegador tentaria abrir e mostraria as chaves <code>{nome}</code> como texto literal, ou reclamaria de tags desconhecidas. A extensão própria é um aviso: "este arquivo precisa de um compilador antes de virar página".</p>
+
+<hr>
+
+<h2>2. O que existe dentro do arquivo</h2>
+
+<p>Um arquivo <code>.svelte</code> é texto puro, salvo em UTF-8 — o mesmo padrão que guarda acentos e cedilha. O sistema operacional vê um arquivo comum, com algumas linhas:</p>
+
+<pre class="term">ana@notebook:~/loja$ file src/App.svelte
+src/App.svelte: HTML document, Unicode text, UTF-8 text
+ana@notebook:~/loja$ wc -l src/App.svelte
+5 src/App.svelte
+ana@notebook:~/loja$ wc -c src/App.svelte
+70 src/App.svelte</pre>
+
+<p>Cinco linhas, setenta bytes. O <code>file</code> chuta "HTML document" porque o arquivo começa com uma tag, mas o palpite está errado: o navegador não sabe o que fazer com um <code>.svelte</code>. Se você abrir o arquivo no navegador, verá o texto cru ou um download — nunca o componente funcionando.</p>
+
+<p>O UTF-8 é o detalhe que estraga o dia de quem salva no formato antigo do Windows. Um arquivo em Latin-1 com "Pão" aparece como "PÃ£o" na página, porque os bytes foram lidos com outra tabela. Se um acento sair errado, a primeira suspeita é a codificação do arquivo, não o Svelte.</p>
+
+<p>Outra consequência de ser texto: você pode versionar no git, comparar diferenças, revisar em qualquer editor. Não existe parte binária, não existe projeto proprietário. Um arquivo <code>.svelte</code> é tão legível quanto uma receita escrita à mão — e é por isso que o guia insiste em mostrar o arquivo inteiro, e não pedaços soltos.</p>
+
+<hr>
+
+<h2>3. O nome do arquivo entra no resultado</h2>
+
+<p>Aqui está uma coisa que quase ninguém espera: o nome do arquivo faz parte do componente. O compilador usa o caminho para calcular o selo do CSS. O mesmo conteúdo, em dois arquivos diferentes, gera dois selos diferentes:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Pão francês&lt;/h1&gt;
+&lt;p&gt;R$ 0.90&lt;/p&gt;
+
+&lt;style&gt;
+  h1 { color: #2e7d32; }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;h1 class="svelte-1n46o8q"&gt;Pão francês&lt;/h1&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+
+<p>O CSS correspondente:</p>
+
+<pre class="out">h1.svelte-1n46o8q { color: #2e7d32; }</pre>
+
+<p>Agora o mesmo conteúdo, salvo como <code>src/Cartao.svelte</code>:</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;h1&gt;Pão francês&lt;/h1&gt;
+&lt;p&gt;R$ 0.90&lt;/p&gt;
+
+&lt;style&gt;
+  h1 { color: #2e7d32; }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;h1 class="svelte-11u2pyd"&gt;Pão francês&lt;/h1&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+
+<p>Outro selo: <code>svelte-11u2pyd</code> em vez de <code>svelte-1n46o8q</code>. É a prova de que o selo não vem do conteúdo do CSS: vem da identidade do arquivo. Duas consequências práticas: renomear um componente muda o CSS gerado (e o hash do build), e dois arquivos com o mesmo conteúdo nunca colidem entre si.</p>
+
+<p>O nome também aparece nas mensagens de erro, na posição do arquivo. Se você renomear <code>App.svelte</code> para <code>app.svelte</code>, o import <code>./App.svelte</code> deixa de achar o arquivo — e o erro vai falar de módulo não encontrado, não de componente. Nomes em maiúscula existem por convenção e por causa da diferença entre maiúsculas e minúsculas nos sistemas de arquivos.</p>
+
+<hr>
+
+<h2>4. O arquivo vira uma função</h2>
+
+<p>Para entender o que o compilador faz, vale ver o resultado. O comando abaixo compila o componente e imprime todo o JavaScript gerado para o navegador:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "const {compile}=require('svelte/compiler');console.log(compile(require('fs').readFileSync('src/App.svelte','utf8'),{generate:'client',filename:'src/App.svelte'}).js.code)"
+import 'svelte/internal/init-operations';
+import 'svelte/internal/disclose-version';
+import * as $ from 'svelte/internal/client';
+
+var root = $.from_html(`<h1></h1>`);
+
+export default function App($$anchor) {
+	let nome = 'Ana';
+	var h1 = root();
+
+	h1.textContent = 'Olá, Ana';
+	$.append($$anchor, h1);
+}</pre>
+
+<p>Treze linhas. O componente virou uma função chamada <code>App</code>, que recebe um lugar onde se encaixar (<code>$$anchor</code>), cria o elemento a partir de um molde e escreve o texto. O HTML do molde é <code>&lt;h1&gt;&lt;/h1&gt;</code>, vazio: o conteúdo entra depois, por <code>textContent</code>.</p>
+
+<p>Repare em <code>h1.textContent = 'Olá, Ana'</code>. O compilador já sabia o valor — ninguém muda <code>nome</code> neste componente — e escreveu o texto direto, sem consultar variável nenhuma na hora de rodar. Isso é otimização de compilador: o que dá para decidir antes, ele decide antes. Em um componente com botão, o código gerado seria diferente, com funções de atualização.</p>
+
+<dl class="anatomy">
+  <dt>import … de 'svelte/internal/client'</dt><dd>o <strong>motor</strong> do Svelte, que sabe criar elementos, atualizar texto e reagir a mudanças. É uma dependência pequena comparada a um framework inteiro.</dd>
+  <dt>var root = $.from_html(`&lt;h1&gt;&lt;/h1&gt;`)</dt><dd>o <strong>molde</strong> do componente: um pedaço de HTML criado uma vez e clonado a cada uso. Repare que a marcação foi reduzida ao esqueleto.</dd>
+  <dt>export default function App</dt><dd>a <strong>função</strong> que representa o componente. É por isso que o arquivo não tem <code>export default</code> escrito por você: ele já existe, gerado.</dd>
+  <dt>$$anchor</dt><dd>o <strong>lugar</strong> onde o componente será encaixado na página, passado pelo componente pai ou pelo <code>mount()</code>.</dd>
+  <dt>$.append($$anchor, h1)</dt><dd>a <strong>montagem</strong> final: o elemento criado é colocado dentro do lugar recebido.</dd>
+</dl>
+
+<p>Há mais duas coisas para notar no JavaScript gerado. A primeira é que as tabulações do código são do compilador, não suas: ele formata a saída do jeito dele, e isso não afeta o resultado. A segunda é que a variável <code>nome</code> continua ali, dentro da função, mesmo que nesse caso não seja usada para nada reativo — o compilador manteve a declaração porque o valor poderia ser lido por uma função que você escrevesse.</p>
+
+<p>Não é preciso entender cada linha agora. O que importa é a ideia: componente é função, marcação é molde, valor é dado. Todo o resto do guia é consequência disso.</p>
+
+<hr>
+
+<h2>5. Por que o componente não tem <code>export default</code></h2>
+
+<p>Na aula de estrutura, o erro era escrever <code>export default {}</code> dentro do componente. Agora dá para ver o motivo: o compilador já gera um <code>export default function App</code>. Se você escrevesse outro, o arquivo teria dois exports padrão — e o JavaScript não permite.</p>
+
+<p>Quem precisa do export é o <code>main.js</code>, que importa o componente e o monta. O <code>export default</code> que aparece lá é do arquivo JavaScript, não do componente. São arquivos diferentes, com papéis diferentes: o componente descreve um pedaço de tela; o <code>main.js</code> decide onde ele começa.</p>
+
+<p>Isso também explica o erro "A component cannot have a default export": não é uma regra arbitrária do Svelte, é uma consequência do código que ele gera. Entender o porquê economiza decoreba — quando a mensagem parecer sem sentido, vale perguntar que código o compilador precisa produzir.</p>
+
+<hr>
+
+<h2>6. Um arquivo vazio é um componente válido</h2>
+
+<p>Pode parecer piada, mas é verdade: um arquivo <code>.svelte</code> sem nenhuma linha compila e produz um componente que não desenha nada. Sem erro, sem aviso. O compilador gera uma função vazia e segue a vida.</p>
+
+<p>Isso é útil quando você está começando um componente novo: cria o arquivo, importa no lugar certo, confirma que a página não quebrou e só então escreve o conteúdo. Se algo der errado depois, você sabe que o problema está no que acabou de escrever, não na ligação entre os arquivos.</p>
+
+<p>Um arquivo com apenas um comentário tem o mesmo efeito: o comentário é descartado e o componente não mostra nada. É o estado inicial da caixa abaixo.</p>
+
+<div class="trysvelte" data-goal="out:Padaria da Ana">
+<p class="try-task"><strong>Missão:</strong> o arquivo só tem um comentário, então a tela fica vazia. Escreva o componente: um <code>&lt;script&gt;</code> com <code>nome</code> valendo <code>'Ana'</code> e um <code>&lt;h1&gt;</code> com "Padaria da {nome}".</p>
+<pre class="script" data-file="App.svelte">&lt;!-- o arquivo ainda está vazio --&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Padaria da {nome}&lt;/h1&gt;</pre>
+</div>
+
+<p>A caixa mostra o componente rodando de verdade: o arquivo que você edita é compilado e montado no navegador, do mesmo jeito que o Vite faz no projeto. A diferença é que aqui não existe <code>main.js</code> nem <code>index.html</code> — a caixa monta o componente direto.</p>
+
+<hr>
+
+<h2>7. Variações do bloco de script</h2>
+
+<p>O bloco <code>&lt;script&gt;</code> aceita dois atributos que mudam o comportamento. O primeiro é <code>lang="ts"</code>, que avisa: "o conteúdo aqui é TypeScript, com tipos". O compilador então usa o pré-processador para remover os tipos antes de compilar.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script lang="ts"&gt;
+  let nome: string = 'Ana';
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana&lt;/p&gt;</pre>
+
+<p>O segundo é <code>module</code>, que cria um bloco que roda <em>uma vez</em> para todos os usos do componente, em vez de uma vez por componente. Serve para estado compartilhado e constantes:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  export const versao = '1.0';
+&lt;/script&gt;
+
+&lt;p&gt;versão {versao}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;versão 1.0&lt;/p&gt;</pre>
+
+<p>Os dois atributos têm aula própria mais adiante. Por enquanto, saiba que existem e que não são necessários para começar: um <code>&lt;script&gt;</code> simples resolve a maioria dos casos. Usar TypeScript sem necessidade acrescenta uma camada de configuração que você vai ter de manter.</p>
+
+<hr>
+
+<h2>8. O que fica fora do arquivo</h2>
+
+<p>Nem tudo pertence ao componente. O título da aba, a fonte do site, o favicon e a cor de fundo da página inteira ficam no <code>index.html</code> ou em um CSS global. O componente cuida do pedaço de tela que ele representa; a página cuida do envelope.</p>
+
+<p>Quando você precisa de algo global dentro do componente, existem duas portas. Uma é <code>:global()</code> no bloco de estilo. A outra é a tag especial <code>&lt;svelte:head&gt;</code>, que escreve no <code>head</code> da página — útil para o título de uma rota, por exemplo. As duas são exceções; o padrão é o componente não saber que existe uma página em volta.</p>
+
+<p>Existe ainda a questão do tamanho do arquivo. Um componente de trezentas linhas é difícil de ler, e a solução não é comprimir o código: é dividir em componentes menores, cada um com a sua responsabilidade. O arquivo <code>.svelte</code> não tem limite técnico de tamanho, mas tem limite humano. Quando você precisa rolar a tela para achar o fim do bloco de estilo, é sinal de que já passou do ponto.</p>
+
+<p>Já as imagens e fontes entram por importação, dentro do script. O arquivo <code>.svelte</code> não tem uma pasta secreta de recursos: ele usa o mesmo sistema de importação do JavaScript, e o Vite resolve o caminho no build. Se a imagem não aparece, o problema costuma estar no caminho, não no componente.</p>
+
+<hr>
+
+<h2>9. O editor ajuda, mas não compila</h2>
+
+<p>Um arquivo <code>.svelte</code> aberto em um editor comum é só texto com cores diferentes. Com a extensão oficial do Svelte para o VS Code, você ganha destaque de sintaxe nas três partes, sugestões e verificação de erros enquanto digita. O editor não compila nada: ele chama o mesmo compilador para conferir.</p>
+
+<p>Isso significa que um erro marcado no editor é o mesmo erro que apareceria no terminal. Se o editor está silencioso e o terminal reclama, desconfie da versão da extensão ou de um arquivo salvo em outro lugar. E se o editor marca erro em algo que funciona, o problema pode ser configuração de tipos, não o Svelte.</p>
+
+<p>Para quem está começando, a configuração mínima basta: a extensão oficial, o arquivo salvo na pasta certa e o terminal rodando o servidor. Não invente uma configuração de pré-processador antes de precisar dela — cada linha de configuração é uma coisa a mais para dar errado.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão. Todas são erros de JavaScript dentro do arquivo, não de Svelte: o bloco de script é JavaScript de verdade, com as regras da linguagem.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>return</code> no topo do script</strong>
+<p>O conteúdo do script vira o corpo de uma função, mas você não pode escrever <code>return</code> solto: ele só vale dentro de uma função que você mesmo declarou.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  return 1;
+&lt;/script&gt;
+
+&lt;p&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): 'return' outside of function</pre>
+<p>A mensagem é do JavaScript: "return fora de função". Se você quer que algo aconteça ao montar, o caminho é <code>$effect</code> ou a função <code>onMount</code>, que têm aulas próprias no Nível 2.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — a mesma variável declarada duas vezes</strong>
+<p>Duas declarações com o mesmo nome no mesmo bloco. O JavaScript não sabe qual valor vale e recusa o arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = 'Ana';
+  let nome = 'Bia';
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 6): Identifier 'nome' has already been declared</pre>
+<p>"Já foi declarado" quer dizer que o nome está ocupado. Apague uma das linhas ou renomeie a segunda — <code>nomePreferido</code>, por exemplo. A posição aponta a segunda declaração, não a primeira.</p>
+</div>
+
+<div class="trysvelte" data-goal="outre:^Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o componente declara <code>nome</code> duas vezes e não compila. Deixe uma declaração só, com o valor <code>'Ana'</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = 'Ana';
+  let nome = 'Bia';
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = 'Ana';
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+</div>
+
+<p>O erro de declaração repetida é mais traiçoeiro do que parece: ele não aparece quando você copia uma linha, mas quando cola um bloco inteiro por cima do que já existia. Depois de colar, vale olhar o script de cima a baixo e procurar nomes que se repetem — o compilador aponta a segunda ocorrência, e é para lá que você deve ir.</p>
+
+<div class="cenario">
+<strong>Erro 3 — palavra reservada como nome de variável</strong>
+<p><code>class</code> é uma palavra da linguagem usada para criar classes. Não pode virar nome de variável, por mais que faça sentido em português.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let class = 'Ana';
+&lt;/script&gt;
+
+&lt;p&gt;{class}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 6): Unexpected keyword 'class'</pre>
+<p>Renomeie para <code>turma</code>, <code>classe</code> ou <code>grupo</code>. A lista de palavras reservadas inclui <code>class</code>, <code>function</code>, <code>return</code>, <code>new</code> e outras. O editor costuma colorir essas palavras de forma diferente — bom sinal de alerta.</p>
+</div>
+
+<div class="trysvelte" data-goal="outre:^Turma: 3">
+<p class="try-task"><strong>Missão:</strong> a variável se chama <code>class</code>, que é palavra reservada, e o arquivo não compila. Renomeie para <code>turma</code> nos dois lugares.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let class = 3;
+&lt;/script&gt;
+
+&lt;p&gt;Turma: {class}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let turma = 3;
+&lt;/script&gt;
+
+&lt;p&gt;Turma: {turma}&lt;/p&gt;</pre>
+</div>
+
+<p>Note que a meta confere o texto que aparece na tela, e não o nome da variável. O Svelte não liga para o nome que você escolhe; quem liga é o JavaScript, que tem uma lista de palavras que não podem ser usadas como identificador.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>O que caracteriza o arquivo e o que cada atributo do script faz.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sobre o arquivo</th><th>Detalhe</th></tr>
+<tr><td>extensão</td><td><code>.svelte</code>, obrigatória para o compilador reconhecer</td></tr>
+<tr><td>conteúdo</td><td>texto UTF-8 com até três blocos</td></tr>
+<tr><td>nome</td><td>em maiúscula; entra no hash do CSS e nas mensagens</td></tr>
+<tr><td>abre no navegador?</td><td>não: precisa ser compilado antes</td></tr>
+<tr><td>export default</td><td>gerado pelo compilador; você não escreve</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Atributo do <code>&lt;script&gt;</code></th><th>Efeito</th></tr>
+<tr><td><code>lang="ts"</code></td><td>o conteúdo é TypeScript; os tipos são removidos na compilação</td></tr>
+<tr><td><code>module</code></td><td>roda uma vez para todos os usos do componente</td></tr>
+<tr><td><code>context="module"</code></td><td>forma antiga do anterior; funciona, mas a nova é <code>module</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que existe dentro de um arquivo <code>.svelte</code>?</p>
+<label><input type="radio" name="q1"> código binário que só o Svelte lê</label>
+<label><input type="radio" name="q1"> texto UTF-8 com até três blocos</label>
+<label><input type="radio" name="q1"> uma página HTML completa</label>
+<label><input type="radio" name="q1"> um banco de dados de componentes</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. De onde vem o <code>svelte-1n46o8q</code> do CSS?</p>
+<label><input type="radio" name="q1"> do conteúdo do HTML</label>
+<label><input type="radio" name="q1"> de um número aleatório a cada build</label>
+<label><input type="radio" name="q1"> do nome e do caminho do arquivo do componente</label>
+<label><input type="radio" name="q1"> da versão do Svelte instalada</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que não se escreve <code>export default</code> no componente?</p>
+<label><input type="radio" name="q1"> porque o compilador já gera esse export na função do componente</label>
+<label><input type="radio" name="q1"> porque o Svelte não aceita JavaScript no script</label>
+<label><input type="radio" name="q1"> porque o export é feito pelo CSS</label>
+<label><input type="radio" name="q1"> porque o <code>main.js</code> proíbe</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;let <input data-answer="turma"> = 3;<br>&lt;/script&gt;<br><br>&lt;p&gt;Turma: {turma}&lt;/p&gt;<br><br>// o nome da variável não pode ser uma palavra reservada como class</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um arquivo <code>.svelte</code> é texto UTF-8 com até três blocos.</li>
+  <li>O navegador não abre o arquivo direto: ele precisa ser compilado.</li>
+  <li>O nome e o caminho do arquivo entram no hash do CSS e nas mensagens de erro.</li>
+  <li>O componente compila para uma função com <code>export default</code> gerado.</li>
+  <li>Valores que não mudam são escritos direto no código gerado.</li>
+  <li>Um arquivo vazio é um componente válido que não desenha nada.</li>
+  <li><code>lang="ts"</code> liga o TypeScript; <code>module</code> cria um bloco compartilhado.</li>
+  <li>Página, fonte e favicon ficam no <code>index.html</code>; o componente cuida do pedaço dele.</li>
+  <li>Os erros desta aula: <code>return</code> no topo, variável repetida e palavra reservada.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

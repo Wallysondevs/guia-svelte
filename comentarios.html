@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comentários — a anotação que o navegador não lê | Guia Svelte</title>
+<meta name="description" content="Como comentar em Svelte: // e /* */ no script, comentários de HTML no markup, /* */ no estilo e svelte-ignore. O que some da saída e os erros reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Comentários</span></h1>
+
+<p class="intro">A Ana anota nas margens do caderno de receitas: "o forno aqui é mais forte", "usar menos açúcar em julho". São recados para ela mesma, não para o cliente. Ninguém compra um pão com a anotação escrita na casca. Comentário em código é isso: uma anotação para quem lê o arquivo, que o programa ignora — e que o navegador não deve receber. Nesta aula você aprende as três sintaxes, onde cada uma vale e por que escrever bem um comentário é tão importante quanto não escrever nenhum.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As três sintaxes de comentário: <code>//</code>, <code>/* */</code> e <code>&lt;!-- --&gt;</code>.</li>
+  <li>Em qual bloco cada sintaxe funciona e em qual quebra o arquivo.</li>
+  <li>Por que os comentários desaparecem do HTML gerado.</li>
+  <li>Como usar comentário para desligar um pedaço de marcação.</li>
+  <li>O que acontece quando você escreve <code>//</code> no meio do HTML.</li>
+  <li>Para que serve o comentário especial <code>svelte-ignore</code>.</li>
+  <li>Por que comentário não é lugar de senha nem de dado pessoal.</li>
+  <li>O que o build faz com os comentários do CSS.</li>
+  <li>Os erros reais: comentário de HTML dentro do script, comentário de JS solto no HTML e comentário sem fechar.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a anotação na margem</h2>
+
+<p>Existe uma diferença entre o que o cliente lê e o que a Ana precisa lembrar. O cliente lê "PÃO FRANCÊS — R$ 0,90". A Ana precisa lembrar "o preço sobe em janeiro" e "o fornecedor novo entrega mais tarde". Se ela escrevesse tudo na placa, o cliente veria informação interna. Por isso a placa tem só o preço, e o caderno tem as anotações.</p>
+
+<p>Comentário em código é a anotação do caderno. Ele fica no arquivo, ao lado do código, mas não vira programa: o compilador o descarta. Você pode escrever o motivo de uma decisão, um aviso para o próximo a mexer no arquivo, uma explicação de uma conta complicada. O navegador nunca vê esse texto — e isso é uma vantagem de segurança, como veremos.</p>
+
+<p>Existe também o comentário que desliga código. Em vez de apagar três linhas que talvez você use amanhã, você as comenta: elas continuam no arquivo, mas deixam de valer. É o equivalente a cobrir uma placa com um pano em vez de arrancar a placa da parede. Útil durante testes, perigoso quando vira hábito — código comentado acumula poeira e ninguém sabe se ainda serve.</p>
+
+<hr>
+
+<h2>2. Comentário de JavaScript: <code>//</code> e <code>/* */</code></h2>
+
+<p>Dentro do bloco <code>&lt;script&gt;</code> roda JavaScript, então valem as duas formas de comentário da linguagem. A primeira é de uma linha só, começando com duas barras:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  // o preço do pão passou a valer em novembro
+  let preco = $state(0.9);
+
+  /* a conta abaixo aplica o desconto de 10%
+     para pagamento no dinheiro */
+  let desconto = $state(preco * 0.1);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;p&gt;Desconto: R$ {desconto.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;R$ 0.90&lt;/p&gt; &lt;p&gt;Desconto: R$ 0.09&lt;/p&gt;</pre>
+
+<p>Repare no que a saída não tem: nenhuma das duas anotações. O compilador leu o script, executou as contas e escreveu os valores no HTML. O texto dos comentários não chegou nem perto da página.</p>
+
+<dl class="anatomy">
+  <dt>//</dt><dd>comentário de <strong>uma linha</strong>. Vale do <code>//</code> até o fim daquela linha; o que vier depois é ignorado pelo motor.</dd>
+  <dt>/*</dt><dd>abre o comentário de <strong>bloco</strong>. Pode atravessar várias linhas e é o formato para explicações mais longas.</dd>
+  <dt>*/</dt><dd>fecha o bloco. Se faltar, o compilador lê o resto do arquivo como comentário e reclama no fim.</dd>
+  <dt>o texto</dt><dd>o que você escreve aqui não é executado nem mostrado: é <strong>margem do caderno</strong>, para quem lê o arquivo.</dd>
+</dl>
+
+<p>O comentário de bloco, entre <code>/*</code> e <code>*/</code>, pode ocupar várias linhas e é o mais indicado para explicar uma decisão com contexto. O de linha, <code>//</code>, serve para uma observação curta. Os dois são ignorados igualmente pelo motor JavaScript — a diferença é de leitura, não de comportamento.</p>
+
+<p>Repare que o comentário de bloco é o único que aceita várias linhas. Em troca, ele tem uma regra chata: não aninha. Um <code>/*</code> dentro de outro comentário não abre nada — o primeiro <code>*/</code> que aparecer fecha tudo, e o que sobra vira código inválido.</p>
+
+<p>Uma armadilha do comentário de bloco: ele não aninha. Se você escrever <code>/* começo /* meio */ fim */</code>, o comentário termina no primeiro <code>*/</code> e o resto vira código inválido. Em código de verdade, isso aparece quando alguém comenta um trecho que já tinha comentário — vale conferir antes de salvar.</p>
+
+<div class="trysvelte" data-goal="outre:^R\$ 0.90">
+<p class="try-task"><strong>Missão:</strong> a Ana usou um comentário de HTML dentro do <code>&lt;script&gt;</code> e o compilador recusa. Troque pela sintaxe de comentário de JavaScript, mantendo o preço em 0.90.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  &lt;!-- lembrar: o preço antigo era 0.75 --&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  // lembrar: o preço antigo era 0.75
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>A mensagem que aparece na caixa é <code>Unexpected token</code> — "token inesperado". O compilador não traduz o motivo em português claro porque, para ele, aquilo é apenas um caractere que não podia estar ali. A pista é a posição: a linha 2, dentro do script, onde só deveria haver JavaScript.</p>
+
+<hr>
+
+<h2>3. Comentário de HTML: <code>&lt;!-- --&gt;</code></h2>
+
+<p>No bloco de marcação, o comentário é o do HTML: começa com <code>&lt;!--</code> e termina com <code>--&gt;</code>. Ele pode ocupar várias linhas e serve para anotar o que é aquela seção, ou para esconder um pedaço de marcação.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;!-- cabeçalho da vitrine --&gt;
+&lt;h1&gt;Pão francês&lt;/h1&gt;
+
+&lt;!-- o parágrafo abaixo está fora do ar até a nova tabela chegar
+&lt;p&gt;Tabela de preços em breve&lt;/p&gt;
+--&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Pão francês&lt;/h1&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+
+<p>Os dois comentários desapareceram, e o parágrafo que estava dentro do segundo também. Esse é o truque para desligar marcação sem apagar: coloque <code>&lt;!--</code> antes e <code>--&gt;</code> depois. Enquanto estiver ali, o navegador nem sabe que existe.</p>
+
+<p>Repare que o comentário de várias linhas tem um detalhe: o fechamento <code>--&gt;</code> pode ficar em uma linha só dele, como no exemplo. Não importa a formatação, só o par de abertura e fechamento. O que está no meio é ignorado.</p>
+
+<div class="trysvelte" data-goal="out:Padaria">
+<p class="try-task"><strong>Missão:</strong> a placa mostra "Padaria" e "Pão" juntos. Use um comentário de HTML para esconder o parágrafo do pão, deixando só o título na tela.</p>
+<pre class="script" data-file="App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+&lt;p&gt;Pão&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+&lt;!-- &lt;p&gt;Pão&lt;/p&gt; --&gt;</pre>
+</div>
+
+<p>A meta desta caixa confere o texto inteiro da tela: só "Padaria", sem o "Pão". É a forma mais direta de ver que o comentário realmente tirou o parágrafo de circulação, em vez de só escondê-lo com CSS.</p>
+
+<hr>
+
+<h2>4. Comentário de CSS: <code>/* */</code> dentro do estilo</h2>
+
+<p>No bloco <code>&lt;style&gt;</code>, o comentário é o do CSS: <code>/*</code> até <code>*/</code>. Ele aparece na saída do compilador, porque faz parte do CSS gerado:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Pão francês&lt;/h1&gt;
+
+&lt;style&gt;
+  /* a cor vem da identidade da padaria */
+  h1 { color: #2e7d32; }
+&lt;/style&gt;</pre>
+
+<pre class="out">/* a cor vem da identidade da padaria */
+  h1.svelte-1n46o8q { color: #2e7d32; }</pre>
+
+<p>Duas coisas para notar. A primeira: o comentário sobreviveu à compilação, ao contrário do que acontece no script e no HTML. A segunda: o seletor ganhou o selo <code>svelte-1n46o8q</code>, o mesmo das aulas anteriores.</p>
+
+<p>No build de produção, porém, o comentário do CSS é removido pelo minificador. O que sobra é só a regra, comprimida. Guarde essa diferença: durante o desenvolvimento você vê o comentário; no arquivo publicado, não. Se a intenção era documentar, o lugar definitivo é o código-fonte, não o arquivo gerado.</p>
+
+<p>Um comentário de CSS não pode ficar aberto. Se faltar o <code>*/</code>, o compilador continua lendo tudo como comentário até o fim do arquivo e reclama com <code>Expected token */</code>. É o equivalente ao comentário de HTML sem fechar, que veremos adiante.</p>
+
+<hr>
+
+<h2>5. O que o compilador faz com cada um</h2>
+
+<p>A tabela abaixo resume o destino de cada sintaxe. Ela vale como consulta rápida quando você não lembra onde pode escrever o quê.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintaxe</th><th>Onde vale</th><th>Aparece na saída?</th></tr>
+<tr><td><code>// …</code></td><td>dentro do <code>&lt;script&gt;</code></td><td>não</td></tr>
+<tr><td><code>/* … */</code></td><td>dentro do <code>&lt;script&gt;</code> ou do <code>&lt;style&gt;</code></td><td>no CSS sim; no build, não</td></tr>
+<tr><td><code>&lt;!-- … --&gt;</code></td><td>na marcação, entre tags</td><td>não</td></tr>
+<tr><td><code>&lt;!-- svelte-ignore … --&gt;</code></td><td>na marcação, antes do elemento</td><td>não (e muda um aviso)</td></tr>
+</table>
+</div>
+
+<p>O caso que mais confunde é o do meio: <code>/* */</code> vale nos dois blocos de código (script e estilo), mas com destinos diferentes. No script, o comentário é descartado antes de qualquer coisa. No estilo, ele faz parte do CSS e só some na minificação.</p>
+
+<p>Já o comentário de HTML vale <em>apenas</em> na marcação. Colocá-lo dentro do script é erro de sintaxe, porque o JavaScript não conhece essa sintaxe. É o primeiro cenário desta aula, com a mensagem real.</p>
+
+<hr>
+
+<h2>6. <code>//</code> no HTML não é comentário</h2>
+
+<p>Quem vem de JavaScript escreve <code>//</code> por reflexo, em qualquer lugar. No meio da marcação, essas duas barras não comentam nada: elas são texto, e texto aparece na tela.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}&lt;/p&gt;
+// anotação do dia</pre>
+
+<pre class="out">&lt;p&gt;Olá, Ana&lt;/p&gt; // anotação do dia</pre>
+
+<p>O compilador não tem como adivinhar que aquilo era uma anotação. Para ele, é uma sequência de caracteres no meio do HTML, e o HTML aceita texto solto. O resultado é a frase aparecendo na página, muitas vezes no rodapé, sem que você entenda de onde veio.</p>
+
+<p>A correção tem duas formas: mover a anotação para dentro do <code>&lt;script&gt;</code>, onde <code>//</code> funciona, ou trocar por um comentário de HTML. Mover para o script costuma ser melhor quando a anotação é sobre o código; usar <code>&lt;!-- --&gt;</code> faz sentido quando é sobre a estrutura da página.</p>
+
+<div class="trysvelte" data-goal="out:Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> a anotação com <code>//</code> ficou fora do script e aparece na tela. Leve a anotação para dentro do <code>&lt;script&gt;</code>, para que a página mostre só "Olá, Ana".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}&lt;/p&gt;
+// anotação do dia</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  // anotação do dia
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+</div>
+
+<p>A meta confere o texto inteiro: "Olá, Ana", sem sobra. Esse tipo de conferência é útil porque o erro não quebra nada — só suja a tela, e às vezes passa despercebido em uma revisão rápida.</p>
+
+<hr>
+
+<h2>7. <code>svelte-ignore</code>: o comentário que fala com o compilador</h2>
+
+<p>Existe um comentário especial que não é para humanos: o <code>svelte-ignore</code>. Ele fica na marcação, antes de um elemento, e diz ao compilador para não emitir um aviso específico naquele elemento. É a forma de assumir uma escolha de propósito, em vez de deixar o aviso aparecer para sempre.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = ['pão'];
+&lt;/script&gt;
+
+&lt;!-- svelte-ignore a11y_click_events_have_key_events --&gt;
+&lt;div onclick={() =&gt; itens.push('bolo')}&gt;comprar&lt;/div&gt;</pre>
+
+<p>O aviso silenciado é de acessibilidade: um elemento que responde a clique mas não pode ser alcançado pelo teclado. Silenciar não corrige o problema — só esconde o alerta. A atitude honesta é corrigir; o <code>svelte-ignore</code> fica reservado para casos em que você sabe o que está fazendo e tem um motivo.</p>
+
+<p>Se o código do aviso estiver errado, o <code>svelte-ignore</code> não faz nada e o aviso continua aparecendo. Os códigos são os que o próprio compilador imprime (na saída do guia, aparecem como <code>css_unused_selector</code>, <code>a11y_no_static_element_interactions</code> e outros). Copie da mensagem, não invente.</p>
+
+<p>Existe também o <code>svelte-ignore</code> para erros de acessibilidade em elementos específicos, e a versão de arquivo inteiro, com a diretiva no começo do arquivo. Antes de usar qualquer uma, pergunte: o aviso está apontando um problema real? Se sim, o comentário é uma venda, não um remédio.</p>
+
+<hr>
+
+<h2>8. Comentário não é lugar de segredo</h2>
+
+<p>Como o comentário do script e do HTML é descartado na compilação, ele não chega ao navegador do cliente. Isso dá uma falsa sensação de segurança: "posso deixar a senha aqui, ninguém vê". Não pode. O comentário continua no repositório, no histórico do git e nas cópias que outras pessoas baixam. Apagar depois não apaga o passado.</p>
+
+<p>A regra prática: nada de senha, chave de API, dado pessoal de cliente ou endereço interno em comentário, nem em código. Se precisa registrar uma informação sensível, ela vai para um arquivo de configuração que não é versionado, como um <code>.env</code>. O comentário é público para quem tem o código, e o código costuma ser mais compartilhado do que parece.</p>
+
+<p>Existe um efeito colateral curioso de o comentário não chegar ao navegador: quem inspeciona a página não encontra pistas do seu trabalho. Em projetos antigos, era comum ver no código-fonte do site recados como "versão 2.1, revisar o carrinho". Hoje, com compilador e minificador, essas notas somem. Quem precisa delas é o time, e o lugar do time é o repositório — não o arquivo publicado.</p>
+
+<p>O inverso também vale: comentário bom não repete o código. <code>// soma 1 ao contador</code> em cima de <code>contador++</code> não ajuda ninguém. O que ajuda é o <em>porquê</em>: "o contador começa em 1 porque o primeiro pão já está na sacola". Uma frase dessas economiza meia hora de quem chegar depois — inclusive você, em três meses.</p>
+
+<hr>
+
+<h2>9. O que o build faz com os comentários</h2>
+
+<p>Para fechar a ideia, o teste do mundo real: gerar o build e procurar o texto dos comentários nos arquivos finais. O componente abaixo tem um comentário de JavaScript, um de HTML e um de CSS:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  // o preço antigo era 0.75
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;!-- este comentário é de HTML --&gt;
+&lt;h1&gt;Pão francês&lt;/h1&gt;
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+
+&lt;style&gt;
+  /* a cor vem da identidade da padaria */
+  h1 { color: #2e7d32; }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;h1 class="svelte-1n46o8q"&gt;Pão francês&lt;/h1&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+
+<p>No build, o CSS e o JavaScript saem em arquivos separados, cada um com hash no nome:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-BPubFjsH.css   0.03 kB │ gzip:  0.05 kB
+dist/assets/index-Q4u7RwmO.js   35.98 kB │ gzip: 13.90 kB
+✓ built in 2.24s</pre>
+
+<p>Agora a busca pelo texto dos comentários dentro do arquivo JavaScript gerado. O <code>grep -c</code> conta quantas linhas casam com o padrão:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -c "Pão francês" dist/assets/index-Q4u7RwmO.js
+1
+ana@notebook:~/loja$ grep -c "preço antigo" dist/assets/index-Q4u7RwmO.js
+0
+ana@notebook:~/loja$ grep -c "comentário" dist/assets/index-Q4u7RwmO.js
+0</pre>
+
+<p>O texto que aparece na tela está lá (1). Os dois comentários, não (0 e 0). O compilador e o minificador cumpriram o papel: o arquivo publicado tem só o necessário. É por isso que comentar não deixa o site mais pesado — e é por isso que um comentário nunca deve ser usado como documentação para o usuário final, porque ele não chega até ele.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas são comentário no lugar errado ou sem fechamento.</p>
+
+<div class="cenario">
+<strong>Erro 1 — comentário de JS solto no HTML</strong>
+<p>A forma <code>{/* … */}</code> só vale dentro de uma expressão. Solta entre duas tags, ela não é comentário: o compilador tenta ler como código e para.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;Pão&lt;/p&gt;
+{/* comentário de JavaScript no HTML */}
+&lt;p&gt;Bolo&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 39): Unexpected token</pre>
+<p>Para comentar marcação, use <code>&lt;!-- … --&gt;</code>. A forma com chaves é útil dentro de uma expressão, como <code>{nome /* o nome do cadastro */}</code>, e só ali.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — comentário de CSS sem fechar</strong>
+<p>Faltou o <code>*/</code>. O compilador lê o resto do estilo como comentário e avisa no fim do arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;Pão&lt;/p&gt;
+
+&lt;style&gt;
+  /* comentário sem fim
+  p { color: green; }
+&lt;/style&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 8): Expected token */</pre>
+<p>"Expected token */" quer dizer "esperava o fechamento do comentário". Comente sempre em pares: abriu com <code>/*</code>, feche com <code>*/</code> na mesma hora, e escreva o texto no meio depois.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — comentário de HTML sem fechar</strong>
+<p>O <code>--&gt;</code> ficou faltando. O compilador continua procurando o fim do comentário até o arquivo acabar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;Olá&lt;/p&gt;
+&lt;!-- sem fim
+&lt;p&gt;Ana&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 10): Expected token --&gt;</pre>
+<p>A posição aponta para o fim do arquivo, onde o compilador desistiu — não para a linha do comentário. Quando a mensagem falar de "token" no fim do arquivo, desconfie de um comentário aberto antes.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>As sintaxes em uma tabela e as mensagens desta aula em outra.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Escreva</th><th>Onde</th></tr>
+<tr><td>comentar uma linha de código</td><td><code>// texto</code></td><td>no <code>&lt;script&gt;</code></td></tr>
+<tr><td>comentar um bloco de código</td><td><code>/* texto */</code></td><td>no <code>&lt;script&gt;</code></td></tr>
+<tr><td>comentar uma regra de estilo</td><td><code>/* texto */</code></td><td>no <code>&lt;style&gt;</code></td></tr>
+<tr><td>anotar ou esconder marcação</td><td><code>&lt;!-- texto --&gt;</code></td><td>no HTML</td></tr>
+<tr><td>silenciar um aviso do compilador</td><td><code>&lt;!-- svelte-ignore código --&gt;</code></td><td>antes do elemento</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa provável</th></tr>
+<tr><td><code>Unexpected token</code></td><td>sintaxe de outro bloco usada no lugar errado</td></tr>
+<tr><td><code>Expected token */</code></td><td>comentário de CSS aberto e não fechado</td></tr>
+<tr><td><code>Expected token --&gt;</code></td><td>comentário de HTML aberto e não fechado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Como se comenta uma linha dentro do bloco <code>&lt;script&gt;</code>?</p>
+<label><input type="radio" name="q1"> <code>&lt;!-- texto --&gt;</code></label>
+<label><input type="radio" name="q1"> <code>/* texto */</code> apenas</label>
+<label><input type="radio" name="q1"> <code>// texto</code></label>
+<label><input type="radio" name="q1"> <code># texto</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. O que acontece com um comentário de HTML na saída compilada?</p>
+<label><input type="radio" name="q1"> ele desaparece da saída</label>
+<label><input type="radio" name="q1"> ele vira atributo da tag seguinte</label>
+<label><input type="radio" name="q1"> ele aparece como texto na tela</label>
+<label><input type="radio" name="q1"> ele é movido para o fim da página</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. Para que serve <code>&lt;!-- svelte-ignore código --&gt;</code>?</p>
+<label><input type="radio" name="q1"> para apagar o elemento seguinte do HTML</label>
+<label><input type="radio" name="q1"> para obrigar o compilador a mostrar todos os avisos</label>
+<label><input type="radio" name="q1"> para escrever um comentário visível ao usuário</label>
+<label><input type="radio" name="q1"> para o compilador não emitir um aviso específico naquele elemento</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;h1&gt;Padaria&lt;/h1&gt;<br><input data-answer="&lt;!--"><br>&lt;p&gt;Tabela de preços em breve&lt;/p&gt;<br>--&gt;<br><br>// abra o comentário que esconde o parágrafo da tabela</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>//</code> e <code>/* */</code> valem dentro do <code>&lt;script&gt;</code>.</li>
+  <li><code>&lt;!-- … --&gt;</code> vale na marcação e é a forma de esconder um trecho de HTML.</li>
+  <li><code>/* */</code> também vale no <code>&lt;style&gt;</code>, mas o build remove esses comentários.</li>
+  <li>Comentários do script e do HTML não chegam ao navegador.</li>
+  <li><code>//</code> no meio do HTML não comenta nada: aparece como texto na tela.</li>
+  <li><code>svelte-ignore</code> silencia um aviso específico e não corrige o problema.</li>
+  <li>Nunca escreva senha, chave ou dado pessoal em comentário.</li>
+  <li>Comentário bom explica o porquê; repetir o código não ajuda ninguém.</li>
+  <li>Os erros desta aula: sintaxe de outro bloco, comentário de CSS sem fechar e comentário de HTML sem fechar.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
