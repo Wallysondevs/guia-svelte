@@ -14,6 +14,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const cp = require("child_process");
 const N = require("./nucleo");
 
@@ -149,8 +150,8 @@ const DEFEITOS = [
 
 function rodarTestador(arquivo, semSim) {
   const env = Object.assign({}, process.env, {
-    PATH: "/home/wallyson/.local/node22/bin:" + process.env.PATH,
-    NODE_PATH: process.env.NODE_PATH || "/home/wallyson/guia-react/node_modules"
+    PATH: path.dirname(process.execPath) + ":" + process.env.PATH,
+    NODE_PATH: process.env.NODE_PATH || path.join(os.homedir(), "guia-react/node_modules")
   });
   const comando = ["tools/testar-missoes.js", arquivo].concat(semSim ? ["--sem-sim"] : []);
   const r = cp.spawnSync(process.execPath, comando, { cwd: RAIZ, env, encoding: "utf8", timeout: 240000 });

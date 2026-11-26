@@ -31,6 +31,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const http = require("http");
 const N = require("./nucleo");
 
@@ -94,7 +95,7 @@ function acharPuppeteer() {
   const candidatos = [
     process.env.PUPPETEER_DIR && path.join(process.env.PUPPETEER_DIR, "puppeteer-core"),
     path.join(RAIZ, "node_modules/puppeteer-core"),
-    "/home/wallyson/guia-react/node_modules/puppeteer-core",
+    path.join(os.homedir(), "guia-react/node_modules/puppeteer-core"),
     "puppeteer-core"
   ].filter(Boolean);
   for (const c of candidatos) {
@@ -105,7 +106,7 @@ function acharPuppeteer() {
 
 function acharChrome() {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
-  const base = "/home/wallyson/.cache/puppeteer/chrome";
+  const base = path.join(os.homedir(), ".cache/puppeteer/chrome");
   try {
     const dirs = fs.readdirSync(base).filter((d) => d.startsWith("linux-")).sort().reverse();
     for (const d of dirs) {
