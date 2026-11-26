@@ -143,6 +143,36 @@
 
 <p>As duas últimas linhas só existem dentro de um componente <code>.svelte</code>: o compilador reconhece a atribuição e a traduz. Num arquivo <code>.js</code> comum não há <code>$cliques</code> para atribuir — lá você usa <code>set</code> e <code>update</code>, que são métodos do próprio store e funcionam em qualquer lugar.</p>
 
+<div class="trysvelte" data-goal="clique:button;;clique:button;;out:Cliques: 2 +1">
+<p class="try-task"><strong>Missão:</strong> o <code>set</code> escreve <code>1</code> a cada clique, então dois cliques mostram <code>Cliques: 1</code>. Troque-o por <code>update</code> para o valor novo sair do valor que já está no store: dois cliques devem mostrar <code>Cliques: 2</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  import { writable } from 'svelte/store';
+
+  const cliques = writable(0);
+
+  function somar() {
+    cliques.set(1);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { writable } from 'svelte/store';
+
+  const cliques = writable(0);
+
+  function somar() {
+    cliques.update((n) =&gt; n + 1);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {$cliques}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;</pre>
+</div>
+
+<p>A caixa importa <code>svelte/store</code> como qualquer componente do projeto: o <code>writable</code> é o da biblioteca. Clique duas vezes no código inicial e a tela para em <code>1</code>: <code>set(1)</code> escreve o mesmo número toda vez, porque não lê o valor que já estava lá.</p>
+
 <hr>
 
 <h2>5. O store mora fora do componente</h2>
@@ -207,7 +237,7 @@ src/App.svelte:7:<button onclick={() => $cliques = $cliques + 1}>+1</button></pr
 
 <p>Aqui vai a parte que separa quem decora de quem entende. Um store não é uma classe mágica: é <strong>um objeto com um método <code>subscribe</code></strong>, e é só isso que o compilador exige. O <code>writable</code> é uma fábrica que monta esse objeto com três peças: o valor guardado, o conjunto de quem está inscrito e os métodos para escrever e avisar.</p>
 
-<p>Veja o mesmo store escrito à mão. Ele não importa nada e cumpre o contrato:</p>
+<p>Para ver as três peças soltas, aqui está o mesmo store escrito à mão. Ele não importa nada e cumpre o contrato:</p>
 
 <pre class="file" data-file="src/App.svelte">&lt;script&gt;
   let valor = 0;
@@ -236,55 +266,18 @@ src/App.svelte:7:<button onclick={() => $cliques = $cliques + 1}>+1</button></pr
   <dt>inscritos.forEach((fn) =&gt; fn(valor))</dt><dd>a parte que quase todo mundo esquece: escrever não basta, é preciso <strong>avisar</strong> cada inscrito com o valor novo.</dd>
 </dl>
 
-<div class="warning">
-<strong>As caixas deste guia e o <code>svelte/store</code></strong>
-<p>Cada caixa "Experimente" compila <strong>um</strong> componente no seu navegador, sem módulos extras: o import de <code>svelte/store</code> não funciona ali. Por isso, nas caixas desta aula, o store é escrito à mão como acima — é o mesmo contrato que o <code>writable</code> cumpre. As saídas de arquivo e de terminal vêm do <code>writable</code> de verdade, com o compilador de verdade.</p>
+<p>Guardar os inscritos, avisar cada um e devolver o cancelamento: as três peças são o que o <code>writable</code> monta quando você escreve <code>writable(0)</code>. Por isso o <code>set</code> de fábrica nunca esquece de avisar.</p>
+
+<div class="tip">
+<strong>A caixa roda o <code>writable</code> de verdade</strong>
+<p>Nas caixas desta aula, o <code>import</code> de <code>svelte/store</code> é o do projeto: <code>writable</code> chega da biblioteca, e o mesmo vale para <code>derived</code>, <code>get</code> e <code>readonly</code>. O objeto à mão acima serve para reconhecer o que tem dentro dele.</p>
 </div>
-
-<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1 +1">
-<p class="try-task"><strong>Missão:</strong> o botão chama <code>set</code>, mas a tela não muda: ninguém é avisado. Faça o valor escritor chegar aos inscritos e o clique mostrar <code>Cliques: 1</code>.</p>
-<pre class="script" data-file="App.svelte">&lt;script&gt;
-  let valor = 0;
-  const contador = {
-    subscribe(fn) {
-      fn(valor);
-      return () =&gt; {};
-    },
-    set(novo) {
-      valor = novo;
-    }
-  };
-&lt;/script&gt;
-
-&lt;p&gt;Cliques: {$contador}&lt;/p&gt;
-&lt;button onclick={() =&gt; contador.set($contador + 1)}&gt;+1&lt;/button&gt;</pre>
-<pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  let valor = 0;
-  const inscritos = new Set();
-  const contador = {
-    subscribe(fn) {
-      fn(valor);
-      inscritos.add(fn);
-      return () =&gt; inscritos.delete(fn);
-    },
-    set(novo) {
-      valor = novo;
-      inscritos.forEach((fn) =&gt; fn(valor));
-    }
-  };
-&lt;/script&gt;
-
-&lt;p&gt;Cliques: {$contador}&lt;/p&gt;
-&lt;button onclick={() =&gt; contador.set($contador + 1)}&gt;+1&lt;/button&gt;</pre>
-</div>
-
-<p>A solução tem três linhas a mais que o código inicial, e são exatamente as três que o <code>writable</code> já traz prontas. Guardar os inscritos, avisar cada um e devolver a função de cancelamento: esse é o trabalho que você não precisa escrever quando importa <code>writable</code>.</p>
 
 <hr>
 
 <h2>7. A conta que acompanha o store</h2>
 
-<p>Mostrar <code>$contador</code> é fácil: o compilador sabe assinar. O problema aparece quando você quer mostrar <em>uma conta</em> feita com o valor do store. Uma variável comum calculada uma vez não acompanha nada:</p>
+<p>Mostrar <code>$cliques</code> é fácil: o compilador sabe assinar. O problema aparece quando você quer mostrar <em>uma conta</em> feita com o valor do store. Uma variável comum calculada uma vez não acompanha nada:</p>
 
 <pre class="file" data-file="src/App.svelte">&lt;script&gt;
   import { writable } from 'svelte/store';
@@ -313,46 +306,26 @@ src/App.svelte:7:<button onclick={() => $cliques = $cliques + 1}>+1</button></pr
 <div class="trysvelte" data-goal="clique:button;;out:Cliques: 1 · dobro: 2 +1">
 <p class="try-task"><strong>Missão:</strong> o clique muda o contador, mas o dobro fica em <code>0</code>. Faça a conta acompanhar o store para o clique mostrar <code>Cliques: 1 · dobro: 2</code>.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  let valor = 0;
-  const inscritos = new Set();
-  const contador = {
-    subscribe(fn) {
-      fn(valor);
-      inscritos.add(fn);
-      return () =&gt; inscritos.delete(fn);
-    },
-    set(novo) {
-      valor = novo;
-      inscritos.forEach((fn) =&gt; fn(valor));
-    }
-  };
+  import { writable } from 'svelte/store';
 
-  let dobro = $contador * 2;
+  const cliques = writable(0);
+  let dobro = $cliques * 2;
 &lt;/script&gt;
 
-&lt;p&gt;Cliques: {$contador} · dobro: {dobro}&lt;/p&gt;
-&lt;button onclick={() =&gt; contador.set($contador + 1)}&gt;+1&lt;/button&gt;</pre>
+&lt;p&gt;Cliques: {$cliques} · dobro: {dobro}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques.set($cliques + 1)}&gt;+1&lt;/button&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  let valor = 0;
-  const inscritos = new Set();
-  const contador = {
-    subscribe(fn) {
-      fn(valor);
-      inscritos.add(fn);
-      return () =&gt; inscritos.delete(fn);
-    },
-    set(novo) {
-      valor = novo;
-      inscritos.forEach((fn) =&gt; fn(valor));
-    }
-  };
+  import { writable } from 'svelte/store';
 
-  const dobro = $derived($contador * 2);
+  const cliques = writable(0);
+  const dobro = $derived($cliques * 2);
 &lt;/script&gt;
 
-&lt;p&gt;Cliques: {$contador} · dobro: {dobro}&lt;/p&gt;
-&lt;button onclick={() =&gt; contador.set($contador + 1)}&gt;+1&lt;/button&gt;</pre>
+&lt;p&gt;Cliques: {$cliques} · dobro: {dobro}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques.set($cliques + 1)}&gt;+1&lt;/button&gt;</pre>
 </div>
+
+<p>São duas linhas de diferença: <code>let dobro</code> calcula no nascimento do componente; <code>const dobro = $derived(…)</code> recalcula a cada aviso. Rode o inicial e clique: <code>Cliques</code> sobe, <code>dobro</code> fica no zero.</p>
 
 <hr>
 
@@ -408,7 +381,7 @@ src/App.svelte:7:<button onclick={() => $cliques = $cliques + 1}>+1</button></pr
 
 <pre class="out">&lt;p&gt;Começou em 0; agora: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt;</pre>
 
-<p>No projeto da Ana o store vem de <code>./contador.js</code>, e não daqui: o <code>get</code> funciona igual, porque ele só precisa do objeto. Aqui o store nasce no próprio arquivo para a saída caber num exemplo só.</p>
+<p>No projeto da Ana o store vem de <code>./contador.js</code>; o <code>get</code> funciona igual, porque só precisa do objeto.</p>
 
 <p><code>get(cliques)</code> devolve o valor que está no quadro naquele instante e <strong>não</strong> cria nenhuma ligação. Se o valor mudar depois, <code>comecou</code> continua <code>0</code>: é uma foto, não um visor. Isso é uma qualidade, não um defeito — dentro de uma função você quase sempre quer o valor de agora, não uma assinatura que dispara renderizações.</p>
 
@@ -445,19 +418,9 @@ get: 3</pre>
 <div class="trysvelte" data-goal="clique:button;;out:pão bolo adicionar">
 <p class="try-task"><strong>Missão:</strong> o botão usa <code>push</code> e a tela continua com um pão só. Faça a lista mostrar os dois itens — <code>pão</code> e <code>bolo</code> — avisando quem está inscrito.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  let itens = ['pão'];
-  const inscritos = new Set();
-  const lista = {
-    subscribe(fn) {
-      fn(itens);
-      inscritos.add(fn);
-      return () =&gt; inscritos.delete(fn);
-    },
-    set(novo) {
-      itens = novo;
-      inscritos.forEach((fn) =&gt; fn(itens));
-    }
-  };
+  import { writable } from 'svelte/store';
+
+  const lista = writable(['pão']);
 &lt;/script&gt;
 
 &lt;ul&gt;
@@ -467,19 +430,9 @@ get: 3</pre>
 &lt;/ul&gt;
 &lt;button onclick={() =&gt; $lista.push('bolo')}&gt;adicionar&lt;/button&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  let itens = ['pão'];
-  const inscritos = new Set();
-  const lista = {
-    subscribe(fn) {
-      fn(itens);
-      inscritos.add(fn);
-      return () =&gt; inscritos.delete(fn);
-    },
-    set(novo) {
-      itens = novo;
-      inscritos.forEach((fn) =&gt; fn(itens));
-    }
-  };
+  import { writable } from 'svelte/store';
+
+  const lista = writable(['pão']);
 &lt;/script&gt;
 
 &lt;ul&gt;
@@ -487,10 +440,10 @@ get: 3</pre>
     &lt;li&gt;{item}&lt;/li&gt;
   {/each}
 &lt;/ul&gt;
-&lt;button onclick={() =&gt; lista.set([...$lista, 'bolo'])}&gt;adicionar&lt;/button&gt;</pre>
+&lt;button onclick={() =&gt; lista.update((l) =&gt; [...l, 'bolo'])}&gt;adicionar&lt;/button&gt;</pre>
 </div>
 
-<p>A solução troca <code>$lista.push('bolo')</code> por <code>lista.set([...$lista, 'bolo'])</code>. Os três pontinhos espalham os itens antigos dentro de uma lista nova, e o <code>'bolo'</code> entra no fim. Como é uma lista nova, o <code>set</code> avisa todo mundo e a tela se redesenha. Com o <code>update</code> do <code>writable</code> a ideia é a mesma: <code>lista.update((l) =&gt; [...l, 'bolo'])</code>.</p>
+<p>A solução troca <code>$lista.push('bolo')</code> por <code>lista.update((l) =&gt; [...l, 'bolo'])</code>. Os três pontinhos espalham os itens antigos dentro de uma lista nova, e o <code>'bolo'</code> entra no fim. Como é uma lista nova, o <code>writable</code> avisa todo mundo e a tela se redesenha. Com <code>set</code> a ideia é a mesma: <code>lista.set([...$lista, 'bolo'])</code> — as duas versões escrevem uma lista nova, que é o único jeito de o store perceber a mudança.</p>
 
 <hr>
 
