@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossário — os termos do Svelte em português | Guia Svelte</title>
+<meta name="description" content="Glossário do Guia Svelte: componente, estado, derivado, prop, runa, diretiva, bloco, snippet, SSR, montagem e mais de cinquenta termos explicados para quem está começando.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Glossário</span></h1>
+
+<p class="intro">A Ana tem um caderno com as palavras que ouve dos clientes e o que cada uma quer dizer na padaria: "fiado", "encomenda", "fornada". Sem esse caderno, o funcionário novo passa a semana perguntando. Este é o caderno de palavras do Svelte. Cada termo tem uma definição curta, dita em português de gente, e uma pista de onde ele aparece no código. Quando você encontrar uma palavra que não conhece numa aula, volte aqui.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O vocabulário mínimo para ler qualquer aula do guia.</li>
+  <li>A diferença entre estado, derivado e prop — a confusão mais comum.</li>
+  <li>O que é runa, diretiva, bloco e snippet, e por que cada um tem nome próprio.</li>
+  <li>O significado das siglas: SSR, DOM, SPA, FLIP.</li>
+  <li>O que muda entre compilação, execução e aviso.</li>
+  <li>Os comandos que aparecem nos terminais do guia.</li>
+  <li>Os pares de termos que parecem sinônimos e não são.</li>
+  <li>Onde encontrar a aula completa de cada assunto.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. Como usar este glossário</h2>
+
+<p>As definições são curtas de propósito: o glossário serve para desbloquear a leitura, não para substituir a aula. Se um termo aparecer no meio de um exercício e você não lembrar o que ele faz, leia a linha aqui, siga o exercício e depois volte à aula indicada para o exemplo completo.</p>
+
+<p>A ordem é alfabética dentro de seis faixas. Cada faixa tem uma tabela com três colunas: o termo, o que ele é em uma frase, e onde você o encontra. Termos em inglês ficam com o original entre parênteses, porque a documentação oficial usa o inglês e uma hora você vai precisar procurar lá.</p>
+
+<p>No fim da página há duas seções diferentes: os <strong>pares que confundem</strong>, com a diferença explicada em duas colunas, e a <strong>tabela de siglas e comandos</strong>, que é a que você mais vai consultar no terminal.</p>
+
+<hr>
+
+<h2>2. O componente por dentro: o mapa mínimo</h2>
+
+<p>Antes das letras, o desenho da peça central. Um componente é um arquivo <code>.svelte</code> com até três blocos, e tudo o que o glossário define depois é uma parte desse desenho:</p>
+
+<pre class="file" data-file="src/Saudacao.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+
+&lt;style&gt;
+  h1 { color: #2e7d32; }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;h1 class="svelte-1ekmh8m"&gt;Olá, Ana&lt;/h1&gt;</pre>
+
+<p>O HTML que o navegador recebe não tem o script nem o estilo: tem só o <code>h1</code> com o valor já resolvido e um selo de classe. O CSS gerado para esse componente é este:</p>
+
+<pre class="out">h1.svelte-1ekmh8m { color: #2e7d32; }</pre>
+
+<dl class="anatomy">
+  <dt>componente</dt><dd>o arquivo inteiro. Nome em maiúscula (<code>Saudacao.svelte</code>) e uma responsabilidade só.</dd>
+  <dt>estado</dt><dd><code>nome</code>, criado com <code>$state</code>: o valor que, ao mudar, redesenha a tela.</dd>
+  <dt>marcação</dt><dd>o <code>&lt;h1&gt;</code> com chaves. As chaves são a porta por onde o estado entra no HTML.</dd>
+  <dt>CSS escopado</dt><dd>o <code>&lt;style&gt;</code>, que virou <code>h1.svelte-1ekmh8m</code>. O selo é a garantia de que a regra não vaza.</dd>
+</dl>
+
+<p>Guarde duas coisas desse desenho. Primeira: o <strong>estado</strong> mora no script e aparece na marcação por chaves — o caminho é sempre de cima para baixo. Segunda: o <strong>estilo</strong> não viaja; ele fica preso ao componente pelo selo. Todo o resto do vocabulário do Svelte é uma variação dessas duas ideias: um valor que desce para a tela, ou uma instrução que o compilador reescreve.</p>
+
+<p>Agora as letras. Cada entrada é uma frase curta com a palavra-chave em negrito — a mesma que você vai ver no código. Onde houver duas palavras parecidas, a seção 9 desfaz a confusão com uma tabela de pares.</p>
+
+<hr>
+
+<h2>3. De A a C</h2>
+
+<p>Esta faixa tem as palavras que aparecem em quase toda aula: ação, atributo, bloco, callback e componente. Se você ler só uma tabela do glossário, leia esta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo</th><th>O que é</th><th>Onde aparece</th></tr>
+<tr><td><strong>ação</strong> (action)</td><td>função que recebe um elemento quando ele é montado e pode devolver limpeza</td><td><code>use:focar</code></td></tr>
+<tr><td><strong>atributo</strong></td><td>informação dentro da tag, fixa ou dinâmica</td><td><code>title={nome}</code></td></tr>
+<tr><td><strong>await</strong></td><td>bloco que mostra espera, sucesso e erro de uma promessa</td><td><code>{#await p} … {/await}</code></td></tr>
+<tr><td><strong>bind</strong></td><td>ligação de duas vias entre um campo e uma variável</td><td><code>bind:value={nome}</code></td></tr>
+<tr><td><strong>bloco</strong></td><td>trecho de HTML que aparece por condição, repetição ou espera</td><td><code>{#if} … {/if}</code></td></tr>
+<tr><td><strong>build</strong></td><td>versão de produção gerada em <code>dist/</code>, com arquivos minificados</td><td><code>npm run build</code></td></tr>
+<tr><td><strong>callback</strong></td><td>função passada como prop para o filho avisar o pai</td><td><code>onSalvar={(t) =&gt; …}</code></td></tr>
+<tr><td><strong>children</strong></td><td>prop especial com o conteúdo escrito entre as tags do componente</td><td><code>{@render children()}</code></td></tr>
+<tr><td><strong>compilador</strong></td><td>programa que transforma <code>.svelte</code> em JavaScript que o navegador entende</td><td><code>svelte@5.59.2</code></td></tr>
+<tr><td><strong>componente</strong></td><td>arquivo com tela, script e estilo próprios, usado como tag</td><td><code>&lt;Cartao /&gt;</code></td></tr>
+<tr><td><strong>contexto</strong></td><td>valor publicado por um componente e lido por descendentes</td><td><code>setContext</code>, <code>getContext</code></td></tr>
+<tr><td><strong>CSS escopado</strong></td><td>CSS do componente com selo que impede o estilo de vazar</td><td><code>h1.svelte-1ekmh8m</code></td></tr>
+</table>
+</div>
+
+<p>Repare que <em>callback</em> e <em>children</em> são os dois jeitos de um componente conversar com outro: um manda função, o outro manda marcação. Quando você se pegar procurando "evento de componente" ou "slot", é aqui que a resposta está — esses nomes saíram de moda no Svelte 5.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o termo <em>estado</em> quer dizer que a tela acompanha o valor. Faça o botão chegar a <code>Cliques: 1</code> com um clique.</p>
+<pre class="script" data-file="Contador.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let cliques = 0;
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="Contador.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<hr>
+
+<h2>4. De D a E</h2>
+
+<p>Aqui ficam as palavras que mais aparecem em mensagem de erro: derivado, diretiva, efeito e estado. Se o compilador reclamar de uma delas, a definição abaixo diz onde ela pode morar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo</th><th>O que é</th><th>Onde aparece</th></tr>
+<tr><td><strong>declarativo</strong></td><td>estilo em que você descreve o resultado e a ferramenta decide os passos</td><td>todo o Svelte</td></tr>
+<tr><td><strong>derivado</strong></td><td>valor calculado a partir de outros valores, sem guardar à mão</td><td><code>let total = $derived(a * b)</code></td></tr>
+<tr><td><strong>diretiva</strong></td><td>atributo com dois-pontos no nome, que o compilador traduz em código</td><td><code>class:</code>, <code>style:</code>, <code>use:</code></td></tr>
+<tr><td><strong>DOM</strong></td><td>árvore de elementos que o navegador monta a partir do HTML</td><td><code>document.body</code></td></tr>
+<tr><td><strong>efeito</strong></td><td>código que roda depois do desenho, para mexer no mundo fora do componente</td><td><code>$effect</code>, <code>onMount</code></td></tr>
+<tr><td><strong>elemento customizado</strong></td><td>tag própria registrada no navegador, fora do Svelte</td><td><code>&lt;meu-cartao&gt;</code></td></tr>
+<tr><td><strong>escopo</strong></td><td>limite de validade de um nome ou de uma regra de estilo</td><td><code>&lt;style&gt;</code> do componente</td></tr>
+<tr><td><strong>estado</strong></td><td>valor observável: quando muda, a tela se redesenha</td><td><code>let n = $state(0)</code></td></tr>
+<tr><td><strong>evento</strong></td><td>ação do usuário ou do navegador que dispara uma função</td><td><code>onclick</code>, <code>oninput</code></td></tr>
+<tr><td><strong>execução</strong></td><td>momento em que o componente roda no navegador e pode falhar</td><td>console do navegador</td></tr>
+<tr><td><strong>export let</strong></td><td>jeito antigo de declarar prop, proibido em componente com runas</td><td>código do Svelte 4</td></tr>
+</table>
+</div>
+
+<p><em>Estado</em> e <em>derivado</em> são primos, não sinônimos: estado é o que você digita, derivado é o que se calcula. Guardar o total como estado e atualizar à mão em cada lugar é a origem de metade dos bugs de tela que mostram número errado.</p>
+
+<div class="trysvelte" data-goal="out:Total: R$ 1.80">
+<p class="try-task"><strong>Missão:</strong> o termo <em>derivado</em> pede duas casas no dinheiro. Faça a tela mostrar <code>Total: R$ 1.80</code> usando um valor derivado formatado.</p>
+<pre class="script" data-file="Total.svelte">&lt;script&gt;
+  let { preco = 0.9, qtd = 2 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {preco * qtd}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Total.svelte">&lt;script&gt;
+  let { preco = 0.9, qtd = 2 } = $props();
+  let total = $derived(preco * qtd);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>5. De F a L</h2>
+
+<p>Esta faixa junta o vocabulário de estrutura (filho, pai, instância, módulo) e o de animação (FLIP). São as palavras que aparecem quando o projeto cresce e deixa de caber num arquivo só.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo</th><th>O que é</th><th>Onde aparece</th></tr>
+<tr><td><strong>filho</strong></td><td>componente usado dentro de outro componente</td><td><code>&lt;Cartao /&gt;</code> dentro de outro</td></tr>
+<tr><td><strong>FLIP</strong></td><td>técnica de animar itens quando a ordem da lista muda</td><td><code>animate:flip</code></td></tr>
+<tr><td><strong>função</strong></td><td>pedaço de código com nome que recebe valores e devolve um resultado</td><td><code>function somar() {}</code></td></tr>
+<tr><td><strong>gatilho</strong> (dependência)</td><td>leitura que faz um derivado ou efeito acompanhar um valor</td><td><code>$derived</code>, <code>$effect</code></td></tr>
+<tr><td><strong>global</strong></td><td>que vale para a página inteira, fora do escopo do componente</td><td><code>:global(seletor)</code></td></tr>
+<tr><td><strong>hidratação</strong></td><td>transformar o HTML vindo do servidor em página interativa</td><td>SSR + navegador</td></tr>
+<tr><td><strong>hook</strong></td><td>função de gancho que roda antes das rotas, no SvelteKit</td><td><code>hooks.server.js</code></td></tr>
+<tr><td><strong>imutável</strong></td><td>valor que não muda: para alterar, troca-se por outro</td><td><code>$state.raw</code></td></tr>
+<tr><td><strong>índice</strong></td><td>posição do item dentro de uma lista, começando em zero</td><td><code>{#each l as x, i}</code></td></tr>
+<tr><td><strong>instância</strong></td><td>uma cópia montada do componente, com estado próprio</td><td>cada <code>&lt;Cartao /&gt;</code></td></tr>
+<tr><td><strong>JSX</strong></td><td>sintaxe do React que mistura marcação e JavaScript</td><td>comparação com <code>{ }</code></td></tr>
+<tr><td><strong>key</strong></td><td>identidade do item numa lista; também o bloco que recria conteúdo</td><td><code>(item.id)</code>, <code>{#key}</code></td></tr>
+<tr><td><strong>layout</strong></td><td>moldura compartilhada por várias páginas no SvelteKit</td><td><code>+layout.svelte</code></td></tr>
+<tr><td><strong>load</strong></td><td>função que busca dados antes de a página desenhar</td><td><code>+page.js</code></td></tr>
+</table>
+</div>
+
+<p><em>Instância</em> é uma palavra que vale a pena fixar: o arquivo <code>Cartao.svelte</code> é um só, mas cada uso cria uma instância com estado independente. Dois cartões na tela têm duas cópias do <code>$state</code>, e mudar um não muda o outro — a não ser que o valor venha de uma prop ou de um contexto.</p>
+
+<hr>
+
+<h2>6. De M a P</h2>
+
+<p>Metade desta faixa é sobre o ciclo de vida — montagem, desmontagem, promessa — e a outra metade é sobre a conversa entre componentes: pai, prop, callback.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo</th><th>O que é</th><th>Onde aparece</th></tr>
+<tr><td><strong>marcação</strong> (markup)</td><td>o HTML do componente, com as chaves e os blocos</td><td>fora do <code>&lt;script&gt;</code></td></tr>
+<tr><td><strong>módulo</strong></td><td>arquivo JavaScript que exporta valores; pode ter estado compartilhado</td><td><code>.svelte.js</code>, <code>&lt;script module&gt;</code></td></tr>
+<tr><td><strong>montagem</strong> (mount)</td><td>processo de criar os elementos na página</td><td><code>mount(App, { target })</code></td></tr>
+<tr><td><strong>nó</strong> (node)</td><td>cada elemento da árvore do DOM</td><td><code>bind:this={no}</code></td></tr>
+<tr><td><strong>nome de componente</strong></td><td>o nome do arquivo, sempre começando com maiúscula</td><td><code>Cartao.svelte</code></td></tr>
+<tr><td><strong>onMount</strong></td><td>função que roda uma vez quando o componente entra na página</td><td><code>onMount(() =&gt; {})</code></td></tr>
+<tr><td><strong>pai</strong></td><td>componente que usa outro e lhe passa props</td><td><code>&lt;Filho onSalvar={…} /&gt;</code></td></tr>
+<tr><td><strong>pré-processador</strong></td><td>ferramenta que transforma o arquivo antes do compilador</td><td><code>vitePreprocess()</code></td></tr>
+<tr><td><strong>promessa</strong></td><td>valor que ainda não chegou, e que resolve ou rejeita</td><td><code>fetch()</code>, <code>{#await}</code></td></tr>
+<tr><td><strong>prop</strong></td><td>valor que vem de fora do componente</td><td><code>let { titulo } = $props()</code></td></tr>
+<tr><td><strong>público</strong> (API)</td><td>o que o componente oferece a quem o usa: props e callbacks</td><td>a fronteira da caixa</td></tr>
+</table>
+</div>
+
+<p>A palavra <em>prop</em> é abreviação de <em>property</em>, propriedade. No guia ela aparece sempre no feminino — "a prop" — para não confundir com a propriedade de um objeto JavaScript, que é outra coisa.</p>
+
+<hr>
+
+<h2>7. De Q a S</h2>
+
+<p>Esta é a faixa da reatividade e da renderização: runa, snippet, SSR, store. São termos que aparecem em documentação oficial e em conversa de equipe, e quase todos têm uma aula própria no guia.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo</th><th>O que é</th><th>Onde aparece</th></tr>
+<tr><td><strong>reatividade</strong></td><td>capacidade de redesenhar a tela quando um valor muda</td><td><code>$state</code>, <code>$derived</code></td></tr>
+<tr><td><strong>renderização</strong></td><td>transformar componente em HTML (servidor) ou DOM (navegador)</td><td><code>render()</code>, <code>mount()</code></td></tr>
+<tr><td><strong>rota</strong></td><td>endereço que corresponde a um arquivo de página no SvelteKit</td><td><code>src/routes/</code></td></tr>
+<tr><td><strong>runa</strong></td><td>palavra com cifrão que o compilador reconhece e reescreve</td><td><code>$state</code>, <code>$props</code></td></tr>
+<tr><td><strong>snippet</strong></td><td>trecho de marcação com nome, declarado e renderizado no componente</td><td><code>{#snippet}</code>, <code>{@render}</code></td></tr>
+<tr><td><strong>slot</strong></td><td>mecanismo antigo de receber conteúdo; substituído por snippets</td><td>código do Svelte 4</td></tr>
+<tr><td><strong>SPA</strong></td><td>aplicação de uma página só, que troca conteúdo sem recarregar</td><td>navegação no cliente</td></tr>
+<tr><td><strong>SSR</strong></td><td>renderização no servidor: o HTML chega pronto ao navegador</td><td><code>render()</code>, SvelteKit</td></tr>
+<tr><td><strong>store</strong></td><td>objeto com <code>subscribe</code> para estado compartilhado entre componentes</td><td><code>writable</code>, <code>derived</code></td></tr>
+<tr><td><strong>&lt;svelte:element&gt;</strong></td><td>elemento especial que escolhe a tag em tempo de execução</td><td><code>this={tag}</code></td></tr>
+</table>
+</div>
+
+<p>Uma distinção que evita confusão em conversa: <em>SSR</em> é o que acontece no servidor (o HTML sai pronto), <em>hidratação</em> é o que acontece no navegador logo depois (o HTML ganha vida). Um projeto pode ter SSR e mesmo assim não hidratar — nesse caso, a página é só leitura.</p>
+
+<div class="cenario">
+<strong>O termo <em>reatividade</em> quando falta a runa</strong>
+<p>A tela deveria acompanhar <code>cliques</code>, mas a variável não foi declarada com <code>$state</code>. O compilador avisa com o nome do problema — e o nome está neste glossário.</p>
+<pre class="out">non_reactive_update: `cliques` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates</pre>
+<p>Traduzindo com os termos desta página: <em>a atualização não é reativa</em>. O valor muda no script, mas nenhum desenho é disparado. Conserto: declarar como estado.</p>
+</div>
+
+<div class="trysvelte" data-goal="digitar:input=Bia;;out:Bia">
+<p class="try-task"><strong>Missão:</strong> o termo <em>ligação de duas vias</em> (<code>bind</code>) resolve este caso. Faça o parágrafo acompanhar o que você digita no campo.</p>
+<pre class="script" data-file="Nome.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input value={nome} /&gt;
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Nome.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value={nome} /&gt;
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>8. De T a Z</h2>
+
+<p>O fim do alfabeto tem o vocabulário de ferramenta: tag, tick, transição, Vite. São palavras que você vai ouvir em reunião e ler no terminal, mais do que escrever no componente.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo</th><th>O que é</th><th>Onde aparece</th></tr>
+<tr><td><strong>tag</strong></td><td>elemento do HTML, com abertura e fechamento</td><td><code>&lt;p&gt;…&lt;/p&gt;</code></td></tr>
+<tr><td><strong>tick</strong></td><td>promessa que resolve no próximo desenho da tela</td><td><code>await tick()</code></td></tr>
+<tr><td><strong>transição</strong></td><td>animação de entrada e saída de um elemento</td><td><code>transition:fade</code></td></tr>
+<tr><td><strong>tree-shaking</strong></td><td>descarte do código que ninguém usa no build</td><td><code>npm run build</code></td></tr>
+<tr><td><strong>untrack</strong></td><td>ler um valor sem que ele vire dependência do efeito</td><td><code>untrack(() =&gt; x)</code></td></tr>
+<tr><td><strong>valor padrão</strong></td><td>o que vale quando a prop não é passada</td><td><code>let { x = 1 } = $props()</code></td></tr>
+<tr><td><strong>Vite</strong></td><td>ferramenta que serve o projeto em desenvolvimento e gera o build</td><td><code>npm run dev</code></td></tr>
+<tr><td><strong>web component</strong></td><td>elemento customizado padrão do navegador, sem framework</td><td><code>customElements.define</code></td></tr>
+<tr><td><strong>Zod</strong></td><td>biblioteca de validação que costuma acompanhar formulários</td><td>validação de dados</td></tr>
+</table>
+</div>
+
+<p><em>Tree-shaking</em> é o nome bonito de uma ideia simples: se ninguém importa uma função, ela não vai para o arquivo final. É por isso que o tamanho do build não cresce com o tamanho da biblioteca, só com o que você usa dela.</p>
+
+<p>O <em>Vite</em> merece um parágrafo próprio porque o nome aparece em toda saída de terminal do guia. Ele é o servidor de desenvolvimento e o empacotador: no <code>npm run dev</code>, mantém os arquivos em memória e recarrega o navegador a cada mudança; no <code>npm run build</code>, junta tudo em poucos arquivos com hash no nome. O Svelte é o compilador dos arquivos <code>.svelte</code>; o Vite é quem orquestra o resto. Confundir os dois leva a procurar configuração de Svelte num arquivo que é do Vite.</p>
+
+<hr>
+
+<h2>9. Pares que confundem</h2>
+
+<p>Estes são os termos que mais aparecem trocados em conversa de equipe e em mensagem de erro. A diferença é curta e vale decorar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Par</th><th>Um é…</th><th>O outro é…</th></tr>
+<tr><td><strong>estado × derivado</strong></td><td>o dado que você digita e muda</td><td>a conta que se refaz a partir dele</td></tr>
+<tr><td><strong>prop × estado</strong></td><td>o que vem de fora e não pertence ao componente</td><td>o que nasce dentro e é do componente</td></tr>
+<tr><td><strong>compilação × execução</strong></td><td>antes de a página existir; erro com linha e coluna</td><td>com a página montada; erro no console, sem posição</td></tr>
+<tr><td><strong>erro × aviso</strong></td><td>impede o arquivo de virar JavaScript</td><td>deixa passar e esconde um bug</td></tr>
+<tr><td><strong>componente × snippet</strong></td><td>arquivo com identidade, estado e ciclo de vida</td><td>pedaço de marcação dentro de um componente</td></tr>
+<tr><td><strong>bind × callback</strong></td><td>duas vias: o filho muda o valor do pai</td><td>uma via: o filho avisa, o pai decide</td></tr>
+<tr><td><strong>SSR × hidratação</strong></td><td>o HTML nasce no servidor</td><td>o HTML ganha comportamento no navegador</td></tr>
+<tr><td><strong>store × contexto</strong></td><td>estado compartilhado por importação, global ao módulo</td><td>estado compartilhado pela árvore de componentes</td></tr>
+</table>
+</div>
+
+<p>Uma regra de bolso para não errar: se o valor precisa aparecer em lugares que não têm relação de pai e filho, provavelmente é store; se ele pertence a uma parte da tela, é contexto; se pertence a um componente só, é estado.</p>
+
+<hr>
+
+<h2>10. Siglas e comandos</h2>
+
+<p>As siglas aparecem em documentação; os comandos, no terminal. A tabela é curta porque a lista é curta — e porque cada linha tem uma aula própria no guia.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sigla ou comando</th><th>Significa</th><th>Onde você usa</th></tr>
+<tr><td><code>SSR</code></td><td>Server-Side Rendering, renderização no servidor</td><td>quando o HTML precisa chegar pronto</td></tr>
+<tr><td><code>CSR</code></td><td>Client-Side Rendering, renderização no navegador</td><td>quando a página é uma aplicação</td></tr>
+<tr><td><code>SPA</code></td><td>Single Page Application, aplicação de uma página</td><td>navegação sem recarregar</td></tr>
+<tr><td><code>DOM</code></td><td>Document Object Model, a árvore de elementos</td><td><code>bind:this</code>, <code>document</code></td></tr>
+<tr><td><code>FLIP</code></td><td>First, Last, Invert, Play: técnica de animação</td><td><code>animate:flip</code></td></tr>
+<tr><td><code>npm run dev</code></td><td>liga o servidor de desenvolvimento</td><td><code>localhost:5173</code></td></tr>
+<tr><td><code>npm run build</code></td><td>gera a versão de produção</td><td><code>dist/</code></td></tr>
+<tr><td><code>npm run preview</code></td><td>serve o build para conferência</td><td><code>localhost:4173</code></td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O endereço <code>localhost:5173</code> é a sua máquina falando com ela mesma. Nada foi publicado: o servidor só existe enquanto o comando está rodando, e o <code>Ctrl+C</code> desliga.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 1.67s</pre>
+
+<p>Repare no prompt: <code>ana@notebook:~/loja$</code> diz quem está logado, em qual máquina e em qual pasta. Todos os comandos do guia rodam dentro da pasta do projeto, e é por isso que o prompt termina em <code>~/loja</code>. Rodar <code>npm run build</code> na pasta errada gera o erro mais comum de todos: "missing script: build".</p>
+
+<p>O número de módulos transformados é o total de arquivos que entraram no pacote. Se ele crescer sem você acrescentar tela, alguma importação nova está puxando peso — vale investigar antes de publicar.</p>
+
+<hr>
+
+<h2>11. Referência rápida: onde está a aula</h2>
+
+<p>O glossário define; a aula ensina. A tabela liga cada grupo de termos à página do guia que mostra o exemplo completo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo</th><th>Vá para</th></tr>
+<tr><td>componente, estado, runa</td><td><a href="primeiro-componente.html">Seu Primeiro Componente</a> e <a href="state.html">$state</a></td></tr>
+<tr><td>marcação, chaves, atributos</td><td><a href="ref-sintaxe.html">Sintaxe do .svelte</a></td></tr>
+<tr><td>toda runa, uma a uma</td><td><a href="ref-runas.html">Todas as Runas</a></td></tr>
+<tr><td>condicional, lista, await</td><td><a href="ref-blocos.html">Blocos Lógicos</a> e <a href="if.html">{#if}</a></td></tr>
+<tr><td>bind, class, style, use</td><td><a href="ref-diretivas.html">Diretivas</a> e <a href="bind.html">bind:</a></td></tr>
+<tr><td>prop, children, contexto</td><td><a href="ref-componentes.html">APIs de Componente</a></td></tr>
+<tr><td>mensagem de erro</td><td><a href="ref-erros.html">Catálogo de Erros</a></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><strong>Componente</strong> é o arquivo <code>.svelte</code>, com script, marcação e estilo; a tag usa o nome do arquivo em maiúscula.</li>
+  <li><strong>Estado</strong> é o que muda e redesenha; <strong>derivado</strong> é o que se calcula a partir dele.</li>
+  <li><strong>Prop</strong> vem de fora, <strong>callback</strong> avisa o pai, <strong>children</strong> traz marcação.</li>
+  <li><strong>Runa</strong> é símbolo do compilador (<code>$state</code>, <code>$props</code>), não função importada.</li>
+  <li><strong>Diretiva</strong> tem dois-pontos; <strong>bloco</strong> abre com <code>{#</code>; <strong>snippet</strong> tem nome e é renderizado com <code>{@render}</code>.</li>
+  <li><strong>CSS escopado</strong> ganha um selo (<code>svelte-1ekmh8m</code>) que impede vazamento de estilo.</li>
+  <li><strong>SSR</strong> é o HTML nascendo no servidor; <strong>hidratação</strong> é ele ganhando vida no navegador.</li>
+  <li><strong>Compilação</strong> erra com linha e coluna; <strong>execução</strong> erra no console, sem posição.</li>
+  <li><strong>Aviso</strong> não bloqueia e esconde bug; trate como erro quando o assunto é reatividade.</li>
+  <li><code>npm run dev</code> serve, <code>npm run build</code> gera, <code>npm run preview</code> confere.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
