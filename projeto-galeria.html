@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto Galeria — fotos, transições e navegação | Guia Svelte</title>
+<meta name="description" content="A galeria da padaria em três versões reais: foto escolhida, caixa que abre com transição e navegação com teclado, mais os erros reais de animate e transition.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Projeto Galeria</span></h1>
+
+<p class="intro">A Ana fotografou a vitrine com o celular e quer mostrar as fotos no site. Uma lista de três imagens lado a lado não serve: ela quer que a cliente toque numa miniatura e veja a foto grande, com uma animação que não pareça um estalo. Esta aula monta a galeria em <strong>três versões</strong>: a grade que troca a foto, a caixa que abre com transição e a versão com teclado, contador e botões. Cada versão foi compilada e rodada de verdade, e as caixas abaixo rodam no seu navegador.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como guardar a foto escolhida num estado e mostrar a certa na tela.</li>
+  <li>Como ligar cada miniatura ao índice que ela representa.</li>
+  <li>O que uma função de transição devolve: duração e CSS.</li>
+  <li>Como abrir e fechar uma caixa com <code>{#if}</code> e <code>transition:</code>.</li>
+  <li>Por que o servidor manda o HTML sem a caixa e o navegador a cria no clique.</li>
+  <li>Como usar <code>{#key}</code> para animar a troca de foto.</li>
+  <li>Como dar a volta na lista com o operador de resto (<code>%</code>).</li>
+  <li>Como ler o teclado com <code>&lt;svelte:window&gt;</code> no lugar certo.</li>
+  <li>O que o build e o preview mostram quando a galeria está pronta.</li>
+  <li>Os dois erros reais de transição e de animação, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: uma foto de cada vez</h2>
+
+<p>A vitrine da Ana cabe numa parede, mas não cabe numa tela de celular. Se as três fotos aparecerem lado a lado, cada uma fica do tamanho de um selo. A solução é a mesma de um álbum: uma foto grande no centro e as outras em miniatura, esperando a vez. Tocar numa miniatura troca a foto grande — e a cliente vê o detalhe que queria sem abrir outra página.</p>
+
+<p>O estado da galeria é um número: o índice da foto escolhida. Zero é a primeira, um é a segunda, dois é a terceira. O HTML lê esse número e mostra a foto correspondente. Quando o número muda, a tela muda. Todo o resto — a grade, a caixa preta, os botões — é desenho em volta desse número.</p>
+
+<p>O custo aparece quando a galeria cresce. Com três fotos, o índice é fácil de conferir. Com trezentas, você precisa de rolagem, de carregamento sob demanda e de uma forma de voltar ao começo. Esta aula fica nas três primeiras, mas escreve o código de um jeito que não precisa ser jogado fora quando a quarta chegar: a lista é um array, e o índice é calculado, não escrito à mão.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>Na galeria</th></tr>
+<tr><td>O álbum aberto no balcão</td><td>A lista <code>fotos</code> dentro do componente</td></tr>
+<tr><td>A foto que está em cima</td><td><code>let escolhida = $state(0)</code></td></tr>
+<tr><td>Apontar para a foto do bolo</td><td><code>onclick={() => (escolhida = i)}</code></td></tr>
+<tr><td>O plástico que protege a foto</td><td>A caixa <code>{#if}</code> com fundo escuro</td></tr>
+<tr><td>Virar a página com cuidado</td><td>A transição de 300 ms</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Três versões, um mesmo problema</h2>
+
+<p>As três versões resolvem o mesmo pedido com níveis diferentes de cuidado. A primeira prova que a troca funciona. A segunda transforma a foto grande numa caixa que abre por cima da página. A terceira deixa a cliente navegar sem voltar para a grade.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Versão</th><th>O que resolve</th><th>O que entra de novo</th></tr>
+<tr><td><strong>v1</strong> — simples</td><td>trocar a foto grande pela miniatura</td><td><code>$state</code>, <code>{#each}</code>, <code>style</code> com variável CSS</td></tr>
+<tr><td><strong>v2</strong> — melhor</td><td>ver a foto por cima, com animação de entrada e saída</td><td><code>transition:</code>, função de transição, <code>{#if}</code></td></tr>
+<tr><td><strong>v3</strong> — pronta</td><td>passar para a próxima sem fechar a caixa</td><td><code>{#key}</code>, <code>$derived</code>, <code>%</code>, <code>&lt;svelte:window&gt;</code></td></tr>
+</table>
+</div>
+
+<p>As três versões moram no mesmo arquivo, <code>src/App.svelte</code>, uma de cada vez. Guarde as anteriores num bloco de notas: comparar o antes e o depois é o jeito mais rápido de entender o que cada linha nova resolve.</p>
+
+<hr>
+
+<h2>3. Versão 1: a grade e a foto grande</h2>
+
+<p>Comece pelo arquivo inteiro. Ele tem a lista de fotos, o índice escolhido, a foto grande e a grade de miniaturas. Cada "foto" é um retângulo colorido com o título — assim a aula não depende de arquivo de imagem e o comportamento fica visível:</p>
+
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const fotos = [
+    { titulo: 'Pão na vitrine', cor: '#f4c17a' },
+    { titulo: 'Bolo de cenoura', cor: '#d98e63' },
+    { titulo: 'Café da manhã', cor: '#9fc4a6' }
+  ];
+  let escolhida = $state(0);
+&lt;/script&gt;
+
+&lt;h1&gt;Galeria da padaria&lt;/h1&gt;
+
+&lt;div class="palco" style="--cor: {fotos[escolhida].cor}"&gt;
+  &lt;span&gt;{fotos[escolhida].titulo}&lt;/span&gt;
+&lt;/div&gt;
+
+&lt;div class="grade"&gt;
+  {#each fotos as foto, i}
+    &lt;button
+      style="--cor: {foto.cor}"
+      aria-label="ver {foto.titulo}"
+      onclick={() =&gt; (escolhida = i)}
+    &gt;&lt;/button&gt;
+  {/each}
+&lt;/div&gt;
+
+&lt;style&gt;
+  .palco {
+    background: var(--cor);
+    height: 140px;
+    display: grid;
+    place-items: center;
+    font-weight: 600;
+  }
+  .grade { display: flex; gap: 8px; margin-top: 8px; }
+  .grade button { width: 48px; height: 48px; background: var(--cor); border: 0; }
+&lt;/style&gt;</pre>
+
+<p>O navegador recebe o primeiro desenho já com a foto do pão. O texto que aparece na tela é este:</p>
+
+
+<pre class="out">Galeria da padaria Pão na vitrine</pre>
+
+<p>O texto tem o título e a legenda, nessa ordem. As miniaturas são botões vazios: o conteúdo delas é a cor de fundo, e o nome vem do <code>aria-label</code>, que não aparece na tela mas é anunciado pelo leitor de tela. Um detalhe importante: o HTML que o servidor manda é o <em>primeiro</em> desenho, com o índice zero. Os outros dois só existem depois do clique.</p>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>const fotos = [ … ]</dt><dd>a lista não muda, então é <code>const</code>. Cada item tem <code>titulo</code> e <code>cor</code>; um objeto com dois campos é mais fácil de ler do que dois arrays paralelos.</dd>
+  <dt>let escolhida = $state(0)</dt><dd>o único valor que muda: o índice da foto no palco. Começa em zero, a primeira da lista.</dd>
+  <dt>{fotos[escolhida].titulo}</dt><dd>o colchete busca o item pela posição. Se <code>escolhida</code> for 1, o título é o do bolo; se for 2, o do café.</dd>
+  <dt>{#each fotos as foto, i}</dt><dd>o bloco repete a miniatura para cada foto. O segundo nome, <code>i</code>, é o índice da repetição — é ele que o clique guarda.</dd>
+  <dt>style="--cor: {foto.cor}"</dt><dd>uma variável CSS vinda do JavaScript. O CSS usa <code>var(--cor)</code> e cada miniatura ganha a sua cor sem uma classe por foto.</dd>
+</dl>
+
+<p>O <code>style</code> com variável é o truque que evita escrever três regras de CSS iguais. O valor entra como texto, e o navegador o trata como uma propriedade daquele elemento. Se a cor vier de um dado, esse é o caminho — e não um <code>class="cor-1"</code> por foto.</p>
+
+<div class="trysvelte" data-goal="clique:.grade button:nth-child(2);;out:Galeria da padaria Bolo de cenoura">
+<p class="try-task"><strong>Missão:</strong> clique na segunda miniatura e a legenda deve mudar para <em>Bolo de cenoura</em>. Hoje qualquer miniatura mostra o pão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const fotos = [
+    { titulo: 'Pão na vitrine', cor: '#f4c17a' },
+    { titulo: 'Bolo de cenoura', cor: '#d98e63' },
+    { titulo: 'Café da manhã', cor: '#9fc4a6' }
+  ];
+  let escolhida = $state(0);
+&lt;/script&gt;
+
+&lt;h1&gt;Galeria da padaria&lt;/h1&gt;
+
+&lt;div class="palco" style="--cor: {fotos[escolhida].cor}"&gt;
+  &lt;span&gt;{fotos[escolhida].titulo}&lt;/span&gt;
+&lt;/div&gt;
+
+&lt;div class="grade"&gt;
+  {#each fotos as foto, i}
+    &lt;button
+      style="--cor: {foto.cor}"
+      aria-label="ver {foto.titulo}"
+      onclick={() =&gt; (escolhida = 0)}
+    &gt;&lt;/button&gt;
+  {/each}
+&lt;/div&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const fotos = [
+    { titulo: 'Pão na vitrine', cor: '#f4c17a' },
+    { titulo: 'Bolo de cenoura', cor: '#d98e63' },
+    { titulo: 'Café da manhã', cor: '#9fc4a6' }
+  ];
+  let escolhida = $state(0);
+&lt;/script&gt;
+
+&lt;h1&gt;Galeria da padaria&lt;/h1&gt;
+
+&lt;div class="palco" style="--cor: {fotos[escolhida].cor}"&gt;
+  &lt;span&gt;{fotos[escolhida].titulo}&lt;/span&gt;
+&lt;/div&gt;
+
+&lt;div class="grade"&gt;
+  {#each fotos as foto, i}
+    &lt;button
+      style="--cor: {foto.cor}"
+      aria-label="ver {foto.titulo}"
+      onclick={() =&gt; (escolhida = i)}
+    &gt;&lt;/button&gt;
+  {/each}
+&lt;/div&gt;</pre>
+</div>
+
+<p>O erro da caixa é sutil: o clique funciona, mas grava sempre zero. Trocar por <code>i</code> faz cada botão guardar a sua posição. É o mesmo raciocínio do contador — um evento muda um estado, a tela acompanha — com um detalhe a mais: o valor vem do laço, e não de uma conta.</p>
+
+<hr>
+
+<h2>4. Versão 2: a caixa que abre com transição</h2>
+
+<p>A versão 1 troca a foto no lugar. A versão 2 abre uma caixa por cima da página, com fundo escuro, e anima a entrada. O código novo é uma função e um bloco:</p>
+
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const fotos = [
+    { titulo: 'Pão na vitrine', cor: '#f4c17a' },
+    { titulo: 'Bolo de cenoura', cor: '#d98e63' },
+    { titulo: 'Café da manhã', cor: '#9fc4a6' }
+  ];
+  let aberta = $state(null);
+
+  function surgir() {
+    return {
+      duration: 300,
+      css: (t) =&gt; `opacity: ${t}; transform: scale(${0.92 + 0.08 * t})`
+    };
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Galeria da padaria&lt;/h1&gt;
+
+&lt;div class="grade"&gt;
+  {#each fotos as foto, i}
+    &lt;button
+      style="--cor: {foto.cor}"
+      aria-label="abrir {foto.titulo}"
+      onclick={() =&gt; (aberta = i)}
+    &gt;&lt;/button&gt;
+  {/each}
+&lt;/div&gt;
+
+{#if aberta !== null}
+  &lt;div class="fundo" transition:surgir&gt;
+    &lt;figure&gt;
+      &lt;div class="foto-grande" style="--cor: {fotos[aberta].cor}"&gt;&lt;/div&gt;
+      &lt;figcaption&gt;{fotos[aberta].titulo}&lt;/figcaption&gt;
+    &lt;/figure&gt;
+    &lt;button id="fechar" onclick={() =&gt; (aberta = null)}&gt;fechar&lt;/button&gt;
+  &lt;/div&gt;
+{/if}
+
+&lt;style&gt;
+  .grade { display: flex; gap: 8px; }
+  .grade button { width: 64px; height: 64px; background: var(--cor); border: 0; }
+  .fundo {
+    position: fixed;
+    inset: 0;
+    background: rgb(0 0 0 / 0.6);
+    display: grid;
+    place-items: center;
+  }
+  .foto-grande { width: 240px; height: 160px; background: var(--cor); }
+  figcaption { color: white; text-align: center; margin-top: 8px; }
+&lt;/style&gt;</pre>
+
+<p>O texto inicial é só o título. A caixa não existe no HTML até alguém clicar:</p>
+
+
+<pre class="out">Galeria da padaria</pre>
+
+<p>Essa ausência é intencional. O <code>{#if aberta !== null}</code> só desenha o bloco quando a condição é verdadeira, e no servidor ela começa falsa. O servidor não vê transição nenhuma: ele manda o HTML, e a animação é assunto do navegador. Quem confere a transição é o olho — ou a caixa desta aula, que espera o tempo da animação antes de conferir o texto.</p>
+
+<h3>A anatomia da transição</h3>
+
+<dl class="anatomy">
+  <dt>let aberta = $state(null)</dt><dd><code>null</code> quer dizer "nenhuma foto aberta". Zero seria uma foto válida, e por isso a comparação é <code>!== null</code>, não uma condição de verdadeiro e falso.</dd>
+  <dt>function surgir()</dt><dd>a transição é uma função que devolve uma configuração. O Svelte a chama quando o elemento entra e quando sai.</dd>
+  <dt>duration: 300</dt><dd>quanto tempo a animação dura, em milissegundos. Curta demais parece um estalo; longa demais atrapalha quem quer fechar.</dd>
+  <dt>css: (t) =&gt; …</dt><dd>a função que recebe <code>t</code>, um número de 0 a 1, e devolve o CSS daquele instante. No começo é 0; no fim, 1.</dd>
+  <dt>transition:surgir</dt><dd>liga a função ao elemento. Ela vale para a entrada e para a saída; se você quiser comportamentos diferentes, use <code>in:</code> e <code>out:</code>.</dd>
+</dl>
+
+<p>A função <code>css</code> é o coração. <code>opacity: ${t}</code> faz a caixa aparecer devagar. <code>scale(${0.92 + 0.08 * t})</code> começa em 92% do tamanho e chega a 100%. A conta é escrita uma vez; o Svelte a chama sessenta vezes por segundo enquanto a transição roda.</p>
+
+<div class="warning">
+<strong>Transição não é enfeite de tempo</strong>
+<p>Uma animação de 300 ms muda a percepção de continuidade: a cliente entende que a foto veio de algum lugar, e não que a tela piscou. Acima de 500 ms, a mesma animação começa a parecer lenta. O tempo é uma decisão de quem usa, não de quem programa.</p>
+</div>
+
+<div class="trysvelte" data-goal="clique:.grade button;;depois:400;;clique:#fechar;;depois:500;;out:Galeria da padaria">
+<p class="try-task"><strong>Missão:</strong> a caixa abre com a transição, mas o botão <em>fechar</em> não fecha. Faça o clique fechar a caixa e deixar só o título na tela.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const fotos = [
+    { titulo: 'Pão na vitrine', cor: '#f4c17a' },
+    { titulo: 'Bolo de cenoura', cor: '#d98e63' },
+    { titulo: 'Café da manhã', cor: '#9fc4a6' }
+  ];
+  let aberta = $state(null);
+
+  function surgir() {
+    return {
+      duration: 300,
+      css: (t) =&gt; `opacity: ${t}; transform: scale(${0.92 + 0.08 * t})`
+    };
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Galeria da padaria&lt;/h1&gt;
+
+&lt;div class="grade"&gt;
+  {#each fotos as foto, i}
+    &lt;button
+      style="--cor: {foto.cor}"
+      aria-label="abrir {foto.titulo}"
+      onclick={() =&gt; (aberta = i)}
+    &gt;&lt;/button&gt;
+  {/each}
+&lt;/div&gt;
+
+{#if aberta !== null}
+  &lt;div class="fundo" transition:surgir&gt;
+    &lt;figure&gt;
+      &lt;div class="foto-grande" style="--cor: {fotos[aberta].cor}"&gt;&lt;/div&gt;
+      &lt;figcaption&gt;{fotos[aberta].titulo}&lt;/figcaption&gt;
+    &lt;/figure&gt;
+    &lt;button id="fechar" onclick={() =&gt; {}}&gt;fechar&lt;/button&gt;
+  &lt;/div&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const fotos = [
+    { titulo: 'Pão na vitrine', cor: '#f4c17a' },
+    { titulo: 'Bolo de cenoura', cor: '#d98e63' },
+    { titulo: 'Café da manhã', cor: '#9fc4a6' }
+  ];
+  let aberta = $state(null);
+
+  function surgir() {
+    return {
+      duration: 300,
+      css: (t) =&gt; `opacity: ${t}; transform: scale(${0.92 + 0.08 * t})`
+    };
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Galeria da padaria&lt;/h1&gt;
+
+&lt;div class="grade"&gt;
+  {#each fotos as foto, i}
+    &lt;button
+      style="--cor: {foto.cor}"
+      aria-label="abrir {foto.titulo}"
+      onclick={() =&gt; (aberta = i)}
+    &gt;&lt;/button&gt;
+  {/each}
+&lt;/div&gt;
+
+{#if aberta !== null}
+  &lt;div class="fundo" transition:surgir&gt;
+    &lt;figure&gt;
+      &lt;div class="foto-grande" style="--cor: {fotos[aberta].cor}"&gt;&lt;/div&gt;
+      &lt;figcaption&gt;{fotos[aberta].titulo}&lt;/figcaption&gt;
+    &lt;/figure&gt;
+    &lt;button id="fechar" onclick={() =&gt; (aberta = null)}&gt;fechar&lt;/button&gt;
+  &lt;/div&gt;
+{/if}</pre>
+</div>
+
+<p>Repare na meta da caixa: <code>depois:400</code> antes de clicar em fechar e <code>depois:500</code> antes de conferir o texto. Sem essas esperas, o avaliador olharia a tela no meio da animação, quando a caixa ainda está saindo. Quem escreve teste de transição aprende isso na prática: o tempo faz parte do contrato.</p>
+
+<hr>
+
+<h2>5. Versão 3: navegação, teclado e contador</h2>
+
+<p>A versão pronta deixa a cliente passar de foto em foto sem fechar a caixa. Ela acrescenta três coisas: os botões de anterior e próxima, o contador de posição e a leitura do teclado. A troca é animada por <code>{#key}</code>.</p>
+
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const fotos = [
+    { titulo: 'Pão na vitrine', cor: '#f4c17a' },
+    { titulo: 'Bolo de cenoura', cor: '#d98e63' },
+    { titulo: 'Café da manhã', cor: '#9fc4a6' }
+  ];
+  let aberta = $state(false);
+  let atual = $state(0);
+  let total = $derived(fotos.length);
+
+  function ir(passo) {
+    atual = (atual + passo + total) % total;
+  }
+
+  function surgir() {
+    return {
+      duration: 250,
+      css: (t) =&gt; `opacity: ${t}; transform: translateY(${(1 - t) * 12}px)`
+    };
+  }
+&lt;/script&gt;
+
+&lt;svelte:window
+  onkeydown={(evento) =&gt; {
+    if (!aberta) return;
+    if (evento.key === 'Escape') aberta = false;
+    if (evento.key === 'ArrowRight') ir(1);
+    if (evento.key === 'ArrowLeft') ir(-1);
+  }}
+/&gt;
+
+&lt;h1&gt;Galeria da padaria&lt;/h1&gt;
+
+&lt;div class="grade"&gt;
+  {#each fotos as foto, i}
+    &lt;button
+      style="--cor: {foto.cor}"
+      aria-label="abrir {foto.titulo}"
+      onclick={() =&gt; {
+        atual = i;
+        aberta = true;
+      }}
+    &gt;&lt;/button&gt;
+  {/each}
+&lt;/div&gt;
+
+{#if aberta}
+  &lt;div class="fundo"&gt;
+    {#key atual}
+      &lt;figure transition:surgir&gt;
+        &lt;div class="foto-grande" style="--cor: {fotos[atual].cor}"&gt;&lt;/div&gt;
+        &lt;figcaption&gt;{fotos[atual].titulo}&lt;/figcaption&gt;
+      &lt;/figure&gt;
+    {/key}
+    &lt;p&gt;{atual + 1} de {total}&lt;/p&gt;
+    &lt;div class="botoes"&gt;
+      &lt;button id="anterior" onclick={() =&gt; ir(-1)}&gt;anterior&lt;/button&gt;
+      &lt;button id="proxima" onclick={() =&gt; ir(1)}&gt;próxima&lt;/button&gt;
+      &lt;button id="fechar" onclick={() =&gt; (aberta = false)}&gt;fechar&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+{/if}
+
+&lt;style&gt;
+  .grade { display: flex; gap: 8px; }
+  .grade button { width: 64px; height: 64px; background: var(--cor); border: 0; }
+  .fundo {
+    position: fixed;
+    inset: 0;
+    background: rgb(0 0 0 / 0.65);
+    color: white;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+  }
+  .foto-grande { width: 240px; height: 160px; background: var(--cor); }
+  .botoes { display: flex; gap: 8px; }
+&lt;/style&gt;</pre>
+
+<p>O texto inicial continua sendo só o título, porque a caixa começa fechada:</p>
+
+
+<pre class="out">Galeria da padaria</pre>
+
+<p>O CSS gerado mostra o escopo do componente em cada seletor. O <code>svelte-1n46o8q</code> aparece no seletor e nas tags do HTML, e é o que impede que o <code>.fundo</code> da galeria escureça a página de outro componente:</p>
+
+
+<pre class="out">.grade.svelte-1n46o8q { display: flex; gap: 8px; }
+  .grade.svelte-1n46o8q button:where(.svelte-1n46o8q) { width: 64px; height: 64px; background: var(--cor); border: 0; }
+  .fundo.svelte-1n46o8q {
+    position: fixed;
+    inset: 0;
+    background: rgb(0 0 0 / 0.65);
+    color: white;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+  }
+  .foto-grande.svelte-1n46o8q { width: 240px; height: 160px; background: var(--cor); }
+  .botoes.svelte-1n46o8q { display: flex; gap: 8px; }</pre>
+
+<p>Três ideias novas nesta versão. A primeira é <code>{#key atual}</code>: quando o índice muda, o Svelte joga fora o bloco antigo e cria outro, e é isso que dispara a transição de entrada. Sem a chave, o mesmo elemento seria atualizado no lugar, sem animação. A segunda é <code>(atual + passo + total) % total</code>: somar o total antes evita índice negativo quando o passo é <code>-1</code>; o resto da divisão traz o número de volta para a faixa. A terceira é <code>&lt;svelte:window onkeydown&gt;</code>, que ouve o teclado na janela inteira — e por isso precisa checar <code>if (!aberta) return</code>, para não interceptar as setas quando a caixa está fechada.</p>
+
+<div class="trysvelte" data-goal="clique:.grade button;;depois:400;;clique:#anterior;;depois:400;;out:Galeria da padaria Café da manhã 3 de 3 anterior próxima fechar">
+<p class="try-task"><strong>Missão:</strong> abra a primeira foto e clique em <em>anterior</em>. A galeria deve dar a volta e mostrar a última, com o contador <code>3 de 3</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const fotos = [
+    { titulo: 'Pão na vitrine', cor: '#f4c17a' },
+    { titulo: 'Bolo de cenoura', cor: '#d98e63' },
+    { titulo: 'Café da manhã', cor: '#9fc4a6' }
+  ];
+  let aberta = $state(false);
+  let atual = $state(0);
+  let total = $derived(fotos.length);
+
+  function ir(passo) {
+    atual = Math.max(0, atual + passo);
+  }
+
+  function surgir() {
+    return {
+      duration: 250,
+      css: (t) =&gt; `opacity: ${t}; transform: translateY(${(1 - t) * 12}px)`
+    };
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Galeria da padaria&lt;/h1&gt;
+
+&lt;div class="grade"&gt;
+  {#each fotos as foto, i}
+    &lt;button
+      style="--cor: {foto.cor}"
+      aria-label="abrir {foto.titulo}"
+      onclick={() =&gt; { atual = i; aberta = true; }}
+    &gt;&lt;/button&gt;
+  {/each}
+&lt;/div&gt;
+
+{#if aberta}
+  &lt;div class="fundo"&gt;
+    {#key atual}
+      &lt;figure transition:surgir&gt;
+        &lt;div class="foto-grande" style="--cor: {fotos[atual].cor}"&gt;&lt;/div&gt;
+        &lt;figcaption&gt;{fotos[atual].titulo}&lt;/figcaption&gt;
+      &lt;/figure&gt;
+    {/key}
+    &lt;p&gt;{atual + 1} de {total}&lt;/p&gt;
+    &lt;div class="botoes"&gt;
+      &lt;button id="anterior" onclick={() =&gt; ir(-1)}&gt;anterior&lt;/button&gt;
+      &lt;button id="proxima" onclick={() =&gt; ir(1)}&gt;próxima&lt;/button&gt;
+      &lt;button id="fechar" onclick={() =&gt; (aberta = false)}&gt;fechar&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const fotos = [
+    { titulo: 'Pão na vitrine', cor: '#f4c17a' },
+    { titulo: 'Bolo de cenoura', cor: '#d98e63' },
+    { titulo: 'Café da manhã', cor: '#9fc4a6' }
+  ];
+  let aberta = $state(false);
+  let atual = $state(0);
+  let total = $derived(fotos.length);
+
+  function ir(passo) {
+    atual = (atual + passo + total) % total;
+  }
+
+  function surgir() {
+    return {
+      duration: 250,
+      css: (t) =&gt; `opacity: ${t}; transform: translateY(${(1 - t) * 12}px)`
+    };
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Galeria da padaria&lt;/h1&gt;
+
+&lt;div class="grade"&gt;
+  {#each fotos as foto, i}
+    &lt;button
+      style="--cor: {foto.cor}"
+      aria-label="abrir {foto.titulo}"
+      onclick={() =&gt; { atual = i; aberta = true; }}
+    &gt;&lt;/button&gt;
+  {/each}
+&lt;/div&gt;
+
+{#if aberta}
+  &lt;div class="fundo"&gt;
+    {#key atual}
+      &lt;figure transition:surgir&gt;
+        &lt;div class="foto-grande" style="--cor: {fotos[atual].cor}"&gt;&lt;/div&gt;
+        &lt;figcaption&gt;{fotos[atual].titulo}&lt;/figcaption&gt;
+      &lt;/figure&gt;
+    {/key}
+    &lt;p&gt;{atual + 1} de {total}&lt;/p&gt;
+    &lt;div class="botoes"&gt;
+      &lt;button id="anterior" onclick={() =&gt; ir(-1)}&gt;anterior&lt;/button&gt;
+      &lt;button id="proxima" onclick={() =&gt; ir(1)}&gt;próxima&lt;/button&gt;
+      &lt;button id="fechar" onclick={() =&gt; (aberta = false)}&gt;fechar&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+{/if}</pre>
+</div>
+
+<p>A solução troca <code>Math.max(0, …)</code> por <code>(atual + passo + total) % total</code>. O <code>Math.max</code> segura o índice no começo, mas não dá a volta: no primeiro item, anterior fica no primeiro. O resto da divisão é a operação certa para uma lista circular, e vale para qualquer quantidade de fotos.</p>
+
+<hr>
+
+<h2>6. O caminho de um clique</h2>
+
+<p>Uma tabela vale mais que três parágrafos quando o assunto é ordem. Abaixo, o que acontece na versão 3 desde o toque na miniatura até o contador mudar:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Passo</th><th>O que muda</th><th>O que a tela mostra</th></tr>
+<tr><td>abrir a página</td><td><code>aberta = false</code>, <code>atual = 0</code></td><td>só a grade e o título</td></tr>
+<tr><td>tocar na segunda miniatura</td><td><code>atual = 1</code>, <code>aberta = true</code></td><td>caixa escura com o bolo, <code>2 de 3</code></td></tr>
+<tr><td>tocar em próxima</td><td><code>atual = 2</code></td><td>café da manhã, <code>3 de 3</code>; o bloco é recriado e anima</td></tr>
+<tr><td>tocar em próxima de novo</td><td><code>atual = 0</code></td><td>pão na vitrine, <code>1 de 3</code></td></tr>
+<tr><td>tocar em anterior no primeiro</td><td><code>atual = 2</code></td><td>café da manhã, <code>3 de 3</code></td></tr>
+<tr><td>apertar Esc</td><td><code>aberta = false</code></td><td>a caixa sai com a transição e some</td></tr>
+</table>
+</div>
+
+<p>Repare que o contador mostra <code>atual + 1</code>, e não <code>atual</code>. O índice começa em zero porque arrays começam em zero; a pessoa começa em um porque aprendeu assim. A conversão é feita na hora de mostrar, não no estado — guardar o número já somado faria a conta do resto errar.</p>
+
+<hr>
+
+<h2>7. O terminal: desenvolvimento, build e prévia</h2>
+
+<p>O projeto da Ana é um Svelte comum com Vite, o mesmo da aula de <a href="primeiro-componente.html">Primeiro Componente</a>. Para ver a galeria enquanto edita:</p>
+
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1113 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O endereço <code>localhost:5173</code> só existe na máquina dela. Cada <code>Ctrl+S</code> no arquivo aparece no navegador em menos de um segundo, e o estado da página é preservado quando possível.</p>
+
+<p>Quando a galeria está pronta, o build gera os arquivos que o cliente baixa:</p>
+
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.22 kB
+dist/assets/index-DZLvVwzm.css   0.41 kB │ gzip:  0.23 kB
+dist/assets/index-DtrFuyuz.js   48.30 kB │ gzip: 18.66 kB
+✓ built in 1.40s</pre>
+
+<p>Dois números contam a história. O CSS tem <code>0.41 kB</code> porque o componente tem poucas regras e o compilador só inclui o que é usado. O JavaScript tem <code>48.30 kB</code>, ou <code>18.66 kB</code> comprimido: é o Svelte, o Vite e a galeria juntos. Para comparar, a versão 1 do contador ficava em <code>15.95 kB</code> comprimido; a galeria é maior porque tem mais marcação e mais lógica, não porque a transição pesa.</p>
+
+<p>Para conferir o build com os próprios olhos, o preview serve a mesma pasta por http:</p>
+
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> loja@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>A porta é <code>4173</code>, diferente da <code>5173</code> do desenvolvimento. As duas podem ficar ligadas ao mesmo tempo. Abrir <code>dist/index.html</code> com dois cliques não funciona: o navegador bloqueia módulos por <code>file://</code>. É o mesmo aviso da aula de <a href="deploy.html">Build e Deploy</a>.</p>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<p>Os dois erros abaixo vieram do compilador desta versão, copiados como estão. Os dois são de animação, e os dois aparecem quando a galeria começa a reordenar ou a combinar efeitos.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>animate:flip</code> num <code>{#each}</code> sem chave</strong>
+<p>O <code>flip</code> anima a troca de posição dos itens, mas só funciona quando o bloco sabe identificar cada item. Sem a chave, o compilador recusa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { flip } from 'svelte/animate';
+  let fotos = $state(['pão', 'bolo', 'café']);
+&lt;/script&gt;
+
+{#each fotos as foto}
+  &lt;p animate:flip&gt;{foto}&lt;/p&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 5): An element that uses the `animate:` directive must be the only child of a keyed `{#each ...}` block. Did you forget to add a key to your each block?</pre>
+<p>A tradução: "um elemento que usa a diretiva <code>animate:</code> tem de ser o único filho de um bloco <code>{#each}</code> com chave. Você esqueceu de adicionar a chave?". O conserto é <code>{#each fotos as foto (foto.titulo)}</code> — o parêntese no fim identifica cada item. Na galeria, a chave natural é o título ou um <code>id</code>; nunca use o índice, porque ele muda quando a lista é reordenada.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>transition:</code> junto com <code>in:</code></strong>
+<p>Um elemento pode ter uma transição geral ou um par de entrada e saída, mas não as duas coisas ao mesmo tempo. O compilador aponta a coluna exata.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function surgir() {
+    return { duration: 300, css: (t) =&gt; `opacity: ${t}` };
+  }
+&lt;/script&gt;
+
+{#if true}
+  &lt;p transition:surgir in:surgir&gt;oi&lt;/p&gt;
+{/if}</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 23): Cannot use `transition:` alongside existing `in:` directive</pre>
+<p>Se você quer entradas e saídas diferentes, escolha <code>in:surgir</code> e <code>out:sumir</code>, com duas funções. Se quer a mesma animação nos dois sentidos, use só <code>transition:surgir</code>. O erro não é de sintaxe: é de intenção — o compilador não sabe qual das duas diretivas deve valer.</p>
+</div>
+
+<hr>
+
+<h2>9. Referência rápida da galeria</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th><th>Onde aparece</th></tr>
+<tr><td><code>$state(0)</code></td><td>guarda o índice da foto escolhida</td><td>no <code>&lt;script&gt;</code></td></tr>
+<tr><td><code>{#each fotos as foto, i}</code></td><td>repete a miniatura e entrega o índice</td><td>no HTML</td></tr>
+<tr><td><code>{#if aberta !== null}</code></td><td>cria e destrói a caixa</td><td>em volta da caixa</td></tr>
+<tr><td><code>{#key atual}</code></td><td>recria o bloco quando o índice muda, para animar</td><td>dentro da caixa</td></tr>
+<tr><td><code>transition:surgir</code></td><td>anima entrada e saída com a mesma função</td><td>na figura</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função de transição</th><th>Devolve</th><th>Custo</th></tr>
+<tr><td><code>duration</code></td><td>milissegundos da animação</td><td>acima de 500 ms parece lento</td></tr>
+<tr><td><code>css(t)</code></td><td>o estilo daquele instante, com <code>t</code> de 0 a 1</td><td>roda a cada quadro; contas pesadas travam</td></tr>
+<tr><td><code>easing</code></td><td>a curva do movimento</td><td>sem ela, a animação é linear</td></tr>
+<tr><td><code>delay</code></td><td>espera antes de começar</td><td>atrasa a resposta ao clique</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Símbolo</th><th>Para que serve na galeria</th></tr>
+<tr><td><code>%</code></td><td>dá a volta na lista sem sair da faixa</td></tr>
+<tr><td><code>&lt;svelte:window&gt;</code></td><td>ouve o teclado na janela inteira</td></tr>
+<tr><td><code>aria-label</code></td><td>dá nome às miniaturas, que não têm texto</td></tr>
+<tr><td><code>--cor</code></td><td>leva a cor do dado para o CSS</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que a função de uma transição devolve?</p>
+<label><input type="radio" name="q1"> uma string de CSS pronta</label>
+<label><input type="radio" name="q1"> um elemento HTML novo</label>
+<label><input type="radio" name="q1"> um objeto com duração e uma função <code>css(t)</code></label>
+<label><input type="radio" name="q1"> uma promessa que resolve no fim</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que a versão 3 usa <code>{#key atual}</code>?</p>
+<label><input type="radio" name="q1"> para guardar o índice no endereço</label>
+<label><input type="radio" name="q1"> para impedir que o índice mude</label>
+<label><input type="radio" name="q1"> para carregar a foto mais rápido</label>
+<label><input type="radio" name="q1"> para recriar o bloco quando a foto muda e disparar a transição</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>(atual + passo + total) % total</code> garante?</p>
+<label><input type="radio" name="q1"> que o índice fica entre 0 e <code>total - 1</code>, dando a volta na lista</label>
+<label><input type="radio" name="q1"> que o índice nunca repete</label>
+<label><input type="radio" name="q1"> que a foto é carregada antes</label>
+<label><input type="radio" name="q1"> que o total muda sozinho</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">function ir(passo) {<br>&nbsp;&nbsp;atual = (atual + passo + total) % <input data-answer="total">;<br>}<br><br>// com três fotos, anterior na primeira leva ao índice 2</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>A galeria é um índice em <code>$state</code> e uma lista de fotos; a tela mostra <code>fotos[indice]</code>.</li>
+  <li>A miniatura guarda a própria posição com <code>onclick={() => (escolhida = i)}</code>.</li>
+  <li><code>{#if}</code> cria e destrói a caixa; o servidor manda o HTML sem ela.</li>
+  <li>Uma transição devolve <code>{ duration, css(t) }</code>; <code>t</code> vai de 0 a 1.</li>
+  <li><code>transition:</code> vale para entrada e saída; <code>in:</code> e <code>out:</code> separam as duas.</li>
+  <li><code>{#key atual}</code> recria o bloco e faz a troca de foto animar.</li>
+  <li><code>(atual + passo + total) % total</code> dá a volta sem índice negativo.</li>
+  <li><code>&lt;svelte:window onkeydown&gt;</code> lê o teclado, com a checagem de a caixa estar aberta.</li>
+  <li>O build gera CSS e JS com hash; o preview serve o resultado em <code>4173</code>.</li>
+  <li><code>animate:flip</code> exige <code>{#each}</code> com chave; <code>transition:</code> não combina com <code>in:</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
