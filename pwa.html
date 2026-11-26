@@ -351,7 +351,7 @@ Run npm run preview to preview your production build locally.
 Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app for the platform of your choosing
 ✔ done</pre>
 
-<p>Três linhas dessa saída importam. <code>Building service worker</code> é a etapa separada, que só existe porque o projeto tem o arquivo. <code>service-worker.js 1.52 kB</code> é o arquivo final, publicado na raiz do site. E <code>✓ built in 29ms</code> é o tempo do worker: rápido porque ele não carrega o Svelte inteiro, só as listas de caminhos.</p>
+<p>Três linhas dessa saída importam. <code>service-worker-manifest.json</code> é o mapa que o Kit usa para saber o que o worker pode guardar. <code>service-worker.js 1.52 kB</code> é o arquivo final, publicado na raiz do site. E <code>✓ built in 29ms</code> é o tempo dessa etapa: rápido porque o worker não carrega o Svelte inteiro, só as listas de caminhos. A etapa aparece mais acima no build, com o nome <code>Building service worker</code> — o <code>tail</code> cortou.</p>
 
 <p>O padrão do SvelteKit é registrar o worker automaticamente em produção. Em desenvolvimento, o registro fica desligado para você não brigar com cache enquanto edita. Se precisar conferir o comportamento real, use <code>npm run preview</code>, que serve o build:</p>
 

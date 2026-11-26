@@ -19,7 +19,7 @@
 
 <h1>SvelteKit · <span class="hl">Checklist de Publicação</span></h1>
 
-<p class="intro">Na véspera da inauguração, a Ana varreu a loja, conferiu o troco, testou a cafeteira e esqueceu o cartaz do preço na porta. Site é igual: o código compila, o build passa, e ainda assim alguém publica uma página sem título, um link quebrado e uma imagem sem descrição. Esta aula é a lista que ela pendura atrás do balcão: dez conferências, cada uma com um comando ou um teste que dá para repetir em dois minutos. Nada aqui é opinião — o que aparece é a resposta real do servidor e do terminal.</p>
+<p class="intro">Na véspera da inauguração, a Ana varreu a loja, conferiu o troco, testou a cafeteira e esqueceu o cartaz do preço na porta. Site é igual: o código compila, o build passa, e ainda assim alguém publica uma página sem título, um link quebrado e uma imagem sem descrição. Esta aula é a lista que ela pendura atrás do balcão: oito conferências, cada uma com um comando ou um teste que dá para repetir em dois minutos. Nada aqui é opinião — o que aparece é a resposta real do servidor e do terminal.</p>
 
 <div class="note">
 <strong>Você vai aprender</strong>
@@ -160,11 +160,11 @@ ana@notebook:~/loja/kit$ </pre>
 Getting Svelte diagnostics...
 
 src/routes/vitrine/+page.svelte:2:1
-Warn: `<img>` element should have an alt attribute
+Warn: `&lt;img&gt;` element should have an alt attribute
 https://svelte.dev/e/a11y_missing_attribute (svelte)
-<h1>Vitrine</h1>
-<img src="/paes/frances.jpg">
-<p>Pão francês quentinho.</p>
+&lt;h1&gt;Vitrine&lt;/h1&gt;
+&lt;img src="/paes/frances.jpg"&gt;
+&lt;p&gt;Pão francês quentinho.&lt;/p&gt;
 
 ====================================
 svelte-check found 0 errors and 1 warning in 1 file</pre>
@@ -248,11 +248,11 @@ content-type: text/html
 etag: "umhs6s"
 x-sveltekit-page: true
 
-ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '<h1>[^<]*</h1>'
-<h1>404</h1>
+ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;'
+&lt;h1&gt;404&lt;/h1&gt;
 
-ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '<p>[^<]*</p>'
-<p>Not Found</p></pre>
+ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '&lt;p&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p&gt;Not Found&lt;/p&gt;</pre>
 
 <p>O status <code>404</code> é o que importa para o buscador: ele entende que a página não existe e não a indexa. Um site que devolve <code>200</code> com o texto "não encontrado" engana o robô e aparece na busca com o endereço errado. Para trocar a mensagem, crie <code>src/routes/+error.svelte</code> — a aula de <a href="pagina-de-erro.html">+error.svelte</a> mostra o caminho.</p>
 
@@ -342,15 +342,15 @@ Could not detect a supported production environment. See https://svelte.dev/docs
 Getting Svelte diagnostics...
 
 src/routes/vitrine/+page.svelte:2:1
-Warn: `<img>` element should have an alt attribute
+Warn: `&lt;img&gt;` element should have an alt attribute
 https://svelte.dev/e/a11y_missing_attribute (svelte)
-<h1>Vitrine</h1>
-<img src="/paes/frances.jpg">
-<p>Pão francês quentinho.</p>
+&lt;h1&gt;Vitrine&lt;/h1&gt;
+&lt;img src="/paes/frances.jpg"&gt;
+&lt;p&gt;Pão francês quentinho.&lt;/p&gt;
 
 ====================================
 svelte-check found 0 errors and 1 warning in 1 file</pre>
-<p>Como o total é <code>0 errors and 1 warning</code>, é fácil ignorar. Não ignore: o mesmo comando pega <code>on:click</code> antigo, <code>href="#"</code> em link e botão sem tipo. Um projeto que chega no dia da publicação com zero avisos é um projeto em que o aviso seguinte vai ser levado a sério.</p>
+<p>Como o total é <code>0 errors and 1 warning</code>, é fácil ignorar. Não ignore: o mesmo comando pega <code>on:click</code> antigo e <code>href="#"</code> em link. Um projeto que chega no dia da publicação com zero avisos é um projeto em que o aviso seguinte vai ser levado a sério.</p>
 </div>
 
 <div class="cenario">
@@ -378,11 +378,11 @@ content-type: text/html
 etag: "umhs6s"
 x-sveltekit-page: true
 
-ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '<h1>[^<]*</h1>'
-<h1>404</h1>
+ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;'
+&lt;h1&gt;404&lt;/h1&gt;
 
-ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '<p>[^<]*</p>'
-<p>Not Found</p></pre>
+ana@notebook:~/loja/kit$ curl -s localhost:4173/contatoo | grep -o '&lt;p&gt;[^&lt;]*&lt;/p&gt;'
+&lt;p&gt;Not Found&lt;/p&gt;</pre>
 <p>O teste rápido é <code>curl -sI</code> em cada endereço que você divulgou: o site, o cardápio, o contato. Se um deles devolver <code>404</code>, o link está errado ou a rota não foi criada. Melhor descobrir com o comando do que com a cliente.</p>
 </div>
 
