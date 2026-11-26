@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto Quiz — perguntas, pontos e tela final | Guia Svelte</title>
+<meta name="description" content="O quiz da padaria em três versões reais: acerto e erro, lista de perguntas com índice, pontos, progresso e tela final, mais os erros reais de índice e de onclick.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Projeto Quiz</span></h1>
+
+<p class="intro">O filho da Ana está aprendendo a tabuada e ela quer uma forma de ele treinar sem caderno. Um quiz é o projeto perfeito para isso: uma pergunta por vez, um botão por alternativa, um acerto que vira ponto e uma tela final que diz como foi. Nas três versões desta aula o quiz cresce da pergunta única até o jogo com três perguntas que reinicia. Tudo o que está escrito aqui saiu do compilador e do navegador de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A montar uma pergunta com alternativas e mostrar o resultado do clique.</li>
+  <li>Por que a resposta certa precisa ser comparada, e não atribuída.</li>
+  <li>A guardar perguntas em lista e avançar com um índice.</li>
+  <li>Como somar pontos sem perder a conta quando a pergunta muda.</li>
+  <li>O que <code>$derived</code> resolve quando a pergunta atual vem de uma lista.</li>
+  <li>Como desligar as alternativas depois da resposta para ninguém responder duas vezes.</li>
+  <li>Como calcular progresso em porcentagem com <code>Math.round</code>.</li>
+  <li>Como terminar o jogo, mostrar o resultado e reiniciar sem recarregar a página.</li>
+  <li>Dois erros reais: índice fora da lista e <code>onclick</code> escrito como texto.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: uma pergunta, várias alternativas, um ponto</h2>
+
+<p>Um quiz é uma máquina de estados pequena. Existe a pergunta atual, o que o jogador escolheu e quantos pontos ele já fez. Quando ele clica, a escolha é guardada e comparada com a certa; quando ele avança, a pergunta troca e a escolha volta ao nada. Nada além disso — e é essa simplicidade que faz do quiz um bom segundo projeto.</p>
+
+<p>A diferença em relação à lista de tarefas é que aqui existe uma <em>posição</em>. A lista de tarefas mostra tudo ao mesmo tempo; o quiz mostra uma pergunta por vez, e para isso precisa de um número que diga qual. Esse número é o índice, e quase todo bug de quiz nasce dele: avançar quando já era a última, voltar para uma pergunta que não existe, mostrar "pergunta 4 de 3".</p>
+
+<p>A terceira peça é a comparação. O jogador escolhe a alternativa de índice <code>0</code> ou <code>1</code>; a pergunta guarda qual é a certa. Acertar é <code>escolha === certa</code>. É tentador escrever <code>escolha = certa</code> — parece a mesma coisa e faz outra: em vez de comparar, atribui. O programa passa a dizer que todo mundo acertou.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na escolinha</th><th>No componente</th></tr>
+<tr><td>A pergunta escrita no quadro</td><td>um item da lista <code>perguntas</code></td></tr>
+<tr><td>O número da questão ("3 de 10")</td><td><code>atual + 1</code> de <code>perguntas.length</code></td></tr>
+<tr><td>O dedo levantado do aluno</td><td><code>resposta</code></td></tr>
+<tr><td>A nota no caderno</td><td><code>pontos</code></td></tr>
+<tr><td>"Acertou!" ou "Errou"</td><td><code>resposta === pergunta.certa ? … : …</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Versão 1: uma pergunta só</h2>
+
+<p>Uma pergunta, duas alternativas, uma frase de resultado. O estado é só a escolha: <code>null</code> enquanto ninguém respondeu, <code>0</code> ou <code>1</code> depois. O <code>{#if}</code> usa esse <code>null</code> para não mostrar nada antes do primeiro clique.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let escolha = $state(null);
+  const certa = 1;
+&lt;/script&gt;
+
+&lt;h1&gt;Quiz da padaria&lt;/h1&gt;
+&lt;p&gt;Qual é o pão mais crocante da vitrine?&lt;/p&gt;
+
+&lt;button onclick={() =&gt; (escolha = 0)}&gt;Sonho&lt;/button&gt;
+&lt;button onclick={() =&gt; (escolha = 1)}&gt;Pão francês&lt;/button&gt;
+
+{#if escolha !== null}
+  &lt;p&gt;{escolha === certa ? 'Acertou!' : 'Errou, tente de novo.'}&lt;/p&gt;
+{/if}</pre>
+
+<p>A saída inicial não tem a frase de resultado, porque <code>escolha</code> ainda é <code>null</code>: o bloco <code>{#if}</code> nem desenha o parágrafo.</p>
+
+<pre class="out">&lt;h1&gt;Quiz da padaria&lt;/h1&gt; &lt;p&gt;Qual é o pão mais crocante da vitrine?&lt;/p&gt; &lt;button&gt;Sonho&lt;/button&gt; &lt;button&gt;Pão francês&lt;/button&gt;</pre>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>let escolha = $state(null)</dt><dd>o estado começa em <code>null</code>, que quer dizer "nada escolhido". Poderia ser <code>-1</code>, mas <code>null</code> lê melhor e não se confunde com um índice válido.</dd>
+  <dt>const certa = 1</dt><dd>o índice da alternativa certa. Constante, porque a resposta não muda durante o jogo.</dd>
+  <dt>onclick={() =&gt; (escolha = 0)}</dt><dd>cada botão sabe o próprio índice. Poderia guardar o texto, mas índice é mais curto de comparar.</dd>
+  <dt>{#if escolha !== null}</dt><dd>mostra o resultado só depois do clique. <code>!==</code> é "diferente de".</dd>
+  <dt>escolha === certa ? … : …</dt><dd>o <code>===</code> compara. O <code>==</code> solto também compara, mas converte tipos no caminho; em JavaScript, usar <code>===</code> é a regra.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:#b;;outre:Acertou">
+<p class="try-task"><strong>Missão:</strong> clicar no pão francês (o botão certo) mostra "Errou." A caixa clica nele: faça aparecer <code>Acertou!</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let escolha = $state(null);
+  const certa = 1;
+&lt;/script&gt;
+
+&lt;p&gt;Qual é o pão mais crocante?&lt;/p&gt;
+&lt;button id="a" onclick={() =&gt; (escolha = 0)}&gt;Sonho&lt;/button&gt;
+&lt;button id="b" onclick={() =&gt; (escolha = 1)}&gt;Pão francês&lt;/button&gt;
+
+{#if escolha !== null}
+  &lt;p&gt;{escolha === certa ? 'Errou.' : 'Acertou!'}&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let escolha = $state(null);
+  const certa = 1;
+&lt;/script&gt;
+
+&lt;p&gt;Qual é o pão mais crocante?&lt;/p&gt;
+&lt;button id="a" onclick={() =&gt; (escolha = 0)}&gt;Sonho&lt;/button&gt;
+&lt;button id="b" onclick={() =&gt; (escolha = 1)}&gt;Pão francês&lt;/button&gt;
+
+{#if escolha !== null}
+  &lt;p&gt;{escolha === certa ? 'Acertou!' : 'Errou.'}&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>A missão parece boba e é o teste mais útil do quiz: se as duas frases estão trocadas, quem acerta lê "Errou" e quem erra lê "Acertou". Um teste manual com as duas alternativas pega isso em dez segundos; um teste automático pega para sempre. Guarde essa ideia — a aula de testes do SvelteKit volta nela.</p>
+
+<hr>
+
+<h2>3. Versão 2: a lista de perguntas e o índice</h2>
+
+<p>Com duas perguntas, escrever dois blocos de HTML já fica repetitivo. A versão 2 guarda as perguntas num array e usa um índice para mostrar só a atual. O <code>$derived</code> faz a ponte: <code>pergunta</code> é sempre <code>perguntas[atual]</code>, recalculada quando <code>atual</code> muda.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let perguntas = $state([
+    { texto: 'Qual é o pão mais crocante?', opcoes: ['Sonho', 'Pão francês'], certa: 1 },
+    { texto: 'Quanto custa um sonho?', opcoes: ['R$ 4.50', 'R$ 9.00'], certa: 0 }
+  ]);
+  let atual = $state(0);
+  let pontos = $state(0);
+  let resposta = $state(null);
+
+  let pergunta = $derived(perguntas[atual]);
+  let respondeu = $derived(resposta !== null);
+
+  function responder(indice) {
+    resposta = indice;
+    if (indice === pergunta.certa) pontos += 1;
+  }
+
+  function proxima() {
+    atual += 1;
+    resposta = null;
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Quiz da padaria&lt;/h1&gt;
+&lt;p&gt;Pergunta {atual + 1} de {perguntas.length} · {pontos} ponto(s)&lt;/p&gt;
+
+&lt;p&gt;{pergunta.texto}&lt;/p&gt;
+
+{#each pergunta.opcoes as opcao, i}
+  &lt;button onclick={() =&gt; responder(i)} disabled={respondeu}&gt;{opcao}&lt;/button&gt;
+{/each}
+
+{#if respondeu}
+  &lt;p&gt;{resposta === pergunta.certa ? 'Acertou!' : 'Errou: a certa é ' + pergunta.opcoes[pergunta.certa]}&lt;/p&gt;
+  {#if atual &lt; perguntas.length - 1}
+    &lt;button onclick={proxima}&gt;próxima&lt;/button&gt;
+  {/if}
+{/if}</pre>
+
+<p>Na saída, os dois botões vêm colados, sem espaço entre eles no HTML: o <code>{#each}</code> gera um <code>&lt;button&gt;</code> por alternativa, sem texto entre um e outro. Isso não muda o que aparece na tela, mas muda o HTML que você vê.</p>
+
+<pre class="out">&lt;h1&gt;Quiz da padaria&lt;/h1&gt; &lt;p&gt;Pergunta 1 de 2 · 0 ponto(s)&lt;/p&gt; &lt;p&gt;Qual é o pão mais crocante?&lt;/p&gt; &lt;button&gt;Sonho&lt;/button&gt;&lt;button&gt;Pão francês&lt;/button&gt;</pre>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>let pergunta = $derived(perguntas[atual])</dt><dd>a pergunta da vez. Sem <code>$derived</code>, ela ficaria presa na primeira para sempre.</dd>
+  <dt>let respondeu = $derived(resposta !== null)</dt><dd>um apelido booleano para "já clicou". Serve para desligar os botões e para o <code>{#if}</code> do resultado.</dd>
+  <dt>responder(indice)</dt><dd>recebe o índice da alternativa clicada, guarda como resposta e soma um ponto se for a certa. A comparação usa <code>pergunta.certa</code>, que já aponta para a pergunta atual.</dd>
+  <dt>disabled={respondeu}</dt><dd>depois do clique, as alternativas ficam apagadas. Sem isso, o jogador clicaria três vezes e ganharia três pontos.</dd>
+  <dt>{#each pergunta.opcoes as opcao, i}</dt><dd>o segundo nome depois da vírgula é o índice da volta. É ele que vai para <code>responder(i)</code>.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:#certa;;clique:#certa;;out:2 de 2 · 2 ponto(s) responder certo">
+<p class="try-task"><strong>Missão:</strong> acertando as duas perguntas, o placar fica em <code>1 ponto(s)</code>. Faça cada acerto valer um ponto, sem apagar o anterior.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let perguntas = $state([
+    { texto: 'Pão francês é doce?', certa: 1 },
+    { texto: 'Sonho é doce?', certa: 0 }
+  ]);
+  let atual = $state(0);
+  let pontos = $state(0);
+
+  function responder(indice) {
+    if (indice === perguntas[atual].certa) pontos = 1;
+    atual = Math.min(atual + 1, perguntas.length - 1);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{atual + 1} de {perguntas.length} · {pontos} ponto(s)&lt;/p&gt;
+&lt;button id="certa" onclick={() =&gt; responder(perguntas[atual].certa)}&gt;responder certo&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let perguntas = $state([
+    { texto: 'Pão francês é doce?', certa: 1 },
+    { texto: 'Sonho é doce?', certa: 0 }
+  ]);
+  let atual = $state(0);
+  let pontos = $state(0);
+
+  function responder(indice) {
+    if (indice === perguntas[atual].certa) pontos += 1;
+    atual = Math.min(atual + 1, perguntas.length - 1);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{atual + 1} de {perguntas.length} · {pontos} ponto(s)&lt;/p&gt;
+&lt;button id="certa" onclick={() =&gt; responder(perguntas[atual].certa)}&gt;responder certo&lt;/button&gt;</pre>
+</div>
+
+<p><code>pontos = 1</code> e <code>pontos += 1</code> parecem variações de estilo e não são. A primeira <em>atribui</em> um: o placar nunca passa de um, não importa quantas perguntas o jogador acerte. A segunda <em>soma</em> um ao que já estava lá. Sempre que o valor novo depende do valor antigo, a forma curta <code>+=</code> é a que expressa a intenção.</p>
+
+<hr>
+
+<h2>4. Versão 3: progresso, tela final e reinício</h2>
+
+<p>A versão pronta tem três perguntas, uma barra de progresso, o botão que vira "ver resultado" na última e a tela final com a nota. O estado ganha uma variável a mais: <code>terminou</code>, que decide qual das duas telas aparece.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let perguntas = $state([
+    { id: 1, texto: 'Qual é o pão mais crocante?', opcoes: ['Sonho', 'Pão francês'], certa: 1 },
+    { id: 2, texto: 'Quanto custa um sonho?', opcoes: ['R$ 4.50', 'R$ 9.00'], certa: 0 },
+    { id: 3, texto: 'Quantos pães há numa dúzia?', opcoes: ['10', '12'], certa: 1 }
+  ]);
+  let atual = $state(0);
+  let pontos = $state(0);
+  let resposta = $state(null);
+  let terminou = $state(false);
+
+  let pergunta = $derived(perguntas[atual]);
+  let respondeu = $derived(resposta !== null);
+  let progresso = $derived(Math.round((atual / perguntas.length) * 100));
+  let ultima = $derived(atual === perguntas.length - 1);
+  let aprovado = $derived(pontos &gt;= 2);
+
+  function responder(indice) {
+    if (respondeu) return;
+    resposta = indice;
+    if (indice === pergunta.certa) pontos += 1;
+  }
+
+  function proxima() {
+    if (ultima) {
+      terminou = true;
+      return;
+    }
+    atual += 1;
+    resposta = null;
+  }
+
+  function reiniciar() {
+    atual = 0;
+    pontos = 0;
+    resposta = null;
+    terminou = false;
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Quiz da padaria&lt;/h1&gt;
+
+{#if terminou}
+  &lt;p&gt;{pontos} de {perguntas.length} · {aprovado ? 'Aprovada!' : 'Vale tentar de novo.'}&lt;/p&gt;
+  &lt;button onclick={reiniciar}&gt;jogar outra vez&lt;/button&gt;
+{:else}
+  &lt;p&gt;Pergunta {atual + 1} de {perguntas.length} · {pontos} ponto(s)&lt;/p&gt;
+  &lt;progress value={progresso} max="100"&gt;{progresso}%&lt;/progress&gt;
+
+  &lt;p&gt;{pergunta.texto}&lt;/p&gt;
+
+  {#each pergunta.opcoes as opcao, i (i)}
+    &lt;button class:certa={respondeu &amp;&amp; i === pergunta.certa} onclick={() =&gt; responder(i)} disabled={respondeu}&gt;
+      {opcao}
+    &lt;/button&gt;
+  {/each}
+
+  {#if respondeu}
+    &lt;p&gt;{resposta === pergunta.certa ? 'Acertou!' : 'Errou: a certa é ' + pergunta.opcoes[pergunta.certa]}&lt;/p&gt;
+    &lt;button onclick={proxima}&gt;{ultima ? 'ver resultado' : 'próxima'}&lt;/button&gt;
+  {/if}
+{/if}
+
+&lt;style&gt;
+  .certa {
+    border-color: #2e7d32;
+    font-weight: bold;
+  }
+&lt;/style&gt;</pre>
+
+<p>A saída mostra a barra de progresso com <code>value="0"</code> e o texto de dentro dela. O elemento <code>&lt;progress&gt;</code> é HTML comum: o Svelte só preenche o valor.</p>
+
+<pre class="out">&lt;h1&gt;Quiz da padaria&lt;/h1&gt; &lt;p&gt;Pergunta 1 de 3 · 0 ponto(s)&lt;/p&gt; &lt;progress value="0" max="100"&gt;0%&lt;/progress&gt; &lt;p&gt;Qual é o pão mais crocante?&lt;/p&gt; &lt;button class="svelte-1n46o8q"&gt;Sonho&lt;/button&gt;&lt;button class="svelte-1n46o8q"&gt;Pão francês&lt;/button&gt;</pre>
+
+<p>O CSS gerado tem uma regra só, e o selo aparece nos botões porque é neles que a classe <code>certa</code> pode cair. O <code>{#if terminou}</code> da tela final não interfere: o estilo é do componente, vale para as duas telas.</p>
+
+<pre class="out">.certa.svelte-1n46o8q {
+    border-color: #2e7d32;
+    font-weight: bold;
+  }</pre>
+
+<div class="trysvelte" data-goal="clique:#proxima;;out:Pergunta 2 de 4 Progresso: 50% próxima">
+<p class="try-task"><strong>Missão:</strong> a barra mostra o número da pergunta em vez da porcentagem. Faça o progresso ser <code>50%</code> na segunda de quatro perguntas.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let atual = $state(1);
+  const total = 4;
+  let progresso = atual;
+&lt;/script&gt;
+
+&lt;p&gt;Pergunta {atual} de {total}&lt;/p&gt;
+&lt;p&gt;Progresso: {progresso}%&lt;/p&gt;
+&lt;button id="proxima" onclick={() =&gt; (atual = atual + 1)}&gt;próxima&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let atual = $state(1);
+  const total = 4;
+  let progresso = $derived(Math.round((atual / total) * 100));
+&lt;/script&gt;
+
+&lt;p&gt;Pergunta {atual} de {total}&lt;/p&gt;
+&lt;p&gt;Progresso: {progresso}%&lt;/p&gt;
+&lt;button id="proxima" onclick={() =&gt; (atual = atual + 1)}&gt;próxima&lt;/button&gt;</pre>
+</div>
+
+<p>Repare que a conta usa <code>atual</code>, não <code>atual + 1</code>: na primeira pergunta o progresso é zero por cento, e na última é setenta e cinco — a barra só completa quando o jogador termina. Se você quiser que a barra comece em vinte e cinco, a conta é <code>((atual + 1) / total) * 100</code>. As duas escolhas são defensáveis; o importante é a barra nunca passar de cem.</p>
+
+<hr>
+
+<h2>5. Embaralhar as alternativas sem perder a certa</h2>
+
+<p>A primeira melhoria que todo mundo pede num quiz é embaralhar: se a resposta certa é sempre a segunda, o aluno aprende a clicar na segunda. Embaralhar é fácil; o que exige cuidado é manter o vínculo com a alternativa certa depois da mistura.</p>
+
+<p>A forma mais simples é guardar a alternativa como objeto, e não como texto: <code>{ texto: 'Pão francês', certa: true }</code>. Depois de embaralhar, a alternativa continua sabendo de si mesma, e a comparação passa a ser <code>opcao.certa</code> em vez de <code>i === pergunta.certa</code>. O índice deixa de carregar significado — o que é bom, porque o índice muda quando a ordem muda.</p>
+
+<p>O sorteio em si costuma ser escrito com <code>sort(() =&gt; Math.random() - 0.5)</code>. Funciona, com um senão honesto: o resultado não é uniformemente aleatório, porque o algoritmo de ordenação compara pares e o embaralhamento fica enviesado. Para um quiz de tabuada, tanto faz. Para um sorteio de verdade, use o algoritmo de Fisher-Yates, que troca posições de trás para a frente.</p>
+
+<p>E há um cuidado extra quando o componente é renderizado no servidor, como no SvelteKit: sortear durante o desenho faz o HTML do servidor sair diferente do HTML do navegador. Nesse caso, sorteie só depois da montagem, dentro de um <code>onMount</code>. No projeto desta aula, que roda todo no navegador, o problema não aparece.</p>
+
+<hr>
+
+<h2>6. O caminho de um clique, passo a passo</h2>
+
+<p>Vale seguir a versão 3 do começo ao fim, porque é aqui que o quiz se comporta como um jogo e não como uma tela parada. A tabela mostra o texto visível depois de cada ação.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ação</th><th>Texto na tela</th><th>Estado depois</th></tr>
+<tr><td>abrir</td><td><code>Pergunta 1 de 3 · 0 ponto(s)</code></td><td><code>atual=0</code>, <code>pontos=0</code>, <code>resposta=null</code></td></tr>
+<tr><td>clicar em "Pão francês"</td><td><code>Pergunta 1 de 3 · 1 ponto(s)</code> e <code>Acertou!</code></td><td><code>resposta=1</code>, botões desligados</td></tr>
+<tr><td>clicar em "próxima"</td><td><code>Pergunta 2 de 3 · 1 ponto(s)</code>, sem frase de resultado</td><td><code>atual=1</code>, <code>resposta=null</code></td></tr>
+<tr><td>errar a segunda</td><td><code>Errou: a certa é R$ 4.50</code></td><td><code>resposta=0</code>, <code>pontos</code> continua 1</td></tr>
+<tr><td>avançar e acertar a terceira</td><td><code>Pergunta 3 de 3 · 2 ponto(s)</code> e o botão <code>ver resultado</code></td><td><code>ultima=true</code></td></tr>
+<tr><td>clicar em "ver resultado"</td><td><code>2 de 3 · Aprovada!</code> e <code>jogar outra vez</code></td><td><code>terminou=true</code></td></tr>
+<tr><td>clicar em "jogar outra vez"</td><td><code>Pergunta 1 de 3 · 0 ponto(s)</code></td><td>tudo zerado</td></tr>
+</table>
+</div>
+
+<p>Três decisões dessa tabela merecem nome. A primeira é a guarda <code>if (respondeu) return;</code> dentro de <code>responder</code>: o botão já está desligado, mas a função também se protege — quem chama a função por outro caminho não ganha ponto duas vezes. A segunda é o <code>resposta = null</code> ao avançar: sem ele, a pergunta nova nasceria com a resposta da anterior e o jogador veria "Acertou!" antes de clicar. A terceira é o <code>reiniciar</code>, que zera as quatro variáveis de uma vez; esquecer uma delas é o que faz o segundo jogo começar no meio.</p>
+
+<p>Existe ainda uma escolha de projeto em <code>aprovado = pontos &gt;= 2</code>: a nota de corte está numa linha só, fácil de mudar. Se ela estivesse dentro do HTML, no meio de um ternário, mudar de dois para três exigiria caçar o número no lugar certo.</p>
+
+<hr>
+
+<h2>7. O terminal: desenvolvimento, build e prévia</h2>
+
+<p>O ciclo é o mesmo dos outros projetos: um servidor que recarrega sozinho enquanto você escreve, um build que gera os arquivos finais e um servidor de prévia para olhar o resultado.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> padaria@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1024 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O build do quiz gerou um CSS bem menor que o do carrinho — <code>0.06 kB</code> contra <code>0.20 kB</code> — porque a versão 3 tem uma regra só. O JavaScript também encolheu um pouco, o que mostra que o tamanho do build acompanha o tamanho do componente:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> padaria@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-D7T7qpo1.css   0.06 kB │ gzip:  0.08 kB
+dist/assets/index-lSv69XtZ.js   45.13 kB │ gzip: 17.51 kB
+✓ built in 1.34s</pre>
+
+<p>O terceiro comando serve o build na porta <code>4173</code>. Um <code>curl</code> confirma que o HTML aponta para os dois arquivos com hash, e não para nenhum <code>.svelte</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> padaria@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose
+
+ana@notebook:~/loja$ curl -s http://localhost:4173/ | head -7
+&lt;!doctype html&gt;
+&lt;html lang="pt-BR"&gt;
+  &lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;title&gt;Padaria da Ana&lt;/title&gt;
+    &lt;script type="module" crossorigin src="/assets/index-lSv69XtZ.js"&gt;&lt;/script&gt;
+    &lt;link rel="stylesheet" crossorigin href="/assets/index-D7T7qpo1.css"&gt;</pre>
+
+<div class="tip">
+<strong>O quiz cabe num arquivo só?</strong>
+<p>Cabe, e para aprender é o certo. Quando o quiz tiver vinte perguntas e duas telas, vale separar: um arquivo <code>perguntas.js</code> só com os dados e um componente <code>Pergunta.svelte</code> que recebe a pergunta por <code>$props()</code>. Separar cedo demais atrapalha; separar tarde dói. A regra prática é separar quando o arquivo passa de umas duzentas linhas ou quando a mesma pergunta aparece em dois lugares.</p>
+</div>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<p>O primeiro erro abaixo acontece em execução e é o campeão de reclamações em quiz. O segundo é de compilação e aparece quando alguém escreve o clique como se fosse HTML antigo. As duas mensagens são cópias das execuções.</p>
+
+<div class="cenario">
+<strong>Erro 1 — o índice passou do fim da lista</strong>
+<p>O botão "próxima" soma um ao índice sem conferir se ainda existe pergunta. Na última, o índice aponta para uma posição vazia e o acesso a <code>.texto</code> quebra.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let perguntas = $state([
+    { texto: 'Qual é o pão mais crocante?', opcoes: ['Sonho', 'Pão francês'] }
+  ]);
+  let atual = $state(1);
+&lt;/script&gt;
+
+&lt;p&gt;{perguntas[atual].texto}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'texto')</pre>
+<p>A tradução: "não consigo ler a propriedade <code>texto</code> de algo que não existe". <code>perguntas[1]</code> é <code>undefined</code> porque a lista tem um item só. A defesa é a mesma da versão 3: antes de avançar, pergunte se ainda há para onde ir — <code>if (ultima) { terminou = true; return; }</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>onclick</code> escrito como texto</strong>
+<p>Em HTML antigo, um atributo de evento podia ser uma string de código. Em Svelte 5, atributo de evento é expressão: ou o nome de uma função, ou uma função seta. Aspas em volta transformam tudo em texto e o compilador recusa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pontos = $state(0);
+  const certa = 1;
+
+  function responder(indice) {
+    if (indice === certa) pontos += 1;
+  }
+&lt;/script&gt;
+
+&lt;button onclick="responder(0)"&gt;Sonho&lt;/button&gt;
+&lt;button onclick="responder(1)"&gt;Pão francês&lt;/button&gt;
+&lt;p&gt;{pontos} ponto(s)&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 10, coluna 8): Event attribute must be a JavaScript expression, not a string</pre>
+<p>A correção é tirar as aspas e usar chaves: <code>onclick={() =&gt; responder(0)}</code>. Note a diferença entre <code>responder(0)</code> e <code>() =&gt; responder(0)</code>: a primeira chama a função na hora de desenhar; a segunda entrega a função para ser chamada no clique. Quando o retorno não importa, a forma com seta é a que você quer.</p>
+</div>
+
+<hr>
+
+<h2>9. Referência rápida do quiz</h2>
+
+<p>A primeira tabela resume o estado da versão 3, a segunda os operadores que mais aparecem em comparação e a terceira as funções que o quiz usa.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Variável</th><th>Tipo</th><th>Para que serve</th></tr>
+<tr><td><code>perguntas</code></td><td><code>$state([...])</code></td><td>os dados do jogo, com a alternativa certa de cada pergunta</td></tr>
+<tr><td><code>atual</code></td><td><code>$state(0)</code></td><td>o índice da pergunta na tela</td></tr>
+<tr><td><code>pontos</code></td><td><code>$state(0)</code></td><td>quantos acertos até agora</td></tr>
+<tr><td><code>resposta</code></td><td><code>$state(null)</code></td><td>o índice escolhido; <code>null</code> quer dizer "ainda não"</td></tr>
+<tr><td><code>terminou</code></td><td><code>$state(false)</code></td><td>decide entre a tela do jogo e a tela do resultado</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Expressão</th><th>Resultado</th></tr>
+<tr><td><code>resposta === pergunta.certa</code></td><td><code>true</code> se a escolha foi a certa</td></tr>
+<tr><td><code>resposta !== null</code></td><td><code>true</code> depois do primeiro clique</td></tr>
+<tr><td><code>atual &lt; perguntas.length - 1</code></td><td><code>true</code> enquanto não é a última pergunta</td></tr>
+<tr><td><code>Math.round((atual / total) * 100)</code></td><td>porcentagem inteira, sem casas</td></tr>
+<tr><td><code>pergunta.opcoes[pergunta.certa]</code></td><td>o texto da alternativa certa</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz</th><th>Quando roda</th></tr>
+<tr><td><code>responder(i)</code></td><td>guarda a escolha e soma ponto se acertou</td><td>no clique de uma alternativa</td></tr>
+<tr><td><code>proxima()</code></td><td>avança ou termina o jogo</td><td>no clique de "próxima"</td></tr>
+<tr><td><code>reiniciar()</code></td><td>zera índice, pontos, resposta e fim</td><td>no clique de "jogar outra vez"</td></tr>
+<tr><td><code>Math.min(a, b)</code></td><td>devolve o menor dos dois</td><td>para não passar do último índice</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Por que o estado da resposta começa em <code>null</code>?</p>
+<label><input type="radio" name="q1"> porque <code>null</code> ocupa menos memória</label>
+<label><input type="radio" name="q1"> porque o índice da alternativa certa é sempre nulo</label>
+<label><input type="radio" name="q1"> para distinguir "ninguém respondeu" de "respondeu a primeira alternativa"</label>
+<label><input type="radio" name="q1"> para o <code>{#each}</code> funcionar</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que <code>disabled={respondeu}</code> resolve nas alternativas?</p>
+<label><input type="radio" name="q1"> deixa o botão colorido quando a resposta está certa</label>
+<label><input type="radio" name="q1"> impede um segundo clique, que somaria pontos duas vezes</label>
+<label><input type="radio" name="q1"> apaga a alternativa errada da tela</label>
+<label><input type="radio" name="q1"> reinicia o quiz automaticamente</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual é a diferença entre <code>pontos = 1</code> e <code>pontos += 1</code>?</p>
+<label><input type="radio" name="q1"> a primeira atribui sempre o mesmo valor; a segunda soma ao que já havia</label>
+<label><input type="radio" name="q1"> a primeira soma; a segunda atribui</label>
+<label><input type="radio" name="q1"> as duas fazem o mesmo, mas <code>+=</code> é mais nova</label>
+<label><input type="radio" name="q1"> a segunda só funciona com números negativos</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let perguntas = $state([{ texto: 'Pão francês é doce?', opcoes: ['Sim', 'Não'], certa: 1 }]);<br>let atual = $state(0);<br>let pergunta = <input data-answer="$derived(perguntas[atual])">;<br><br>&lt;p&gt;{pergunta.texto}&lt;/p&gt;<br><br>// a pergunta da tela tem de mudar quando o índice mudar</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um quiz é a pergunta atual, a escolha e os pontos — três estados e uma comparação.</li>
+  <li><code>escolha === certa</code> compara; <code>escolha = certa</code> atribui e faz todo mundo acertar.</li>
+  <li>A lista de perguntas fica em <code>$state([...])</code>; o índice diz qual está na tela.</li>
+  <li><code>$derived(perguntas[atual])</code> mantém a pergunta atual em sincronia com o índice.</li>
+  <li><code>disabled={respondeu}</code> fecha a porta do segundo clique; a guarda dentro da função fecha a segunda porta.</li>
+  <li><code>resposta = null</code> ao avançar evita que a pergunta nova nasça respondida.</li>
+  <li><code>Math.round((atual / total) * 100)</code> dá a porcentagem inteira do progresso.</li>
+  <li><code>reiniciar()</code> zera as quatro variáveis; esquecer uma faz o segundo jogo começar no meio.</li>
+  <li>Os erros desta aula: <code>Cannot read properties of undefined (reading 'texto')</code> e <code>Event attribute must be a JavaScript expression, not a string</code>.</li>
+  <li>Terminal do projeto: <code>dev</code> em 5173, <code>build</code> com JS e CSS, <code>preview</code> em 4173.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Animações — a lista que troca de lugar sem sumir | Guia Svelte</title>
+<meta name="description" content="animate:flip no Svelte 5: a chave obrigatória no each, o filho direto do bloco, a animação escrita à mão com from e to, e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Animações</span></h1>
+
+<p class="intro">A Ana pendura os cartazes de preço numa ordem: pão, bolo, café. Quando o pão entra em promoção, o cartaz dele vai para o começo da fila — e ela não descola e recoloca: ela desliza o cartaz pela parede, um lugar de cada vez. Na tela, a mesma coisa: quando a ordem de uma lista muda, os itens podem <strong>deslizar</strong> até a posição nova em vez de desaparecer e reaparecer. O Svelte faz isso com uma diretiva só, <code>animate:</code>, e ela tem três exigências que o compilador cobra sem piedade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que <code>animate:</code> faz que <code>transition:</code> não faz.</li>
+  <li>Usar <code>animate:flip</code> numa lista que muda de ordem.</li>
+  <li>As três condições que a lista precisa cumprir.</li>
+  <li>O que são <code>from</code> e <code>to</code> e como usar os dois.</li>
+  <li>Escrever uma animação à mão, sem importar nada.</li>
+  <li>Passar parâmetros para o <code>flip</code>.</li>
+  <li>Por que a chave do <code>{#each}</code> é obrigatória aqui.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>O que o terminal mostra ao procurar animações no projeto.</li>
+  <li>Quando animar uma lista e quando deixar quieto.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o cartaz que desliza</h2>
+
+<p>Uma transição cuida de um elemento que <em>entra</em> ou <em>sai</em>. Uma animação cuida de um elemento que <strong>muda de lugar</strong> sem sair: o item que era o segundo vira o primeiro, o que era o último sobe três posições. Sem animação, a lista pisca: os itens trocam de posição de um quadro para o outro e o olho perde o fio.</p>
+
+<p>Com animação, o Svelte mede onde cada item estava antes da mudança, aplica a mudança e depois leva cada item da posição antiga para a nova, em alguns milissegundos. O conteúdo não é recriado; o elemento é o mesmo, só deslocado. É por isso que a chave no <code>{#each}</code> é obrigatória: sem ela, o Svelte não sabe qual elemento é qual e não tem como medir nada.</p>
+
+<p>Essa é a diferença que mais confunde. Transição é sobre existir e deixar de existir. Animação é sobre estar em outro lugar. Você pode ter as duas na mesma lista: um item novo entra com <code>transition:fade</code> e os antigos deslizam com <code>animate:flip</code>.</p>
+
+<p>No servidor, nenhuma das duas roda. O HTML sai na ordem final, e a animação é um efeito que só quem vê a página no navegador aproveita — o mesmo princípio das transições.</p>
+
+<hr>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No Svelte</th></tr>
+<tr><td>Deslizar o cartaz pela parede</td><td><code>animate:flip</code></td></tr>
+<tr><td>O número do cartaz que não muda</td><td>a chave: <code>(item)</code> ou <code>(item.id)</code></td></tr>
+<tr><td>O lugar de onde o cartaz saiu</td><td><code>from</code></td></tr>
+<tr><td>O lugar para onde ele vai</td><td><code>to</code></td></tr>
+<tr><td>Quanto tempo o deslize leva</td><td><code>duration</code>, em milissegundos</td></tr>
+<tr><td>Um cartaz novo, colado do zero</td><td><code>transition:</code>, e não <code>animate:</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>3. <code>animate:flip</code>: a lista que muda de ordem</h2>
+
+<p>O caso mais comum é reordenar. O <code>flip</code> existe justamente para isso — o nome vem de "first, last, invert, play": mede a posição inicial, mede a final, inverte o deslocamento e anima até zero.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { flip } from 'svelte/animate';
+
+  let itens = $state([{ id: 1, n: 'Pão' }, { id: 2, n: 'Bolo' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it (it.id)}
+    &lt;li animate:flip={{ duration: 250 }}&gt;{it.n}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Pão&lt;/li&gt;&lt;li&gt;Bolo&lt;/li&gt;&lt;/ul&gt; &lt;button&gt;inverter&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>import { flip } from 'svelte/animate'</dt><dd>as animações não vêm de <code>svelte/transition</code>: o módulo é outro, <code>svelte/animate</code>, e ele só tem uma função — <code>flip</code>.</dd>
+  <dt>animate:flip</dt><dd>a diretiva. Ela roda quando o elemento muda de posição dentro da lista, não quando ele entra ou sai.</dd>
+  <dt>{{ duration: 250 }}</dt><dd>os parâmetros, no mesmo formato das transições. Sem eles, o <code>flip</code> usa o padrão de 300 milissegundos.</dd>
+  <dt>(it.id)</dt><dd>a chave. É o que diz ao Svelte que o item de <code>id</code> 1 é o mesmo antes e depois da inversão.</dd>
+</dl>
+
+<p>O botão não faz nada de especial: ele inverte a lista com <code>slice().reverse()</code>, criando uma lista nova. O que o leitor vê é o cartaz deslizando para o outro lado — desde que a chave exista.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:b a inverter">
+<p class="try-task"><strong>Missão:</strong> o compilador recusa esta lista porque o <code>{#each}</code> não tem chave. Acrescente a chave certa e o clique deve inverter a ordem: <code>b a</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function meuFlip(node, { from, to }) {
+    const dy = from.top - to.top;
+    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
+  }
+  let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it}
+    &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function meuFlip(node, { from, to }) {
+    const dy = from.top - to.top;
+    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
+  }
+  let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it (it.id)}
+    &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
+</div>
+
+<p>Como nas outras caixas do guia, o <code>svelte/animate</code> não é importável aqui: a caixa compila um componente só. O <code>meuFlip</code> do exemplo é o <code>flip</code> escrito à mão, com as mesmas peças — <code>from</code>, <code>to</code>, <code>duration</code> e <code>css</code>.</p>
+
+<hr>
+
+<h2>4. As três condições para <code>animate:</code> funcionar</h2>
+
+<p>O compilador é rígido com <code>animate:</code> porque a animação depende de saber exatamente qual elemento se moveu. Três condições, todas verificadas na compilação:</p>
+
+<p><strong>1. O elemento tem de estar dentro de um <code>{#each}</code> com chave.</strong> Sem chave, cada item é identificado pela posição, e posição é justamente o que muda. O compilador recusa a lista e pede a chave na mensagem.</p>
+
+<p><strong>2. O elemento com <code>animate:</code> tem de ser o filho direto do bloco.</strong> Nada de um <code>{#if}</code> no meio, nem de um <code>&lt;span&gt;</code> dentro de um <code>&lt;li&gt;</code>: a diretiva vai no elemento que o <code>{#each}</code> cria.</p>
+
+<p><strong>3. Tem de ser um elemento do DOM, não um componente.</strong> Um componente pode desenhar dez elementos; o Svelte não teria como medir "o componente". Se precisar animar um componente, envolva-o num elemento e ponha a diretiva no elemento.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:b a inverter">
+<p class="try-task"><strong>Missão:</strong> a diretiva está dentro de um <code>{#if}</code>, e o compilador recusa. Coloque a diretiva no <code>&lt;li&gt;</code>, que é o filho direto do bloco, e o clique deve inverter para <code>b a</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function meuFlip(node, { from, to }) {
+    const dy = from.top - to.top;
+    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
+  }
+  let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it (it.id)}
+    {#if it.n}
+      &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+    {/if}
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function meuFlip(node, { from, to }) {
+    const dy = from.top - to.top;
+    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
+  }
+  let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it (it.id)}
+    &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
+</div>
+
+<p>Repare que a solução não mudou de ideia sobre o conteúdo: o <code>{#if}</code> saiu porque ele não fazia nada além de atrapalhar. Quando a condição é real — mostrar só os itens ativos, por exemplo — o caminho é filtrar a lista antes do <code>{#each}</code>, e não esconder itens dentro dele.</p>
+
+<hr>
+
+<h2>5. Uma animação escrita à mão</h2>
+
+<p>Assim como a transição, a animação é uma função. Ela recebe o elemento e um objeto com <code>from</code> e <code>to</code> — as posições medidas antes e depois da mudança — e devolve <code>duration</code> e <code>css</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function meuFlip(node, { from, to }) {
+    const dy = from.top - to.top;
+    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
+  }
+  let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it (it.id)}
+    &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;a&lt;/li&gt;&lt;li&gt;b&lt;/li&gt;&lt;/ul&gt; &lt;button&gt;inverter&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>from</dt><dd>um retângulo com <code>top</code>, <code>left</code>, <code>width</code> e <code>height</code> medidos <strong>antes</strong> da mudança.</dd>
+  <dt>to</dt><dd>o mesmo retângulo medido <strong>depois</strong>. A diferença entre os dois é o deslocamento que você precisa desfazer.</dd>
+  <dt>dy</dt><dd><code>from.top - to.top</code>: a diferença vertical entre as duas posições. Positivo quer dizer que o elemento estava mais abaixo e subiu; negativo, que estava mais acima e desceu.</dd>
+  <dt>css: (t) =&gt; …</dt><dd>roda a cada quadro com <code>t</code> de 0 a 1. Em <code>t = 0</code> o estilo desfaz o deslocamento; em <code>t = 1</code>, o elemento está no lugar final.</dd>
+</dl>
+
+<p>É esse truque que dá a sensação de movimento: o Svelte reposiciona o elemento no lugar novo e, no mesmo instante, aplica um <code>transform</code> que o empurra de volta para onde ele estava. A animação, então, vai levando esse <code>transform</code> a zero. O elemento nunca "pula": ele começa deslocado e termina exato.</p>
+
+<p>Numa lista vertical, o deslocamento que importa é o vertical — <code>from.top - to.top</code>. Medindo de verdade numa lista de dois itens de 24 pixels, o valor dá <code>-24</code> para o item que desceu e <code>+24</code> para o que subiu. Usar <code>left</code> numa lista vertical dá zero, e a animação não aparece: o item só reaparece no lugar novo. É um erro silencioso, do tipo que a gente demora a achar.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:b a inverter">
+<p class="try-task"><strong>Missão:</strong> o elemento tem duas diretivas <code>animate:</code> e o compilador recusa. Deixe só o <code>meuFlip</code> e o clique deve inverter a lista para <code>b a</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function meuFlip(node, { from, to }) {
+    const dy = from.top - to.top;
+    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
+  }
+  function meuOutro(node, { from, to }) {
+    return { duration: 200, css: (t) =&gt; `opacity: ${t}` };
+  }
+  let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it (it.id)}
+    &lt;li animate:meuFlip animate:meuOutro&gt;{it.n}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function meuFlip(node, { from, to }) {
+    const dy = from.top - to.top;
+    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
+  }
+  let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it (it.id)}
+    &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
+</div>
+
+<p>Se você quiser dois efeitos ao mesmo tempo — deslizar e aparecer —, o caminho é somar os estilos dentro do mesmo <code>css</code>, e não empilhar diretivas. Duas diretivas no mesmo elemento não somam: uma delas é escolhida e a outra é recusada.</p>
+
+<hr>
+
+<h2>6. <code>flip</code> com parâmetros</h2>
+
+<p>O <code>flip</code> de fábrica aceita os mesmos parâmetros de uma transição: <code>duration</code>, <code>delay</code> e <code>easing</code>. Também aceita uma função <code>key</code> própria, para quando o elemento não muda de posição mas você quer animar mesmo assim.</p>
+
+<pre class="file" data-file="src/lib/Lista.svelte">&lt;script&gt;
+  import { flip } from 'svelte/animate';
+
+  let { itens } = $props();
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as item (item)}
+    &lt;li animate:flip={{ duration: 250 }}&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Nesse componente a chave é o próprio texto do item — funciona porque a lista da Ana não tem dois itens iguais. Quando houver repetição, use uma chave única de verdade, como um <code>id</code>: texto repetido faz o Svelte confundir dois elementos diferentes.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Parâmetro</th><th>Para que serve</th></tr>
+<tr><td><code>duration</code></td><td>tempo da animação, em milissegundos (padrão 300)</td></tr>
+<tr><td><code>delay</code></td><td>espera antes de começar</td></tr>
+<tr><td><code>easing</code></td><td>curva de velocidade, de <code>svelte/easing</code></td></tr>
+<tr><td><code>key</code></td><td>função que devolve um identificador por item, para listas sem chave natural</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>7. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são do compilador desta versão, copiadas da execução. Todas acontecem antes de a página abrir, o que é uma boa notícia: o erro de animação nunca chega ao leitor.</p>
+
+<div class="cenario">
+<strong>Erro 1 — lista sem chave</strong>
+<p>O caso mais comum, e o único em que a mensagem traz a dica completa:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { flip } from 'svelte/animate';
+
+  let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it}
+    &lt;li animate:flip&gt;{it.n}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 9, coluna 8): An element that uses the `animate:` directive must be the only child of a keyed `{#each ...}` block. Did you forget to add a key to your each block?</pre>
+<p>"Um elemento que usa a diretiva <code>animate:</code> precisa ser o único filho de um bloco <code>{#each ...}</code> com chave. Você esqueceu de pôr a chave no seu bloco each?" A tradução é literal: falta o <code>(it.id)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — duas animações no mesmo elemento</strong>
+<p>A diretiva aparece uma vez, porque ela anima o deslocamento do elemento. Duas não somam: a segunda é recusada:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { flip } from 'svelte/animate';
+  function outro(node, { from, to }) {
+    return { duration: 200, css: (t) =&gt; `opacity: ${t}` };
+  }
+  let itens = $state([{ id: 1, n: 'a' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it (it.id)}
+    &lt;li animate:flip animate:outro&gt;{it.n}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 11, coluna 21): An element can only have one 'animate' directive</pre>
+<p>"Um elemento só pode ter uma diretiva 'animate'." Para combinar deslocamento e opacidade, escreva uma função só, que devolva os dois estilos no mesmo <code>css</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>animate:</code> num componente</strong>
+<p>Diretiva de animação vale para elementos do DOM. Componentes não têm retângulo único para medir:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { flip } from 'svelte/animate';
+  import Cartao from './Cartao.svelte';
+
+  let itens = $state([{ id: 1, n: 'a' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as it (it.id)}
+    &lt;Cartao animate:flip n={it.n} /&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 10, coluna 12): This type of directive is not valid on components</pre>
+<p>"Este tipo de diretiva não é válido em componentes." A correção é envolver: <code>&lt;li animate:flip&gt;&lt;Cartao n={it.n} /&gt;&lt;/li&gt;</code>. Aí quem anima é o <code>li</code>, que tem posição própria.</p>
+</div>
+
+<hr>
+
+<h2>8. Animação × transição × <code>{#key}</code></h2>
+
+<p>As três mexem com movimento e vivem se confundindo. A tabela resolve de vez:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>transition:</code></th><th><code>animate:</code></th><th><code>{#key}</code></th></tr>
+<tr><td>Dispara quando</td><td>o elemento entra ou sai</td><td>o elemento muda de posição</td><td>a chave muda de valor</td></tr>
+<tr><td>Precisa de</td><td>estar dentro de um bloco</td><td><code>{#each}</code> com chave</td><td>nada além da chave</td></tr>
+<tr><td>Vem de</td><td><code>svelte/transition</code></td><td><code>svelte/animate</code></td><td>do próprio Svelte</td></tr>
+<tr><td>Exemplo</td><td>fade ao abrir um aviso</td><td>item que sobe na lista</td><td>trocar o texto com fade</td></tr>
+</table>
+</div>
+
+<p>Uma lista pode usar as duas primeiras ao mesmo tempo: o item novo entra com <code>transition:</code> e os que já estavam deslizam com <code>animate:</code>. É a combinação que dá a sensação de lista "viva" sem exagero.</p>
+
+<hr>
+
+<h2>9. Quando animar uma lista — e quando não</h2>
+
+<p>Animação é açúcar, e açúcar em excesso empacha. Três perguntas resolvem a decisão:</p>
+
+<p><strong>A lista muda de ordem com frequência?</strong> Se sim, animar ajuda: o leitor acompanha o que se moveu. Se a ordem é fixa e só o conteúdo muda, não há o que animar.</p>
+
+<p><strong>Quantos itens se movem?</strong> Animar dois ou três itens é barato. Animar cinquenta é caro: cada elemento ganha um <code>transform</code> recalculado a cada quadro. Em listas longas, anime só o que mudou de posição ou não anime.</p>
+
+<p><strong>O movimento diz alguma coisa?</strong> Uma animação que só enfeita cansa depois da terceira vez. Uma que explica — "este item subiu porque ficou mais importante" — continua útil na centésima.</p>
+
+<div class="warning">
+<strong>A chave é o contrato com o leitor</strong>
+<p>Chave errada estraga a animação de um jeito difícil de diagnosticar: os elementos animam com o texto trocado, ou pulam de posição sem deslizar. Se a lista tem identificadores, use-os. Se não tem, crie um ao montar a lista — um contador que não se repete resolve.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintaxe</th><th>O que faz</th></tr>
+<tr><td><code>animate:flip</code></td><td>anima o deslocamento com os parâmetros padrão</td></tr>
+<tr><td><code>animate:flip={{ duration: 250 }}</code></td><td>o mesmo, com tempo escolhido</td></tr>
+<tr><td><code>animate:minhaFn</code></td><td>uma função sua, com <code>from</code> e <code>to</code></td></tr>
+<tr><td><code>{#each lista as item (item.id)}</code></td><td>a chave que a animação exige</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>must be the only child of a keyed {#each ...} block</code></td><td>falta a chave, ou há um <code>{#if}</code> no meio</td></tr>
+<tr><td><code>An element can only have one 'animate' directive</code></td><td>duas diretivas no mesmo elemento</td></tr>
+<tr><td><code>This type of directive is not valid on components</code></td><td>a diretiva está num componente</td></tr>
+<tr><td>o item anima com o texto trocado</td><td>chave repetida ou baseada em posição</td></tr>
+</table>
+</div>
+
+<p>No projeto da Ana, a lista animada é um componente separado. O terminal mostra a diretiva e o parâmetro:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "animate:" src
+src/lib/Lista.svelte:9:    <li animate:flip={{ duration: 250 }}>{item}</li></pre>
+
+<p>E o build conta o preço de importar <code>svelte/animate</code> junto com as transições que já estavam lá:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 121 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DrjEY7hM.js  52.20 kB │ gzip: 20.21 kB
+✓ built in 2.58s</pre>
+
+<p>O pacote chegou a 52,20 kB. Os módulos que mexem com movimento — <code>svelte/animate</code>, <code>svelte/transition</code> e <code>svelte/easing</code> — são os que mais crescem quando você importa tudo "por via das dúvidas". Importe só o que usa.</p>
+
+<hr>
+
+<h2>11. O que a caixa verifica e o que ela não verifica</h2>
+
+<p>Vale ser honesto sobre o limite das caixas desta aula. A verificação confere três coisas: que o componente compila, que a lista aparece na ordem certa e que o clique inverte a ordem. O que ela <strong>não</strong> confere é o movimento em si — a animação é visual e acontece nos 300 milissegundos entre um quadro e outro.</p>
+
+<p>Isso não é uma limitação do guia, é da natureza do teste: verificar animação de verdade exige comparar quadros, e isso é trabalho de ferramenta de captura de tela, não de asserção de texto. Por isso as missões atacam o que dá para provar — a chave, o filho direto, a diretiva única —, que é justamente onde as pessoas erram.</p>
+
+<p>Na prática, o seu teste de animação é o olho: rode o projeto, inverta a lista, veja se o item desliza. Se ele piscar em vez de deslizar, o problema está numa das três condições da seção 4.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Quando a diretiva <code>animate:</code> roda?</p>
+<label><input type="radio" name="q1"> quando o elemento entra na tela</label>
+<label><input type="radio" name="q1"> quando o elemento muda de posição dentro da lista</label>
+<label><input type="radio" name="q1"> quando o elemento sai da tela</label>
+<label><input type="radio" name="q1"> a cada mudança de estado do componente</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>from</code> e <code>to</code> são, numa função de animação?</p>
+<label><input type="radio" name="q1"> os valores antigo e novo do item</label>
+<label><input type="radio" name="q1"> os índices da lista antes e depois</label>
+<label><input type="radio" name="q1"> os retângulos do elemento antes e depois da mudança</label>
+<label><input type="radio" name="q1"> as cores de início e de fim</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual é a condição que o compilador cobra com a dica "Did you forget to add a key"?</p>
+<label><input type="radio" name="q1"> o <code>{#each}</code> tem de ter chave</label>
+<label><input type="radio" name="q1"> o elemento tem de ter <code>transition:</code></label>
+<label><input type="radio" name="q1"> a lista tem de ter pelo menos dois itens</label>
+<label><input type="radio" name="q1"> a função de animação tem de ser importada</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { flip } from '<input data-answer="svelte/animate">';<br><br>{#each itens as it <input data-answer="(it.id)">}<br>&nbsp;&nbsp;&lt;li <input data-answer="animate:flip">>{it.n}&lt;/li&gt;<br>{/each}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>animate:</code> anima o elemento que <strong>muda de posição</strong>; <code>transition:</code> anima quem entra ou sai.</li>
+  <li><code>flip</code> vem de <code>svelte/animate</code> e mede a posição antes e depois para desfazer o salto.</li>
+  <li>A lista precisa de <code>{#each}</code> com chave — sem isso o compilador recusa.</li>
+  <li>A diretiva vai no filho direto do bloco: nada de <code>{#if}</code> ou de elemento aninhado no meio.</li>
+  <li>Não vale em componentes; para animar um componente, envolva-o num elemento.</li>
+  <li>Uma função de animação recebe <code>from</code>, <code>to</code> e devolve <code>duration</code> e <code>css</code>.</li>
+  <li>Os retângulos trazem <code>top</code>, <code>left</code>, <code>width</code> e <code>height</code>; a diferença entre eles é o deslocamento.</li>
+  <li><code>duration</code>, <code>delay</code> e <code>easing</code> são os parâmetros do <code>flip</code>.</li>
+  <li>No servidor não há animação: o HTML sai na ordem final.</li>
+  <li>Chave repetida ou baseada em posição produz animação com o texto trocado.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

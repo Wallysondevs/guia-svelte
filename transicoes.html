@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transições — o elemento que entra e sai devagar | Guia Svelte</title>
+<meta name="description" content="transition:, in: e out:, as transições de fábrica como fade e fly, a transição escrita à mão com css e duration, e os erros reais do compilador do Svelte 5.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Transições</span></h1>
+
+<p class="intro">A porta da padaria da Ana não abre num estalo: ela tem um amortecedor que leva meio segundo, e é por isso que ninguém leva a porta na cara. Um aviso na tela merece o mesmo cuidado. Quando ele aparece de repente, o leitor se assusta; quando some de repente, ele acha que perdeu alguma coisa. O Svelte chama esse amortecedor de <strong>transição</strong>, e ele se escreve com uma palavra antes do nome da animação.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que uma transição faz e quando ela roda.</li>
+  <li>A diferença entre <code>transition:</code>, <code>in:</code> e <code>out:</code>.</li>
+  <li>As transições de fábrica: <code>fade</code>, <code>fly</code>, <code>slide</code>, <code>scale</code>, <code>blur</code>.</li>
+  <li>Passar parâmetros: <code>duration</code>, <code>delay</code>, <code>easing</code>, <code>y</code>.</li>
+  <li>Escrever uma transição à mão com <code>css</code> e <code>duration</code>.</li>
+  <li>Usar transições dentro de <code>{#each}</code> e <code>{#if}</code>.</li>
+  <li>Por que a saída continua na tela por alguns milissegundos.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>O que o terminal mostra ao procurar transições no projeto.</li>
+  <li>Quando animar ajuda e quando animar atrapalha.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a porta com amortecedor</h2>
+
+<p>Uma transição é uma animação curta que roda quando um elemento <strong>entra</strong> ou <strong>sai</strong> da tela. Ela não muda o conteúdo nem o layout no fim: quando a animação termina, o elemento está exatamente onde estaria sem ela. O que muda é o caminho — a opacidade subindo, o elemento descendo alguns pixels, a altura crescendo.</p>
+
+<p>Isso importa porque o olho humano precisa de continuidade. Quando algo aparece do nada, o cérebro procura a causa e perde o fio do que estava lendo. Meio segundo de fade resolve: o elemento "chega", e a leitura continua de onde estava. É o mesmo motivo do amortecedor na porta.</p>
+
+<p>O Svelte dá três diretivas para isso, e a diferença entre elas é só <em>quando</em> a animação roda. <code>transition:</code> vale para os dois sentidos; <code>in:</code> só para a entrada; <code>out:</code> só para a saída. Você pode usar <code>in:</code> e <code>out:</code> juntos com animações diferentes, mas não pode misturar <code>transition:</code> com nenhum dos dois.</p>
+
+<p>Um detalhe que confunde no começo: no servidor, nenhuma transição roda. O HTML que sai do compilador é o mesmo com ou sem transição — o elemento aparece pronto. A animação é coisa do navegador, e é por isso que as saídas desta aula mostram o conteúdo final.</p>
+
+<hr>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No Svelte</th></tr>
+<tr><td>O amortecedor que segura a porta</td><td><code>transition:fade</code></td></tr>
+<tr><td>A porta que abre devagar e fecha rápido</td><td><code>in:fly out:fade</code></td></tr>
+<tr><td>O tempo que o amortecedor leva</td><td><code>duration</code></td></tr>
+<tr><td>A espera antes de a porta começar a fechar</td><td><code>delay</code></td></tr>
+<tr><td>O jeito de acelerar e frear</td><td><code>easing</code></td></tr>
+<tr><td>O aviso que já está na parede quando você chega</td><td>no servidor não há transição: o HTML sai pronto</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>3. <code>transition:fade</code>: a primeira transição</h2>
+
+<p>O elemento precisa ser criado ou destruído por um bloco para a transição ter o que animar. Na prática isso quer dizer: dentro de um <code>{#if}</code>, de um <code>{#each}</code> ou de um <code>{#await}</code>. Um parágrafo fixo no HTML não tem entrada nem saída — ele simplesmente está lá.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { fade } from 'svelte/transition';
+
+  let visivel = $state(true);
+&lt;/script&gt;
+
+{#if visivel}
+  &lt;p transition:fade&gt;Pão quentinho&lt;/p&gt;
+{/if}
+&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pão quentinho&lt;/p&gt; &lt;button&gt;trocar&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>import { fade } from 'svelte/transition'</dt><dd>as transições de fábrica vêm de <code>svelte/transition</code>, um módulo separado. Sem o import, o nome não existe.</dd>
+  <dt>transition:fade</dt><dd>a diretiva. Ela vale para a entrada e para a saída do elemento, com os mesmos parâmetros nos dois sentidos.</dd>
+  <dt>{#if visivel}</dt><dd>o bloco que cria e destrói. É a mudança de <code>visivel</code> que dá ao Svelte um momento de entrada e outro de saída.</dd>
+  <dt>o parágrafo na saída</dt><dd>o HTML gerado não guarda sinal da transição: no servidor, o elemento sai pronto, sem animação.</dd>
+</dl>
+
+<p>No navegador, o clique em "trocar" não remove o parágrafo na hora: ele começa a ficar transparente e só é removido quando a animação termina. Esse intervalo é observável — e é a base das metas das caixas desta aula.</p>
+
+<div class="tip">
+<strong>A transição não é um estado</strong>
+<p>Ela não fica guardada em nenhuma variável e não atrasa o seu código: o <code>visivel</code> já vale <code>false</code> no primeiro milissegundo. Quem espera é só o DOM, que segura o elemento antigo enquanto ele desaparece.</p>
+</div>
+
+<hr>
+
+<h2>4. <code>in:</code>, <code>out:</code> e os parâmetros</h2>
+
+<p>Quando a entrada e a saída precisam ser diferentes, use as duas diretivas separadas. Cada uma recebe os seus parâmetros, num objeto entre chaves duplas:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { fly } from 'svelte/transition';
+
+  let visivel = $state(true);
+&lt;/script&gt;
+
+{#if visivel}
+  &lt;p in:fly={{ y: 20, duration: 300 }} out:fly={{ y: -20 }}&gt;Aviso do dia&lt;/p&gt;
+{/if}
+&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Aviso do dia&lt;/p&gt; &lt;button&gt;trocar&lt;/button&gt;</pre>
+
+<p>O <code>fly</code> desloca o elemento no eixo que você escolher: <code>y: 20</code> quer dizer "comece vinte pixels abaixo" na entrada e "termine vinte pixels abaixo" na saída. O <code>duration</code> é o tempo em milissegundos; o padrão da biblioteca é 400. Sem <code>out:fly</code>, a saída usaria o padrão do <code>in:</code> — e no caso de <code>in:</code> e <code>out:</code> diferentes, o Svelte usa exatamente o que você escreveu em cada um.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Transição</th><th>O que faz</th><th>Parâmetros úteis</th></tr>
+<tr><td><code>fade</code></td><td>opacidade de 0 a 1</td><td><code>duration</code>, <code>delay</code></td></tr>
+<tr><td><code>fly</code></td><td>desloca e aparece</td><td><code>x</code>, <code>y</code>, <code>duration</code>, <code>opacity</code></td></tr>
+<tr><td><code>slide</code></td><td>abre e fecha a altura</td><td><code>duration</code>, <code>axis</code></td></tr>
+<tr><td><code>scale</code></td><td>cresce de um ponto</td><td><code>start</code>, <code>duration</code>, <code>opacity</code></td></tr>
+<tr><td><code>blur</code></td><td>desfoque e opacidade</td><td><code>amount</code>, <code>duration</code></td></tr>
+<tr><td><code>draw</code></td><td>desenha o traço de um SVG</td><td><code>duration</code>, <code>speed</code></td></tr>
+</table>
+</div>
+
+<p>O <code>delay</code> também é parâmetro de todas: ele adia o começo da animação, sem mexer na duração. Servir para entrada em cascata numa lista — cada item com um <code>delay</code> um pouco maior que o anterior. O limite é o bom senso: atraso de mais de 300 milissegundos já parece travamento, e a pessoa clica de novo antes de o primeiro item aparecer.</p>
+
+<p>Todas aceitam <code>easing</code>: uma função que muda a velocidade ao longo do tempo. A biblioteca <code>svelte/easing</code> tem dezenas prontas — <code>cubicOut</code> começa rápido e freia, <code>bounceOut</code> quica no fim. O padrão é uma curva suave o suficiente para quase tudo.</p>
+
+<hr>
+
+<h2>5. Uma transição escrita à mão</h2>
+
+<p>A transição de fábrica é conveniência, não requisito. Uma transição é uma <strong>função</strong> que recebe o elemento e os parâmetros e devolve um objeto com <code>duration</code> e <code>css</code>. O Svelte chama a função <code>css</code> a cada quadro, com um número de 0 a 1, e aplica o que ela devolver como estilo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function minha(node, { duracao = 500 } = {}) {
+    return { duration: duracao, css: (t) =&gt; `opacity: ${t}` };
+  }
+  let v = $state(true);
+&lt;/script&gt;
+
+{#if v}&lt;p transition:minha={{ duracao: 200 }}&gt;oi&lt;/p&gt;{/if}
+&lt;button onclick={() =&gt; (v = !v)}&gt;trocar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;oi&lt;/p&gt; &lt;button&gt;trocar&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>function minha(node, params)</dt><dd>a função da transição. <code>node</code> é o elemento; <code>params</code> é o objeto que você passou depois do <code>=</code>.</dd>
+  <dt>{ duracao = 500 } = {}</dt><dd>parâmetros com valor padrão. O <code>= {}</code> protege o caso em que ninguém passa nada.</dd>
+  <dt>return { duration, css }</dt><dd>o contrato. <code>duration</code> em milissegundos; <code>css</code> devolve o estilo de cada quadro.</dd>
+  <dt>(t) =&gt; `opacity: ${t}`</dt><dd><code>t</code> vai de 0 (sumido) a 1 (inteiro) na entrada, e o contrário na saída.</dd>
+</dl>
+
+<p>Essa é a peça que permite entender o resto: as transições de fábrica fazem exatamente isso, com curvas mais elaboradas. E ela é a única forma de usar transições em lugares onde o import não está disponível — como nas caixas deste guia, que compilam um componente só, sem módulos extras.</p>
+
+<div class="trysvelte" data-goal="clique:button;;depois:100;;outre:^oi trocar$;;depois:800;;out:trocar">
+<p class="try-task"><strong>Missão:</strong> o parágrafo some no mesmo instante do clique, sem animação nenhuma. Faça ele sair com <code>transition:minhaFade</code> e a tela mostrar <code>oi</code> por um instante antes de ficar só com o botão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function minhaFade() {
+    return { duration: 400, css: (t) =&gt; `opacity: ${t}` };
+  }
+  let visivel = $state(true);
+&lt;/script&gt;
+
+{#if visivel}&lt;p&gt;oi&lt;/p&gt;{/if}
+&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function minhaFade() {
+    return { duration: 400, css: (t) =&gt; `opacity: ${t}` };
+  }
+  let visivel = $state(true);
+&lt;/script&gt;
+
+{#if visivel}&lt;p transition:minhaFade&gt;oi&lt;/p&gt;{/if}
+&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
+</div>
+
+<p>A verificação espera 100 milissegundos e confere que o texto ainda está lá, depois espera mais e confere que sumiu. Sem a diretiva, o texto já teria desaparecido na primeira conferência.</p>
+
+<hr>
+
+<h2>6. Duração: o tempo é o assunto</h2>
+
+<p>A transição mais bonita do mundo não conserta um tempo ruim. Curto demais e ninguém vê; longo demais e a tela parece travada. A faixa que funciona na maioria dos casos fica entre 150 e 400 milissegundos para elementos pequenos e até 600 para blocos grandes.</p>
+
+<div class="trysvelte" data-goal="clique:button;;depois:100;;outre:^oi trocar$;;depois:800;;out:trocar">
+<p class="try-task"><strong>Missão:</strong> a transição existe, mas dura 40 milissegundos e o parágrafo some antes de alguém perceber. Faça a saída durar 400 milissegundos.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function minhaFade(node, { duracao = 40 } = {}) {
+    return { duration: duracao, css: (t) =&gt; `opacity: ${t}` };
+  }
+  let visivel = $state(true);
+&lt;/script&gt;
+
+{#if visivel}&lt;p transition:minhaFade={{ duracao: 40 }}&gt;oi&lt;/p&gt;{/if}
+&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function minhaFade(node, { duracao = 40 } = {}) {
+    return { duration: duracao, css: (t) =&gt; `opacity: ${t}` };
+  }
+  let visivel = $state(true);
+&lt;/script&gt;
+
+{#if visivel}&lt;p transition:minhaFade={{ duracao: 400 }}&gt;oi&lt;/p&gt;{/if}
+&lt;button onclick={() =&gt; visivel = !visivel}&gt;trocar&lt;/button&gt;</pre>
+</div>
+
+<p>Repare que a solução muda <strong>o argumento</strong>, não a função: o valor padrão <code>40</code> continua lá, mas o <code>{{ duracao: 400 }}</code> passa por cima dele. É assim que se reaproveita uma transição em lugares com tempos diferentes — cada uso decide o seu.</p>
+
+<div class="warning">
+<strong>Respeite quem pediu menos animação</strong>
+<p>Existe gente que sente desconforto com movimento na tela, e o sistema operacional tem uma opção para reduzir animações. Uma transição curta e discreta é aceitável; uma explosão de movimento não. Se o seu projeto se importa com isso, a consulta a <code>prefers-reduced-motion</code> é o caminho — e o tema é de acessibilidade, com aula própria mais adiante.</p>
+</div>
+
+<hr>
+
+<h2>7. Transições em listas</h2>
+
+<p>Dentro de um <code>{#each}</code>, cada item tem a sua própria entrada e saída. Quando a lista muda, só os itens que entram e saem animam; os que ficam não são recriados:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { fade } from 'svelte/transition';
+
+  let itens = $state(['pão', 'bolo']);
+&lt;/script&gt;
+
+{#each itens as item (item)}
+  &lt;p transition:fade&gt;{item}&lt;/p&gt;
+{/each}
+&lt;button onclick={() =&gt; (itens = itens.filter((i) =&gt; i !== 'bolo'))}&gt;tirar bolo&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;pão&lt;/p&gt;&lt;p&gt;bolo&lt;/p&gt; &lt;button&gt;tirar bolo&lt;/button&gt;</pre>
+
+<p>A chave <code>(item)</code> é o que permite ao Svelte saber qual item é qual. Sem ela, mudar a ordem da lista faz o Svelte reaproveitar os elementos na posição errada, e a transição anima o texto errado. Com chave, cada item é uma identidade — e animações de lista só fazem sentido assim.</p>
+
+<div class="trysvelte" data-goal="clique:button;;depois:60;;outre:pão bolo;;depois:320;;out:pão tirar bolo">
+<p class="try-task"><strong>Missão:</strong> ao tirar o bolo, o parágrafo dele desaparece num piscar. Faça os itens da lista saírem com <code>transition:minhaFade</code>, para o bolo ainda estar na tela um instante depois do clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function minhaFade() {
+    return { duration: 400, css: (t) =&gt; `opacity: ${t}` };
+  }
+  let itens = $state(['pão', 'bolo']);
+&lt;/script&gt;
+
+{#each itens as item (item)}
+  &lt;p&gt;{item}&lt;/p&gt;
+{/each}
+&lt;button onclick={() =&gt; itens = itens.filter((i) =&gt; i !== 'bolo')}&gt;tirar bolo&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function minhaFade() {
+    return { duration: 400, css: (t) =&gt; `opacity: ${t}` };
+  }
+  let itens = $state(['pão', 'bolo']);
+&lt;/script&gt;
+
+{#each itens as item (item)}
+  &lt;p transition:minhaFade&gt;{item}&lt;/p&gt;
+{/each}
+&lt;button onclick={() =&gt; itens = itens.filter((i) =&gt; i !== 'bolo')}&gt;tirar bolo&lt;/button&gt;</pre>
+</div>
+
+<p>O efeito é o mesmo do <code>{#if}</code>, aplicado por item: o elemento que sai continua no DOM até a animação acabar, e o que fica não é tocado. É por isso que listas com transição parecem mais suaves do que listas que mudam de uma vez.</p>
+
+<hr>
+
+<h2>8. O que a saída ainda não mostra</h2>
+
+<p>Vale repetir porque é a fonte de metade das dúvidas: <strong>no servidor não há transição</strong>. O HTML que o compilador gera é idêntico ao de um componente sem diretiva nenhuma. Toda a animação acontece depois, no navegador, quando o JavaScript assume o controle.</p>
+
+<p>Isso tem uma consequência prática para quem vai publicar: a página aparece pronta para quem tem JavaScript desligado ou para um robô de busca, e a transição é um enfeite que só quem vê a página animada aproveita. Nada do conteúdo depende dela — e é assim que deve ser.</p>
+
+<p>Há um terceiro efeito, menos óbvio: como a animação segura o elemento antigo no DOM, dois elementos com o mesmo texto podem coexistir por alguns milissegundos durante a troca. Se o seu código procura um elemento por texto ou conta quantos existem, essa sobreposição aparece como um número a mais. É passageiro, mas é real — e é o tipo de coisa que só se descobre olhando o DOM durante a animação.</p>
+
+<p>Também explica por que os testes automatizados de transição são chatos: você precisa esperar o tempo passar. Nas caixas desta aula, esse tempo é dado pelo passo <code>depois:</code>, que espera os milissegundos pedidos antes de conferir o texto.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são do compilador desta versão, copiadas da execução. Todas acontecem antes de a página abrir.</p>
+
+<div class="cenario">
+<strong>Erro 1 — transição num componente</strong>
+<p>Diretivas de transição valem para elementos do DOM, não para componentes. Um componente pode desenhar dez elementos; o Svelte não saberia qual animar:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+&lt;/script&gt;
+
+&lt;Cartao transition:fade /&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 8): This type of directive is not valid on components</pre>
+<p>"Este tipo de diretiva não é válido em componentes." A correção é mover a diretiva para dentro do componente, no elemento que deve animar — ou envolver o componente num elemento e animar o elemento.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>transition:</code> junto com <code>in:</code></strong>
+<p><code>transition:</code> já significa "entrada e saída". Misturar com uma das duas metades é ambíguo, e o compilador recusa:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { fade } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
+
+  let v = $state(true);
+&lt;/script&gt;
+
+{#if v}&lt;p transition:fade in:fly&gt;x&lt;/p&gt;{/if}</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 26): Cannot use `transition:` alongside existing `in:` directive</pre>
+<p>"Não é possível usar <code>transition:</code> junto com uma diretiva <code>in:</code> existente." Escolha um dos dois estilos: ou <code>transition:</code>, ou o par <code>in:</code> e <code>out:</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — duas transições no mesmo elemento</strong>
+<p>Cada elemento tem uma transição de entrada e uma de saída. Declarar <code>transition:</code> duas vezes não é "somar animações": é erro:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { fade, fly } from 'svelte/transition';
+&lt;/script&gt;
+
+&lt;p transition:fade transition:fly&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 19): Cannot use multiple `transition:` directives on a single element</pre>
+<p>"Não é possível usar múltiplas diretivas <code>transition:</code> num único elemento." Se você quer combinar efeitos, escreva uma transição própria que devolva os dois estilos no mesmo <code>css</code> — é uma linha de <code>css</code> a mais, não uma diretiva a mais.</p>
+</div>
+
+<hr>
+
+<h2>10. Transição, animação e <code>{#key}</code></h2>
+
+<p>Três coisas parecidas, três papéis diferentes. Confundir uma com a outra é o segundo motivo mais comum de "a animação não funciona":</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ferramenta</th><th>Quando age</th><th>Para que serve</th></tr>
+<tr><td><code>transition:</code></td><td>quando o elemento entra ou sai do DOM</td><td>fade, fly, slide na entrada e na saída</td></tr>
+<tr><td><code>animate:</code></td><td>quando o item muda de lugar numa lista</td><td>reordenar sem salto (aula de animações)</td></tr>
+<tr><td><code>{#key}</code></td><td>quando a chave muda</td><td>destruir e recriar um bloco para a transição rodar</td></tr>
+</table>
+</div>
+
+<p>O <code>{#key}</code> merece um exemplo, porque resolve um caso teimoso: trocar o texto de um parágrafo não dispara transição nenhuma, porque o elemento não saiu nem entrou. Envolvendo o parágrafo num <code>{#key texto}</code>, mudar o texto destrói o bloco antigo e cria um novo — e aí a transição roda:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { fade } from 'svelte/transition';
+
+  let texto = $state('Pão francês');
+&lt;/script&gt;
+
+{#key texto}
+  &lt;p transition:fade&gt;{texto}&lt;/p&gt;
+{/key}
+&lt;button onclick={() =&gt; (texto = 'Bolo de cenoura')}&gt;trocar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pão francês&lt;/p&gt; &lt;button&gt;trocar&lt;/button&gt;</pre>
+
+<p>Sem o <code>{#key}</code>, o texto simplesmente muda, sem animação. Com ele, o parágrafo antigo sai com fade enquanto o novo entra — o efeito de "troca de cartaz" que a vitrine da Ana faz à mão.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintaxe</th><th>Roda quando</th><th>Observação</th></tr>
+<tr><td><code>transition:fn={params}</code></td><td>entra e sai</td><td>não pode conviver com <code>in:</code> nem com outro <code>transition:</code></td></tr>
+<tr><td><code>in:fn={params}</code></td><td>só na entrada</td><td>pode conviver com <code>out:</code></td></tr>
+<tr><td><code>out:fn={params}</code></td><td>só na saída</td><td>pode conviver com <code>in:</code></td></tr>
+<tr><td><code>transition:fn|local</code></td><td>entra e sai, só no bloco</td><td>para transições que não devem subir para o pai</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>nada anima</td><td>o elemento não está dentro de <code>{#if}</code>, <code>{#each}</code> ou <code>{#key}</code></td></tr>
+<tr><td>só o texto muda, sem transição</td><td>o elemento não saiu nem entrou: envolva em <code>{#key}</code></td></tr>
+<tr><td>a animação é rápida demais</td><td><code>duration</code> em milissegundos, não em segundos</td></tr>
+<tr><td>o item anima errado na lista</td><td>falta a chave no <code>{#each}</code></td></tr>
+</table>
+</div>
+
+<p>No projeto da Ana, a transição mora no componente do aviso. O terminal mostra onde ela está:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "transition:" src
+src/lib/Aviso.svelte:7:<p transition:fade>{texto}</p></pre>
+
+<p>E o build conta o que o import de <code>svelte/transition</code> acrescentou ao pacote:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 118 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CujWOcgt.js  45.68 kB │ gzip: 17.68 kB
+✓ built in 4.35s</pre>
+
+<p>Eram 116 módulos e 42,58 kB. Com o aviso animado, 118 módulos e 45,68 kB: cada transição importada é código de verdade que viaja para o navegador. Duas ou três valem o preço; vinte começam a pesar.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual diretiva anima só a saída do elemento?</p>
+<label><input type="radio" name="q1"> <code>transition:</code></label>
+<label><input type="radio" name="q1"> <code>out:</code></label>
+<label><input type="radio" name="q1"> <code>in:</code></label>
+<label><input type="radio" name="q1"> <code>animate:</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que uma função de transição precisa devolver?</p>
+<label><input type="radio" name="q1"> um número com a duração</label>
+<label><input type="radio" name="q1"> uma string de CSS</label>
+<label><input type="radio" name="q1"> um objeto com <code>duration</code> e <code>css</code></label>
+<label><input type="radio" name="q1"> um elemento do DOM</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que a saída do servidor não mostra a transição?</p>
+<label><input type="radio" name="q1"> porque transições só rodam no navegador</label>
+<label><input type="radio" name="q1"> porque o compilador remove as transições do código</label>
+<label><input type="radio" name="q1"> porque o servidor não tem CSS</label>
+<label><input type="radio" name="q1"> porque as transições exigem JavaScript desligado</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { fade } from '<input data-answer="svelte/transition">';<br><br>{#if visivel}<br>&nbsp;&nbsp;&lt;p <input data-answer="transition:fade">&gt;Pão quentinho&lt;/p&gt;<br>{/if}<br><br>// a diretiva anima a entrada e a saída do parágrafo</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>transition:</code> anima entrada e saída; <code>in:</code> e <code>out:</code> animam uma de cada vez.</li>
+  <li>Só há transição quando o elemento entra ou sai do DOM: dentro de <code>{#if}</code>, <code>{#each}</code> ou <code>{#key}</code>.</li>
+  <li>As transições de fábrica vêm de <code>svelte/transition</code>: <code>fade</code>, <code>fly</code>, <code>slide</code>, <code>scale</code>, <code>blur</code>, <code>draw</code>.</li>
+  <li>Parâmetros vão num objeto: <code>transition:fade={{ duration: 300, delay: 100 }}</code>.</li>
+  <li><code>duration</code> é em milissegundos; entre 150 e 400 funciona para a maioria dos casos.</li>
+  <li>Uma transição é uma função que devolve <code>{ duration, css }</code>; <code>css(t)</code> roda a cada quadro com <code>t</code> de 0 a 1.</li>
+  <li>No servidor não há animação: o HTML sai pronto, com ou sem transição.</li>
+  <li>Listas com transição precisam de chave no <code>{#each}</code>.</li>
+  <li><code>{#key}</code> força a troca de elemento quando só o texto muda.</li>
+  <li>Os erros desta aula: diretiva em componente, <code>transition:</code> com <code>in:</code> e duas <code>transition:</code> no mesmo elemento.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

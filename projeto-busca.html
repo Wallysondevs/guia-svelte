@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto Busca com Debounce — filtrar sem travar | Guia Svelte</title>
+<meta name="description" content="A busca da vitrine da Ana em três versões reais: filtro imediato, espera de 300 ms com setTimeout, $effect com limpeza e os quatro estados da busca.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Projeto Busca com Debounce</span></h1>
+
+<p class="intro">A vitrine da Ana tem dezessete produtos, e a cliente pergunta "tem pão de queijo?" enquanto a fila anda. A Ana precisa de um campo onde ela digita três letras e a lista encurta na hora. O problema é que cada letra digitada é uma busca, e busca custa tempo — ainda mais quando os dados vêm de um servidor. Esta aula monta a busca em <strong>três versões</strong> até chegar no <em>debounce</em>: esperar a pessoa parar de digitar antes de procurar. Toda saída foi compilada e rodada de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A filtrar uma lista com <code>filter</code> e <code>includes</code> a partir do que foi digitado.</li>
+  <li>Por que comparar sem <code>toLowerCase</code> perde resultados.</li>
+  <li>O que é <em>debounce</em> (esperar a digitação parar) e por que ele economiza trabalho.</li>
+  <li>Como atrasar uma ação com <code>setTimeout</code> e <code>clearTimeout</code>.</li>
+  <li>Como usar <code>$effect</code> para reagir ao texto e devolver a função de limpeza.</li>
+  <li>Os quatro estados de uma busca: carregando, com resultados, sem resultados e com erro.</li>
+  <li>Como testar um atraso no navegador sem esperar com cronômetro na mão.</li>
+  <li>O terminal do projeto: <code>dev</code>, <code>build</code> e <code>preview</code>.</li>
+  <li>Dois erros reais: <code>bind</code> num <code>&lt;div&gt;</code> e <code>bind</code> numa constante.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: procurar é comparar pedaços de texto</h2>
+
+<p>Buscar numa lista é uma das operações mais antigas da computação e uma das mais simples: para cada item, verifique se ele contém o que foi digitado. Se contém, mostre; se não, esconda. O Svelte não tem nada de especial aqui — a busca é JavaScript comum, e o que ele acrescenta é manter a lista na tela em sincronia com o resultado.</p>
+
+<p>A parte que engana é o "cada letra". Quando a Ana digita <code>pão</code>, o campo dispara três eventos de input: <code>p</code>, <code>pã</code>, <code>pão</code>. Numa lista de dezessete itens isso não custa nada. Numa lista que vem de um servidor, são três pedidos; numa lista de dez mil itens, são três varreduras inteiras. O debounce existe para transformar três buscas em uma: ele espera um tempinho depois da última tecla e só então procura.</p>
+
+<p>O nome vem da eletrônica: um botão mecânico, ao ser apertado, faz o contato pular várias vezes em poucos milissegundos. O circuito "debounce" ignora os pulos e entrega um único sinal limpo. Aqui é a mesma coisa com o teclado — os pulos são as letras, e o sinal limpo é a palavra inteira.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na vitrine</th><th>No componente</th></tr>
+<tr><td>O que a cliente falou</td><td><code>let termo = $state('')</code></td></tr>
+<tr><td>O caderno de produtos</td><td><code>const catalogo = [...]</code></td></tr>
+<tr><td>Procurar a palavra no caderno</td><td><code>catalogo.filter((nome) =&gt; nome.includes(termo))</code></td></tr>
+<tr><td>Esperar a cliente terminar a frase</td><td>o atraso de <code>setTimeout</code></td></tr>
+<tr><td>Riscar a procura antiga e começar outra</td><td><code>clearTimeout</code> na limpeza do <code>$effect</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Versão 1: o filtro imediato</h2>
+
+<p>A primeira versão é a busca mais direta possível: um campo ligado por <code>bind:value</code> e um <code>$derived</code> que filtra o catálogo a cada mudança do termo. Sem atraso, sem estado de carregando — cada letra atualiza a lista.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const catalogo = ['Pão francês', 'Pão de queijo', 'Sonho', 'Bolo de fubá'];
+  let termo = $state('');
+
+  let achados = $derived(catalogo.filter((nome) =&gt; nome.includes(termo)));
+&lt;/script&gt;
+
+&lt;h1&gt;Busca na vitrine&lt;/h1&gt;
+
+&lt;input bind:value={termo} placeholder="o que você procura?" /&gt;
+
+&lt;p&gt;{achados.length} resultado(s)&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each achados as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Com o termo vazio, <code>includes('')</code> é sempre verdadeiro — todo texto contém o texto vazio. Por isso a lista aparece inteira na primeira renderização:</p>
+
+<pre class="out">&lt;h1&gt;Busca na vitrine&lt;/h1&gt; &lt;input value="" placeholder="o que você procura?"/&gt; &lt;p&gt;4 resultado(s)&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Pão francês&lt;/li&gt;&lt;li&gt;Pão de queijo&lt;/li&gt;&lt;li&gt;Sonho&lt;/li&gt;&lt;li&gt;Bolo de fubá&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>const catalogo = [...]</dt><dd>a lista fixa de produtos. É <code>const</code> porque não muda; quem muda é o termo.</dd>
+  <dt>let termo = $state('')</dt><dd>o que a pessoa digitou. Começa vazio, e o <code>bind:value</code> mantém o campo e a variável iguais.</dd>
+  <dt>nome.includes(termo)</dt><dd>devolve verdadeiro quando o termo aparece em qualquer posição do nome, com maiúsculas e acentos exatamente como foram escritos.</dd>
+  <dt>catalogo.filter(…)</dt><dd>devolve uma lista nova só com os aprovados. O catálogo original fica intacto — filtrar não apaga nada.</dd>
+  <dt>{#each achados as nome}</dt><dd>desenha um <code>&lt;li&gt;</code> por resultado. Quando a lista filtrada fica vazia, o <code>{#each}</code> não desenha nada.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="digitar:input=PÃO;;out:2 resultado(s)">
+<p class="try-task"><strong>Missão:</strong> a Ana digita <code>PÃO</code> em maiúsculas e a busca não acha nada. Faça a comparação ignorar maiúsculas e minúsculas.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['Pão francês', 'Pão de queijo', 'Sonho']);
+  let termo = $state('');
+  let achados = $derived(itens.filter((t) =&gt; t.includes(termo)));
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;p&gt;{achados.length} resultado(s)&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['Pão francês', 'Pão de queijo', 'Sonho']);
+  let termo = $state('');
+  let achados = $derived(itens.filter((t) =&gt; t.toLowerCase().includes(termo.toLowerCase())));
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;p&gt;{achados.length} resultado(s)&lt;/p&gt;</pre>
+</div>
+
+<p>Note que a solução chama <code>toLowerCase()</code> nos dois lados. Baixar só o termo não resolve: <code>'Pão'.includes('pão')</code> continua falso, porque o <code>P</code> maiúsculo do nome não casa com o <code>p</code> minúsculo do termo. Baixar os dois lados é o que faz a comparação funcionar em qualquer combinação.</p>
+
+<hr>
+
+<h2>3. Versão 2: esperar 300 milissegundos</h2>
+
+<p>A versão 2 põe o atraso. A ideia é ter duas variáveis de texto: <code>termo</code>, que acompanha o campo letra por letra, e <code>aplicado</code>, que só muda quando a pessoa para de digitar. A lista filtra por <code>aplicado</code>, não por <code>termo</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const catalogo = ['Pão francês', 'Pão de queijo', 'Sonho', 'Bolo de fubá'];
+  let termo = $state('');
+  let aplicado = $state('');
+  let carregando = $state(false);
+
+  let achados = $derived(
+    catalogo.filter((nome) =&gt; nome.toLowerCase().includes(aplicado.toLowerCase()))
+  );
+
+  function digitar(evento) {
+    termo = evento.target.value;
+    carregando = true;
+    setTimeout(() =&gt; {
+      aplicado = termo;
+      carregando = false;
+    }, 300);
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Busca na vitrine&lt;/h1&gt;
+
+&lt;input value={termo} oninput={digitar} placeholder="o que você procura?" /&gt;
+
+&lt;p&gt;{carregando ? 'Buscando…' : achados.length + ' resultado(s)'}&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each achados as nome}
+    &lt;li&gt;{nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>A saída inicial é igual à da versão 1, porque <code>aplicado</code> também começa vazio e a lista mostra tudo:</p>
+
+<pre class="out">&lt;h1&gt;Busca na vitrine&lt;/h1&gt; &lt;input value="" placeholder="o que você procura?"/&gt; &lt;p&gt;4 resultado(s)&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Pão francês&lt;/li&gt;&lt;li&gt;Pão de queijo&lt;/li&gt;&lt;li&gt;Sonho&lt;/li&gt;&lt;li&gt;Bolo de fubá&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>A diferença aparece ao digitar rápido. Cada tecla cria um <code>setTimeout</code> novo, e todos os atrasados vão disparar — o primeiro com <code>p</code>, o segundo com <code>pã</code>, o terceiro com <code>pão</code>. O resultado final é o certo por acaso: o último a disparar é o último a ser criado. Mas os três disparos acontecem, e num caso real de rede isso significa três pedidos.</p>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>termo e aplicado</dt><dd>dois textos com papéis diferentes: um é o que está na tela, o outro é o que a busca usa. Separar os dois é a essência do debounce.</dd>
+  <dt>oninput={digitar}</dt><dd>entrega a função, não o resultado dela. O navegador chama <code>digitar(evento)</code> a cada tecla.</dd>
+  <dt>evento.target.value</dt><dd>o texto atual do campo. Como aqui não há <code>bind</code>, esse é o jeito de saber o que foi digitado.</dd>
+  <dt>setTimeout(fn, 300)</dt><dd>agenda a função para daqui a trezentos milissegundos e devolve um número de identificação, que a versão 3 vai usar para cancelar.</dd>
+  <dt>{carregando ? … : …}</dt><dd>mostra "Buscando…" enquanto o atraso corre. É o primeiro dos quatro estados da busca.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="digitar:input=sonho;;depois:400;;outre:^Resultados: sonho">
+<p class="try-task"><strong>Missão:</strong> a busca só acontece quando alguém aperta o botão. Faça ela acontecer sozinha, 300 ms depois da última tecla, e sumir com o botão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let termo = $state('');
+  let aplicado = $state('nada');
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;button onclick={() =&gt; (aplicado = termo)}&gt;buscar&lt;/button&gt;
+&lt;p&gt;Resultados: {aplicado}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let termo = $state('');
+  let aplicado = $state('nada');
+
+  $effect(() =&gt; {
+    const id = setTimeout(() =&gt; {
+      aplicado = termo;
+    }, 300);
+    return () =&gt; clearTimeout(id);
+  });
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;p&gt;Resultados: {aplicado}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>$effect</code> roda uma vez e depois de novo a cada mudança em <code>termo</code>. Antes de rodar de novo, o Svelte chama a função devolvida no <code>return</code> — a famosa <strong>limpeza</strong>. Com <code>clearTimeout(id)</code> ali, o atraso da tecla anterior é cancelado, e só o último sobrevive. É o mesmo mecanismo que cancela um ouvinte de evento ou fecha uma conexão; a diferença é o que você cancela.</p>
+
+<hr>
+
+<h2>4. Versão 3: quatro estados e o atraso que cancela</h2>
+
+<p>A versão pronta junta o debounce com a limpeza e organiza a tela em quatro estados. Uma busca de verdade tem mais do que "achou" e "não achou": tem o tempo de espera, tem o resultado vazio e tem a falha. Quem não desenha os quatro acaba mostrando uma tela em branco sem explicação.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const catalogo = ['Pão francês', 'Pão de queijo', 'Sonho', 'Bolo de fubá', 'Coxinha'];
+
+  let termo = $state('');
+  let aplicado = $state('');
+  let carregando = $state(false);
+  let erro = $state('');
+
+  let achados = $derived(
+    catalogo.filter((nome) =&gt; nome.toLowerCase().includes(aplicado.toLowerCase()))
+  );
+
+  $effect(() =&gt; {
+    const alvo = termo.trim();
+
+    if (alvo === aplicado) return;
+
+    carregando = true;
+    erro = '';
+
+    const id = setTimeout(() =&gt; {
+      if (alvo === 'erro') {
+        erro = 'A busca falhou. Tente outro nome.';
+      } else {
+        aplicado = alvo;
+      }
+      carregando = false;
+    }, 300);
+
+    return () =&gt; clearTimeout(id);
+  });
+
+  function limpar() {
+    termo = '';
+    aplicado = '';
+    erro = '';
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Busca na vitrine&lt;/h1&gt;
+
+&lt;label&gt;
+  Buscar
+  &lt;input bind:value={termo} placeholder="o que você procura?" /&gt;
+&lt;/label&gt;
+{#if termo !== ''}
+  &lt;button onclick={limpar}&gt;limpar&lt;/button&gt;
+{/if}
+
+{#if carregando}
+  &lt;p class="aviso"&gt;Buscando…&lt;/p&gt;
+{:else if erro}
+  &lt;p class="erro"&gt;{erro}&lt;/p&gt;
+{:else if achados.length === 0}
+  &lt;p class="aviso"&gt;Nada encontrado para {aplicado}.&lt;/p&gt;
+{:else}
+  &lt;p&gt;{achados.length} resultado(s){aplicado === '' ? ' na vitrine' : ' para ' + aplicado}&lt;/p&gt;
+  &lt;ul&gt;
+    {#each achados as nome (nome)}
+      &lt;li&gt;{nome}&lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}
+
+&lt;style&gt;
+  .aviso {
+    color: #666;
+  }
+  .erro {
+    color: #b00020;
+  }
+&lt;/style&gt;</pre>
+
+<p>Na primeira renderização, o <code>$effect</code> nem chega a agendar nada: <code>alvo</code> é <code>''</code> e <code>aplicado</code> também, então o <code>return</code> antecipado sai. A frase mostra os cinco itens e diz "na vitrine" em vez de "para", porque não há termo aplicado:</p>
+
+<pre class="out">&lt;h1&gt;Busca na vitrine&lt;/h1&gt; &lt;label&gt;Buscar &lt;input value="" placeholder="o que você procura?"/&gt;&lt;/label&gt;  &lt;p&gt;5 resultado(s) na vitrine&lt;/p&gt; &lt;ul&gt;&lt;li&gt;Pão francês&lt;/li&gt;&lt;li&gt;Pão de queijo&lt;/li&gt;&lt;li&gt;Sonho&lt;/li&gt;&lt;li&gt;Bolo de fubá&lt;/li&gt;&lt;li&gt;Coxinha&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O CSS gerado são duas regras, e o selo aparece só nos parágrafos que podem receber as classes:</p>
+
+<pre class="out">.aviso.svelte-1n46o8q {
+    color: #666;
+  }
+  .erro.svelte-1n46o8q {
+    color: #b00020;
+  }</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Estado</th><th>Quando acontece</th><th>O que a Ana vê</th></tr>
+<tr><td>inicial</td><td><code>termo</code> e <code>aplicado</code> vazios</td><td><code>5 resultado(s) na vitrine</code></td></tr>
+<tr><td>carregando</td><td>digitou e o atraso ainda não venceu</td><td><code>Buscando…</code></td></tr>
+<tr><td>com resultado</td><td><code>achados.length &gt; 0</code></td><td><code>2 resultado(s) para pão</code></td></tr>
+<tr><td>vazio</td><td><code>achados.length === 0</code></td><td><code>Nada encontrado para xyz.</code></td></tr>
+<tr><td>erro</td><td>a busca falhou</td><td><code>A busca falhou. Tente outro nome.</code></td></tr>
+</table>
+</div>
+
+<p>A ordem dos ramos importa. <code>carregando</code> vem primeiro porque, enquanto espera, a lista antiga ainda está na memória e poderia aparecer — e mostrar resultado velho embaixo de "Buscando…" confunde. <code>erro</code> vem antes do vazio porque uma falha não é "nada encontrado": são mensagens diferentes para problemas diferentes.</p>
+
+<div class="trysvelte" data-goal="digitar:input=xyz;;out:Nada encontrado para xyz">
+<p class="try-task"><strong>Missão:</strong> quando nada casa com o que foi digitado, a tela mostra <code>0 resultado(s)</code> e uma lista vazia. Troque isso por uma frase: <code>Nada encontrado para xyz</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['Pão francês', 'Sonho']);
+  let termo = $state('');
+  let achados = $derived(itens.filter((t) =&gt; t.toLowerCase().includes(termo.toLowerCase())));
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;p&gt;{achados.length} resultado(s)&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['Pão francês', 'Sonho']);
+  let termo = $state('');
+  let achados = $derived(itens.filter((t) =&gt; t.toLowerCase().includes(termo.toLowerCase())));
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+
+{#if achados.length === 0}
+  &lt;p&gt;Nada encontrado para {termo}&lt;/p&gt;
+{:else}
+  &lt;p&gt;{achados.length} resultado(s)&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Repare que a solução usa <code>{termo}</code> na mensagem, não <code>{aplicado}</code>: neste componente não existe <code>aplicado</code>, e o termo digitado é a informação que a pessoa precisa ver para corrigir o que escreveu. Na versão 3, com debounce, a mensagem usa <code>aplicado</code> — mostrar o termo enquanto a busca ainda está correndo diria "nada encontrado" para algo que nem foi procurado.</p>
+
+<hr>
+
+<h2>5. Quanto o debounce economiza</h2>
+
+<p>O ganho depende de quanto tempo a pessoa leva entre as teclas. A tabela usa uma busca de 300 ms e uma digitação rápida de 150 ms por letra, que é mais ou menos o ritmo de quem escreve no celular.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Termo digitado</th><th>Sem debounce</th><th>Com debounce de 300 ms</th></tr>
+<tr><td><code>pão</code></td><td>3 buscas</td><td>1 busca</td></tr>
+<tr><td><code>sonho</code></td><td>5 buscas</td><td>1 busca</td></tr>
+<tr><td><code>pão de queijo</code></td><td>13 buscas</td><td>1 busca</td></tr>
+<tr><td>digitação lenta (1 s por letra)</td><td>3 buscas</td><td>3 buscas — o atraso vence entre as teclas</td></tr>
+</table>
+</div>
+
+<p>A última linha é a parte honesta: debounce não elimina buscas, ele elimina buscas <em>intermediárias</em>. Quem digita devagar recebe uma busca por letra de qualquer jeito, e está certo — o atraso é menor que a pausa. O valor do atraso é uma escolha de projeto: 150 ms parece instantâneo e economiza pouco; 500 ms economiza muito e começa a parecer lento. Trezentos milissegundos é o meio-termo mais comum.</p>
+
+<p>Existe um custo escondido no debounce: durante o atraso, a tela mostra resultado velho. Se a pessoa digita <code>sonho</code> e o resultado de <code>pão</code> continua ali por trezentos milissegundos, ela pode clicar no lugar errado. A defesa é o estado "Buscando…", que a versão 3 desenha antes de qualquer lista.</p>
+
+<hr>
+
+<h2>6. Busca que ignora acento</h2>
+
+<p>A cliente digita <code>pao</code>, sem til, e a vitrine tem <code>Pão francês</code>. Com <code>includes</code> puro, a busca não acha — e o problema não é maiúscula, é acento. Baixar para minúsculas não resolve, porque <code>ã</code> e <code>a</code> são letras diferentes para o computador.</p>
+
+<p>A solução é separar a letra do acento antes de comparar. O método <code>normalize('NFD')</code> faz exatamente isso: transforma <code>ã</code> em <code>a</code> mais um acento separado, e esse acento é um caractere na faixa que vai de U+0300 a U+036F. Uma expressão regular remove essa faixa, e o texto fica sem acento: <code>texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '')</code>.</p>
+
+<p>O custo é que a normalização precisa rodar dos dois lados, e rodar a cada tecla. Em listas pequenas, tanto faz. Em listas grandes, vale normalizar o catálogo uma vez, quando ele carrega, e guardar o nome já sem acento ao lado do nome bonito — assim a busca compara textos prontos e a tela mostra o nome com acento. É o mesmo raciocínio do preço: calcule com um valor, mostre outro.</p>
+
+<p>Vale lembrar também que <code>includes</code> diferencia maiúsculas de minúsculas em qualquer idioma, e que ordenar alfabeticamente em português exige <code>localeCompare</code> com o locale <code>pt-BR</code>. São detalhes que passam despercebidos até a primeira cliente chamada Ângela procurar o próprio nome.</p>
+
+<hr>
+
+<h2>7. O terminal: desenvolvimento, build e prévia</h2>
+
+<p>O ciclo de sempre, com os números deste projeto. Primeiro o servidor que recarrega a cada arquivo salvo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> padaria@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 793 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Depois o build. A busca tem duas regras de CSS e o JavaScript ficou em <code>17.44 kB</code> comprimido:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> padaria@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.22 kB
+dist/assets/index-BNhi1mic.css   0.07 kB │ gzip:  0.07 kB
+dist/assets/index-C8hAknEl.js   45.40 kB │ gzip: 17.44 kB
+✓ built in 1.56s</pre>
+
+<p>E a prévia por http, com a conferência do HTML servido:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> padaria@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose
+
+ana@notebook:~/loja$ curl -s http://localhost:4173/ | head -7
+&lt;!doctype html&gt;
+&lt;html lang="pt-BR"&gt;
+  &lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;title&gt;Padaria da Ana&lt;/title&gt;
+    &lt;script type="module" crossorigin src="/assets/index-C8hAknEl.js"&gt;&lt;/script&gt;
+    &lt;link rel="stylesheet" crossorigin href="/assets/index-BNhi1mic.css"&gt;</pre>
+
+<div class="warning">
+<strong>Debounce não substitui cancelar o pedido</strong>
+<p>O atraso evita pedidos intermediários, mas não cancela o pedido que já saiu. Se a pessoa digitar <code>pão</code>, esperar meio segundo e digitar <code>sonho</code>, o pedido de <code>pão</code> pode chegar depois do de <code>sonho</code> — e a resposta velha sobrescrever a nova. A solução é guardar o pedido atual e descartar a resposta que não corresponde mais ao termo, ou usar <code>AbortController</code> para abortar de verdade. É o próximo degrau depois desta aula.</p>
+</div>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<p>Os dois erros abaixo são de compilação e nascem da mesma confusão: <code>bind</code> não é um atributo qualquer. Ele só funciona em elemento de formulário e só aponta para algo que pode mudar. As mensagens são cópias das execuções.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>bind:value</code> numa constante</strong>
+<p>O termo foi declarado com <code>const</code>. O compilador aceita <code>bind</code> em estado ou propriedade, porque a ligação precisa escrever no alvo; constante não aceita escrita.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const catalogo = ['Pão francês', 'Sonho'];
+  const termo = '';
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;p&gt;{catalogo.length} resultado(s)&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 7): Cannot bind to constant</pre>
+<p>"Cannot bind to constant" é curto e direto: não dá para ligar a uma constante. Troque por <code>let termo = $state('')</code>. Repare que o <code>catalogo</code> pode continuar constante — ele é lido, nunca escrito pelo campo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>bind:value</code> num <code>&lt;div&gt;</code></strong>
+<p>O <code>bind</code> parece um atributo comum e não é: ele precisa de um elemento que saiba receber valor. <code>&lt;div&gt;</code> não sabe.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let termo = $state('');
+&lt;/script&gt;
+
+&lt;div bind:value={termo}&gt;digite aqui&lt;/div&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 5): `bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</pre>
+<p>A mensagem lista os três elementos que aceitam <code>bind:value</code>. Para uma <code>div</code> editável existe <code>bind:innerHTML</code> e <code>bind:textContent</code>, mas o caminho normal de um campo de busca é <code>&lt;input bind:value={termo} /&gt;</code>.</p>
+</div>
+
+<hr>
+
+<h2>9. Referência rápida da busca</h2>
+
+<p>A primeira tabela lista as funções de texto que resolvem a maior parte das buscas, a segunda os estados da versão 3 e a terceira o que cada função do componente faz.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Método</th><th>O que faz</th><th>Exemplo</th></tr>
+<tr><td><code>includes(t)</code></td><td>verdadeiro se o texto contém <code>t</code></td><td><code>'Pão de queijo'.includes('quei')</code> → <code>true</code></td></tr>
+<tr><td><code>toLowerCase()</code></td><td>tudo em minúsculas</td><td><code>'PÃO'.toLowerCase()</code> → <code>'pão'</code></td></tr>
+<tr><td><code>trim()</code></td><td>tira espaços das pontas</td><td><code>' pão '.trim()</code> → <code>'pão'</code></td></tr>
+<tr><td><code>startsWith(t)</code></td><td>verdadeiro só se começa com <code>t</code></td><td><code>'Pão'.startsWith('Pã')</code> → <code>true</code></td></tr>
+<tr><td><code>normalize('NFD')</code></td><td>separa a letra do acento, para comparar sem acento</td><td><code>'pão'.normalize('NFD')</code> → <code>'pa\u0303o'</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pedaco do código</th><th>Papel</th></tr>
+<tr><td><code>termo</code></td><td>o que está no campo agora</td></tr>
+<tr><td><code>aplicado</code></td><td>o que a busca usou por último</td></tr>
+<tr><td><code>carregando</code></td><td>o atraso está correndo</td></tr>
+<tr><td><code>erro</code></td><td>mensagem de falha, vazia quando não há falha</td></tr>
+<tr><td><code>achados</code></td><td>a lista filtrada e pronta para desenhar</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Quando roda</th><th>O que faz</th></tr>
+<tr><td><code>$effect(…)</code></td><td>na montagem e a cada mudança de <code>termo</code></td><td>agenda a busca com atraso</td></tr>
+<tr><td>o <code>return</code> do efeito</td><td>antes da próxima execução e ao desmontar</td><td><code>clearTimeout</code> cancela o atraso anterior</td></tr>
+<tr><td><code>limpar()</code></td><td>no clique do botão</td><td>zera termo, aplicado e erro</td></tr>
+<tr><td><code>setTimeout(fn, 300)</code></td><td>na hora de agendar</td><td>devolve o <code>id</code> que o <code>clearTimeout</code> usa</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Por que a busca chama <code>toLowerCase()</code> nos dois lados da comparação?</p>
+<label><input type="radio" name="q1"> porque o método só aceita um argumento de cada vez</label>
+<label><input type="radio" name="q1"> porque deixa a busca mais rápida</label>
+<label><input type="radio" name="q1"> porque só baixar um dos lados ainda perde resultados quando o outro tem maiúscula</label>
+<label><input type="radio" name="q1"> porque o <code>filter</code> exige textos iguais</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que a função devolvida no <code>return</code> de um <code>$effect</code> faz?</p>
+<label><input type="radio" name="q1"> define o valor que o efeito devolve para o HTML</label>
+<label><input type="radio" name="q1"> roda antes da próxima execução do efeito e quando o componente sai da tela</label>
+<label><input type="radio" name="q1"> impede o efeito de rodar de novo</label>
+<label><input type="radio" name="q1"> repete o efeito a cada 300 ms</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que a versão 3 tem duas variáveis de texto, <code>termo</code> e <code>aplicado</code>?</p>
+<label><input type="radio" name="q1"> uma acompanha o campo a cada letra e a outra só muda quando o atraso vence</label>
+<label><input type="radio" name="q1"> porque o <code>bind:value</code> exige duas variáveis</label>
+<label><input type="radio" name="q1"> porque a lista precisa de um texto e o campo de outro tipo</label>
+<label><input type="radio" name="q1"> para guardar a busca anterior e poder voltar</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let termo = $state('');<br>let achados = $derived(<input data-answer="catalogo.filter((nome) => nome.toLowerCase().includes(termo.toLowerCase()))|catalogo.filter((n) => n.toLowerCase().includes(termo.toLowerCase()))">);<br><br>&lt;p&gt;{achados.length} resultado(s)&lt;/p&gt;<br><br>// a lista tem de filtrar sem ligar para maiúsculas</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Buscar é filtrar: <code>lista.filter((item) =&gt; item.includes(termo))</code>.</li>
+  <li><code>includes('')</code> é sempre verdadeiro, e é por isso que a lista aparece inteira com o campo vazio.</li>
+  <li>Comparar sem <code>toLowerCase()</code> nos dois lados perde resultados.</li>
+  <li>Debounce é esperar a digitação parar: <code>termo</code> acompanha o campo, <code>aplicado</code> só muda depois do atraso.</li>
+  <li><code>setTimeout</code> agenda e devolve um <code>id</code>; <code>clearTimeout(id)</code> cancela o agendamento anterior.</li>
+  <li>O <code>return</code> do <code>$effect</code> é a limpeza: roda antes da próxima execução e quando o componente sai da tela.</li>
+  <li>Uma busca tem quatro estados: carregando, com resultado, sem resultado e com erro; a ordem dos <code>{#if}</code> importa.</li>
+  <li>Debounce reduz buscas intermediárias, não cancela pedido já enviado — para isso existe <code>AbortController</code>.</li>
+  <li>Erros desta aula: <code>Cannot bind to constant</code> e <code>`bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</code>.</li>
+  <li>Terminal: <code>dev</code> em 5173, <code>build</code> com JS e CSS com hash, <code>preview</code> em 4173.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
