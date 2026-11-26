@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diretivas — bind:, class:, style:, use: e transições | Guia Svelte</title>
+<meta name="description" content="Referência das diretivas do Svelte 5: bind:value, bind:checked, bind:group, bind:this, class:, style:, use:, {@attach} e transition:, com saídas reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Diretivas</span></h1>
+
+<p class="intro">A Ana colou etiquetas coloridas nas gavetas da padaria. Verde quer dizer "conferido", amarela "falta repor", vermelha "vence hoje". A etiqueta não muda a gaveta: ela diz ao funcionário o que fazer com ela. No Svelte, as <strong>diretivas</strong> são essas etiquetas: atributos com dois-pontos no nome (<code>bind:</code>, <code>class:</code>, <code>style:</code>, <code>use:</code>, <code>transition:</code>) que dizem ao compilador para tratar aquele elemento de um jeito especial. Esta página é o mural com todas as etiquetas que existem.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que o dois-pontos muda num atributo comum.</li>
+  <li><code>bind:value</code>, <code>bind:checked</code>, <code>bind:group</code> e <code>bind:this</code>.</li>
+  <li>Como o <code>bind:</code> aparece no HTML gerado — quando aparece.</li>
+  <li><code>class:</code> e <code>style:</code>, com e sem valor.</li>
+  <li><code>use:</code> para rodar uma função quando o elemento é montado.</li>
+  <li><code>{@attach}</code>, o jeito novo de fazer o mesmo trabalho.</li>
+  <li><code>transition:</code>, <code>in:</code>, <code>out:</code> e <code>animate:</code>.</li>
+  <li>Por que <code>use:</code> e transição não mudam o HTML do servidor.</li>
+  <li>As mensagens reais quando a diretiva é usada no elemento errado.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: um atributo que o compilador trata diferente</h2>
+
+<p>Um atributo comum vai para o HTML como está: <code>title="Salvar"</code> vira <code>title="Salvar"</code> no arquivo final. Uma diretiva não vai: ela é uma instrução para o compilador, que gera código em vez de atributo. Você escreve <code>bind:value={nome}</code> e o navegador nunca vê esse texto — vê um input que já vem preenchido e um evento ligado.</p>
+
+<p>O dois-pontos é o sinal. À esquerda fica o nome da diretiva, à direita o alvo (o evento, a classe, a propriedade). É uma sintaxe curta para algo que em JavaScript puro exigiria três ou quatro linhas: pegar o elemento, ler o valor, escutar a mudança, escrever de volta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Diretiva</th><th>Forma</th><th>Faz o quê</th></tr>
+<tr><td><code>bind:</code></td><td><code>bind:value={nome}</code></td><td>mantém valor e variável iguais nos dois sentidos</td></tr>
+<tr><td><code>class:</code></td><td><code>class:ativo={pago}</code></td><td>liga ou desliga uma classe</td></tr>
+<tr><td><code>style:</code></td><td><code>style:color={cor}</code></td><td>aplica uma propriedade de estilo</td></tr>
+<tr><td><code>use:</code></td><td><code>use:focar</code></td><td>roda uma função quando o elemento é montado</td></tr>
+<tr><td><code>transition:</code></td><td><code>transition:fade</code></td><td>anima entrada e saída</td></tr>
+<tr><td><code>in:</code> / <code>out:</code></td><td><code>in:fly</code>, <code>out:fade</code></td><td>anima só a entrada ou só a saída</td></tr>
+<tr><td><code>animate:</code></td><td><code>animate:flip</code></td><td>anima itens de uma lista com chave</td></tr>
+</table>
+</div>
+
+<p>Repare que todas terminam em dois-pontos, nunca em <code>on:</code>. O <code>on:click</code> do Svelte 4 é o único caso que você vai encontrar em código antigo; no Svelte 5 ele ainda compila, mas o compilador avisa que está fora de moda. O substituto é o atributo comum <code>onclick</code>, sem dois-pontos.</p>
+
+<p>Vale entender o custo dessa escolha. Uma diretiva não é "mágica": ela é uma abreviação que o compilador expande. Quando você escreve <code>bind:value</code>, o resultado é um trecho de código que lê o campo, escuta o evento e escreve na variável; quando escreve <code>class:ativo</code>, o resultado é uma instrução que adiciona ou remove a classe conforme o valor. Saber disso ajuda no dia em que a diretiva não funciona: o problema quase sempre está no valor ligado, não na diretiva.</p>
+
+<p>Há também um custo de leitura. Uma pessoa que abre o arquivo e vê <code>bind:value={nome}</code> entende em um segundo que campo e variável andam juntos. A mesma ligação escrita à mão ocupa quatro linhas e exige que o leitor reconstrua a intenção. Código curto que diz o que faz é a razão de as diretivas existirem.</p>
+
+<hr>
+
+<h2>2. <code>bind:value</code>: a via de mão dupla</h2>
+
+<p>O caso mais comum de todos: um campo de texto e uma variável que devem estar sempre iguais. Sem <code>bind</code>, você escuta o evento e copia o valor à mão. Com <code>bind</code>, o compilador escreve essa ligação para você.</p>
+
+<pre class="file" data-file="src/Nome.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value={nome} /&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value="Ana"/&gt; &lt;p&gt;Olá, Ana&lt;/p&gt;</pre>
+
+<p>O HTML gerado já traz <code>value="Ana"</code>: o campo nasce preenchido com o valor da variável. A outra metade da ligação — do campo para a variável — não aparece no HTML porque é comportamento, não marcação: o compilador ligou um <code>oninput</code> interno que atualiza <code>nome</code> a cada tecla.</p>
+
+<dl class="anatomy">
+  <dt>bind:value</dt><dd>a <strong>propriedade ligada</strong>. Para <code>&lt;input&gt;</code>, é o valor digitado; para <code>&lt;select&gt;</code>, a opção escolhida.</dd>
+  <dt>={nome}</dt><dd>a <strong>variável</strong> dos dois lados. Precisa ser declarada com <code>$state</code> para a tela acompanhar.</dd>
+  <dt>/&gt;</dt><dd>o <strong>fim da tag</strong>. Em Svelte, elemento sem conteúdo pode fechar em si mesmo, como no XML.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="digitar:input=Bia;;out:Olá, Bia">
+<p class="try-task"><strong>Missão:</strong> o campo começa com <code>Ana</code>, mas digitar não muda o parágrafo. Faça o parágrafo acompanhar o que você digita, sem escrever <code>oninput</code>.</p>
+<pre class="script" data-file="Nome.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input value={nome} /&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Nome.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value={nome} /&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+</div>
+
+<p>Clique no campo, apague e digite <code>Bia</code>. A diferença entre os dois códigos é de quatro caracteres e de comportamento: no primeiro, o valor digitado fica só no campo; no segundo, ele volta para a variável e o parágrafo se redesenha.</p>
+
+<hr>
+
+<h2>3. <code>bind:checked</code>, <code>bind:group</code> e <code>bind:value</code> no select</h2>
+
+<p>Campo de texto é só o começo. Cada tipo de controle tem a propriedade que faz sentido ligar: caixa de seleção liga em <code>checked</code>, rádio liga em <code>group</code>, lista suspensa liga em <code>value</code>.</p>
+
+<pre class="file" data-file="src/Marcado.svelte">&lt;script&gt;
+  let pago = $state(true);
+&lt;/script&gt;
+
+&lt;label&gt;
+  &lt;input type="checkbox" bind:checked={pago} /&gt;
+  Pago
+&lt;/label&gt;
+&lt;p&gt;{pago ? 'pedido pago' : 'falta pagar'}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;label&gt;&lt;input type="checkbox" checked=""/&gt; Pago&lt;/label&gt; &lt;p&gt;pedido pago&lt;/p&gt;</pre>
+
+<p>Atributo booleano aparece vazio quando é verdadeiro e desaparece quando é falso. É a mesma regra do <code>disabled</code>: presença significa sim.</p>
+
+<div class="trysvelte" data-goal="clique:input;;out:falta pagar">
+<p class="try-task"><strong>Missão:</strong> a caixa começa marcada e o texto diz <code>pedido pago</code>. Ao desmarcar, o texto deve virar <code>falta pagar</code>.</p>
+<pre class="script" data-file="Marcado.svelte">&lt;script&gt;
+  let pago = $state(true);
+&lt;/script&gt;
+
+&lt;input type="checkbox" checked={pago} /&gt;
+&lt;p&gt;{pago ? 'pedido pago' : 'falta pagar'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Marcado.svelte">&lt;script&gt;
+  let pago = $state(true);
+&lt;/script&gt;
+
+&lt;input type="checkbox" bind:checked={pago} /&gt;
+&lt;p&gt;{pago ? 'pedido pago' : 'falta pagar'}&lt;/p&gt;</pre>
+</div>
+
+<p>Agora os dois primos. O <code>bind:group</code> junta vários rádios numa variável só — a escolha vira o valor do rádio selecionado:</p>
+
+<pre class="file" data-file="src/Grupo.svelte">&lt;script&gt;
+  let tamanho = $state('médio');
+&lt;/script&gt;
+
+&lt;label&gt;&lt;input type="radio" value="pequeno" bind:group={tamanho} /&gt; pequeno&lt;/label&gt;
+&lt;label&gt;&lt;input type="radio" value="médio" bind:group={tamanho} /&gt; médio&lt;/label&gt;
+&lt;p&gt;{tamanho}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;label&gt;&lt;input type="radio" value="pequeno"/&gt; pequeno&lt;/label&gt; &lt;label&gt;&lt;input type="radio" value="médio" checked=""/&gt; médio&lt;/label&gt; &lt;p&gt;médio&lt;/p&gt;</pre>
+
+<p>O <code>checked=""</code> apareceu no rádio que combina com o valor inicial. E no <code>&lt;select&gt;</code>, o valor ligado põe <code>selected</code> na opção certa:</p>
+
+<pre class="file" data-file="src/Seletor.svelte">&lt;script&gt;
+  let sabor = $state('queijo');
+&lt;/script&gt;
+
+&lt;select bind:value={sabor}&gt;
+  &lt;option value="queijo"&gt;queijo&lt;/option&gt;
+  &lt;option value="frango"&gt;frango&lt;/option&gt;
+&lt;/select&gt;
+&lt;p&gt;{sabor}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;select&gt;&lt;option value="queijo" selected=""&gt;queijo&lt;/option&gt;&lt;option value="frango"&gt;frango&lt;/option&gt;&lt;/select&gt; &lt;p&gt;queijo&lt;/p&gt;</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Elemento</th><th>Diretiva</th><th>Tipo do valor</th></tr>
+<tr><td><code>&lt;input type="text"&gt;</code></td><td><code>bind:value</code></td><td>texto</td></tr>
+<tr><td><code>&lt;input type="number"&gt;</code></td><td><code>bind:value</code></td><td>número (ou <code>null</code>)</td></tr>
+<tr><td><code>&lt;input type="checkbox"&gt;</code></td><td><code>bind:checked</code></td><td>verdadeiro/falso</td></tr>
+<tr><td>vários <code>type="radio"</code></td><td><code>bind:group</code></td><td>o valor do rádio escolhido</td></tr>
+<tr><td><code>&lt;select&gt;</code></td><td><code>bind:value</code></td><td>o valor da opção escolhida</td></tr>
+<tr><td><code>&lt;textarea&gt;</code></td><td><code>bind:value</code></td><td>texto</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. <code>bind:this</code> e as medidas do elemento</h2>
+
+<p>Às vezes você precisa do elemento em si, não do valor dele: para chamar <code>focus()</code>, medir a largura, montar um gráfico. O <code>bind:this</code> guarda a referência numa variável:</p>
+
+<pre class="file" data-file="src/Caixa.svelte">&lt;script&gt;
+  let campo;
+&lt;/script&gt;
+
+&lt;input bind:this={campo} placeholder="nome" /&gt;
+&lt;button onclick={() =&gt; campo.focus()}&gt;focar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;input placeholder="nome"/&gt; &lt;button&gt;focar&lt;/button&gt;</pre>
+
+<p>A variável <code>campo</code> não tem <code>$state</code> de propósito: ninguém precisa redesenhar a tela quando a referência muda. Ela vale <code>undefined</code> até o elemento existir — e no servidor nunca existe, porque não há DOM. Por isso o HTML gerado não mostra nada de <code>bind:this</code>.</p>
+
+<p>A mesma ideia serve para medidas. <code>bind:clientWidth</code> escreve na variável a largura interna do elemento e atualiza quando ela muda:</p>
+
+<pre class="file" data-file="src/Largura.svelte">&lt;script&gt;
+  let caixa;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;div bind:this={caixa} bind:clientWidth={largura}&gt;
+  &lt;p&gt;{largura}px&lt;/p&gt;
+&lt;/div&gt;</pre>
+
+<pre class="out">&lt;div&gt;&lt;p&gt;0px&lt;/p&gt;&lt;/div&gt;</pre>
+
+<p>Zero é o valor inicial, e é o que o servidor consegue saber: sem navegador, não há layout. No navegador a medida chega no primeiro quadro e o número aparece. Existem variantes para altura (<code>clientHeight</code>), para o tamanho total com borda (<code>offsetWidth</code>) e para a posição (<code>clientTop</code>).</p>
+
+<hr>
+
+<h2>5. <code>class:</code>: uma classe que liga e desliga</h2>
+
+<p>Trocar classe por condição é o pão de cada dia do CSS. Em vez de montar o texto da classe com <code>?</code> e <code>+</code>, você usa <code>class:</code>:</p>
+
+<pre class="file" data-file="src/Classe.svelte">&lt;script&gt;
+  let negrito = $state(true);
+  let ativo = $state(false);
+&lt;/script&gt;
+
+&lt;p class:negrito class:ativo&gt;Pão&lt;/p&gt;
+
+&lt;style&gt;
+  .negrito { font-weight: bold; }
+  .ativo { color: #2e7d32; }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;p class="svelte-1nuilkk negrito"&gt;Pão&lt;/p&gt;</pre>
+
+<p>Sem valor depois do nome, a diretiva usa a variável de mesmo nome como condição: <code>class:negrito</code> vale porque <code>negrito</code> é <code>true</code>, e <code>class:ativo</code> não vale porque <code>ativo</code> é <code>false</code>. Com valor, você escolhe outra variável: <code>class:negrito={preco &gt; 10}</code>.</p>
+
+<p>Repare na ordem das classes no HTML: primeiro o selo do estilo escopado, depois a classe da diretiva. Se você também escrever um <code>class="…"</code> comum, ele vem antes do selo. A ordem não importa para o CSS; importa apenas para quem compara texto de HTML — como as caixas deste guia.</p>
+
+<div class="warning">
+<strong><code>class:nome</code> não é <code>class="nome"</code></strong>
+<p><code>class:nome</code> sem valor liga a classe <code>nome</code> quando a variável <code>nome</code> for verdadeira. Se você queria só escrever a classe, use <code>class="nome"</code>. O compilador aceita as duas formas e não avisa — a diferença aparece quando a variável fica falsa e a classe some sozinha.</p>
+</div>
+
+<hr>
+
+<h2>6. <code>style:</code>: a propriedade que acompanha o valor</h2>
+
+<p><code>style:</code> faz com estilo o que <code>class:</code> faz com classe: liga uma propriedade a um valor. Serve para números que mudam (uma barra de progresso, uma cor escolhida pelo cliente):</p>
+
+<pre class="file" data-file="src/Estado.svelte">&lt;script&gt;
+  let cor = $state('#2e7d32');
+  let grande = $state(true);
+&lt;/script&gt;
+
+&lt;p style:color={cor} style:font-size={grande ? '20px' : '12px'}&gt;Pão&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p style="color: #2e7d32; font-size: 20px;"&gt;Pão&lt;/p&gt;</pre>
+
+<p>O compilador juntou as duas diretivas num único atributo <code>style</code>, na ordem em que foram escritas. Quando um valor vira <code>null</code> ou <code>undefined</code>, a propriedade sai do atributo — é a forma de "desligar" um estilo sem escrever uma string vazia.</p>
+
+<p>O nome da propriedade segue o CSS e aceita hífen: <code>style:font-size</code>, <code>style:background-color</code>. Também é possível usar <code>style:--minha-variavel</code> para variáveis CSS. O que não pode é deixar o nome vazio, como na seção de erros.</p>
+
+<hr>
+
+<h2>7. <code>use:</code>: uma função quando o elemento nasce</h2>
+
+<p>Existem tarefas que só fazem sentido no navegador: dar foco, iniciar um mapa, medir, escutar um evento global. A diretiva <code>use:</code> entrega o elemento para uma função sua no momento em que ele é montado:</p>
+
+<pre class="file" data-file="src/Acao.svelte">&lt;script&gt;
+  function focar(node) {
+    node.focus();
+    return {
+      destroy() {
+        console.log('saiu');
+      }
+    };
+  }
+&lt;/script&gt;
+
+&lt;input use:focar placeholder="nome" /&gt;</pre>
+
+<pre class="out">&lt;input placeholder="nome"/&gt;</pre>
+
+<p>A função recebe o elemento e pode devolver um objeto com <code>destroy</code> — o código de limpeza, que roda quando o elemento sai da tela. Devolver <code>update</code> também é possível: ele roda quando os parâmetros da ação mudam (<code>use:medir={largura}</code>). No servidor, a ação não roda e o HTML sai limpo, como acima.</p>
+
+<p>Uma ação bem escrita devolve sempre a limpeza do que criou. Sem isso, cada elemento que sai deixa um ouvinte de evento pendurado na memória — o tipo de vazamento que só aparece depois de meia hora de uso.</p>
+
+<p>A ação pode receber parâmetro: <code>use:medir={largura}</code> entrega <code>largura</code> como segundo argumento da função. Quando esse parâmetro muda, o Svelte chama <code>update(novoValor)</code> se a ação devolver essa função no objeto. É assim que uma biblioteca de gráficos redesenha quando os dados mudam, sem que o componente precise desmontar e montar de novo.</p>
+
+<p>O nome "ação" (<em>action</em>) vem do Svelte 3 e continua valendo. A função não tem acesso a estado reativo por conta própria: ela recebe o nó e os parâmetros, e devolve funções de ciclo de vida. Para observar estado dentro de uma ação, você lê o valor no momento da chamada ou usa uma closure que o componente atualiza.</p>
+
+<hr>
+
+<h2>8. <code>{@attach}</code>: o parente novo do <code>use:</code></h2>
+
+<p>O Svelte 5 acrescentou uma forma mais simples de fazer o mesmo trabalho: em vez de uma diretiva com nome, uma expressão anexada ao elemento. O resultado é o mesmo, e a função pode ser passada de qualquer jeito — inclusive vinda de outro módulo:</p>
+
+<pre class="file" data-file="src/Anexo.svelte">&lt;script&gt;
+  function pintar(node) {
+    node.style.background = '#e8f5e9';
+  }
+&lt;/script&gt;
+
+&lt;p {@attach pintar}&gt;Pão&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pão&lt;/p&gt;</pre>
+
+<p>No servidor, a função não roda e o HTML sai sem estilo — a cor aparece no navegador. A vantagem sobre <code>use:</code> é que <code>{@attach}</code> aceita qualquer expressão que devolva uma função, então dá para escolher a função por condição. A desvantagem é que ele não tem nome no HTML, o que torna a leitura um pouco menos autoexplicativa.</p>
+
+<p>Na prática, a regra de escolha é simples. Se a função tem nome fixo e recebe parâmetros que mudam, <code>use:</code> é mais direto e mais fácil de achar com uma busca no projeto. Se a função vem de uma expressão, de um objeto ou muda conforme o estado, <code>{@attach}</code> resolve sem gambiarra. As duas formas convivem no mesmo componente sem conflito.</p>
+
+<p>Existe ainda um detalhe de ordem que confunde: o anexo roda depois que o elemento existe, mas antes de algumas medidas estarem prontas. Se a função precisa da largura final, meça no próximo quadro com <code>requestAnimationFrame</code> — ou use <code>bind:clientWidth</code>, que já cuida disso.</p>
+
+<div class="trysvelte" data-goal="out:Pão!">
+<p class="try-task"><strong>Missão:</strong> a função <code>esticar</code> existe mas ninguém a usa. Anexe-a ao parágrafo com <code>{@attach}</code> para a tela mostrar <code>Pão!</code>.</p>
+<pre class="script" data-file="Anexo.svelte">&lt;script&gt;
+  function esticar(node) {
+    node.textContent = node.textContent + '!';
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Pão&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Anexo.svelte">&lt;script&gt;
+  function esticar(node) {
+    node.textContent = node.textContent + '!';
+  }
+&lt;/script&gt;
+
+&lt;p {@attach esticar}&gt;Pão&lt;/p&gt;</pre>
+</div>
+
+<p>A caixa acima é honesta sobre o que o anexo faz: ele mexe no DOM depois que o Svelte desenhou. Funciona para dar foco, medir, iniciar biblioteca — e é uma porta para sair do fluxo normal do componente. Prefira <code>class:</code> e <code>style:</code> quando o efeito é visual e pode ser descrito em CSS.</p>
+
+<hr>
+
+<h2>9. Transições: <code>transition:</code>, <code>in:</code>, <code>out:</code> e <code>animate:</code></h2>
+
+<p>Transição é animação de entrada e saída. Você importa uma função pronta de <code>svelte/transition</code> e aplica no elemento:</p>
+
+<pre class="file" data-file="src/Transicao.svelte">&lt;script&gt;
+  import { fade } from 'svelte/transition';
+  let visivel = $state(true);
+&lt;/script&gt;
+
+{#if visivel}
+  &lt;p transition:fade&gt;Pão quentinho&lt;/p&gt;
+{/if}
+&lt;button onclick={() =&gt; (visivel = !visivel)}&gt;alternar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pão quentinho&lt;/p&gt; &lt;button&gt;alternar&lt;/button&gt;</pre>
+
+<p>No HTML do servidor, o parágrafo sai sem nenhum sinal de transição. A animação é comportamento de navegador: o elemento entra e sai com opacidade gradual, controlada pelo runtime. Se o JavaScript não carregar, o conteúdo continua lá — o que é o comportamento certo para uma página pública.</p>
+
+<p>As variantes servem para animar só um lado: <code>in:fly</code> anima a entrada, <code>out:fade</code> anima a saída. E <code>animate:flip</code> é diferente das outras: ele anima itens de uma lista quando a ordem muda, e exige um <code>{#each}</code> com chave:</p>
+
+<pre class="file" data-file="src/ListaAnimada.svelte">&lt;script&gt;
+  import { flip } from 'svelte/animate';
+  let lista = $state([{ id: 1, nome: 'pão' }, { id: 2, nome: 'leite' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each lista as item (item.id)}
+    &lt;li animate:flip&gt;{item.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;li&gt;leite&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Diretiva</th><th>Onde pode ir</th><th>Precisa de</th><th>Roda no servidor?</th></tr>
+<tr><td><code>bind:value</code></td><td>input, textarea, select</td><td>variável de estado</td><td>só o valor inicial</td></tr>
+<tr><td><code>bind:this</code></td><td>qualquer elemento</td><td>variável comum</td><td>não</td></tr>
+<tr><td><code>class:</code></td><td>qualquer elemento</td><td>condição</td><td>sim, gera classe</td></tr>
+<tr><td><code>style:</code></td><td>qualquer elemento</td><td>valor CSS</td><td>sim, gera atributo</td></tr>
+<tr><td><code>use:</code></td><td>qualquer elemento</td><td>função de ação</td><td>não</td></tr>
+<tr><td><code>transition:</code></td><td>qualquer elemento</td><td>função importada</td><td>não</td></tr>
+<tr><td><code>animate:</code></td><td>filho único de each com chave</td><td>função importada</td><td>não</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As quatro mensagens abaixo saíram do compilador desta versão. Cada uma aponta o que a diretiva precisa e onde ela não pode ficar.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>bind:value</code> em elemento que não tem valor</strong>
+<p>Só campo de formulário tem valor para ligar. Uma <code>&lt;div&gt;</code> ou um <code>&lt;span&gt;</code> não têm.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;span bind:value={nome}&gt;{nome}&lt;/span&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 6): `bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</pre>
+<p>A mensagem já entrega a lista: "só pode ser usada com input, textarea, select". Para mostrar um valor em texto, use <code>{nome}</code>; para editar, use um campo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — diretiva entre aspas</strong>
+<p>O alvo de uma diretiva é um nome ou uma expressão, nunca uma string. Entre aspas, o compilador espera um sinal de igual.</p>
+<pre class="file" data-file="src/App.svelte">&lt;input use:"focar" /&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 11): Expected token =</pre>
+<p>"Expected token =" quer dizer "esperava um sinal de igual". Escreva <code>use:focar</code> (sem aspas) ou <code>use:focar={parametro}</code> quando a ação recebe parâmetro.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — nome de estilo vazio</strong>
+<p><code>style:</code> precisa do nome da propriedade CSS. Sem nome, não há o que aplicar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p style:&gt;Pão&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 3): `style:` name cannot be empty</pre>
+<p>"Name cannot be empty" é literal: o nome não pode ficar vazio. O formato é <code>style:cor={valor}</code>, com o nome da propriedade logo depois dos dois-pontos.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 4 — <code>animate:</code> em lista sem chave</strong>
+<p>Animar a reordenação exige que o compilador saiba qual item é qual. Sem chave no <code>{#each}</code>, ele não sabe — e a mensagem explica o que fazer.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { flip } from 'svelte/animate';
+  let lista = $state([1, 2]);
+&lt;/script&gt;
+
+{#each lista as n}
+  &lt;p animate:flip&gt;{n}&lt;/p&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 5): An element that uses the `animate:` directive must be the only child of a keyed `{#each ...}` block. Did you forget to add a key to your each block?</pre>
+<p>A tradução: "um elemento que usa <code>animate:</code> precisa ser o único filho de um bloco <code>{#each}</code> com chave; esqueceu de adicionar a chave?". A correção é <code>{#each lista as n (n)}</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>Duas tabelas para consulta: a primeira junta as formas que você vai escrever; a segunda, as mensagens de erro com a tradução.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Se você quer…</th><th>Escreva</th></tr>
+<tr><td>ligar um campo a uma variável</td><td><code>&lt;input bind:value={nome} /&gt;</code></td></tr>
+<tr><td>ligar uma caixa de seleção</td><td><code>&lt;input type="checkbox" bind:checked={pago} /&gt;</code></td></tr>
+<tr><td>ligar um grupo de rádios</td><td><code>&lt;input type="radio" bind:group={tamanho} /&gt;</code></td></tr>
+<tr><td>guardar o elemento</td><td><code>&lt;div bind:this={caixa}&gt;&lt;/div&gt;</code></td></tr>
+<tr><td>medir a largura</td><td><code>&lt;div bind:clientWidth={largura}&gt;&lt;/div&gt;</code></td></tr>
+<tr><td>ligar uma classe</td><td><code>class:ativo={pago}</code></td></tr>
+<tr><td>aplicar uma cor</td><td><code>style:color={cor}</code></td></tr>
+<tr><td>rodar algo quando monta</td><td><code>use:focar</code> ou <code>{@attach focar}</code></td></tr>
+<tr><td>animar entrada e saída</td><td><code>transition:fade</code></td></tr>
+<tr><td>animar reordenação</td><td><code>{#each l as x (x.id)} … animate:flip … {/each}</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que significa</th><th>Conserto</th></tr>
+<tr><td><code>`bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</code></td><td>elemento sem valor</td><td>use um campo de formulário</td></tr>
+<tr><td><code>Expected token =</code></td><td>alvo entre aspas</td><td>tire as aspas do nome</td></tr>
+<tr><td><code>`style:` name cannot be empty</code></td><td>faltou a propriedade CSS</td><td><code>style:color={cor}</code></td></tr>
+<tr><td><code>… must be the only child of a keyed `{#each ...}` block</code></td><td>animate sem chave</td><td>adicione <code>(item.id)</code></td></tr>
+<tr><td><code>Cannot bind to constant</code></td><td><code>bind:this</code> em <code>const</code></td><td>declare com <code>let</code></td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 1.67s</pre>
+
+<p>Um detalhe deste terminal: o tamanho do arquivo final não muda quando você acrescenta uma transição. O código da animação já está no pacote do runtime, e a sua parte é só a chamada de uma função.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+&gt; loja@0.0.1 preview
+&gt; vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Confira as diretivas de navegador no <code>preview</code>, não na saída do servidor. <code>bind:this</code>, <code>use:</code>, <code>{@attach}</code> e transições só existem quando há DOM — e este é o comando que serve a versão de produção para você testar.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Diretiva é atributo com dois-pontos: o compilador gera código em vez de escrever o atributo no HTML.</li>
+  <li><code>bind:value</code> liga campo e variável nos dois sentidos; o HTML sai com <code>value</code> já preenchido.</li>
+  <li><code>bind:checked</code> para caixa, <code>bind:group</code> para rádios, <code>bind:value</code> também no <code>&lt;select&gt;</code>.</li>
+  <li><code>bind:this</code> guarda o elemento; <code>bind:clientWidth</code> e parentes medem — no servidor, medida é zero.</li>
+  <li><code>class:nome</code> sem valor usa a variável de mesmo nome como condição; <code>class:nome={outra}</code> escolhe a condição.</li>
+  <li><code>style:propriedade={valor}</code> junta tudo num atributo <code>style</code>; valor nulo remove a propriedade.</li>
+  <li><code>use:funcao</code> roda quando o elemento monta e pode devolver <code>destroy</code> e <code>update</code>.</li>
+  <li><code>{@attach funcao}</code> é a forma nova, com expressão em vez de nome fixo.</li>
+  <li>Transições (<code>transition:</code>, <code>in:</code>, <code>out:</code>) e <code>animate:</code> são comportamento de navegador; o HTML do servidor sai limpo.</li>
+  <li>Erro de diretiva costuma vir com a lista de onde ela pode ser usada — leia a lista antes de tentar outra coisa.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catálogo de Erros — a mensagem do compilador traduzida | Guia Svelte</title>
+<meta name="description" content="Catálogo de erros do Svelte 5 com a mensagem real do compilador: marcação aberta, runa no lugar errado, diretiva inválida, erro de execução e avisos, com a tradução e o conserto.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Catálogo de Erros</span></h1>
+
+<p class="intro">A Ana pendurou um quadro na parede da padaria: "se a máquina apitar, olhe o número". O apito não é castigo, é recado — e o número diz onde olhar. As mensagens do compilador do Svelte são assim: feias na primeira leitura, úteis na segunda. Esta página é o quadro completo: cada mensagem que você vai encontrar, o que ela quer dizer em português e o que fazer. Todas foram copiadas do compilador desta versão, com linha e coluna.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como ler uma mensagem de erro sem entrar em pânico: linha, coluna, mensagem.</li>
+  <li>Os erros de marcação: tag aberta, bloco aberto, fechamento trocado.</li>
+  <li>Os erros de chave e de expressão.</li>
+  <li>Os erros de runa e de prop, que sempre dizem onde a runa pode morar.</li>
+  <li>Os erros de diretiva, com a lista de elementos aceitos.</li>
+  <li>Os erros de execução, que só aparecem quando o componente desenha.</li>
+  <li>A diferença entre erro e aviso — e por que o aviso importa.</li>
+  <li>Um roteiro de investigação em quatro passos.</li>
+  <li>As seis mensagens mais comuns da padaria, com o conserto ao lado.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a mensagem é um mapa, não um castigo</h2>
+
+<p>Quem nunca programou lê uma mensagem de erro e vê um parágrafo em inglês. Quem já leu algumas sabe que 90% delas seguem o mesmo formato: um lugar, uma expectativa e um nome. "Na linha 5, coluna 8, eu esperava uma expressão JavaScript e você me deu uma string." Traduzido assim, o erro deixa de ser opinião e vira instrução.</p>
+
+<p>Existem dois momentos em que o erro aparece, e confundi-los custa tempo. O <strong>erro de compilação</strong> acontece antes da página existir: o arquivo nem chega a virar JavaScript, e o terminal mostra a mensagem com linha e coluna. O <strong>erro de execução</strong> acontece com a página já montada: o JavaScript roda, encontra algo que não existe e para. A mensagem é do navegador, não do compilador, e quase sempre não tem posição.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Momento</th><th>Quem reclama</th><th>Cara da mensagem</th><th>Onde ver</th></tr>
+<tr><td>compilação</td><td>compilador do Svelte</td><td>"Erro de compilação (linha L, coluna C): …"</td><td>terminal e sobreposição do Vite</td></tr>
+<tr><td>execução</td><td>JavaScript do navegador</td><td>"… is not defined", "Cannot read properties…"</td><td>console do navegador</td></tr>
+<tr><td>aviso</td><td>compilador, sem bloquear</td><td>"nome_do_aviso: frase"</td><td>terminal, painel do Vite</td></tr>
+</table>
+</div>
+
+<p>O terceiro tipo é o mais traiçoeiro: o <strong>aviso</strong> não impede nada. A página abre, o build passa e o bug vai para produção. A seção 9 mostra os quatro avisos que mais aparecem no projeto da Ana.</p>
+
+<hr>
+
+<h2>2. A anatomia de uma mensagem</h2>
+
+<p>Vamos abrir uma mensagem real, pedaço por pedaço. O componente abaixo esqueceu o <code>let</code> antes de uma runa:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  contador = $state(0);
+&lt;/script&gt;
+
+&lt;button&gt;{contador}&lt;/button&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 2, coluna 13): `$state(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+
+<dl class="anatomy">
+  <dt>Erro de compilação</dt><dd>o <strong>tipo</strong>: o arquivo não virou JavaScript. Se fosse um aviso, a palavra seria outra e a página abriria.</dd>
+  <dt>(linha 2, coluna 13)</dt><dd>a <strong>posição</strong>. Linha é a linha do arquivo; coluna conta caracteres a partir de 1. É o primeiro lugar para olhar, sempre.</dd>
+  <dt>`$state(...)`</dt><dd>o <strong>nome do recurso</strong> entre crases. O compilador está dizendo de quem ele está falando — aqui, da runa.</dd>
+  <dt>can only be used as …</dt><dd>a <strong>regra</strong>: "só pode ser usada como inicialização de declaração de variável…". A frase inteira é a resposta, mesmo comprida.</dd>
+</dl>
+
+<p>A posição merece atenção especial. <code>linha 2, coluna 13</code> aponta para o <code>$</code> de <code>$state</code> — não para o começo da linha. Em arquivos grandes, isso economiza minutos: você vai direto ao caractere. E quando a linha apontada parece certa, desconfie da linha anterior: um bloco aberto no fim do arquivo pode ser reportado na linha em que começou.</p>
+
+<div class="tip">
+<strong>Leia a última frase primeiro</strong>
+<p>Mensagens longas costumam terminar com a instrução: "use `$props()` instead", "add an explicit `</p>`", "did you forget to add a key to your each block?". Pular direto para o fim é mais rápido do que traduzir o começo.</p>
+</div>
+
+<hr>
+
+<h2>3. Erros de JavaScript dentro do script</h2>
+
+<p>O bloco <code>&lt;script&gt;</code> é JavaScript, e o compilador usa um analisador de verdade. Erros de sintaxe da linguagem aparecem com a mesma cara dos erros de Svelte.</p>
+
+<div class="cenario">
+<strong>Atribuir a uma constante</strong>
+<p><code>const</code> não aceita nova atribuição. O compilador aponta a linha da tentativa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const taxa = 0.1;
+  taxa = 0.2;
+&lt;/script&gt;
+
+&lt;p&gt;{taxa}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 2): Cannot assign to constant</pre>
+<p>"Cannot assign to constant" é literal: não é possível atribuir a uma constante. Se o valor muda, ele é <code>let</code> (e provavelmente <code>$state</code>).</p>
+</div>
+
+<div class="cenario">
+<strong>Dois blocos <code>&lt;script&gt;</code></strong>
+<p>Um componente tem no máximo um script normal e um script de módulo. Dois scripts normais confundem o compilador.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let a = $state(1);
+&lt;/script&gt;
+
+&lt;script&gt;
+  let b = $state(2);
+&lt;/script&gt;
+
+&lt;p&gt;{a + b}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): A component can have a single top-level `&lt;script&gt;` element and/or a single top-level `&lt;script module&gt;` element</pre>
+<p>A mensagem diz "um único <code>&lt;script&gt;</code> de topo e/ou um único <code>&lt;script module&gt;</code>". Junte as declarações num bloco só, ou marque o segundo como <code>&lt;script module&gt;</code> se ele for compartilhado.</p>
+</div>
+
+<p>Há ainda um erro de JavaScript que engana pela mensagem: quando uma chave de expressão fica aberta, o analisador continua lendo o resto do arquivo como se fosse conta e, ao encontrar a barra de <code>&lt;/h1&gt;</code>, pensa que começou uma expressão regular:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;{nome&lt;/h1&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 5, coluna 11): Unterminated regular expression</pre>
+
+<p>"Unterminated regular expression" quer dizer "expressão regular não terminada". Não há expressão regular nenhuma no seu código: o que faltou foi o <code>}</code>. Quando a mensagem falar de regex e você não escreveu regex, procure chave aberta.</p>
+
+<hr>
+
+<h2>4. Erros de marcação: tag e bloco abertos</h2>
+
+<p>O HTML do componente precisa fechar tudo o que abre. O compilador reclama com o nome do elemento ou do bloco, e a linha apontada é a da abertura.</p>
+
+<div class="cenario">
+<strong>Tag sem fechamento</strong>
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 0): `&lt;h1&gt;` was left open</pre>
+<p>"was left open" quer dizer "ficou aberta". A correção é fechar: <code>&lt;h1&gt;Padaria&lt;/h1&gt;</code>. Elementos vazios, como <code>&lt;img&gt;</code> e <code>&lt;br&gt;</code>, não precisam de fechamento.</p>
+</div>
+
+<div class="cenario">
+<strong>Bloco sem fechamento</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#if nome === 'Ana'}
+  &lt;p&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>A linha 5 é a do <code>{#if}</code> que abriu. Falta o <code>{/if}</code>. Como blocos podem estar aninhados, conte os pares de dentro para fora.</p>
+</div>
+
+<div class="cenario">
+<strong>Seção sem bloco</strong>
+<p>Um <code>{:else}</code> solto, sem <code>{#if}</code> acima, é recusado com uma pergunta.</p>
+<pre class="file" data-file="src/App.svelte">{:else}
+  &lt;p&gt;oi&lt;/p&gt;
+{/if}</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 1): {:...} block is invalid at this position (did you forget to close the preceding element or block?)</pre>
+<p>"Did you forget to close the preceding element or block?" é a pergunta que resolve a maioria dos casos: feche o que veio antes. Se não há nada antes, o <code>{:else}</code> está sobrando.</p>
+</div>
+
+<hr>
+
+<h2>5. Erros de chave e de expressão</h2>
+
+<p>Chaves esperam um valor. Quando o valor não existe, o compilador usa o vocabulário do analisador: "whitespace" (espaço), "token" (pedaço de sintaxe), "expression" (expressão).</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que quer dizer</th><th>O que estava no arquivo</th></tr>
+<tr><td><code>Expected whitespace</code></td><td>esperava um espaço e um valor</td><td><code>{@html}</code> ou <code>{#if}</code> vazio</td></tr>
+<tr><td><code>Expected token =</code></td><td>esperava um sinal de igual</td><td><code>use:"focar"</code></td></tr>
+<tr><td><code>Expected token each</code></td><td>esperava fechar o each</td><td><code>{/if}</code> no lugar de <code>{/each}</code></td></tr>
+<tr><td><code>Unexpected token</code></td><td>sobrou um sinal</td><td><code>onclick={}</code> ou chave dupla</td></tr>
+<tr><td><code>Unterminated regular expression</code></td><td>chave <code>{</code> sem fechar</td><td><code>{nome</code> colado na tag</td></tr>
+</table>
+</div>
+
+<div class="cenario">
+<strong>Diretiva vazia</strong>
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;{@html}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 9): Expected whitespace</pre>
+<p>Faltou o valor depois de <code>@html</code>. A forma certa é <code>{@html texto}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Trecho sem parênteses</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;div&gt;{@render children}&lt;/div&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 14): `{@render ...}` tags can only contain call expressions</pre>
+<p>"Call expressions" são chamadas de função. Escreva <code>{@render children()}</code> — ou <code>{@render children?.()}</code> quando o conteúdo é opcional.</p>
+</div>
+
+<hr>
+
+<h2>6. Erros de runa e de prop</h2>
+
+<p>Toda mensagem de runa tem a mesma estrutura: "só pode ser usada como…" seguida da lista de lugares permitidos. Ler a lista é mais rápido do que procurar a resposta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Lugar permitido</th></tr>
+<tr><td><code>`$state(...)` can only be used as a variable declaration initializer…</code></td><td><code>let nome = $state(valor)</code> ou campo de classe</td></tr>
+<tr><td><code>`$props()` can only be used at the top level of components…</code></td><td>começo do <code>&lt;script&gt;</code>, nunca em função</td></tr>
+<tr><td><code>`$bindable()` can only be used inside a `$props()` declaration</code></td><td>dentro da desestruturação de <code>$props()</code></td></tr>
+<tr><td><code>`$host()` can only be used inside custom element component instances</code></td><td>componente compilado como elemento customizado</td></tr>
+<tr><td><code>Cannot use `export let` in runes mode — use `$props()` instead</code></td><td><code>let { x } = $props()</code></td></tr>
+</table>
+</div>
+
+<div class="cenario">
+<strong><code>$props()</code> dentro de função</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function somar() {
+    let { a } = $props();
+    return a;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{somar()}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 16): `$props()` can only be used at the top level of components as a variable declaration initializer</pre>
+<p>Props são lidas uma vez, na inicialização. Mova a linha para o topo e use a variável dentro da função.</p>
+</div>
+
+<div class="cenario">
+<strong>Modo antigo misturado com runas</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let nome = 'Ana';
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+<p>A presença de <code>$state</code> liga o modo novo, e nele props entram por <code>$props()</code>. A mensagem entrega o substituto: "use <code>$props()</code> instead".</p>
+</div>
+
+<hr>
+
+<h2>7. Erros de diretiva e de elemento</h2>
+
+<p>Diretiva tem lugar certo e elemento certo. O compilador costuma listar as opções válidas na própria mensagem, o que economiza documentação.</p>
+
+<div class="cenario">
+<strong><code>bind:value</code> onde não há valor</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;span bind:value={nome}&gt;{nome}&lt;/span&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 6): `bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</pre>
+<p>A lista de aceitos está na mensagem. Para mostrar um valor em texto, <code>{nome}</code> basta.</p>
+</div>
+
+<div class="cenario">
+<strong>Diretiva de elemento em componente</strong>
+<p><code>class:</code>, <code>style:</code> e <code>use:</code> valem para elementos do HTML, não para componentes seus.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+&lt;/script&gt;
+
+&lt;Cartao class:ativo /&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 8): This type of directive is not valid on components</pre>
+<p>"Não é válida em componentes." A alternativa é passar uma prop e deixar o filho decidir a classe lá dentro.</p>
+</div>
+
+<div class="cenario">
+<strong><code>animate:</code> sem chave no each</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { flip } from 'svelte/animate';
+  let lista = $state([1, 2]);
+&lt;/script&gt;
+
+{#each lista as n}
+  &lt;p animate:flip&gt;{n}&lt;/p&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 5): An element that uses the `animate:` directive must be the only child of a keyed `{#each ...}` block. Did you forget to add a key to your each block?</pre>
+<p>A mensagem explica a regra e faz a pergunta certa. Escreva <code>{#each lista as n (n)}</code> e deixe o <code>&lt;p&gt;</code> como filho único.</p>
+</div>
+
+<p>Outros dois erros de diretiva que valem decorar:</p>
+
+<pre class="out">Erro de compilação (linha 1, coluna 3): `style:` name cannot be empty</pre>
+
+<pre class="out">Erro de compilação (linha 1, coluna 11): Expected token =</pre>
+
+<p>O primeiro é <code>style:</code> sem nome de propriedade. O segundo é <code>use:"focar"</code> com aspas: o alvo de uma diretiva é um nome, não uma string.</p>
+
+<hr>
+
+<h2>8. Erros de execução: quando o componente desenha e cai</h2>
+
+<p>Estes não são do compilador. O arquivo compila, o navegador começa a desenhar e alguma expressão encontra <code>undefined</code>. A mensagem aparece no console, sem linha do arquivo <code>.svelte</code>.</p>
+
+<div class="cenario">
+<strong>Nome que não existe</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;{naoExiste}&lt;/h1&gt;</pre>
+<pre class="out">naoExiste is not defined</pre>
+<p>"is not defined" quer dizer "não foi definido". O compilador não adivinha intenção: o nome desconhecido seria uma variável global, e ela não existe. Confira a grafia.</p>
+</div>
+
+<div class="cenario">
+<strong>Ler propriedade de <code>undefined</code></strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedido = $state();
+&lt;/script&gt;
+
+&lt;p&gt;{pedido.nome}&lt;/p&gt;</pre>
+<pre class="out">Cannot read properties of undefined (reading 'nome')</pre>
+<p>"Não é possível ler propriedades de undefined (lendo 'nome')". A variável existe, mas está vazia. Dê um valor inicial (<code>$state({ nome: '' })</code>) ou use <code>{pedido?.nome}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Chamar algo que não é função</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state('0.90');
+&lt;/script&gt;
+
+&lt;p&gt;{preco()}&lt;/p&gt;</pre>
+<pre class="out">preco is not a function</pre>
+<p>A variável é uma string, e string não se chama com parênteses. Ou você queria <code>{preco}</code>, ou a variável deveria guardar uma função.</p>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa</th><th>Conserto</th></tr>
+<tr><td><code>X is not defined</code></td><td>nome não declarado ou digitado errado</td><td>declare com <code>let</code> ou corrija a grafia</td></tr>
+<tr><td><code>Cannot read properties of undefined (reading 'x')</code></td><td>valor vazio acessado como objeto</td><td>valor inicial ou <code>?.</code></td></tr>
+<tr><td><code>X is not a function</code></td><td>chamada de parênteses no que não é função</td><td>tire os parênteses ou guarde uma função</td></tr>
+<tr><td><code>Cannot assign to constant</code></td><td>atribuição a <code>const</code></td><td>declare com <code>let</code></td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="out:Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o parágrafo usa um nome que não existe e a caixa mostra o erro de execução. Conserte para a tela mostrar <code>Olá, Ana</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {naoExiste}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>9. Avisos: o compilador reclamando antes de quebrar</h2>
+
+<p>Aviso não impede a página de abrir. Ele aparece no terminal com um nome em minúsculas e uma frase, e é a única chance de descobrir um bug que só apareceria meses depois. Estes quatro saíram do compilador desta versão:</p>
+
+<div class="cenario">
+<strong><code>non_reactive_update</code></strong>
+<p>Uma variável comum é alterada e o HTML depende dela. Compila, abre, e a tela não acompanha.</p>
+<pre class="out">non_reactive_update: `cliques` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates</pre>
+<p>O conserto é declarar com <code>$state</code>. O aviso só aparece em componente que já usa alguma runa; no modo antigo, <code>let</code> é reativo e o aviso não faz sentido.</p>
+</div>
+
+<div class="cenario">
+<strong><code>state_referenced_locally</code></strong>
+<p>Uma leitura pega só o valor inicial de um estado.</p>
+<pre class="out">state_referenced_locally: This reference only captures the initial value of `nome`. Did you mean to reference it inside a closure instead?</pre>
+<p>"Só captura o valor inicial" — o valor não vai acompanhar as mudanças. Se você quer acompanhar, use <code>$derived</code> ou leia dentro de uma função.</p>
+</div>
+
+<div class="cenario">
+<strong><code>element_implicitly_closed</code></strong>
+<p>Uma tag é fechada por outra, sem fechamento próprio.</p>
+<pre class="out">element_implicitly_closed: This element is implicitly closed by the following `&lt;/div&gt;`, which can cause an unexpected DOM structure. Add an explicit `&lt;/p&gt;` to avoid surprises.</pre>
+<p>O navegador "conserta" o HTML e cria uma estrutura diferente da que você escreveu. Feche o <code>&lt;p&gt;</code> antes do <code>&lt;/div&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<strong><code>event_directive_deprecated</code></strong>
+<p>O jeito antigo de escutar evento, ainda aceito para não quebrar projeto velho.</p>
+<pre class="out">event_directive_deprecated: Using `on:click` to listen to the click event is deprecated. Use the event attribute `onclick` instead</pre>
+<p>"Deprecated" quer dizer fora de moda, com substituto pronto. Troque <code>on:click</code> por <code>onclick</code> e o aviso desaparece.</p>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Aviso</th><th>O que ele protege</th><th>Gravidade</th></tr>
+<tr><td><code>non_reactive_update</code></td><td>tela que não acompanha o valor</td><td>alta: bug silencioso</td></tr>
+<tr><td><code>state_referenced_locally</code></td><td>valor congelado no primeiro desenho</td><td>alta: bug silencioso</td></tr>
+<tr><td><code>element_implicitly_closed</code></td><td>DOM diferente do escrito</td><td>média: depende do CSS</td></tr>
+<tr><td><code>event_directive_deprecated</code></td><td>sintaxe que vai sair</td><td>baixa: funciona hoje</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>10. Como investigar um erro</h2>
+
+<p>Com o catálogo na mão, sobra o método. Quatro passos resolvem quase tudo, na ordem:</p>
+
+<p><strong>1. Vá à posição.</strong> Linha e coluna do erro, quando existem, apontam o caractere. Abra o arquivo na linha e olhe a coluna — muitas vezes o problema é o que está imediatamente à esquerda: uma chave aberta, uma aspa sem par, um <code>=</code> que virou <code>==</code>.</p>
+
+<p><strong>2. Traduza a última frase.</strong> "Did you forget to add a key?", "use `$props()` instead", "add an explicit `&lt;/p&gt;`". A instrução está ali; o resto é explicação.</p>
+
+<p><strong>3. Reduza.</strong> Se a mensagem não fizer sentido no arquivo grande, copie o componente para uma caixa "Experimente" deste guia e apague metade. Se o erro sumir, ele estava na metade apagada; se ficar, está na outra. Duas ou três rodadas isolam a linha.</p>
+
+<p><strong>4. Compare com o que funcionava.</strong> Volte uma versão no Git, ou desfaça a última mudança. Erro que aparece do nada quase sempre veio de uma edição recente — inclusive de uma edição em outro arquivo.</p>
+
+<div class="trysvelte" data-goal="out:Cliques: 0">
+<p class="try-task"><strong>Missão:</strong> a caixa mostra um erro de compilação sobre <code>$state</code>. Conserte o componente para a tela mostrar <code>Cliques: 0</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<div class="trysvelte" data-goal="out:Aberta">
+<p class="try-task"><strong>Missão:</strong> o bloco <code>{#if}</code> ficou aberto e o componente não compila. Feche o bloco para aparecer <code>Aberta</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aberta = $state(true);
+&lt;/script&gt;
+
+{#if aberta}
+  &lt;p&gt;Aberta&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aberta = $state(true);
+&lt;/script&gt;
+
+{#if aberta}
+  &lt;p&gt;Aberta&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>As duas caixas acima mostram o erro real no lugar da página: o mesmo texto que o terminal mostraria. Consertar dentro da caixa é o jeito mais rápido de aprender a ler a mensagem, porque você vê o antes e o depois na mesma tela.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>A tabela grande junta as mensagens deste catálogo com a tradução em uma linha. Use como índice: procure a frase que você viu e siga para a seção correspondente.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você viu</th><th>Em português</th><th>Vá para</th></tr>
+<tr><td><code>`$state(...)` can only be used as a variable declaration initializer…</code></td><td>falta <code>let nome =</code></td><td>seção 6</td></tr>
+<tr><td><code>`$props()` can only be used at the top level…</code></td><td>tire de dentro da função</td><td>seção 6</td></tr>
+<tr><td><code>`$bindable()` can only be used inside a `$props()` declaration</code></td><td>vai dentro do <code>$props()</code></td><td>seção 6</td></tr>
+<tr><td><code>Cannot use `export let` in runes mode</code></td><td>modo novo não aceita prop antiga</td><td>seção 6</td></tr>
+<tr><td><code>`bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</code></td><td>elemento sem valor</td><td>seção 7</td></tr>
+<tr><td><code>This type of directive is not valid on components</code></td><td>diretiva em componente</td><td>seção 7</td></tr>
+<tr><td><code>An element that uses the `animate:` directive…</code></td><td>falta chave no each</td><td>seção 7</td></tr>
+<tr><td><code>Block was left open</code></td><td>faltou <code>{/…}</code></td><td>seção 4</td></tr>
+<tr><td><code>`&lt;h1&gt;` was left open</code></td><td>faltou fechar a tag</td><td>seção 4</td></tr>
+<tr><td><code>{:...} block is invalid at this position</code></td><td>seção sem bloco</td><td>seção 4</td></tr>
+<tr><td><code>Expected whitespace</code></td><td>falta o valor</td><td>seção 5</td></tr>
+<tr><td><code>Expected token each</code></td><td>fechamento trocado</td><td>seção 5</td></tr>
+<tr><td><code>Unterminated regular expression</code></td><td>chave aberta</td><td>seção 3</td></tr>
+<tr><td><code>X is not defined</code></td><td>nome não declarado</td><td>seção 8</td></tr>
+<tr><td><code>Cannot read properties of undefined</code></td><td>valor vazio acessado</td><td>seção 8</td></tr>
+<tr><td><code>X is not a function</code></td><td>parênteses no lugar errado</td><td>seção 8</td></tr>
+<tr><td><code>Cannot assign to constant</code></td><td>atribuição a <code>const</code></td><td>seção 3</td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>No servidor de desenvolvimento, o erro de compilação toma a tela do navegador e mostra o arquivo com a linha sublinhada. É a mesma mensagem do terminal, com o conforto de ver o código em volta.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 1.67s</pre>
+
+<p>No build não há sobreposição: o erro sai no terminal e o comando termina com código diferente de zero. Se o seu terminal mostra "built in" com os arquivos no fim, não há erro de compilação — o problema é de execução e mora no console do navegador.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Mensagem de compilação tem tipo, posição, nome do recurso e regra: leia a posição e a última frase.</li>
+  <li>Erro de execução vem do JavaScript, sem posição no <code>.svelte</code>, e aparece no console do navegador.</li>
+  <li>Tag e bloco abertos são reportados na linha da abertura: <code>was left open</code>, <code>Block was left open</code>.</li>
+  <li>Fechamento trocado aparece como <code>Expected token …</code> com o nome do bloco que deveria fechar.</li>
+  <li>Chave aberta pode virar <code>Unterminated regular expression</code>; procure o <code>}</code> que falta.</li>
+  <li>Toda mensagem de runa lista onde ela pode morar — é a resposta, não um enigma.</li>
+  <li><code>bind:</code> só em campo de formulário; <code>class:</code> e <code>style:</code> não valem em componente.</li>
+  <li><code>animate:</code> exige filho único de um <code>{#each}</code> com chave.</li>
+  <li>Avisos não bloqueiam e escondem bugs: <code>non_reactive_update</code> e <code>state_referenced_locally</code> são os mais urgentes.</li>
+  <li>Para investigar: vá à posição, traduza a última frase, reduza o arquivo pela metade, compare com a versão que funcionava.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

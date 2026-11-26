@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APIs de Componente — $props, children, contexto e montagem | Guia Svelte</title>
+<meta name="description" content="Referência das APIs de componente do Svelte 5: $props, children, callback props, $bindable, setContext, onMount, mount(), svelte:element e svelte:boundary, com saídas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">APIs de Componente</span></h1>
+
+<p class="intro">A Ana comprou uma caixa de vidro para a vitrine. O que entra pela tampa de cima é o pedido do cliente; o que sai pela fresta lateral é o aviso de "pronto". A caixa não sabe quem está lá fora, e quem está lá fora não sabe o que tem dentro — só o que entra e o que sai. Um componente funciona igual: as <strong>props</strong> entram, os <strong>callbacks</strong> saem, e o meio é problema dele. Esta página é o manual das portas da caixa: como abrir, como fechar e como conversar sem quebrar o vidro.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li><code>$props()</code> com valores padrão, resto e props de função.</li>
+  <li><code>children</code>: como um componente recebe HTML de quem o usa.</li>
+  <li>Como o filho avisa o pai sem <code>createEventDispatcher</code>.</li>
+  <li><code>$bindable</code> e a ligação de duas vias entre pai e filho.</li>
+  <li><code>setContext</code> e <code>getContext</code> para não passar prop de mão em mão.</li>
+  <li><code>onMount</code>, <code>$effect</code>, <code>tick</code> e <code>untrack</code> no ciclo de vida.</li>
+  <li><code>mount()</code> e <code>unmount()</code>, o começo e o fim de tudo.</li>
+  <li>Os elementos <code>&lt;svelte:element&gt;</code> e companhia.</li>
+  <li><code>&lt;svelte:boundary&gt;</code> como rede de proteção de erro.</li>
+  <li>As mensagens reais quando a API é usada fora do lugar.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: portas de entrada e de saída</h2>
+
+<p>Um componente é uma função que devolve tela. As entradas são as props; a saída é o que ele chama de volta — hoje, funções que o pai entregou. O que não é porta é detalhe interno: as variáveis de estado, as funções auxiliares, o CSS. Essa fronteira é o que permite trocar o conteúdo da caixa sem quebrar quem a usa.</p>
+
+<p>Quem vem de outras bibliotecas procura três coisas que o Svelte 5 resolveu de outro jeito: eventos de componente (não existem mais como API própria; use callback como prop), slots (viraram snippets, com <code>children</code> sendo o caso especial) e acesso ao elemento do componente (não existe; use <code>bind:this</code> ou contexto). A tabela abaixo é o mapa completo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>API</th><th>Vem de</th><th>Serve para</th></tr>
+<tr><td><code>$props()</code></td><td>runa</td><td>receber valores de fora</td></tr>
+<tr><td><code>children</code></td><td>prop especial</td><td>receber conteúdo entre as tags</td></tr>
+<tr><td><code>$bindable()</code></td><td>runa</td><td>devolver mudanças ao pai</td></tr>
+<tr><td><code>setContext</code> / <code>getContext</code></td><td><code>svelte</code></td><td>passar valor para descendentes</td></tr>
+<tr><td><code>onMount</code> / <code>onDestroy</code></td><td><code>svelte</code></td><td>rodar código na montagem e na saída</td></tr>
+<tr><td><code>tick()</code></td><td><code>svelte</code></td><td>esperar o próximo desenho</td></tr>
+<tr><td><code>untrack()</code></td><td><code>svelte</code></td><td>ler sem virar dependência</td></tr>
+<tr><td><code>mount()</code> / <code>unmount()</code></td><td><code>svelte</code></td><td>criar e destruir a aplicação</td></tr>
+<tr><td><code>&lt;svelte:element&gt;</code></td><td>elemento especial</td><td>escolher a tag em tempo de execução</td></tr>
+<tr><td><code>&lt;svelte:boundary&gt;</code></td><td>elemento especial</td><td>mostrar alternativa quando algo quebra</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. <code>$props()</code>: o que entra pela tampa</h2>
+
+<p>Toda prop nasce de uma desestruturação de <code>$props()</code>, no topo do <code>&lt;script&gt;</code>. O valor à direita do <code>=</code> é o padrão, usado quando ninguém passa nada:</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { titulo = 'Pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{titulo}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pão francês: R$ 0.90&lt;/p&gt;</pre>
+
+<p>Sem padrão, a prop que ninguém passa vale <code>undefined</code> — e <code>undefined.toFixed(2)</code> quebra o componente. Por isso a recomendação prática é dar padrão a toda prop que pode faltar, ou tratar o valor com <code>??</code> na hora de usar.</p>
+
+<dl class="anatomy">
+  <dt>let { … } = $props()</dt><dd>a <strong>porta de entrada</strong>. Os nomes dentro das chaves são as props que o componente aceita.</dd>
+  <dt>titulo = 'Pão francês'</dt><dd>o <strong>padrão</strong>. Vale só quando a prop não é passada; <code>undefined</code> explícito também cai no padrão.</dd>
+  <dt>...resto</dt><dd>o <strong>resto</strong>: um objeto com todas as props que não foram nomeadas. Útil para repassar opções.</dd>
+  <dt>onSalvar</dt><dd>uma <strong>prop de função</strong>. O pai passa a função; o filho chama quando tem algo a avisar.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="out:Pão francês: R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> ninguém passa props para este componente e a tela mostra <code>: R$</code>. Dê valores padrão para <code>titulo</code> e <code>preco</code>, e formate o preço com duas casas.</p>
+<pre class="script" data-file="Cartao.svelte">&lt;script&gt;
+  let { titulo, preco } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{titulo}: R$ {preco}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Cartao.svelte">&lt;script&gt;
+  let { titulo = 'Pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{titulo}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>A caixa roda o componente sozinho, sem pai — é o mesmo caso de um componente usado sem atributos. Se a tela mostra <code>Pão francês: R$ 0.90</code>, os padrões estão certos e a formatação também.</p>
+
+<hr>
+
+<h2>3. <code>children</code>: o conteúdo que vem de fora</h2>
+
+<p>Um componente que só aceita texto e número é limitado. Muitas vezes o pai quer mandar marcação: um parágrafo, um botão, outro componente. É para isso que existe a prop <code>children</code> — ela é um snippet com o conteúdo escrito entre as tags.</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { titulo = 'Pão francês', preco = 0.9, children } = $props();
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{titulo}&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+  {@render children?.()}
+&lt;/article&gt;</pre>
+
+<pre class="out">&lt;article&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt; &lt;/article&gt;</pre>
+
+<p>O ponto de interrogação antes dos parênteses é JavaScript: se <code>children</code> não existir (o pai não passou conteúdo), a chamada não acontece. Sem ele, o componente quebraria ao ser usado como <code>&lt;Cartao /&gt;</code> sozinho.</p>
+
+<pre class="file" data-file="src/Vitrine.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+&lt;/script&gt;
+
+&lt;Cartao titulo="Pão de queijo" preco={1.5}&gt;
+  &lt;p&gt;Feito na hora.&lt;/p&gt;
+&lt;/Cartao&gt;
+&lt;Cartao /&gt;</pre>
+
+<p>Sozinho, o cartão usa os padrões e não desenha conteúdo extra — o <code>children</code> não existe e o <code>?.</code> evita a chamada. Com dois cartões na vitrine, um com conteúdo e outro sem, o HTML que o navegador recebe é <code>&lt;article&gt;&lt;h2&gt;Pão de queijo&lt;/h2&gt; &lt;p&gt;R$ 1.50&lt;/p&gt; &lt;p&gt;Feito na hora.&lt;/p&gt;&lt;/article&gt;</code> seguido de <code>&lt;article&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt; &lt;/article&gt;</code>.</p>
+
+<p>Repare que o componente filho não aparece no HTML com o nome dele: o compilador desmancha a caixa e entrega as tags de dentro, como se o conteúdo tivesse sido escrito ali desde o começo.</p>
+
+<p>Para mandar mais de um trecho com nome — um cabeçalho, um rodapé —, declare snippets no pai e passe como props: <code>&lt;Painel&gt;{#snippet cabecalho()}…{/snippet}{/Painel}&gt;</code>. O filho renderiza <code>{@render cabecalho()}</code>. É o substituto direto dos slots nomeados do Svelte 4.</p>
+
+<hr>
+
+<h2>4. Callback props: o filho avisando o pai</h2>
+
+<p>Quando o filho tem algo a dizer, ele chama uma função que o pai entregou. Não existe mais <code>createEventDispatcher</code> no caminho recomendado: evento de componente virou prop de função, com nome começando por <code>on</code>.</p>
+
+<pre class="file" data-file="src/Filho.svelte">&lt;script&gt;
+  let { onSalvar } = $props();
+  let texto = $state('');
+&lt;/script&gt;
+
+&lt;input bind:value={texto} placeholder="pedido" /&gt;
+&lt;button onclick={() =&gt; onSalvar(texto)}&gt;Salvar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;input value="" placeholder="pedido"/&gt; &lt;button&gt;Salvar&lt;/button&gt;</pre>
+
+<p>Sozinho, o filho desenha o campo vazio e o botão. No pai, o mesmo filho aparece seguido do parágrafo, e o texto inicial é <code>Último pedido: nada ainda</code> — o campo só muda quando alguém digita e clica.</p>
+
+<pre class="file" data-file="src/Pai.svelte">&lt;script&gt;
+  import Filho from './Filho.svelte';
+  let ultimo = $state('nada ainda');
+&lt;/script&gt;
+
+&lt;Filho onSalvar={(t) =&gt; (ultimo = t)} /&gt;
+&lt;p&gt;Último pedido: {ultimo}&lt;/p&gt;</pre>
+
+<p>A vantagem sobre o despachante antigo é que o fluxo fica visível: quem lê o pai vê <code>onSalvar={(t) =&gt; …}</code> e sabe exatamente o que acontece. A desvantagem é que o filho não avisa "olha, eu tenho um evento" sem declarar a prop — o que, na prática, é uma vantagem para quem lê.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer…</th><th>Svelte 5</th><th>Svelte 4 (antigo)</th></tr>
+<tr><td>receber um valor</td><td><code>let { x } = $props()</code></td><td><code>export let x</code></td></tr>
+<tr><td>receber conteúdo</td><td><code>{@render children()}</code></td><td><code>&lt;slot /&gt;</code></td></tr>
+<tr><td>avisar o pai</td><td><code>let { onSalvar } = $props()</code></td><td><code>createEventDispatcher</code></td></tr>
+<tr><td>devolver mudança</td><td><code>$bindable()</code></td><td><code>bind:</code> em prop exportada</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. <code>$bindable</code>: quando o filho devolve o valor</h2>
+
+<p>Callback resolve o aviso de um evento. Quando o filho edita um valor que pertence ao pai — um campo numérico, um seletor —, a ligação de duas vias é mais direta. <code>$bindable</code> marca a prop como ligável:</p>
+
+<pre class="file" data-file="src/Quantidade.svelte">&lt;script&gt;
+  let { valor = $bindable(0) } = $props();
+&lt;/script&gt;
+
+&lt;input type="number" bind:value={valor} /&gt;</pre>
+
+<pre class="out">&lt;input type="number" value="0"/&gt;</pre>
+
+<p>Sozinho, o campo nasce com o padrão <code>0</code>. No pai, o valor inicial vem de <code>qtd</code> e o HTML sai com <code>value="2"</code> seguido do parágrafo <code>2 pães</code>.</p>
+
+<pre class="file" data-file="src/PaiBind.svelte">&lt;script&gt;
+  import Quantidade from './Quantidade.svelte';
+  let qtd = $state(2);
+&lt;/script&gt;
+
+&lt;Quantidade bind:valor={qtd} /&gt;
+&lt;p&gt;{qtd} pães&lt;/p&gt;</pre>
+
+<p>Dentro do filho, <code>valor</code> se comporta como estado: muda quando o usuário digita. Fora, o pai recebe a mudança na variável <code>qtd</code>. O compilador gera a ponte nos dois sentidos, e o valor inicial vem do pai (2, no exemplo).</p>
+
+<p>O custo é de propriedade: com <code>bind</code>, o dado tem dois donos. Isso é aceitável num campo de formulário e problemático num dado de negócio, porque fica difícil saber quem mudou o quê. A regra que o guia segue: <code>$bindable</code> para controles de entrada; callback para tudo o mais.</p>
+
+<hr>
+
+<h2>6. Contexto: o que desce sem passar de mão em mão</h2>
+
+<p>Existe um caso em que passar prop é pior do que não passar: quando o valor precisa chegar a um componente fundo na árvore. O contexto resolve isso — o pai publica, qualquer descendente lê, sem prop no meio.</p>
+
+<pre class="file" data-file="src/Contexto.svelte">&lt;script&gt;
+  import { setContext } from 'svelte';
+  import Cabecalho from './Cabecalho.svelte';
+
+  setContext('padaria', { nome: 'Padaria da Ana', aberta: true });
+&lt;/script&gt;
+
+&lt;Cabecalho /&gt;</pre>
+
+<pre class="file" data-file="src/Cabecalho.svelte">&lt;script&gt;
+  import { getContext } from 'svelte';
+  let padaria = getContext('padaria');
+&lt;/script&gt;
+
+&lt;p&gt;{padaria.nome} — {padaria.aberta ? 'aberta' : 'fechada'}&lt;/p&gt;</pre>
+
+<p>Com o pai acima publicando o contexto, o HTML que o navegador recebe é <code>&lt;p&gt;Padaria da Ana — aberta&lt;/p&gt;</code>. O cabeçalho não recebeu prop nenhuma e mesmo assim soube o nome da padaria.</p>
+
+<p>A chave (<code>'padaria'</code>) é o endereço do valor. Qualquer descendente que peça a mesma chave recebe o mesmo objeto. Se ninguém publicou, <code>getContext</code> devolve <code>undefined</code> — e aí <code>padaria.nome</code> quebra na hora de desenhar, como na seção de erros.</p>
+
+<p>Duas regras práticas. Primeira: publique o contexto durante a inicialização do componente, não dentro de um evento ou de um <code>setTimeout</code> — depois da montagem, os filhos já leram. Segunda: se o valor muda, publique um objeto com estado dentro (<code>{ contador }</code> criado com <code>$state</code>) em vez de um número solto; assim os filhos acompanham.</p>
+
+<hr>
+
+<h2>7. Ciclo de vida: <code>onMount</code>, <code>$effect</code>, <code>tick</code></h2>
+
+<p>Alguns trabalhos só podem acontecer no navegador e depois que o elemento existe. O mais comum é <code>onMount</code>, que roda uma vez, quando o componente entra na página:</p>
+
+<pre class="file" data-file="src/Montagem.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+  let status = $state('carregando');
+
+  onMount(() =&gt; {
+    status = 'pronto';
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{status}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;carregando&lt;/p&gt;</pre>
+
+<p>No servidor, <code>onMount</code> não roda — e a saída mostra o estado inicial. No navegador, o texto vira <code>pronto</code> no primeiro quadro. Essa diferença é a razão de a tela piscar em páginas que dependem de dados do navegador, e a razão de você nunca colocar no <code>onMount</code> algo que o HTML precisa ter.</p>
+
+<div class="trysvelte" data-goal="out:pronto">
+<p class="try-task"><strong>Missão:</strong> a tela fica presa em <code>carregando</code>. Use <code>onMount</code> para trocar o estado para <code>pronto</code> assim que o componente entrar na página.</p>
+<pre class="script" data-file="Montagem.svelte">&lt;script&gt;
+  let status = $state('carregando');
+&lt;/script&gt;
+
+&lt;p&gt;{status}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Montagem.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+  let status = $state('carregando');
+
+  onMount(() =&gt; {
+    status = 'pronto';
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{status}&lt;/p&gt;</pre>
+</div>
+
+<p>As outras peças do ciclo de vida se encaixam assim: <code>$effect</code> roda depois de cada desenho em que suas dependências mudaram; <code>onDestroy</code> roda quando o componente sai; <code>tick()</code> devolve uma promessa que resolve no próximo desenho, útil quando você precisa medir algo que acabou de aparecer; <code>untrack()</code> lê um valor sem que ele vire dependência do efeito.</p>
+
+<pre class="file" data-file="src/Medida.svelte">&lt;script&gt;
+  import { tick } from 'svelte';
+  let lista = $state([]);
+  let altura = $state(0);
+
+  async function adicionar() {
+    lista = [...lista, 'pão'];
+    await tick();
+    altura = lista.length * 24;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+&lt;p&gt;{lista.length} itens, {altura}px&lt;/p&gt;</pre>
+
+<pre class="out">&lt;button&gt;adicionar&lt;/button&gt; &lt;p&gt;0 itens, 0px&lt;/p&gt;</pre>
+
+<p>Sem o <code>await tick()</code>, a medida seria feita antes de o novo item existir na tela — o clássico "medi zero". O <code>tick</code> não faz mágica: ele só espera o compilador terminar o trabalho que já estava na fila.</p>
+
+<hr>
+
+<h2>8. <code>mount()</code> e <code>unmount()</code>: o começo e o fim</h2>
+
+<p>Todo projeto Svelte tem um arquivo de entrada que liga o componente principal ao HTML. No Svelte 5 ele usa <code>mount</code>, não <code>new App()</code>:</p>
+
+<pre class="file" data-file="src/main.js">import { mount } from 'svelte';
+import App from './App.svelte';
+
+const app = mount(App, {
+  target: document.getElementById('app')
+});
+
+export default app;</pre>
+
+<p>O <code>target</code> é o elemento onde a aplicação vai morar — no projeto da Ana, a <code>&lt;div id="app"&gt;&lt;/div&gt;</code> do <code>index.html</code>. O retorno é um objeto com o componente montado; guardar numa constante permite desmontar depois:</p>
+
+<pre class="file" data-file="src/desmontar.js">import { unmount } from 'svelte';
+import app from './main.js';
+
+unmount(app);</pre>
+
+<p>Duas coisas que costumam confundir. Primeira: <code>mount</code> não existe no servidor — é função de navegador, e chamá-la durante a renderização do servidor quebra. Segunda: montar duas vezes no mesmo <code>target</code> duplica a aplicação; se você precisa trocar a tela, desmonte antes ou deixe o próprio componente decidir o que mostrar.</p>
+
+<hr>
+
+<h2>9. <code>&lt;svelte:element&gt;</code> e os outros elementos especiais</h2>
+
+<p>Quando a tag precisa ser escolhida em tempo de execução — um título que pode ser <code>h1</code> ou <code>h2</code>, um link que pode ser <code>a</code> ou <code>button</code> —, use <code>&lt;svelte:element&gt;</code>:</p>
+
+<pre class="file" data-file="src/Elemento.svelte">&lt;script&gt;
+  let tag = $state('h2');
+&lt;/script&gt;
+
+&lt;svelte:element this={tag}&gt;Pão&lt;/svelte:element&gt;</pre>
+
+<pre class="out">&lt;h2&gt;Pão&lt;/h2&gt;</pre>
+
+<p>O valor de <code>this</code> é o nome da tag, em texto. Se ele for <code>null</code> ou vazio, nada é desenhado — útil para quando a tag só é conhecida depois de carregar um dado.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Elemento</th><th>Para que serve</th><th>Exemplo</th></tr>
+<tr><td><code>&lt;svelte:element&gt;</code></td><td>tag escolhida em execução</td><td><code>&lt;svelte:element this={tag}&gt;</code></td></tr>
+<tr><td><code>&lt;svelte:window&gt;</code></td><td>eventos da janela</td><td><code>&lt;svelte:window onkeydown={…} /&gt;</code></td></tr>
+<tr><td><code>&lt;svelte:document&gt;</code></td><td>eventos do documento</td><td><code>&lt;svelte:document onvisibilitychange={…} /&gt;</code></td></tr>
+<tr><td><code>&lt;svelte:body&gt;</code></td><td>eventos do corpo</td><td><code>&lt;svelte:body onmouseenter={…} /&gt;</code></td></tr>
+<tr><td><code>&lt;svelte:head&gt;</code></td><td>título e meta tags</td><td><code>&lt;svelte:head&gt;&lt;title&gt;…&lt;/title&gt;&lt;/svelte:head&gt;</code></td></tr>
+<tr><td><code>&lt;svelte:boundary&gt;</code></td><td>rede de proteção de erro</td><td><code>&lt;svelte:boundary&gt;…{/snippet}&lt;/svelte:boundary&gt;</code></td></tr>
+</table>
+</div>
+
+<p>O <code>&lt;svelte:window&gt;</code> é o mais usado no dia a dia: ele escuta um evento global sem que você precise pegar o objeto <code>window</code> e lembrar de remover o ouvinte depois. Vale saber que <code>&lt;svelte:head&gt;</code> escreve no cabeçalho do documento, e não no corpo — por isso não aparece na saída HTML que este guia mostra.</p>
+
+<hr>
+
+<h2>10. <code>&lt;svelte:boundary&gt;</code>: a rede de proteção</h2>
+
+<p>Um erro dentro do componente derruba a página inteira. O <code>&lt;svelte:boundary&gt;</code> limita o estrago: o que está dentro pode falhar, e o snippet <code>failed</code> mostra uma alternativa em vez do vazio.</p>
+
+<pre class="file" data-file="src/Limite.svelte">&lt;script&gt;
+  function risco() {
+    throw new Error('sem estoque');
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;{risco()}&lt;/p&gt;
+  {#snippet failed(erro)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;</pre>
+
+<pre class="out">Erro ao renderizar: sem estoque</pre>
+
+<p>A saída acima é o que acontece <strong>no servidor</strong>: o boundary não segura o erro durante a renderização do servidor, e o processo inteiro falha. No navegador, o mesmo componente mostra <code>Deu erro: sem estoque</code>, e o resto da página continua vivo. É por isso que a caixa abaixo funciona e a linha de comando acima não.</p>
+
+<div class="trysvelte" data-goal="out:Deu erro: sem estoque">
+<p class="try-task"><strong>Missão:</strong> a função <code>risco</code> sempre lança um erro e o componente cai. Coloque o parágrafo dentro de um <code>&lt;svelte:boundary&gt;</code> com o snippet <code>failed</code> que mostra <code>Deu erro: sem estoque</code>.</p>
+<pre class="script" data-file="Limite.svelte">&lt;script&gt;
+  function risco() {
+    throw new Error('sem estoque');
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{risco()}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Limite.svelte">&lt;script&gt;
+  function risco() {
+    throw new Error('sem estoque');
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;{risco()}&lt;/p&gt;
+  {#snippet failed(erro)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;</pre>
+</div>
+
+<p>O snippet <code>failed</code> recebe o erro como argumento. Existe também <code>pending</code>, que aparece enquanto uma promessa lida dentro do boundary não resolve. O custo dessa rede é que ela esconde o erro do usuário — e é exatamente o que você quer quando o pedido é "a página não pode ficar em branco", e exatamente o que você não quer quando está tentando descobrir o bug: nesse caso, deixe o erro aparecer.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As quatro mensagens abaixo saíram do compilador desta versão, com linha e coluna. A última vem do navegador, não do compilador.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>export let</code> em modo de runas</strong>
+<p>Assim que o componente usa uma runa, o modo antigo é desligado e <code>export let</code> deixa de ser prop.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  export let nome = 'Ana';
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}: {total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+<p>A mensagem diz o substituto: "não pode usar export let no modo de runas — use $props()". Troque por <code>let { nome = 'Ana' } = $props();</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>{@render}</code> sem chamada</strong>
+<p>O trecho precisa ser chamado como função. Sem os parênteses, o compilador recusa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;div&gt;{@render children}&lt;/div&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 14): `{@render ...}` tags can only contain call expressions</pre>
+<p>"Só podem conter expressões de chamada" — ou seja, <code>children()</code>, com parênteses. Sem conteúdo opcional, a forma segura é <code>{@render children?.()}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>$props()</code> fora do topo</strong>
+<p>Props são lidas uma vez, na inicialização. Dentro de uma função, não existe "topo do componente".</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function somar() {
+    let { a } = $props();
+    return a;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{somar()}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 16): `$props()` can only be used at the top level of components as a variable declaration initializer</pre>
+<p>Mova a linha para o começo do <code>&lt;script&gt;</code> e use a variável dentro da função.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 4 — <code>getContext</code> sem quem publique</strong>
+<p>Compila e quebra ao desenhar: ninguém chamou <code>setContext</code> com essa chave acima deste componente.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { getContext } from 'svelte';
+  let padaria = getContext('padaria');
+&lt;/script&gt;
+
+&lt;p&gt;{padaria.nome}&lt;/p&gt;</pre>
+<pre class="out">Cannot read properties of undefined (reading 'nome')</pre>
+<p>A mensagem fala de <code>'nome'</code> em <code>undefined</code>: o contexto voltou vazio. Confira a chave e se o componente que publica está realmente acima na árvore.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<p>As duas tabelas juntam a forma exata e o efeito de cada API, e a tradução das mensagens de erro mais comuns.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Efeito</th><th>Onde escrever</th></tr>
+<tr><td><code>let { a = 1, ...resto } = $props()</code></td><td>recebe props com padrão e resto</td><td>topo do script</td></tr>
+<tr><td><code>{@render children()}</code></td><td>desenha o conteúdo do pai</td><td>no HTML do filho</td></tr>
+<tr><td><code>onSalvar={(v) =&gt; …}</code></td><td>callback do filho para o pai</td><td>na tag do filho</td></tr>
+<tr><td><code>let { x = $bindable(0) } = $props()</code></td><td>prop ligável</td><td>topo do filho</td></tr>
+<tr><td><code>setContext('chave', valor)</code></td><td>publica para descendentes</td><td>inicialização do pai</td></tr>
+<tr><td><code>getContext('chave')</code></td><td>lê o que foi publicado</td><td>inicialização do filho</td></tr>
+<tr><td><code>onMount(fn)</code></td><td>roda uma vez no navegador</td><td>topo do script</td></tr>
+<tr><td><code>await tick()</code></td><td>espera o próximo desenho</td><td>em função assíncrona</td></tr>
+<tr><td><code>mount(App, { target })</code></td><td>cria a aplicação</td><td><code>main.js</code></td></tr>
+<tr><td><code>&lt;svelte:element this={tag}&gt;</code></td><td>tag dinâmica</td><td>no HTML</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Significa</th><th>Conserto</th></tr>
+<tr><td><code>Cannot use `export let` in runes mode — use `$props()` instead</code></td><td>prop no modo antigo</td><td>troque por <code>$props()</code></td></tr>
+<tr><td><code>`{@render ...}` tags can only contain call expressions</code></td><td>faltaram os parênteses</td><td><code>{@render children()}</code></td></tr>
+<tr><td><code>`$props()` can only be used at the top level of components</code></td><td>fora do topo</td><td>mova para o topo do script</td></tr>
+<tr><td><code>Cannot read properties of undefined</code></td><td>contexto vazio</td><td>publique antes com <code>setContext</code></td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Enquanto o servidor está no ar, o painel mostra avisos de API: prop que ninguém passa, contexto lido fora do lugar, <code>onMount</code> que nunca roda porque o componente é só de servidor. Esses avisos não impedem a página de abrir — impedem que o bug chegue em produção sem você saber.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 1.67s</pre>
+
+<p>"111 modules transformed" inclui cada componente que o projeto importa. Um componente que só é usado por outro entra no pacote uma vez; um que ninguém importa não entra. É por isso que apagar um componente órfão diminui o número no próximo build.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Props entram por <code>let { … } = $props()</code>, com padrão à direita do <code>=</code>.</li>
+  <li><code>children</code> é o conteúdo entre as tags; renderize com <code>{@render children?.()}</code>.</li>
+  <li>O filho avisa o pai chamando uma prop de função — não existe mais <code>createEventDispatcher</code> no caminho novo.</li>
+  <li><code>$bindable</code> cria ligação de duas vias; use em controle de entrada, não em dado de negócio.</li>
+  <li><code>setContext</code> publica para descendentes; <code>getContext</code> lê pelo mesmo nome, e devolve <code>undefined</code> se ninguém publicou.</li>
+  <li><code>onMount</code> não roda no servidor; o HTML sai com o estado inicial.</li>
+  <li><code>tick()</code> espera o próximo desenho; <code>untrack()</code> lê sem criar dependência.</li>
+  <li><code>mount(App, { target })</code> liga a aplicação ao HTML e <code>unmount(app)</code> desliga.</li>
+  <li><code>&lt;svelte:element this={tag}&gt;</code> escolhe a tag em execução; os outros <code>svelte:</code> ligam a janela, o documento e o cabeçalho.</li>
+  <li><code>&lt;svelte:boundary&gt;</code> segura o erro no navegador, mas não no servidor.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
