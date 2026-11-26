@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instalando o Svelte — do Node ao primeiro arquivo | Guia Svelte</title>
+<meta name="description" content="Passo a passo real para instalar Svelte 5 com Vite: Node, npm, package.json, npm install, os arquivos de configuração e as mensagens de erro desta etapa.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Instalando</span></h1>
+
+<p class="intro">A Ana quer fazer o site da padaria no notebook que ela comprou na promoção. O sobrinho disse "é só instalar o Svelte" e sumiu. Ela abriu o terminal, aquela janela preta, e ficou olhando o cursor piscando. Esta aula é o que ela precisava: o que instalar, em que ordem, o que cada comando faz e o que aparece na tela quando dá certo — e quando não dá. Nada de mágica: são quatro programas e uma pasta.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que são Node, npm e o terminal, e por que o Svelte precisa deles.</li>
+  <li>Como conferir as versões que já estão na máquina.</li>
+  <li>O que é o <code>package.json</code> e por que ele é a lista de compras do projeto.</li>
+  <li>Como rodar <code>npm install</code> e ler a saída sem susto.</li>
+  <li>Para que servem os três pacotes instalados: <code>svelte</code>, <code>vite</code> e o plugin.</li>
+  <li>Por que o guia prende as versões e o que muda se você não prender.</li>
+  <li>Os arquivos de configuração que completam o projeto e o papel de cada um.</li>
+  <li>Como conferir a instalação com dois comandos.</li>
+  <li>Os erros reais desta etapa: TypeScript sem aviso, aspas inteligentes e <code>$props()</code> repetido.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a bancada antes do primeiro pão</h2>
+
+<p>Antes de assar o primeiro pão, a Ana não liga o forno. Ela limpa a bancada, separa a balança, confere se a tomada funciona. Instalar o Svelte é isso: preparar a bancada. O componente que ela vai escrever daqui a pouco é o pão; o que faremos agora é colocar na bancada as ferramentas que transformam farinha em pão.</p>
+
+<p>Essas ferramentas são programas que ficam no computador dela, não na internet. O primeiro é o <strong>Node</strong>, que executa JavaScript fora do navegador — é nele que o compilador do Svelte roda. O segundo é o <strong>npm</strong>, que vem junto com o Node e serve para baixar pacotes e rodar comandos. O terceiro é o <strong>Vite</strong>, que junta os arquivos e serve a página durante o desenvolvimento. O quarto é o próprio <strong>Svelte</strong>.</p>
+
+<p>Repare no que <em>não</em> está nessa lista: editor de texto não entra na conta, porque qualquer um serve; navegador você já tem. A instalação é pequena. O que assusta é o vocabulário — e o vocabulário se resolve lendo a saída de cada comando com calma, que é o que faremos aqui.</p>
+
+<hr>
+
+<h2>2. O que precisa estar na máquina</h2>
+
+<p>Abra o terminal. No Linux e no macOS ele se chama Terminal; no Windows, use o WSL, que é um Linux dentro do Windows — os comandos deste guia são de Linux. O prompt parece com isto: <code>ana@notebook:~/loja$</code>. Ele diz três coisas: quem você é (<code>ana</code>), em que máquina (<code>notebook</code>) e em que pasta (<code>~/loja</code>). O <code>~</code> é atalho para a sua pasta pessoal.</p>
+
+<p>O primeiro comando confere se o Node está instalado e em que versão:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -v
+v22.23.5
+ana@notebook:~/loja$ npm -v
+10.9.9</pre>
+
+<p>Se a resposta for um número parecido com esses, está tudo certo. Se aparecer "command not found", o Node não está instalado: baixe a versão LTS no site oficial e instale como qualquer programa. A versão 22 é a que este guia usa; versões 20.19 ou mais novas também funcionam. Versões muito antigas fazem o Vite reclamar — e você vai ver a mensagem exata mais adiante.</p>
+
+<p>Um detalhe que economiza meia hora de sofrimento: depois de instalar o Node, feche e abra o terminal de novo. O terminal guarda uma lista de onde os programas ficam, e essa lista só é lida quando ele abre. Instalar sem reabrir dá a impressão de que nada funcionou.</p>
+
+<hr>
+
+<h2>3. Node e npm: o motor e a lista de compras</h2>
+
+<p>O Node é um motor: ele pega um arquivo JavaScript e executa. O npm é o balcão de encomendas que vem acoplado ao motor: com ele você baixa pacotes prontos, escolhe versões e roda atalhos definidos no projeto. Os dois vivem juntos, mas fazem coisas diferentes — e é comum confundir.</p>
+
+<p>Quando você digita <code>npm install</code>, o npm lê um arquivo chamado <code>package.json</code>, vê quais pacotes estão listados ali e baixa cada um para uma pasta chamada <code>node_modules</code>. Quando você digita <code>npm run dev</code>, o npm lê o mesmo arquivo, procura um atalho chamado <code>dev</code> e executa o comando que estiver escrito nele. Nada de mágica: é leitura de arquivo e execução.</p>
+
+<p>Por isso o <code>package.json</code> é a peça central. Ele não guarda o código do Svelte, nem o Vite: guarda <em>nomes e versões</em>, do mesmo jeito que a lista de compras da Ana não guarda a farinha, só o que comprar. Quem tem a farinha é a despensa — no nosso caso, a pasta <code>node_modules</code>, que pode ser apagada e refeita a qualquer momento a partir da lista.</p>
+
+<hr>
+
+<h2>4. O <code>package.json</code>: a lista de compras escrita</h2>
+
+<p>Crie a pasta do projeto e entre nela. No exemplo, a pasta é <code>loja</code>, dentro da pasta pessoal da Ana. Depois crie o arquivo <code>package.json</code> com exatamente este conteúdo:</p>
+
+<pre class="file" data-file="package.json">{
+  "name": "loja",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "svelte": "^5.59.2",
+    "vite": "^7.1.3"
+  }
+}</pre>
+
+<p>Parece complicado, mas são cinco informações. A anatomia:</p>
+
+<dl class="anatomy">
+  <dt>"name" e "version"</dt><dd>o <strong>nome</strong> do projeto e a versão dele. Aparecem no terminal quando um comando roda: é a linha <code>&gt; loja@0.0.1 dev</code>.</dd>
+  <dt>"private": true</dt><dd>impede que alguém publique este projeto no npm por acidente. Para o site da padaria, é o que queremos.</dd>
+  <dt>"type": "module"</dt><dd>diz ao Node que os arquivos <code>.js</code> usam <code>import</code> e <code>export</code>, o formato moderno de módulos.</dd>
+  <dt>"scripts"</dt><dd>os <strong>atalhos</strong>. <code>"dev": "vite"</code> quer dizer: quando eu digitar <code>npm run dev</code>, execute o programa <code>vite</code>.</dd>
+  <dt>"devDependencies"</dt><dd>os pacotes necessários para <em>desenvolver</em>, não para o site funcionar no ar. Aqui ficam o Svelte, o Vite e o plugin que liga um no outro.</dd>
+</dl>
+
+<p>Os três acentos circunflexos (<code>^</code>) merecem uma frase. Eles dizem "aceito esta versão ou uma mais nova que não mude o número do meio". É uma margem de segurança pequena e é ela que permite o projeto receber correções sem você mexer em nada. Mais adiante nesta aula veremos por que o guia escolheu justamente estes números.</p>
+
+<hr>
+
+<h2>5. <code>npm install</code>: comprando a lista</h2>
+
+<p>Com a lista escrita, o comando é um só. Ele lê o <code>package.json</code>, baixa o que falta e cria a pasta <code>node_modules</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm install
+
+added 36 packages, and audited 37 packages in 8s
+
+6 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities</pre>
+
+<p>Quatro blocos de informação. <code>added 36 packages</code> é o número de pacotes baixados — não três, porque cada pacote depende de outros. <code>audited 37 packages</code> é a verificação de segurança que o npm faz sozinho. <code>6 packages are looking for funding</code> é um pedido de doação de quem mantém as bibliotecas: você pode ignorar. <code>found 0 vulnerabilities</code> é o resultado da auditoria — nenhum problema conhecido nas versões baixadas.</p>
+
+<p>Se aparecer um número diferente de pacotes, não é erro: depende da versão exata que o npm resolveu. O que importa é a última linha, sem "vulnerabilities" em vermelho, e a pasta <code>node_modules</code> criada. Essa pasta pode ter milhares de arquivos — é normal. Ela não vai para o repositório nem para o servidor: é refeita a partir da lista com um <code>npm install</code>.</p>
+
+<p>Junto com ela nasce um arquivo chamado <code>package-lock.json</code>. Ele registra a versão exata de cada pacote baixado, inclusive as dependências indiretas. O <code>package.json</code> diz "svelte 5.59.2 ou mais novo dentro do 5"; o <code>package-lock.json</code> diz "foi este aqui, exatamente este". Guarde os dois no projeto: é assim que a máquina da Ana e a máquina do sobrinho instalam a mesma coisa.</p>
+
+<hr>
+
+<h2>6. As três dependências e o preço de prender as versões</h2>
+
+<p>Três pacotes foram declarados. Cada um tem um papel distinto, e nenhum é opcional neste arranjo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pacote</th><th>Versão no projeto</th><th>Para que serve</th></tr>
+<tr><td><code>svelte</code></td><td><code>^5.59.2</code></td><td>o compilador e o motor que fazem o componente funcionar; é a versão que este guia usa</td></tr>
+<tr><td><code>vite</code></td><td><code>^7.1.3</code></td><td>o servidor de desenvolvimento e o empacotador: junta os arquivos e serve a página</td></tr>
+<tr><td><code>@sveltejs/vite-plugin-svelte</code></td><td><code>^6.2.1</code></td><td>a ponte entre os dois: ensina o Vite a compilar arquivos <code>.svelte</code></td></tr>
+</table>
+</div>
+
+<p>Por que não instalar sempre a versão mais nova de tudo? Porque a saída muda. Um guia que mostra <code>VITE v7.3.8 ready in 830 ms</code> precisa que o seu Vite seja o 7.3.8; um guia que mostra uma mensagem de erro na linha 2 precisa do compilador que gera aquela mensagem. Fixar as versões é o que faz a aula ser reproduzível — e é o que permite comparar o seu resultado com o do guia sem adivinhar.</p>
+
+<p>O custo é real: você fica alguns meses atrás do lançamento mais recente e precisa atualizar de propósito, lendo o que mudou. Para quem está aprendendo, esse é um preço barato. Para um projeto em produção, a equipe costuma atualizar em lotes, com testes. O importante é saber que a escolha existe e que foi feita de propósito, não por descuido.</p>
+
+<hr>
+
+<h2>7. Os arquivos que completam o projeto</h2>
+
+<p>O <code>node_modules</code> sozinho não faz nada. Faltam cinco arquivos pequenos que dizem ao Vite onde começar, o que compilar e qual página abrir. O primeiro é a configuração do Vite:</p>
+
+<pre class="file" data-file="vite.config.js">import { defineConfig } from 'vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+
+export default defineConfig({
+  plugins: [svelte()]
+});</pre>
+
+<p>Três linhas fazem o serviço: importam o Vite, importam o plugin do Svelte e ligam o plugin na lista de plugins. Sem o <code>svelte()</code> ali, o Vite trataria o <code>.svelte</code> como texto e a página abriria em branco.</p>
+
+<p>O segundo arquivo é a configuração do próprio Svelte. Ele começa quase vazio, mas já tem uma função importante:</p>
+
+<pre class="file" data-file="svelte.config.js">import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+
+export default {
+  preprocess: vitePreprocess()
+};</pre>
+
+<p><code>preprocess</code> é o que roda <em>antes</em> da compilação. É graças a ele que o Svelte entende TypeScript dentro de um componente marcado com <code>lang="ts"</code>. Sem essa linha, um componente com tipos não compila — e a mensagem que aparece é justamente a do primeiro cenário abaixo.</p>
+
+<p>O terceiro arquivo é a página que o navegador carrega. Ela é HTML comum, com uma <code>div</code> vazia e um <code>script</code> que puxa o ponto de entrada:</p>
+
+<pre class="file" data-file="index.html">&lt;!doctype html&gt;
+&lt;html lang="pt-BR"&gt;
+  &lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;title&gt;Loja da Ana&lt;/title&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;div id="app"&gt;&lt;/div&gt;
+    &lt;script type="module" src="/src/main.js"&gt;&lt;/script&gt;
+  &lt;/body&gt;
+&lt;/html&gt;</pre>
+
+<p>O quarto arquivo é o ponto de entrada, em <code>src/main.js</code>. Ele importa o componente principal e manda montá-lo dentro da <code>div</code> com identificador <code>app</code>:</p>
+
+<pre class="file" data-file="src/main.js">import { mount } from 'svelte';
+import App from './App.svelte';
+
+const app = mount(App, { target: document.getElementById('app') });
+
+export default app;</pre>
+
+<p>O quinto é o componente em si. Este é o primeiro da Ana no projeto novo, e ele já usa estado:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aberta = $state(true);
+&lt;/script&gt;
+
+&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;p&gt;{aberta ? 'Aberta agora' : 'Fechada'}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Padaria da Ana&lt;/h1&gt; &lt;p&gt;Aberta agora&lt;/p&gt;</pre>
+
+<p>Se a placa está aberta, aparece "Aberta agora"; se <code>aberta</code> virar <code>false</code>, aparece "Fechada" — sem ninguém tocar no HTML. O <code>?</code> e o <code>:</code> formam a expressão condicional, que tem aula própria mais adiante. Por enquanto, leia como "se isto, então aquilo; senão, aquilo outro".</p>
+
+<div class="trysvelte" data-goal="out:Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o componente usa <code>{nome}</code> mas ninguém declarou <code>nome</code>, e a caixa mostra um erro. Declare a variável no bloco <code>&lt;script&gt;</code> com o valor <code>'Ana'</code>, do jeito que os arquivos acima fazem.</p>
+<pre class="script" data-file="App.svelte">&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+</div>
+
+<p>Esse erro — usar um nome que não foi declarado — é o mais comum de quem copiou um pedaço de exemplo pela metade. O compilador não tem como saber se você esqueceu a declaração ou se o nome está escrito diferente; ele só sabe que aquele nome não existe ali.</p>
+
+<hr>
+
+<h2>8. Conferindo com dois comandos</h2>
+
+<p>Instalação boa é instalação conferida. O primeiro comando mostra o que o <code>package.json</code> declara, em formato de dado:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm pkg get devDependencies
+{
+  "@sveltejs/vite-plugin-svelte": "^6.2.1",
+  "svelte": "^5.59.2",
+  "vite": "^7.1.3"
+}</pre>
+
+<p>O segundo mostra a versão que foi <em>de fato</em> instalada, perguntando ao pacote dentro de <code>node_modules</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log(require('svelte/package.json').version)"
+5.59.2</pre>
+
+<p>Repare na diferença entre os dois: o primeiro lê a intenção (o que está escrito), o segundo lê a realidade (o que está na pasta). Quando os dois discordam, quase sempre é porque falta rodar <code>npm install</code> depois de editar o <code>package.json</code>.</p>
+
+<p>Se o número que aparecer for <code>5.59.2</code>, você está exatamente na versão deste guia. Se for <code>6.x</code> ou outro, alguma coisa instalou mais novo do que a lista pedia — confira o arquivo e rode a instalação de novo.</p>
+
+<div class="trysvelte" data-goal="outre:^Bem-vinda, Ana">
+<p class="try-task"><strong>Missão:</strong> a Ana escreveu o cumprimento dentro do <code>console.log</code> e a tela mostra só "Bem-vinda!". Faça o texto completo aparecer na página, com o nome vindo da variável.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  console.log('Bem-vinda, ' + nome);
+&lt;/script&gt;
+
+&lt;h1&gt;Bem-vinda!&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Bem-vinda, {nome}&lt;/h1&gt;</pre>
+</div>
+
+<p><code>console.log</code> escreve no console do navegador, não na tela. É uma ferramenta de diagnóstico, não de interface. Quem começa confunde os dois e passa meia hora procurando um texto que está lá, no painel de desenvolvedor, enquanto a página mostra outra coisa.</p>
+
+<hr>
+
+<h2>9. O que apareceu na pasta</h2>
+
+<p>Depois da instalação, a pasta do projeto tem sete entradas. Este é o resultado real de <code>ls</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls
+index.html
+node_modules
+package-lock.json
+package.json
+src
+svelte.config.js
+vite.config.js</pre>
+
+<p>Traduzindo: <code>index.html</code> é a página que o navegador carrega; <code>src</code> é onde o seu código mora (o <code>App.svelte</code> e o <code>main.js</code>); <code>package.json</code> e <code>package-lock.json</code> são a lista de compras e o recibo; <code>svelte.config.js</code> e <code>vite.config.js</code> são as configurações; <code>node_modules</code> é a despensa. Só os dois primeiros e a pasta <code>src</code> são escritos por você.</p>
+
+<pre class="term">ana@notebook:~/loja$ du -sh node_modules
+31M	node_modules</pre>
+
+<p>Trinta e um megabytes para um projeto que ainda mostra um título e um parágrafo. É o preço de ter as ferramentas de desenvolvimento na máquina. No site publicado, esse peso não existe: o build gera dois arquivos pequenos, e é isso que o navegador do cliente baixa.</p>
+
+<p>O teste final da instalação é o build. Quando ele termina com <code>✓ built in</code> e cria a pasta <code>dist</code>, o compilador leu todos os seus componentes e gerou o site. Se algo estiver faltando — plugin, configuração, dependência —, é aqui que aparece. A aula <a href="servidor-dev.html">O Servidor de Desenvolvimento</a> mostra o build e o servidor em detalhe.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Duas delas acontecem na primeira hora de qualquer pessoa; não são sinal de que você fez algo muito errado.</p>
+
+<div class="cenario">
+<strong>Erro 1 — TypeScript sem avisar o compilador</strong>
+<p>O arquivo tem tipos, mas o <code>&lt;script&gt;</code> não está marcado com <code>lang="ts"</code>. O compilador tenta ler como JavaScript e para no dois-pontos.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome: string = 'Ana';
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 10): Unexpected token (did you forget to add `lang="ts"`?)</pre>
+<p>A mensagem já entrega a solução entre parênteses: escreva <code>&lt;script lang="ts"&gt;</code>. Aí o <code>vitePreprocess</code> entra em ação e os tipos são removidos antes da compilação. Se você não quer TypeScript, basta não escrever tipos.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — aspas inteligentes coladas de outro lugar</strong>
+<p>O editor trocou as aspas retas por aspas curvas, do tipo que aparece em textos formatados. Para o JavaScript, isso não é aspa: é um caractere desconhecido.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = ‘Ana’;
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 13): Unexpected character '‘'</pre>
+<p>Olhe a posição: coluna 13 é exatamente a aspa de abertura. A solução é apagar e digitar de novo, no teclado, sem copiar de página de blog. Vale para aspas, travessões e qualquer caractere "bonito" que o editor invente.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>$props()</code> duas vezes</strong>
+<p>Cada componente declara as propriedades que recebe uma vez só. Copiar dois exemplos para o mesmo arquivo cria duas declarações e o compilador recusa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { titulo } = $props();
+  let { preco } = $props();
+&lt;/script&gt;
+
+&lt;h2&gt;{titulo}&lt;/h2&gt;
+&lt;p&gt;{preco}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 18): Cannot use `$props()` more than once</pre>
+<p>Junte tudo numa declaração só: <code>let { titulo, preco } = $props()</code>. O assunto tem aula própria no nível de componentes; por ora, guarde a regra: uma chamada por arquivo.</p>
+</div>
+
+<div class="trysvelte" data-goal="outre:^Total: 0">
+<p class="try-task"><strong>Missão:</strong> a Ana inventou uma runa que não existe e a caixa mostra um erro de compilação. Troque <code>$contador</code> pela runa certa, que guarda um valor que pode mudar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let total = $contador(0);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>Os comandos desta aula, na ordem em que você vai usá-los, e o que cada arquivo faz.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th></tr>
+<tr><td><code>node -v</code></td><td>mostra a versão do Node</td></tr>
+<tr><td><code>npm -v</code></td><td>mostra a versão do npm</td></tr>
+<tr><td><code>npm install</code></td><td>lê o <code>package.json</code> e baixa os pacotes para <code>node_modules</code></td></tr>
+<tr><td><code>npm pkg get devDependencies</code></td><td>mostra as dependências declaradas no projeto</td></tr>
+<tr><td><code>npm run dev</code></td><td>liga o servidor de desenvolvimento</td></tr>
+<tr><td><code>npm run build</code></td><td>gera a versão final em <code>dist/</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Quem escreve</th><th>Para que serve</th></tr>
+<tr><td><code>package.json</code></td><td>você</td><td>lista de pacotes e atalhos de comando</td></tr>
+<tr><td><code>package-lock.json</code></td><td>o npm</td><td>as versões exatas que foram instaladas</td></tr>
+<tr><td><code>node_modules/</code></td><td>o npm</td><td>os pacotes baixados; pode ser apagada e refeita</td></tr>
+<tr><td><code>vite.config.js</code></td><td>você</td><td>liga o plugin do Svelte no Vite</td></tr>
+<tr><td><code>svelte.config.js</code></td><td>você</td><td>opções do compilador, como o pré-processador</td></tr>
+<tr><td><code>index.html</code></td><td>você</td><td>a página que carrega o <code>src/main.js</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o <code>npm install</code> usa para saber o que baixar?</p>
+<label><input type="radio" name="q1"> a pasta <code>node_modules</code></label>
+<label><input type="radio" name="q1"> o arquivo <code>package.json</code></label>
+<label><input type="radio" name="q1"> o arquivo <code>index.html</code></label>
+<label><input type="radio" name="q1"> o navegador</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Para que serve o <code>@sveltejs/vite-plugin-svelte</code>?</p>
+<label><input type="radio" name="q1"> para baixar o Node automaticamente</label>
+<label><input type="radio" name="q1"> para transformar CSS em JavaScript</label>
+<label><input type="radio" name="q1"> para ensinar o Vite a compilar arquivos <code>.svelte</code></label>
+<label><input type="radio" name="q1"> para publicar o site na internet</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. A mensagem <code>Unexpected character '‘'</code> aponta para qual problema?</p>
+<label><input type="radio" name="q1"> uma aspa curva usada no lugar da aspa reta</label>
+<label><input type="radio" name="q1"> uma versão antiga do Node</label>
+<label><input type="radio" name="q1"> falta de <code>npm install</code></label>
+<label><input type="radio" name="q1"> um componente com nome em minúscula</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">"scripts": {<br>&nbsp;&nbsp;"dev": "<input data-answer="vite">",<br>&nbsp;&nbsp;"build": "vite build"<br>}<br><br>// o atalho que liga o servidor de desenvolvimento</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O Svelte roda em cima do <strong>Node</strong>, que executa JavaScript fora do navegador.</li>
+  <li>O <strong>npm</strong> baixa pacotes e roda os atalhos escritos no <code>package.json</code>.</li>
+  <li><code>package.json</code> é a lista de compras; <code>node_modules</code> é a despensa; <code>package-lock.json</code> é o recibo com as versões exatas.</li>
+  <li>Três pacotes bastam: <code>svelte</code>, <code>vite</code> e <code>@sveltejs/vite-plugin-svelte</code>.</li>
+  <li>As versões estão presas de propósito, para a saída das aulas bater com a sua.</li>
+  <li><code>npm install</code> termina com <code>found 0 vulnerabilities</code> quando dá tudo certo.</li>
+  <li><code>vite.config.js</code> liga o plugin; <code>svelte.config.js</code> liga o pré-processador.</li>
+  <li><code>index.html</code> tem a <code>div#app</code>; <code>src/main.js</code> chama <code>mount()</code> dentro dela.</li>
+  <li>TypeScript exige <code>lang="ts"</code>; aspas curvas quebram o arquivo; <code>$props()</code> é uma vez por componente.</li>
+  <li><code>console.log</code> não é tela: o que aparece na página vem do HTML com chaves.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

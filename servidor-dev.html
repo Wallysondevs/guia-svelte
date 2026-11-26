@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O Servidor de Desenvolvimento — salvar e ver na hora | Guia Svelte</title>
+<meta name="description" content="npm run dev explicado: localhost, porta, recarga automática (HMR), o que reiniciar quando muda, como parar o servidor e os erros reais que aparecem no caminho.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">O Servidor de Desenvolvimento</span></h1>
+
+<p class="intro">A Ana assa pão todos os dias e prova a massa antes de levar ao forno. Se estivesse ruim, ela corrige e prova de novo — não espera o pão pronto para descobrir que faltou sal. Um servidor de desenvolvimento faz esse papel no projeto: ele deixa a página aberta, você salva o arquivo e o resultado aparece em menos de um segundo, ainda quente. Nesta aula você liga esse servidor, entende cada linha que ele imprime e aprende o que ele faz quando alguma coisa quebra.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um servidor de desenvolvimento e por que ele não é a internet.</li>
+  <li>O que <code>npm run dev</code> faz e o que cada linha da saída significa.</li>
+  <li>Como ler um endereço <code>http://localhost:5173/</code> por partes.</li>
+  <li>Por que a porta pode mudar sozinha e o que fazer quando isso acontece.</li>
+  <li>O que é recarga automática (HMR) e o que aparece no terminal a cada arquivo salvo.</li>
+  <li>O que o HMR não resolve e quando é preciso reiniciar o servidor.</li>
+  <li>A diferença entre o servidor de desenvolvimento e o <code>npm run preview</code>.</li>
+  <li>Como parar o servidor sem deixar processo pendurado.</li>
+  <li>Os erros reais que aparecem com o servidor no ar: propriedade de <code>undefined</code>, método que não existe e recursão sem fim.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o fogão ligado enquanto você prova</h2>
+
+<p>Sem servidor de desenvolvimento, o ciclo é lento e chato: você muda o arquivo, roda o build, abre a pasta gerada, recarrega a página, descobre que errou uma vírgula e recomeça. Cada tentativa custa dezenas de segundos. Com o servidor ligado, o ciclo é: salva, olha a página. O tempo entre uma coisa e outra é o tempo de piscar.</p>
+
+<p>Essa diferença parece pequena e muda tudo na prática. Quando o ciclo é curto, você experimenta mais: testa uma cor, um texto, um espaçamento. Quando o ciclo é longo, você junta cinco mudanças antes de testar e, se algo quebrar, não sabe qual das cinco foi. O servidor de desenvolvimento é uma ferramenta de paciência: ele devolve a sua.</p>
+
+<p>O nome assusta. "Servidor" parece coisa de datacenter, de gente de terno. Aqui é só um programa que fica rodando no seu computador, olhando os arquivos e respondendo a um endereço. Nada sai da máquina da Ana: quando o terminal diz <code>localhost</code>, está dizendo "aqui dentro".</p>
+
+<hr>
+
+<h2>2. O que é um servidor de desenvolvimento</h2>
+
+<p>Um servidor é um programa que espera pedidos e responde. O navegador pede um endereço; o servidor devolve um arquivo. O servidor de desenvolvimento do Vite faz isso e mais duas coisas: compila os arquivos <code>.svelte</code> quando o navegador pede e observa o disco para saber quando algo mudou.</p>
+
+<p>Ele também serve os arquivos por <code>http</code>, e não por <code>file://</code>. Isso não é detalhe: o navegador bloqueia módulos JavaScript carregados por <code>file://</code> por segurança (a regra se chama CORS). Se você abrir o <code>index.html</code> clicando duas vezes, verá uma página vazia e um erro no console. O servidor existe justamente para dar um endereço <code>http</code> ao seu projeto.</p>
+
+<p>Por último, o servidor de desenvolvimento não é o site publicado. Ele inclui ferramentas de depuração, mapas de código e recarga automática — coisas boas para você e ruins para o cliente. O que vai para o ar é o resultado do <code>npm run build</code>, que veremos mais adiante nesta aula.</p>
+
+<hr>
+
+<h2>3. Ligando o servidor</h2>
+
+<p>Na pasta do projeto, um comando. O terminal responde com quatro blocos: o nome do projeto, o comando que está sendo executado, o aviso de porta e o endereço.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+Port 5173 is in use, trying another one...
+
+  VITE v7.3.8  ready in 620 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O bloco <code>&gt; loja@0.0.1 dev</code> é o npm mostrando o que ele leu no <code>package.json</code>: o projeto <code>loja</code>, na versão <code>0.0.1</code>, executando o atalho <code>dev</code>. A linha seguinte mostra o comando real, <code>vite</code>. É uma boa prática olhar essas duas linhas: se o atalho estiver apontando para outro programa, o problema está no <code>package.json</code>, não no Svelte.</p>
+
+<p>O aviso <code>Port 5173 is in use, trying another one...</code> quer dizer que outro programa já estava usando a porta 5173. O Vite não desiste: ele tenta a próxima e avisa. O endereço final veio na linha <code>Local</code> — nesse exemplo, 5173 mesmo, porque a porta acabou liberando antes do teste. Quando isso acontece com você, use o endereço que aparecer na tela, não o que você decorou.</p>
+
+<p>O servidor fica rodando e ocupando o terminal. Não feche a janela e não aperte <code>Ctrl+C</code> sem querer: os dois encerram o processo. Para trabalhar em outra coisa, abra uma segunda aba do terminal — é o que a Ana faz quando precisa pesar farinha enquanto o forno está aceso.</p>
+
+<hr>
+
+<h2>4. Lendo o endereço por partes</h2>
+
+<p>O endereço <code>http://localhost:5173/</code> tem quatro pedaços, e cada um responde a uma pergunta.</p>
+
+<dl class="anatomy">
+  <dt>http://</dt><dd>o <strong>protocolo</strong>: como o navegador fala com o servidor. É o mesmo das páginas comuns; o <code>s</code> de <code>https</code> indica conexão criptografada, que não é necessária aqui porque nada sai da máquina.</dd>
+  <dt>localhost</dt><dd>o <strong>endereço</strong> da própria máquina. Vale <code>127.0.0.1</code> também: é o computador conversando consigo mesmo. Nenhum dado atravessa a internet.</dd>
+  <dt>:5173</dt><dd>a <strong>porta</strong>: o número do balcão. Um computador pode ter vários servidores ao mesmo tempo, cada um em uma porta diferente, como uma padaria com vários caixas.</dd>
+  <dt>/</dt><dd>o <strong>caminho</strong> pedido. A barra sozinha significa "a página inicial"; no Vite, isso entrega o <code>index.html</code> da raiz.</dd>
+</dl>
+
+<p>A linha <code>Network: use --host to expose</code> é um convite. Por padrão o servidor só aceita conexões da própria máquina; com <code>--host</code>, ele aceita da rede local — útil para testar no celular, arriscado em rede pública. Para quem está começando, deixe como está: <code>localhost</code> basta.</p>
+
+<p>Um erro comum é abrir o endereço errado, com <code>https</code> em vez de <code>http</code>, ou trocar a porta. O navegador então mostra "não foi possível conectar" — e o servidor está lá, funcionando, esperando no endereço certo. Antes de mexer no código, confira o endereço na tela do terminal.</p>
+
+<hr>
+
+<h2>5. Salvou, mudou: a recarga automática</h2>
+
+<p>Com o servidor no ar, cada vez que você salva um arquivo o Vite percebe e manda a mudança para o navegador. O terminal registra isso em uma linha:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 620 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+5:21:05 PM [vite] (client) hmr update /src/App.svelte</pre>
+
+<p><code>hmr update /src/App.svelte</code> quer dizer "atualização em tempo real no arquivo App.svelte". HMR é a sigla de <em>Hot Module Replacement</em>, troca de módulo a quente: o Vite substitui só aquele pedaço da página, sem recarregar tudo. O relógio na frente é a hora em que a atualização aconteceu.</p>
+
+<p>Na prática, você vê o texto novo sem perder o que estava fazendo: um campo preenchido continua preenchido, um contador não volta a zero. Isso é diferente de recarregar a página com F5, que joga tudo fora e começa do zero. A diferença importa quando você está testando um formulário longo.</p>
+
+<p>Vale reparar no relógio: <code>5:21:05 PM</code> é a hora local do computador da Ana. Em uma sessão longa, essas linhas viram um diário do trabalho — dá para ver quantas vezes você salvou e em que ordem. Quando algo para de atualizar, a ausência da linha é a informação: o Vite não percebeu a mudança, e o problema pode ser o editor salvando em outro arquivo, ou o servidor observando outra pasta.</p>
+
+<p>O componente que a Ana estava ajustando é este:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;h1&gt;Pão francês&lt;/h1&gt;
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Pão francês&lt;/h1&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+
+<p>Quando ela muda <code>0.9</code> para <code>1.1</code> e salva, o terminal imprime a linha de <code>hmr update</code> e o navegador passa a mostrar <code>R$ 1.10</code>. Nenhum comando a mais: o ciclo é salvar e olhar.</p>
+
+<div class="trysvelte" data-goal="digitar:input=Ana;;outre:^Olá, Ana!">
+<p class="try-task"><strong>Missão:</strong> o campo já escreve no estado, mas o parágrafo não mostra nada. Faça o cumprimento aparecer na tela quando você digitar "Ana" no campo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (nome = e.currentTarget.value)} placeholder="seu nome" /&gt;
+&lt;p&gt;Digite seu nome acima.&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (nome = e.currentTarget.value)} placeholder="seu nome" /&gt;
+&lt;p&gt;Olá, {nome}!&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>e.currentTarget.value</code> é o texto que está dentro do campo no momento do evento. O <code>oninput</code> dispara a cada tecla — é o mesmo ciclo de salvar e ver, só que disparado por você em vez do disco.</p>
+
+<hr>
+
+<h2>6. O que o HMR não faz</h2>
+
+<p>A recarga automática é boa, mas não é mágica. Existe uma lista de mudanças que ela não consegue aplicar a quente, e o Vite resolve isso com uma recarga completa da página — você vê a tela piscar e o estado volta ao início. É normal, mas explica aquele "sumiu o que eu tinha digitado".</p>
+
+<p>Algumas mudanças exigem mais do que recarregar a página: exigem reiniciar o servidor. É o caso de alterações em <code>vite.config.js</code>, em <code>svelte.config.js</code>, no <code>package.json</code> ou depois de instalar um pacote novo. Se você mudou a configuração e nada aconteceu, pare o servidor com <code>Ctrl+C</code> e ligue de novo. Custa dois segundos e resolve.</p>
+
+<p>Também vale saber o que <em>não</em> é recarregado: o código que roda fora do componente, como o <code>main.js</code>, costuma provocar recarga total. E se o servidor reclamar que a porta está ocupada a cada reinício, é sinal de que o processo antigo não morreu — feche a aba do terminal ou encerre o processo antes de abrir outro.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;outre:Total: 4">
+<p class="try-task"><strong>Missão:</strong> o botão soma um e o total chega a 3 depois de dois cliques. Faça o valor <strong>dobrar</strong> a cada clique, para que dois cliques levem de 1 a 4.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let total = $state(1);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; total++}&gt;Total: {total}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let total = $state(1);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (total *= 2)}&gt;Total: {total}&lt;/button&gt;</pre>
+</div>
+
+<p>Enquanto você edita, a caixa compila o componente com o compilador de verdade e roda o resultado. É o mesmo ciclo do servidor de desenvolvimento, só que sem o terminal no meio.</p>
+
+<hr>
+
+<h2>7. O servidor não conserta o seu código</h2>
+
+<p>Existe uma confusão comum: achar que, se o servidor está no ar, a página está certa. Não é assim. O servidor entrega o que você escreveu; se o componente quebra ao desenhar, o servidor continua lá, imperturbável, servindo a página quebrada.</p>
+
+<p>Os problemas aparecem em dois momentos diferentes, e vale distinguir. O primeiro é a <strong>compilação</strong>: o arquivo nem chega a virar JavaScript, porque tem um erro de sintaxe — chave sem fechar, tag aberta, runa no lugar errado. O terminal mostra a mensagem e o navegador exibe uma sobreposição de erro no lugar da página. O segundo é a <strong>execução</strong>: o componente compilou, mas quebra quando tenta rodar — um valor que não existe, um método chamado em um tipo errado.</p>
+
+<p>Essa distinção economiza tempo. Erro de compilação se resolve lendo a mensagem e indo à linha apontada. Erro de execução se resolve olhando <em>quando</em> a página quebra: ao abrir, ao clicar, ao digitar. O console do navegador mostra a sequência; a mensagem sozinha não conta a história toda.</p>
+
+<div class="trysvelte" data-goal="outre:^Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o componente quebra porque <code>pessoa</code> existe mas está vazia, e ler <code>.nome</code> de vazio dá erro. Dê a ela um objeto com o nome "Ana".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pessoa = $state();
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {pessoa.nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pessoa = $state({ nome: 'Ana' });
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {pessoa.nome}&lt;/p&gt;</pre>
+</div>
+
+<p>O erro que aparece na caixa é o mesmo que você veria no console do navegador: <code>Cannot read properties of undefined (reading 'nome')</code>. Ele quer dizer "tentei pegar a propriedade <code>nome</code> de algo que não existe". A solução nunca é esconder a mensagem: é garantir que o objeto exista antes de ler.</p>
+
+<hr>
+
+<h2>8. <code>npm run preview</code>: vendo o build</h2>
+
+<p>O servidor de desenvolvimento tem ferramentas que o cliente não deve receber. Para ver o site como ele vai ao ar, primeiro gere o build e depois sirva o resultado:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> loja@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Repare nas diferenças: a porta padrão é 4173, não 5173, e o terminal não mostra a linha do VITE com o tempo de inicialização. O <code>preview</code> não compila nada: ele só serve a pasta <code>dist</code> que já existe. Se você rodar o preview sem ter rodado o build, ele avisa que não encontrou a pasta.</p>
+
+<p>O uso certo é uma conferida final, antes de publicar: rode <code>npm run build</code>, depois <code>npm run preview</code> e clique pelas páginas. O que aparece ali é exatamente o que o servidor de produção vai entregar — mesmos arquivos, mesmos nomes com hash. Se algo funciona no <code>dev</code> e quebra no <code>preview</code>, a diferença está no build, e é melhor descobrir isso antes do cliente.</p>
+
+<hr>
+
+<h2>9. Parando o servidor</h2>
+
+<p>Para encerrar, clique na janela do terminal e aperte <code>Ctrl+C</code>. O servidor para, a porta é liberada e o prompt volta a aparecer. Se você fechar a janela do terminal direto, o processo também morre — mas é mais fácil esquecer um servidor rodando em uma aba escondida e depois brigar com a porta ocupada.</p>
+
+<p>Quando o terminal parece travado, sem responder a nada, quase sempre é um servidor rodando e esperando. <code>Ctrl+C</code> é a saída; se não funcionar, feche a aba. E não existe problema em ligar e desligar o servidor quantas vezes quiser: ele não guarda estado do projeto, só lê os arquivos de novo.</p>
+
+<p>Uma última recomendação de organização: um terminal para o servidor, outro para os comandos. Assim você roda <code>npm install</code> sem derrubar o servidor e vê as mensagens dos dois sem misturar. A Ana faz o mesmo na cozinha: um fogão para o pão, outro para o recheio.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são de erro em tempo de execução: o arquivo compila, o servidor continua no ar e a página quebra ao ser desenhada. São as mensagens reais desta versão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — ler uma propriedade de algo vazio</strong>
+<p>A variável existe, mas o valor dentro dela é <code>undefined</code>. Tentar ler <code>.nome</code> de <code>undefined</code> derruba o componente.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pessoa = $state();
+&lt;/script&gt;
+
+&lt;p&gt;{pessoa.nome}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'nome')</pre>
+<p>Dê um valor inicial ao estado: <code>$state({ nome: 'Ana' })</code>. Se o dado vem de fora e pode demorar, a solução é condicional — mostrar outra coisa enquanto ele não chega —, assunto das aulas de <code>{#if}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — chamar um método que o tipo não tem</strong>
+<p><code>trim()</code> existe em texto, não em número. O componente compila e quebra na hora de desenhar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state(42);
+&lt;/script&gt;
+
+&lt;p&gt;{nome.trim()}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: nome.trim is not a function</pre>
+<p>A mensagem diz exatamente qual método não é função. Aqui, o valor guardado é número; para tratar como texto, use <code>String(nome).trim()</code>. Vale a regra geral: confira o tipo antes de chamar método.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — função que chama a si mesma sem parar</strong>
+<p>A função <code>soma</code> chama <code>soma</code> de novo, sempre, e nunca chega a um resultado. Em algum momento a pilha de chamadas estoura.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function soma(n) {
+    return soma(n + 1);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{soma(1)}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Maximum call stack size exceeded</pre>
+<p>Falta a condição de parada: um <code>if</code> que devolva o resultado sem chamar a função de novo. Toda recursão precisa de uma saída, senão é só um laço disfarçado — e o navegador trava até desistir.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>Os comandos do dia a dia e as mensagens que você vai ver no terminal.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>O que faz</th><th>Porta padrão</th></tr>
+<tr><td><code>npm run dev</code></td><td>liga o servidor de desenvolvimento com recarga automática</td><td>5173</td></tr>
+<tr><td><code>npm run build</code></td><td>gera o site final em <code>dist/</code></td><td>—</td></tr>
+<tr><td><code>npm run preview</code></td><td>serve o <code>dist/</code> já gerado</td><td>4173</td></tr>
+<tr><td><code>Ctrl+C</code></td><td>para o processo que está rodando no terminal</td><td>—</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No terminal</th><th>Significado</th></tr>
+<tr><td><code>&gt; loja@0.0.1 dev</code></td><td>o npm executando o atalho <code>dev</code> do <code>package.json</code></td></tr>
+<tr><td><code>VITE v7.3.8 ready in 620 ms</code></td><td>o servidor subiu e está pronto</td></tr>
+<tr><td><code>Local: http://localhost:5173/</code></td><td>o endereço para abrir no navegador desta máquina</td></tr>
+<tr><td><code>Port 5173 is in use, trying another one...</code></td><td>a porta estava ocupada; o Vite escolheu outra</td></tr>
+<tr><td><code>hmr update /src/App.svelte</code></td><td>uma alteração foi aplicada sem recarregar a página</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o endereço <code>localhost</code> indica?</p>
+<label><input type="radio" name="q1"> um site publicado na internet</label>
+<label><input type="radio" name="q1"> a própria máquina, conversando consigo mesma</label>
+<label><input type="radio" name="q1"> o servidor da Ana em outra cidade</label>
+<label><input type="radio" name="q1"> a pasta <code>dist</code> aberta direto no navegador</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que a linha <code>hmr update /src/App.svelte</code> significa?</p>
+<label><input type="radio" name="q1"> o servidor encontrou um erro no componente</label>
+<label><input type="radio" name="q1"> o build terminou com sucesso</label>
+<label><input type="radio" name="q1"> a alteração no arquivo foi aplicada sem recarregar a página</label>
+<label><input type="radio" name="q1"> o npm baixou um pacote novo</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Depois de mudar o <code>vite.config.js</code>, o que costuma ser necessário?</p>
+<label><input type="radio" name="q1"> parar o servidor com <code>Ctrl+C</code> e ligar de novo</label>
+<label><input type="radio" name="q1"> nada: o HMR aplica qualquer mudança</label>
+<label><input type="radio" name="q1"> rodar <code>npm install</code> sempre</label>
+<label><input type="radio" name="q1"> apagar a pasta <code>src</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">"scripts": {<br>&nbsp;&nbsp;"<input data-answer="dev">": "vite"<br>}<br><br>// o atalho que liga o servidor com recarga automática</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O servidor de desenvolvimento deixa a página aberta e recompila a cada arquivo salvo.</li>
+  <li><code>npm run dev</code> usa a porta 5173 por padrão; se ela estiver ocupada, o Vite escolhe outra e avisa.</li>
+  <li><code>localhost</code> é a própria máquina: nada atravessa a internet.</li>
+  <li><code>hmr update</code> significa troca de módulo a quente, sem recarregar a página inteira.</li>
+  <li>Mudanças em configuração e em <code>package.json</code> pedem reinício do servidor.</li>
+  <li>O servidor no ar não garante código correto: erros de compilação e de execução são diferentes.</li>
+  <li><code>npm run preview</code> serve o <code>dist/</code> na porta 4173, para conferir o build.</li>
+  <li><code>Ctrl+C</code> para o processo e libera a porta.</li>
+  <li>As mensagens desta aula: propriedade de <code>undefined</code>, método que não é função e pilha de chamadas estourada.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

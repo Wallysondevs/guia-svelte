@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Estrutura do Projeto — onde cada arquivo mora | Guia Svelte</title>
+<meta name="description" content="A árvore de um projeto Svelte explicada: src, dist, node_modules, index.html, main.js, componentes, imagens e o que vai para o git, com saídas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">A Estrutura do Projeto</span></h1>
+
+<p class="intro">A Ana organiza a cozinha por estações: a bancada de farinha, a geladeira, o forno, a louça. Se o açúcar ficar no armário da louça, ela perde tempo toda vez que faz um bolo. Um projeto Svelte funciona igual: cada arquivo tem um lugar, e quem sabe o lugar não fica caçando nada. Nesta aula você abre a pasta da Ana, vê o que existe dentro, entende por que cada coisa está ali e aprende o que acontece quando um arquivo vai para o lugar errado.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As pastas de um projeto Svelte e o papel de cada uma.</li>
+  <li>O que é escrito por você e o que é gerado pelo npm e pelo Vite.</li>
+  <li>Por que o componente não é uma página HTML completa.</li>
+  <li>O caminho que vai de <code>index.html</code> até o componente raiz.</li>
+  <li>Como importar um componente e por que o caminho começa com <code>./</code>.</li>
+  <li>Onde colocar imagens e por que existem duas respostas possíveis.</li>
+  <li>O que o build cria em <code>dist/</code> e por que o nome do arquivo tem hash.</li>
+  <li>Por que <code>node_modules/</code> nunca vai para o repositório.</li>
+  <li>Os erros reais de estrutura: dois scripts, dois estilos e um bloco sem fechar.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: cada coisa na sua estação</h2>
+
+<p>Na cozinha da Ana existe uma regra simples: o que é usado junto fica junto. A farinha perto da balança, a forma perto do forno, o caderno de pedidos perto do telefone. Ninguém precisa decorar onde está o quê: o lugar conta a história do uso. Um projeto de software tem a mesma lógica, com uma diferença: os lugares têm nomes fixos, combinados entre todas as ferramentas.</p>
+
+<p>Esses nomes fixos existem porque três programas diferentes precisam concordar sobre onde estão as coisas. O <strong>npm</strong> espera o <code>package.json</code> na raiz. O <strong>Vite</strong> espera o <code>index.html</code> na raiz e procura o código em <code>src/</code>. O <strong>compilador do Svelte</strong> compila os arquivos <code>.svelte</code> que o Vite encontrar. Se você renomear a pasta <code>src</code> para <code>codigo</code>, nada funciona até você avisar cada ferramenta — e avisar cada uma é trabalho que não vale a pena.</p>
+
+<p>Por isso a estrutura é conservadora. Você não desenha a sua: usa a que o ecossistema já conhece e reserva a criatividade para dentro dela — novos componentes, novas pastas dentro de <code>src/</code>. É como a cozinha: a posição do forno é do apartamento, mas a Ana decide onde ficam as forminhas.</p>
+
+<hr>
+
+<h2>2. A árvore do projeto</h2>
+
+<p>A pasta do projeto tem sete entradas na raiz. O comando abaixo mostra o que existe dentro de <code>src</code>, que é a parte escrita por você:</p>
+
+<pre class="term">ana@notebook:~/loja$ find src
+src
+src/App.svelte
+src/main.js</pre>
+
+<p>Duas coisas: um componente e um arquivo JavaScript. O resto do projeto é configuração e material gerado. A tabela abaixo é o mapa completo, com a origem de cada peça.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Caminho</th><th>O que é</th><th>Quem cria</th></tr>
+<tr><td><code>src/</code></td><td>o seu código: componentes e o ponto de entrada</td><td>você</td></tr>
+<tr><td><code>index.html</code></td><td>a página que o navegador carrega primeiro</td><td>você</td></tr>
+<tr><td><code>package.json</code></td><td>pacotes e atalhos de comando</td><td>você</td></tr>
+<tr><td><code>vite.config.js</code></td><td>liga o plugin do Svelte no Vite</td><td>você</td></tr>
+<tr><td><code>svelte.config.js</code></td><td>opções do compilador</td><td>você</td></tr>
+<tr><td><code>node_modules/</code></td><td>os pacotes baixados</td><td>o npm</td></tr>
+<tr><td><code>dist/</code></td><td>o site pronto, depois do build</td><td>o Vite</td></tr>
+</table>
+</div>
+
+<p>Existe uma razão prática para os arquivos de configuração ficarem na raiz e não dentro de <code>src</code>: as ferramentas os procuram pelo nome, a partir da pasta onde você rodou o comando. O Vite lê <code>vite.config.js</code> antes de qualquer outra coisa; o npm lê <code>package.json</code> antes de instalar. Se você mover um deles para dentro de <code>src</code>, o comando continua rodando — só que ignorando a sua configuração, o que é pior do que dar erro, porque o sintoma aparece longe da causa.</p>
+
+<p>Guarde a coluna da direita: ela decide o que você pode apagar. <code>node_modules</code> e <code>dist</code> são resultado de comando; se sumirem, um comando os recria. Já <code>src</code> é o contrário: se sumir, o trabalho foi embora. Quem entende essa diferença nunca tem medo de apagar a pasta errada — e nunca perde código por acidente.</p>
+
+<hr>
+
+<h2>3. <code>src/</code>: onde mora o seu código</h2>
+
+<p>Dentro de <code>src</code> ficam os componentes. Um componente é um arquivo <code>.svelte</code> com nome em maiúscula. Este é o cartão de preço da padaria, um segundo componente que a Ana criou para não repetir HTML:</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let titulo = 'Pão francês';
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{titulo}&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;</pre>
+
+<pre class="out">&lt;article&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;&lt;/article&gt;</pre>
+
+<p>Repare no <code>article</code> em volta de tudo. Componentes podem ter mais de um elemento no nível de cima, mas agrupar em uma tag só costuma ser melhor: o componente vira uma caixa previsível, que o CSS pode posicionar sem surpresa. O <code>article</code> foi escolhido porque o conteúdo faz sentido sozinho, como uma ficha de produto.</p>
+
+<p>Quando o projeto cresce, <code>src</code> ganha subpastas. Duas convenções resolvem quase todos os casos: <code>src/lib/</code> para componentes reaproveitáveis e <code>src/routes/</code> só quando você usar SvelteKit, no Nível 3. Antes disso, uma pasta <code>src/lib</code> com os componentes que não são a tela principal já deixa o projeto arrumado.</p>
+
+<hr>
+
+<h2>4. O componente não é uma página</h2>
+
+<p>Este é o mal-entendido mais comum de quem vem do HTML. Um arquivo <code>.svelte</code> não é uma página completa: não tem <code>&lt;html&gt;</code>, não tem <code>&lt;head&gt;</code>, não tem <code>&lt;!doctype&gt;</code>. Ele é um pedaço de tela que será montado <em>dentro</em> de uma página. Se você colar um documento inteiro num componente, o compilador não reclama — e o resultado é estranho:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;!doctype html&gt;
+&lt;html lang="pt-BR"&gt;
+&lt;body&gt;
+  &lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;/body&gt;
+&lt;/html&gt;</pre>
+
+<pre class="out">&lt;!doctype html=""/&gt; &lt;html lang="pt-BR"&gt;&lt;body&gt;&lt;h1&gt;Padaria da Ana&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;</pre>
+
+<p>O <code>&lt;!doctype&gt;</code> virou um elemento com um atributo vazio, e o <code>&lt;html&gt;</code> foi colocado dentro do corpo da página que já existia — um HTML dentro do outro. Nada disso é o que você queria. A página de verdade é o <code>index.html</code>, na raiz; o componente é só o miolo.</p>
+
+<p>Essa separação tem um custo e um ganho. O custo é que você precisa de dois arquivos para ver a primeira tela. O ganho é que o mesmo componente pode ser usado em páginas diferentes — ou várias vezes na mesma página — sem repetir <code>head</code>, fonte e título. A Ana escreve o cartão de preço uma vez e o usa em três lugares.</p>
+
+<div class="trysvelte" data-goal="outre:^Bem-vinda, Ana pão quentinho">
+<p class="try-task"><strong>Missão:</strong> o componente tem dois blocos <code>&lt;style&gt;</code> e o compilador recusa. Junte as regras num bloco só, mantendo o título "Bem-vinda, Ana" e o parágrafo "pão quentinho".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Bem-vinda, {nome}&lt;/h1&gt;
+
+&lt;style&gt;
+  h1 { color: #2e7d32; }
+&lt;/style&gt;
+
+&lt;style&gt;
+  p { padding: 4px; }
+&lt;/style&gt;
+
+&lt;p&gt;pão quentinho&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Bem-vinda, {nome}&lt;/h1&gt;
+&lt;p&gt;pão quentinho&lt;/p&gt;
+
+&lt;style&gt;
+  h1 { color: #2e7d32; }
+  p { padding: 4px; }
+&lt;/style&gt;</pre>
+</div>
+
+<p>A regra é a mesma para os três blocos: no máximo um <code>&lt;script&gt;</code>, no máximo um <code>&lt;style&gt;</code>, e todo o HTML que você quiser. O compilador precisa de uma ordem única para executar; dois blocos do mesmo tipo deixariam essa ordem ambígua.</p>
+
+<hr>
+
+<h2>5. O caminho do <code>index.html</code> até o componente</h2>
+
+<p>Quando o navegador abre <code>http://localhost:5173/</code>, ele recebe o <code>index.html</code>. Esse arquivo tem uma <code>div</code> vazia com identificador <code>app</code> e uma tag <code>script</code> que carrega <code>/src/main.js</code>. O <code>main.js</code> é o ponto de entrada: ele importa o componente raiz e manda montá-lo dentro daquela <code>div</code>.</p>
+
+<pre class="file" data-file="src/main.js">import { mount } from 'svelte';
+import App from './App.svelte';
+
+const app = mount(App, { target: document.getElementById('app') });
+
+export default app;</pre>
+
+<dl class="anatomy">
+  <dt>import { mount } from 'svelte'</dt><dd>traz a função <strong>mount</strong>, que cria o componente dentro de um elemento da página. É o único lugar do projeto em que o Svelte é chamado diretamente.</dd>
+  <dt>import App from './App.svelte'</dt><dd>importa o <strong>componente raiz</strong>. O <code>./</code> significa "na mesma pasta deste arquivo"; sem ele, o Node procuraria um pacote instalado.</dd>
+  <dt>document.getElementById('app')</dt><dd>acha a <code>div</code> do <code>index.html</code>. Se o identificador não bater, a montagem falha e a página fica vazia.</dd>
+  <dt>export default app</dt><dd>exporta o resultado da montagem. O Vite usa isso para recarregar o componente durante o desenvolvimento.</dd>
+</dl>
+
+<p>Esse arquivo é o único que "conversa" com o HTML. Todo o resto do projeto são componentes que se importam entre si. Se um dia a página abrir em branco, a investigação começa aqui: o <code>index.html</code> tem a <code>div#app</code>? O <code>main.js</code> está sendo carregado? O caminho do import do <code>App</code> está certo?</p>
+
+<hr>
+
+<h2>6. Importar um componente de outro arquivo</h2>
+
+<p>Para usar o cartão dentro do componente principal, você importa o arquivo e escreve a tag com o mesmo nome, em maiúscula:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Padaria da {nome}&lt;/h1&gt;
+&lt;Cartao /&gt;</pre>
+
+<p>Três detalhes que quebram o iniciante. Primeiro: o caminho <code>./Cartao.svelte</code> tem a extensão e começa com <code>./</code> — sem isso, o Vite procura um pacote chamado <code>Cartao.svelte</code> no <code>node_modules</code> e não acha. Segundo: o nome do import (<code>Cartao</code>) é o nome que você usa na tag; manter igual ao arquivo é convenção, não obrigação. Terceiro: a tag é maiúscula. <code>&lt;cartao /&gt;</code> seria uma tag desconhecida e apareceria literalmente na tela.</p>
+
+<p>O <code>App.svelte</code> acima não pode ser compilado sozinho: ele depende de outro arquivo. É por isso que os exemplos de duas peças neste guia aparecem em caixas separadas ou em arquivos completos. A caixa "Experimente" compila um componente por vez — bom lembrete de que importar é uma ligação entre arquivos, não um recurso de texto.</p>
+
+<div class="trysvelte" data-goal="outre:^Pão fresquinho, Ana">
+<p class="try-task"><strong>Missão:</strong> o bloco <code>&lt;script&gt;</code> foi escrito dentro da <code>div</code> e a caixa mostra um erro. Mova o script para o topo do arquivo, que é o lugar dele.</p>
+<pre class="script" data-file="App.svelte">&lt;div&gt;
+  &lt;script&gt;
+    let nome = 'Ana';
+  &lt;/script&gt;
+  &lt;h1&gt;Pão fresquinho, {nome}&lt;/h1&gt;
+&lt;/div&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = 'Ana';
+&lt;/script&gt;
+
+&lt;div&gt;
+  &lt;h1&gt;Pão fresquinho, {nome}&lt;/h1&gt;
+&lt;/div&gt;</pre>
+</div>
+
+<p>O compilador só reconhece o <code>&lt;script&gt;</code> de nível superior — aquele que fica solto no arquivo. Dentro de uma <code>div</code>, ele é apenas uma tag de HTML que o navegador ignora, e a variável nunca é declarada.</p>
+
+<hr>
+
+<h2>7. Imagens e arquivos estáticos</h2>
+
+<p>O projeto da Ana ainda não tem imagem nenhuma. Quando tiver, há dois lugares possíveis, e a escolha muda o resultado. O primeiro é <code>public/</code>, na raiz: tudo o que está ali é copiado para o build sem passar pelo compilador e fica acessível pelo caminho absoluto, como <code>/favicon.svg</code>. Bom para favicon, ícone de aplicativo e arquivos que precisam de nome fixo.</p>
+
+<p>O segundo é <code>src/assets/</code>: arquivos importados dentro do código, como <code>import foto from './assets/pao.png'</code>. O Vite processa esses arquivos, otimiza quando pode e, no build, troca o nome por um com hash. Você ganha cache longo e não precisa se preocupar com colisão de nome; perde o endereço fixo.</p>
+
+<p>Sobre os nomes dos arquivos de imagem, duas convenções evitam dor de cabeça: tudo em minúsculas, sem acento e sem espaço. <code>pao-frances.png</code> funciona em qualquer servidor; <code>Pão Francês (1).png</code> precisa de conversão para texto na URL e quebra em alguns sistemas. O mesmo vale para componentes: <code>CartaoDePreco.svelte</code> é melhor que <code>cartão de preço.svelte</code>, que o import não consegue escrever sem escapar.</p>
+
+<p>A regra prática: imagem usada dentro de um componente e que pode mudar de nome, <code>src/assets</code>; arquivo que precisa ser buscado por um caminho conhecido (favicon, <code>robots.txt</code>, imagem de compartilhamento), <code>public</code>. Se você não tem certeza, comece por <code>src/assets</code> — é o caminho que o build resolve sozinho.</p>
+
+<hr>
+
+<h2>8. <code>dist/</code>: o resultado do build</h2>
+
+<p>Depois de <code>npm run build</code>, aparece a pasta <code>dist</code>. Ela é o site inteiro, pronto para subir em qualquer servidor de arquivos. O conteúdo, de verdade:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls dist
+assets
+index.html
+ana@notebook:~/loja$ ls dist/assets
+index-D4Bgwu4I.js
+ana@notebook:~/loja$ du -sh dist
+48K	dist</pre>
+
+<p>Dois arquivos e 48 kB. O <code>index.html</code> é a página; o arquivo com hash é o JavaScript com todos os componentes compilados dentro. Se você tivesse uma imagem, ela estaria em <code>assets</code> também, com o nome trocado por um hash.</p>
+
+<p>Aquele <code>D4Bgwu4I</code> não é enfeite: é a impressão digital do conteúdo. Mude uma letra no componente e o nome do arquivo muda. É o que permite dizer ao navegador "guarde este arquivo para sempre" sem o risco de ele mostrar uma versão velha depois de uma atualização. O custo é que o nome é feio e não dá para adivinhar — por isso ninguém digita esse caminho à mão.</p>
+
+<p>A pasta <code>dist</code> é descartável: rodar o build de novo apaga e recria. Nunca edite um arquivo dentro dela; a próxima compilação sobrescreve. O mesmo vale para <code>node_modules</code>, que veremos a seguir.</p>
+
+<hr>
+
+<h2>9. <code>node_modules/</code>: a despensa</h2>
+
+<p>A pasta <code>node_modules</code> guarda todos os pacotes baixados, inclusive os que os pacotes usam. Por isso ela é grande:</p>
+
+<pre class="term">ana@notebook:~/loja$ du -sh node_modules
+31M	node_modules</pre>
+
+<p>Trinta e um megabytes para um projeto de dois arquivos. É normal. Cada pacote tem as suas dependências, e elas têm as suas; o npm achata tudo isso numa pasta só. Você nunca abre essa pasta para editar nada — a não ser para investigar um bug muito estranho, e mesmo assim com cuidado: a próxima instalação desfaz qualquer mudança.</p>
+
+<p>O <code>package-lock.json</code> merece uma linha, porque ele é o que garante que a máquina do sobrinho instale exatamente o que a máquina da Ana instalou. Sem ele, o <code>npm install</code> olharia só as faixas do <code>package.json</code> e poderia trazer uma versão mais nova de uma dependência indireta — aquele pacote que ninguém declarou, mas que o Vite usa por baixo. Com ele, o npm segue o recibo. Versione os dois arquivos juntos e o projeto fica reproduzível.</p>
+
+<p>Como ela é caríssima de versionar e totalmente reproduzível a partir da lista, ela fica fora do git. O arquivo que ensina o git a ignorá-la chama-se <code>.gitignore</code> e fica na raiz:</p>
+
+<pre class="file" data-file=".gitignore">node_modules
+dist</pre>
+
+<p>Duas linhas. A primeira impede que a despensa vá para o repositório; a segunda faz o mesmo com o resultado do build, que também é gerado. Quem clonar o projeto roda <code>npm install</code> e <code>npm run build</code> e chega no mesmo lugar. Essa é a beleza da separação entre fonte (o que você escreve) e artefato (o que as ferramentas geram).</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>Os três erros abaixo são de estrutura, não de lógica: o arquivo está com dois blocos do mesmo tipo ou com um bloco aberto. As mensagens saíram do compilador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — dois blocos <code>&lt;script&gt;</code></strong>
+<p>Acontece quando você cola um exemplo embaixo do outro. Um componente tem um script comum e, se precisar, um <code>&lt;script module&gt;</code>.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = 'Ana';
+&lt;/script&gt;
+
+&lt;script&gt;
+  let idade = 30;
+&lt;/script&gt;
+
+&lt;p&gt;{nome} {idade}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): A component can have a single top-level `&lt;script&gt;` element and/or a single top-level `&lt;script module&gt;` element</pre>
+<p>Junte as declarações no primeiro bloco e apague o segundo. A linha apontada é o começo do segundo script: o compilador aceita o primeiro e reclama do seguinte.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — bloco <code>{#each}</code> sem fechamento</strong>
+<p>O fechamento <code>{/each}</code> sumiu, e o compilador encontrou o <code>&lt;/ul&gt;</code> enquanto ainda esperava o fim do bloco.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = ['pão', 'bolo'];
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 0): `&lt;/ul&gt;` attempted to close an element that was not open</pre>
+<p>A mensagem fala do <code>&lt;/ul&gt;</code>, mas o problema está uma linha antes: falta <code>{/each}</code>. Blocos que abrem com <code>{#</code> fecham com <code>{/</code>. Confira os pares antes de procurar em outro lugar.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — tag aberta e não fechada</strong>
+<p>Um <code>&lt;h1&gt;</code> sem <code>&lt;/h1&gt;</code> deixa o compilador esperando o resto do arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Olá, {nome}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): `&lt;h1&gt;` was left open</pre>
+<p>"Left open" quer dizer "ficou aberta". Note que a linha apontada é o fim do arquivo, não a linha da tag: o compilador só percebe que faltou fechar quando o arquivo acaba. A dica é fechar a tag na mesma hora em que você abre.</p>
+</div>
+
+<div class="trysvelte" data-goal="outre:^Pão quentinho, Ana">
+<p class="try-task"><strong>Missão:</strong> o componente tem um <code>export default</code> copiado do <code>main.js</code>, e o compilador recusa. Remova essa linha: quem exporta o componente é o próprio Svelte.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  export default {};
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;Pão quentinho, {nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;Pão quentinho, {nome}&lt;/p&gt;</pre>
+</div>
+
+<p><code>export default</code> é coisa do <code>main.js</code>, que precisa entregar o resultado da montagem para o Vite. O componente não: o compilador gera o export sozinho, e um segundo export seria conflito.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>Duas tabelas para consultar com o projeto aberto: o que é de quem, e o que você pode apagar sem medo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pasta</th><th>Conteúdo</th><th>Pode apagar?</th></tr>
+<tr><td><code>src/</code></td><td>componentes e ponto de entrada</td><td>não — é o seu trabalho</td></tr>
+<tr><td><code>assets/</code> em <code>src</code></td><td>imagens importadas pelo código</td><td>não</td></tr>
+<tr><td><code>public/</code></td><td>arquivos copiados sem processar</td><td>não, se estiverem em uso</td></tr>
+<tr><td><code>node_modules/</code></td><td>pacotes baixados</td><td>sim — <code>npm install</code> recria</td></tr>
+<tr><td><code>dist/</code></td><td>site compilado</td><td>sim — <code>npm run build</code> recria</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Papel</th><th>Vai para o git?</th></tr>
+<tr><td><code>src/App.svelte</code></td><td>componente raiz, montado pelo <code>main.js</code></td><td>sim</td></tr>
+<tr><td><code>src/main.js</code></td><td>ponto de entrada, chama <code>mount()</code></td><td>sim</td></tr>
+<tr><td><code>index.html</code></td><td>página com a <code>div#app</code></td><td>sim</td></tr>
+<tr><td><code>package.json</code></td><td>lista de pacotes e atalhos</td><td>sim</td></tr>
+<tr><td><code>package-lock.json</code></td><td>versões exatas instaladas</td><td>sim</td></tr>
+<tr><td><code>node_modules/</code></td><td>pacotes baixados</td><td>não</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual pasta contém o código que você escreve?</p>
+<label><input type="radio" name="q1"> <code>node_modules</code></label>
+<label><input type="radio" name="q1"> <code>src</code></label>
+<label><input type="radio" name="q1"> <code>dist</code></label>
+<label><input type="radio" name="q1"> <code>public</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que <code>node_modules</code> não vai para o git?</p>
+<label><input type="radio" name="q1"> porque é protegida pelo sistema</label>
+<label><input type="radio" name="q1"> porque o git não aceita pastas com muitos arquivos</label>
+<label><input type="radio" name="q1"> porque é gerada pelo <code>npm install</code> a partir do <code>package.json</code></label>
+<label><input type="radio" name="q1"> porque contém dados secretos</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que o <code>src/main.js</code> faz?</p>
+<label><input type="radio" name="q1"> importa o componente raiz e o monta dentro da <code>div#app</code></label>
+<label><input type="radio" name="q1"> compila os arquivos <code>.svelte</code></label>
+<label><input type="radio" name="q1"> gera o <code>index.html</code> do build</label>
+<label><input type="radio" name="q1"> baixa os pacotes do projeto</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { <input data-answer="mount"> } from 'svelte';<br>import App from './App.svelte';<br><br>const app = mount(App, { target: document.getElementById('app') });<br><br>// a função que coloca o componente dentro da página</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>A estrutura é padrão: <code>src/</code> tem o seu código, a raiz tem os arquivos de configuração.</li>
+  <li><code>src/main.js</code> importa o componente raiz e chama <code>mount()</code> dentro da <code>div#app</code> do <code>index.html</code>.</li>
+  <li>Componente não é página: <code>&lt;!doctype&gt;</code> e <code>&lt;html&gt;</code> ficam no <code>index.html</code>.</li>
+  <li>Ao importar, use <code>./</code>, a extensão <code>.svelte</code> e um nome em maiúscula na tag.</li>
+  <li>Imagens: <code>src/assets</code> quando o código importa, <code>public</code> quando o caminho precisa ser fixo.</li>
+  <li><code>dist/</code> é o site pronto, com nomes que carregam hash do conteúdo.</li>
+  <li><code>node_modules/</code> e <code>dist/</code> são gerados: podem ser apagados e recriados por comando.</li>
+  <li>O <code>.gitignore</code> mantém fora do repositório o que é gerado.</li>
+  <li>Um componente tem no máximo um <code>&lt;script&gt;</code> e um <code>&lt;style&gt;</code>, e não tem <code>export default</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
