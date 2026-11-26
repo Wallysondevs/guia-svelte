@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>svelte:boundary — o disjuntor que evita a tela em branco | Guia Svelte</title>
+<meta name="description" content="svelte:boundary em Svelte 5: área protegida, snippet failed com error e reset, onerror para registrar, o que ele não pega e a saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">svelte:boundary</span></h1>
+
+<p class="intro">A padaria da Ana tem um forno elétrico novo, e o eletricista instalou um disjuntor: quando algo dá curto, o disjuntor desliga a linha antes de o prédio pegar fogo. A tela de um componente precisa do mesmo aparelho. Um cálculo com dado errado, um gráfico que não carrega, uma lista com um item corrompido — qualquer um desses derruba a página inteira e deixa a pessoa olhando para o vazio. O <code>svelte:boundary</code> é o disjuntor: isola o estrago, mostra uma mensagem no lugar do conteúdo e oferece um botão para religar.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um <em>boundary</em> e por que ele existe.</li>
+  <li>Como envolver uma parte da tela com <code>&lt;svelte:boundary&gt;</code>.</li>
+  <li>Como escrever o snippet <code>failed</code> com <code>erro</code> e <code>reset</code>.</li>
+  <li>Como usar <code>onerror</code> para registrar a falha em algum lugar.</li>
+  <li>Por que o botão de tentar de novo também precisa arrumar a causa.</li>
+  <li>O que o boundary <strong>não</strong> pega: erro de clique, erro no servidor, código fora da área.</li>
+  <li>Como usar dois boundaries para isolar dois widgets.</li>
+  <li>Onde vale a pena proteger e onde é exagero.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o disjuntor da tela</h2>
+
+<p>Um disjuntor não conserta o curto. Ele faz duas coisas: impede que o curto derrube a casa inteira e dá um jeito de religar depois de o problema ser resolvido. Um boundary de tela é igual: ele não conserta o erro do seu código, ele impede que o erro apague a página toda e oferece um caminho de volta.</p>
+
+<p>Sem boundary, o comportamento é drástico: um erro durante o desenho do componente interrompe o desenho, e o que a pessoa vê é a página pela metade ou completamente vazia. Pior: a pessoa não tem o que fazer, porque não há botão nenhum. Com boundary, a parte quebrada vira uma mensagem — e o resto da tela continua funcionando.</p>
+
+<p>O caso clássico é o widget de fora: um gráfico, um mapa, um editor que você não escreveu. Você não controla o código dele, então não pode prometer que ele nunca vai falhar. Pode prometer que, se falhar, o cabeçalho e o carrinho vão continuar na tela.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No prédio</th><th>No componente</th></tr>
+<tr><td>O disjuntor da linha</td><td><code>&lt;svelte:boundary&gt;</code></td></tr>
+<tr><td>O que está ligado naquela linha</td><td>o conteúdo entre a abertura e o fechamento</td></tr>
+<tr><td>O aviso vermelho no quadro</td><td>o snippet <code>failed</code></td></tr>
+<tr><td>O botão de religar</td><td>a função <code>reset</code></td></tr>
+<tr><td>O caderno do zelador</td><td><code>onerror</code></td></tr>
+<tr><td>Um disjuntor por andar</td><td>um boundary por widget</td></tr>
+</table>
+</div>
+
+<p>O vocabulário: <em>boundary</em> é a área protegida; <em>snippet</em> é o pedaço de marcação com nome, que você já viu em <code>{#snippet}</code>; <em>failed</em> é o snippet que o Svelte desenha no lugar do conteúdo quando algo quebra; e <em>reset</em> é a função que reabre o disjuntor.</p>
+
+<hr>
+
+<h2>2. A área protegida</h2>
+
+<p>A tag é uma das tags especiais do Svelte, com o prefixo <code>svelte:</code>. Tudo o que está dentro dela fica protegido; tudo o que está fora continua sendo problema de quem escreveu.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let quebrado = $state(false);
+  let falhas = $state(0);
+
+  function temperatura() {
+    if (quebrado) throw new Error('o forno não acendeu');
+    return '180 °C';
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;Temperatura: {temperatura()}&lt;/p&gt;
+  &lt;button onclick={() =&gt; (quebrado = true)}&gt;ligar o forno&lt;/button&gt;
+
+  {#snippet failed(erro, reset)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+    &lt;button onclick={() =&gt; { quebrado = false; falhas += 1; reset(); }}&gt;
+      tentar de novo
+    &lt;/button&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;
+
+&lt;p&gt;tentativas: {falhas}&lt;/p&gt;</pre>
+
+<p>Na primeira renderização, nada quebrou: o compilador do servidor devolve o conteúdo normal e a contagem de tentativas em zero.</p>
+
+<pre class="out">&lt;p&gt;Temperatura: 180 °C&lt;/p&gt; &lt;button&gt;ligar o forno&lt;/button&gt; &lt;p&gt;tentativas: 0&lt;/p&gt;</pre>
+
+<p>No navegador, o botão "ligar o forno" muda o estado, a função <code>temperatura()</code> lança o erro e o boundary entra em ação. Este é o texto que aparece nesse momento, colhido no mesmo avaliador das caixas:</p>
+
+<pre class="out">Deu erro: o forno não acendeu tentar de novo tentativas: 0</pre>
+
+<dl class="anatomy">
+  <dt>&lt;svelte:boundary&gt;</dt><dd>a <strong>área protegida</strong>. Se o desenho de qualquer coisa aqui dentro lançar erro, o conteúdo é substituído pelo snippet <code>failed</code>.</dd>
+  <dt>temperatura()</dt><dd>a função que lança o erro. O <code>throw</code> interrompe o desenho naquele ponto; o boundary captura e segue.</dd>
+  <dt>{#snippet failed(erro, reset)}</dt><dd>o <strong>plano B</strong>. Recebe o erro capturado e a função que reabre a área. Só existe dentro do boundary.</dd>
+  <dt>erro.message</dt><dd>o texto do erro, o mesmo que você escreveu no <code>new Error(...)</code>. É o que a pessoa pode ler sem susto.</dd>
+  <dt>falhas += 1</dt><dd>a contagem de tentativas. Fica fora do boundary para continuar visível mesmo quando o conteúdo cai.</dd>
+</dl>
+
+<p>Repare que a contagem de tentativas não é restaurada pelo <code>reset</code>: ela mora no estado do componente que envolve o boundary, e o boundary só substitui o conteúdo interno. Essa separação é útil — o histórico de falhas sobrevive ao religamento.</p>
+
+<hr>
+
+<h2>3. O snippet <code>failed</code>: o que mostrar no lugar</h2>
+
+<p>O snippet recebe dois parâmetros, e os dois são opcionais na declaração mas úteis na prática. O primeiro é o <strong>erro</strong>, com mensagem e pilha. O segundo é o <strong>reset</strong>, uma função que manda o Svelte tentar desenhar o conteúdo de novo.</p>
+
+<p>Uma mensagem boa tem três partes: o que a pessoa perdeu, o que ela pode fazer e um identificador para quem dá suporte. "Deu erro: Cannot read properties of undefined" cumpre a primeira e falha nas outras duas. "Os preços não carregaram. Tente de novo em instantes." cumpre as duas primeiras. O identificador pode ser um código curto que você registra junto com o erro completo.</p>
+
+<p>O texto técnico tem seu lugar: no <code>onerror</code>, para o registro, e não na cara de quem está comprando pão. Se você precisa mostrar o detalhe para a equipe, use um endereço de desenvolvimento — nunca a mensagem crua em produção.</p>
+
+<div class="warning">
+<strong>Não esconda o erro para sempre</strong>
+<p>Um boundary que engole tudo e nunca registra nada transforma um problema visível em problema invisível. O <code>onerror</code> existe para isso: mesmo que a tela mostre uma mensagem gentil, alguém precisa saber que a falha aconteceu, com a mensagem original e a hora.</p>
+</div>
+
+<hr>
+
+<h2>4. <code>onerror</code>: o caderno do zelador</h2>
+
+<p>O atributo <code>onerror</code> recebe uma função chamada quando o boundary captura um erro. Ela recebe o erro e o reset, na mesma ordem do snippet. É o lugar de registrar: guardar a mensagem num estado para mostrar na tela, mandar para um serviço de monitoramento, incrementar um contador.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let ultimoErro = $state('nenhum');
+
+  function explodir() {
+    throw new Error('o forno não acendeu');
+  }
+
+  function registrar(erro) {
+    ultimoErro = erro.message;
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary onerror={registrar}&gt;
+  &lt;p&gt;Conteúdo da vitrine&lt;/p&gt;
+  {#snippet failed(erro)}
+    &lt;p&gt;A vitrine falhou: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;
+
+&lt;p&gt;último erro registrado: {ultimoErro}&lt;/p&gt;</pre>
+
+<p>Fora do boundary, o registro do último erro aparece normalmente na primeira renderização:</p>
+
+<pre class="out">&lt;p&gt;Conteúdo da vitrine&lt;/p&gt; &lt;p&gt;último erro registrado: nenhum&lt;/p&gt;</pre>
+
+<p>O <code>onerror</code> é chamado quando o erro é capturado, e o valor que ele grava fica disponível para a tela — inclusive para o parágrafo que está fora do boundary. Se você quiser mostrar o horário da falha, é ali que ele precisa ser capturado.</p>
+
+<div class="trysvelte" data-goal="out:Deu erro: o forno não acendeu registrado: &quot;o forno não acendeu&quot;">
+<p class="try-task"><strong>Missão:</strong> o boundary mostra a mensagem, mas o registro fora dele fica vazio. Faça o <code>onerror</code> guardar a mensagem do erro e a tela terminar com <strong>registrado: "o forno não acendeu"</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let ultimoErro = $state('');
+
+  function explodir() {
+    throw new Error('o forno não acendeu');
+  }
+
+  function registrar(erro) {
+    ultimoErro = '';
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary onerror={registrar}&gt;
+  &lt;p&gt;{explodir()}&lt;/p&gt;
+  {#snippet failed(erro)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;
+
+&lt;p&gt;registrado: "{ultimoErro}"&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let ultimoErro = $state('');
+
+  function explodir() {
+    throw new Error('o forno não acendeu');
+  }
+
+  function registrar(erro) {
+    ultimoErro = erro.message;
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary onerror={registrar}&gt;
+  &lt;p&gt;{explodir()}&lt;/p&gt;
+  {#snippet failed(erro)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;
+
+&lt;p&gt;registrado: "{ultimoErro}"&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>5. <code>reset</code>: tentar de novo</h2>
+
+<p>O botão de religar é a parte que todo mundo esquece de testar. O <code>reset</code> manda o Svelte tentar desenhar o conteúdo outra vez — mas, se a causa do erro continua lá, o conteúdo quebra de novo, o boundary captura de novo e a pessoa vê a mesma mensagem. Um botão que não muda nada é pior que nenhum botão.</p>
+
+<p>Por isso o handler do reset costuma fazer duas coisas: arrumar o estado que causou o erro e só então chamar <code>reset()</code>. No componente da seção 2, o handler faz <code>quebrado = false</code> antes. A ordem entre as duas linhas não muda o resultado aqui, porque o Svelte aplica as mudanças juntas no fim do evento; o que não pode é esquecer a primeira.</p>
+
+<div class="trysvelte" data-goal="clique:.liga;;clique:.reset;;out:tudo certo ligar">
+<p class="try-task"><strong>Missão:</strong> o botão "tentar de novo" chama <code>reset</code>, mas a tela volta para a mesma mensagem. Faça o segundo clique devolver <strong>tudo certo</strong> e o botão "ligar".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let quebrado = $state(false);
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  {#if quebrado}
+    &lt;p&gt;{[].primeiro.nome}&lt;/p&gt;
+  {:else}
+    &lt;p&gt;tudo certo&lt;/p&gt;
+  {/if}
+
+  {#snippet failed(erro, reset)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+    &lt;button class="reset" onclick={reset}&gt;tentar de novo&lt;/button&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;
+
+&lt;button class="liga" onclick={() =&gt; (quebrado = true)}&gt;ligar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let quebrado = $state(false);
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  {#if quebrado}
+    &lt;p&gt;{[].primeiro.nome}&lt;/p&gt;
+  {:else}
+    &lt;p&gt;tudo certo&lt;/p&gt;
+  {/if}
+
+  {#snippet failed(erro, reset)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+    &lt;button class="reset" onclick={() =&gt; { quebrado = false; reset(); }}&gt;tentar de novo&lt;/button&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;
+
+&lt;button class="liga" onclick={() =&gt; (quebrado = true)}&gt;ligar&lt;/button&gt;</pre>
+</div>
+
+<p>A mensagem que aparece no caso quebrado é a do erro de verdade: <code>Cannot read properties of undefined (reading 'nome')</code>. Ela é feia, e é exatamente por isso que o snippet <code>failed</code> deve traduzir: "Não foi possível carregar os preços" é o que a pessoa precisa ler; a mensagem crua vai para o registro.</p>
+
+<hr>
+
+<h2>6. O que o boundary não pega</h2>
+
+<p>O disjuntor protege a fiação daquele trecho, não a casa toda. Existem três buracos que confundem quem está começando, e os três aparecem na prática.</p>
+
+<p>O primeiro: erro dentro de um <strong>event handler</strong>. O clique roda depois do desenho, fora do ciclo que o boundary observa. Se o handler lança, o erro vai para o console do navegador e a tela não muda. Para esse caso, use <code>try/catch</code> dentro do handler e guarde o erro num estado.</p>
+
+<p>O segundo: erro durante a <strong>renderização no servidor</strong>. O boundary é uma peça de tempo de execução no navegador; no servidor, o desenho acontece de uma vez e o erro sobe. Quem protege a requisição no servidor é outra camada — o tratamento de erro do framework. O sintoma é claro: a página inteira falha, mesmo com o boundary no lugar.</p>
+
+<p>O terceiro: conteúdo <strong>fora</strong> da área. Um boundary em volta da lista não protege o cabeçalho. Se o erro acontece antes da tag de abertura, ele não é capturado por nada.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde o erro acontece</th><th>Boundary pega?</th><th>O que fazer</th></tr>
+<tr><td>durante o desenho do conteúdo</td><td><strong>sim</strong></td><td>snippet <code>failed</code></td></tr>
+<tr><td>dentro de um <code>$effect</code></td><td><strong>sim</strong></td><td>snippet <code>failed</code></td></tr>
+<tr><td>numa promessa aguardada</td><td><strong>sim</strong></td><td>snippet <code>failed</code></td></tr>
+<tr><td>no handler de um clique</td><td>não</td><td><code>try/catch</code> no handler</td></tr>
+<tr><td>na renderização do servidor</td><td>não</td><td>tratamento de erro do servidor</td></tr>
+<tr><td>fora da tag de abertura</td><td>não</td><td>envolver o trecho certo</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="out:Deu erro: o forno não acendeu">
+<p class="try-task"><strong>Missão:</strong> o boundary está no lugar certo, mas o forno quebrado ficou <strong>fora</strong> dele e a página toda cai. Mova a linha do forno para dentro da área protegida e mostre <strong>Deu erro: o forno não acendeu</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function explodir() {
+    throw new Error('o forno não acendeu');
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;área protegida&lt;/p&gt;
+  {#snippet failed(erro, reset)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;
+
+&lt;p&gt;forno: {explodir()}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function explodir() {
+    throw new Error('o forno não acendeu');
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;área protegida&lt;/p&gt;
+  &lt;p&gt;forno: {explodir()}&lt;/p&gt;
+  {#snippet failed(erro, reset)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;</pre>
+</div>
+
+<hr>
+
+<h2>7. Dois boundaries, dois estragos</h2>
+
+<p>Um boundary por widget é a regra de ouro quando a tela tem partes independentes. Se o gráfico de vendas quebra, a tabela de preços não tem por que sumir junto. Cada área protegida tem o próprio snippet, com uma mensagem específica — "o gráfico não carregou" diz mais do que "algo deu errado".</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function explodir() {
+    throw new Error('o gráfico não carregou');
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;preços de hoje&lt;/p&gt;
+  {#snippet failed(erro)}
+    &lt;p&gt;Os preços não carregaram&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;gráfico de vendas&lt;/p&gt;
+  {#snippet failed(erro)}
+    &lt;p&gt;O gráfico não carregou&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;</pre>
+
+<pre class="out">&lt;p&gt;preços de hoje&lt;/p&gt; &lt;p&gt;gráfico de vendas&lt;/p&gt;</pre>
+
+<p>O custo de exagerar é o contrário: um boundary por botão transforma cada falha num retalho de mensagens diferentes, e a pessoa não entende que o problema é um só. O bom senso é agrupar por <em>assunto</em>: os preços juntos, o gráfico sozinho, a lista de pedidos em outro lugar.</p>
+
+<hr>
+
+<h2>8. Onde vale a pena proteger</h2>
+
+<p>Boundary não é enfeite para toda tela. Ele custa um pedaço a mais de marcação e um caminho a mais para testar. Vale a pena quando a falha de uma parte não deveria derrubar as outras e quando você tem uma mensagem útil para mostrar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Boundary?</th><th>Por quê</th></tr>
+<tr><td>widget de terceiro (gráfico, mapa, editor)</td><td>sim</td><td>você não controla o código dele</td></tr>
+<tr><td>dados que vêm de fora e podem vir tortos</td><td>sim</td><td>a falha é esperada, não excepcional</td></tr>
+<tr><td>formulário simples do próprio app</td><td>raramente</td><td>erro aqui é bug seu; corrija o bug</td></tr>
+<tr><td>componente que já valida os dados</td><td>não</td><td>o erro não deveria existir</td></tr>
+<tr><td>área com várias partes independentes</td><td>um por parte</td><td>isolar o estrago</td></tr>
+</table>
+</div>
+
+<p>Existe ainda o irmão do <code>failed</code>, o snippet <code>pending</code>, que mostra algo enquanto o conteúdo assíncrono ainda está a caminho. Ele faz sentido quando o conteúdo protegido espera dados; a aula sobre componentes assíncronos mostra esse caso com calma.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador e do renderizador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — nome da tag escrito errado</strong>
+<p>As tags <code>svelte:</code> são poucas e fixas. Um <code>e</code> no lugar do <code>a</code> faz o compilador listar todas as que existem.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;fora&lt;/p&gt;
+
+&lt;svelte:boundry&gt;
+  &lt;p&gt;dentro&lt;/p&gt;
+&lt;/svelte:boundry&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 1): Valid `&lt;svelte:...&gt;` tag names are svelte:head, svelte:options, svelte:window, svelte:document, svelte:body, svelte:element, svelte:component, svelte:self, svelte:fragment or svelte:boundary</pre>
+<p>A mensagem é comprida porque serve de lembrete: <code>svelte:head</code>, <code>svelte:window</code>, <code>svelte:element</code>, <code>svelte:boundary</code> e mais algumas. Para esta aula, o nome certo é <code>svelte:boundary</code>, com "a" depois do "d".</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — o boundary não protege o servidor</strong>
+<p>O mesmo componente que funciona no navegador derruba a renderização do servidor. O erro sobe em vez de virar mensagem.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function explodir() {
+    throw new Error('o forno não acendeu');
+  }
+&lt;/script&gt;
+
+&lt;svelte:boundary&gt;
+  &lt;p&gt;{explodir()}&lt;/p&gt;
+  {#snippet failed(erro, reset)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;</pre>
+<pre class="out">Erro ao renderizar: o forno não acendeu</pre>
+<p>A tradução: durante o desenho do servidor, o erro foi lançado e ninguém o capturou. Para o servidor, use o tratamento de erro do framework; para o navegador, o boundary continua valendo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>erro</code> usado fora do snippet</strong>
+<p>O objeto do erro só existe dentro do snippet <code>failed</code>. Escrever <code>{erro.message}</code> no conteúdo normal faz o desenho procurar um nome que não foi declarado.</p>
+<pre class="file" data-file="src/App.svelte">&lt;svelte:boundary&gt;
+  &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {#snippet failed(erro, reset)}
+    &lt;p&gt;falhou&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;</pre>
+<pre class="out">Erro ao renderizar: erro is not defined</pre>
+<p>"erro is not defined" quer dizer que o nome não existe naquele escopo. Para mostrar a mensagem, ela precisa estar dentro de <code>{#snippet failed(erro)}</code> ou guardada num estado pelo <code>onerror</code>.</p>
+</div>
+
+<hr>
+
+<h2>10. O boundary não substitui o conserto</h2>
+
+<p>É tentador envolver tudo num boundary e considerar o assunto resolvido. O problema é que a tela passa a funcionar pela metade com mais frequência, e ninguém percebe: a mensagem é gentil, o layout não quebra, e o erro se acumula no registro sem que ninguém olhe.</p>
+
+<p>O uso saudável é o inverso: boundary é rede de segurança, não plano principal. Se a mesma mensagem aparece toda semana no mesmo lugar, o boundary está fazendo o trabalho de um bug tracker — e o conserto é arrumar a causa, não melhorar o texto do snippet.</p>
+
+<p>Vale também cuidar do estado depois da falha. Um carrinho que quebrou no meio pode ter ficado pela metade; o botão de tentar de novo deve recomeçar de um estado conhecido, não continuar de onde parou. No exemplo da seção 2, é por isso que o handler zera <code>quebrado</code> antes de chamar <code>reset()</code>: religar sem arrumar a causa é pedir para quebrar de novo.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escreva</th><th>Faz</th></tr>
+<tr><td><code>&lt;svelte:boundary&gt; … &lt;/svelte:boundary&gt;</code></td><td>protege o conteúdo contra erros de desenho</td></tr>
+<tr><td><code>{#snippet failed(erro, reset)}</code></td><td>o que aparece no lugar do conteúdo quebrado</td></tr>
+<tr><td><code>{#snippet pending()}</code></td><td>o que aparece enquanto o conteúdo assíncrono carrega</td></tr>
+<tr><td><code>onerror={(erro, reset) =&gt; …}</code></td><td>registra a falha antes de mostrar a mensagem</td></tr>
+<tr><td><code>reset()</code></td><td>manda o Svelte tentar desenhar o conteúdo de novo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td>a tela inteira some</td><td>erro fora do boundary</td><td>mover o trecho para dentro</td></tr>
+<tr><td>o botão de tentar de novo não resolve</td><td>a causa continua no estado</td><td>arrumar o estado antes do <code>reset()</code></td></tr>
+<tr><td>clique quebra e nada aparece</td><td>erro no handler</td><td><code>try/catch</code> no handler</td></tr>
+<tr><td>página falha só no servidor</td><td>boundary não atua no SSR</td><td>tratamento de erro do framework</td></tr>
+<tr><td>erro is not defined</td><td><code>erro</code> fora do snippet</td><td>usar dentro do <code>failed</code> ou guardar no <code>onerror</code></td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index--xJH_S4l.js  36.57 kB │ gzip: 14.15 kB
+✓ built in 1.53s</pre>
+
+<p>O build não muda por causa do boundary: a tag é compilada junto com o componente e não vira biblioteca extra. O que muda é o comportamento em tempo de execução — e esse só se confere rodando a página.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> loja@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que o boundary faz quando o conteúdo lança um erro?</p>
+<label><input type="radio" name="q1"> recarrega a página inteira</label>
+<label><input type="radio" name="q1"> corrige o erro e continua o desenho</label>
+<label><input type="radio" name="q1"> substitui o conteúdo pelo snippet <code>failed</code></label>
+<label><input type="radio" name="q1"> esconde a seção até a próxima atualização</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Qual erro o boundary <strong>não</strong> captura?</p>
+<label><input type="radio" name="q1"> erro de cálculo durante o desenho</label>
+<label><input type="radio" name="q1"> erro dentro de um <code>$effect</code></label>
+<label><input type="radio" name="q1"> erro no handler de um clique</label>
+<label><input type="radio" name="q1"> erro numa promessa aguardada</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o botão de reset costuma arrumar o estado antes de chamar <code>reset()</code>?</p>
+<label><input type="radio" name="q1"> porque, se a causa continua, o conteúdo quebra de novo</label>
+<label><input type="radio" name="q1"> porque <code>reset()</code> apaga todo o estado do componente</label>
+<label><input type="radio" name="q1"> porque o Svelte recusa duas chamadas seguidas</label>
+<label><input type="radio" name="q1"> porque o boundary não aceita <code>reset</code> sem parâmetro</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;svelte:boundary onerror={(erro) =&gt; registrar(erro)}&gt;<br>&nbsp;&nbsp;&lt;Grafico /&gt;<br>&nbsp;&nbsp;{#snippet <input data-answer="failed">(erro, reset)}<br>&nbsp;&nbsp;&nbsp;&nbsp;&lt;p&gt;O gráfico não carregou&lt;/p&gt;<br>&nbsp;&nbsp;{/snippet}<br>&lt;/svelte:boundary&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>svelte:boundary</code> isola o erro de uma parte da tela: o resto continua funcionando.</li>
+  <li>O snippet <code>failed(erro, reset)</code> substitui o conteúdo quebrado.</li>
+  <li><code>onerror</code> registra a falha antes de a mensagem aparecer.</li>
+  <li><code>reset()</code> reabre a área; sem arrumar a causa, o erro volta.</li>
+  <li>O boundary não pega erro de clique, erro no servidor nem conteúdo fora da tag.</li>
+  <li>Um boundary por widget independente; um por botão é exagero.</li>
+  <li>Mensagem boa diz o que se perdeu e o que fazer; o texto técnico vai para o registro.</li>
+  <li>Boundary é rede de segurança, não substituto do conserto.</li>
+  <li>O gêmeo <code>pending</code> cobre o tempo de espera do conteúdo assíncrono.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

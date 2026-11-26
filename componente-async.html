@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Componentes Assíncronos — o pedido que demora | Guia Svelte</title>
+<meta name="description" content="Promessas na tela com {#await}, then e catch, refazer o pedido com $derived, o await no topo do componente e a opção experimental.async, com saídas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Componentes Assíncronos</span></h1>
+
+<p class="intro">A Ana pede cinquenta pães para a festa da escola e o atendente diz: "fica pronto em vinte minutos". Ela não fica parada olhando o forno nem vai embora sem o pedido — ela guarda o papel, faz outra coisa e volta quando o prazo acaba. Uma <strong>promessa</strong> em JavaScript é esse papel: o valor não está pronto ainda, mas chegará. Esta aula ensina a mostrar na tela os três momentos de um pedido — esperando, pronto e deu errado — sem travar a página e sem deixar a pessoa no escuro.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma promessa e por que o valor dela demora.</li>
+  <li>Como mostrar os três estados de uma promessa com <code>{#await}</code>.</li>
+  <li>Como escrever as ramificações <code>{:then}</code> e <code>{:catch}</code>.</li>
+  <li>Por que a saída do servidor mostra sempre o estado de espera.</li>
+  <li>Como refazer o pedido quando o estado muda, com uma promessa derivada.</li>
+  <li>O que muda quando o componente usa <code>await</code> no topo do script.</li>
+  <li>Por que o compilador pede a opção <code>experimental.async</code> nesta versão.</li>
+  <li>Como o <code>svelte:boundary</code> cobre o tempo de espera com o snippet <code>pending</code>.</li>
+  <li>Como cuidar de carregando, erro e vazio sem confundir a pessoa.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o papel do pedido</h2>
+
+<p>Quando a Ana faz um pedido que demora, ela recebe um papel com a descrição e o prazo. Esse papel não é o pão; é a <strong>garantia</strong> de que haverá pão. No JavaScript, o papel se chama promessa: um objeto que representa um valor futuro, com dois desfechos possíveis — resolvida (chegou) ou rejeitada (não veio, e o motivo está escrito).</p>
+
+<p>A página não pode parar enquanto o pedido não chega. Se ela parasse, a pessoa não conseguiria rolar, clicar nem desistir. Por isso o componente mostra o estado de espera, o Svelte continua a vida dele e, quando a promessa resolve, o pedaço da tela que depende dela é redesenhado. É o mesmo motivo pelo qual a Ana não fica plantada na frente do forno.</p>
+
+<p>Existe uma diferença entre "demora" e "travou": demorar é o normal da rede; travar é deixar a tela sem sinal de vida. Um componente assíncrono bem feito sempre diz em que pé está o pedido — esperando, pronto ou falhou — e sempre oferece um caminho: tentar de novo, voltar, falar com a padaria.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No balcão</th><th>No componente</th></tr>
+<tr><td>"Fica pronto em vinte minutos"</td><td>uma promessa criada e ainda pendente</td></tr>
+<tr><td>O papel com o pedido anotado</td><td>a variável que guarda a promessa</td></tr>
+<tr><td>"Está pronto"</td><td>a promessa resolvida com um valor</td></tr>
+<tr><td>"Acabou o trigo"</td><td>a promessa rejeitada com um erro</td></tr>
+<tr><td>Voltar ao balcão e perguntar de novo</td><td>criar uma promessa nova</td></tr>
+</table>
+</div>
+
+<p>O vocabulário: <em>promessa</em> é o valor futuro; <em>resolver</em> é entregar o valor; <em>rejeitar</em> é entregar o erro; <em>aguardar</em> (<code>await</code>) é esperar o desfecho dentro de uma função assíncrona. Quatro palavras que você vai ver em qualquer conversa sobre dados que vêm de fora.</p>
+
+<hr>
+
+<h2>2. O bloco <code>{#await}</code></h2>
+
+<p>O Svelte tem um bloco feito para promessas. Ele recebe a promessa e desenha o primeiro trecho enquanto ela não resolve, o segundo quando resolve e o terceiro quando falha. O bloco inteiro se chama <code>{#await}</code>, e as ramificações são <code>{:then}</code> e <code>{:catch}</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function assar() {
+    return new Promise((resolver) =&gt; {
+      setTimeout(() =&gt; resolver('pão quentinho'), 300);
+    });
+  }
+
+  let pedido = assar();
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;Pronto: {valor}&lt;/p&gt;
+{:catch erro}
+  &lt;p&gt;Falhou: {erro.message}&lt;/p&gt;
+{/await}</pre>
+
+<p>O HTML do servidor mostra o estado inicial, porque a promessa do exemplo leva trezentos milissegundos para resolver e o servidor não espera:</p>
+
+<pre class="out">&lt;p&gt;assando…&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>{#await pedido}</dt><dd>abre o bloco. O conteúdo até o próximo <code>{:…}</code> é o que aparece <strong>enquanto</strong> a promessa não resolve.</dd>
+  <dt>{:then valor}</dt><dd>o que aparece quando ela resolve. <code>valor</code> é o nome que você escolhe para o resultado entregue.</dd>
+  <dt>{:catch erro}</dt><dd>o que aparece quando ela falha. <code>erro</code> é o motivo da falha, quase sempre um objeto com <code>message</code>.</dd>
+  <dt>{/await}</dt><dd>fecha o bloco. Sem ele, o compilador recusa o arquivo — é o erro da seção 10.</dd>
+  <dt>assar()</dt><dd>a função que cria a promessa. Ela resolve depois de um tempo, como um pedido de verdade.</dd>
+</dl>
+
+<p>A ordem das ramificações é fixa: primeiro a espera, depois o <code>then</code>, depois o <code>catch</code>. Você pode omitir o <code>then</code> ou o <code>catch</code>, e aí o bloco simplesmente não desenha nada naquele desfecho — o que costuma ser pior para quem usa a tela.</p>
+
+<div class="trysvelte" data-goal="depois:400;;out:Pronto: pão quentinho">
+<p class="try-task"><strong>Missão:</strong> o bloco mostra "assando…" e depois não mostra mais nada, porque falta a ramificação do sucesso. Faça aparecer <strong>Pronto: pão quentinho</strong> quando a promessa resolver.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedido = new Promise((resolver) =&gt; {
+    setTimeout(() =&gt; resolver('pão quentinho'), 150);
+  });
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;assando…&lt;/p&gt;
+{/await}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedido = new Promise((resolver) =&gt; {
+    setTimeout(() =&gt; resolver('pão quentinho'), 150);
+  });
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;Pronto: {valor}&lt;/p&gt;
+{/await}</pre>
+</div>
+
+<p>Repare no que o teste faz: ele espera 400 milissegundos antes de conferir. Sem a espera, a verificação aconteceria enquanto a promessa ainda está pendente e nada estaria pronto. Esse é o cuidado número um ao testar código assíncrono: <em>o resultado não existe no instante do clique</em>.</p>
+
+<hr>
+
+<h2>3. <code>{:catch}</code>: quando o pedido não vem</h2>
+
+<p>Promessa rejeitada não é catástrofe: é informação. O forno apagou, a rede caiu, o servidor respondeu 500. Sem a ramificação <code>{:catch}</code>, a rejeição fica sem tratamento — o navegador registra um erro no console e a tela continua mostrando "assando…" para sempre, o que é pior do que mostrar o problema.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function buscar() {
+    return Promise.reject(new Error('o forno apagou'));
+  }
+
+  let pedido = buscar();
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;Pronto: {valor}&lt;/p&gt;
+{:catch erro}
+  &lt;p&gt;Falhou: {erro.message}&lt;/p&gt;
+{/await}</pre>
+
+<p>No servidor, a promessa já nasce rejeitada, mas a renderização não espera para ver:</p>
+
+<pre class="out">&lt;p&gt;assando…&lt;/p&gt;</pre>
+
+<p>No navegador, a mensagem aparece assim que a rejeição chega. É por isso que o <code>{:catch}</code> precisa de uma frase pensada: "Falhou: o forno apagou" é melhor que o texto cru do erro, e muito melhor que uma tela parada na espera.</p>
+
+<div class="trysvelte" data-goal="depois:200;;out:Falhou: o forno apagou">
+<p class="try-task"><strong>Missão:</strong> a promessa é rejeitada e a tela fica presa em "assando…". Trate a falha e mostre <strong>Falhou: o forno apagou</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedido = Promise.reject(new Error('o forno apagou'));
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;Pronto: {valor}&lt;/p&gt;
+{/await}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedido = Promise.reject(new Error('o forno apagou'));
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;Pronto: {valor}&lt;/p&gt;
+{:catch erro}
+  &lt;p&gt;Falhou: {erro.message}&lt;/p&gt;
+{/await}</pre>
+</div>
+
+<div class="warning">
+<strong>Promessa rejeitada sem tratamento</strong>
+<p>Uma promessa rejeitada que ninguém escuta gera um aviso de <em>unhandled rejection</em> no console e pode derrubar a montagem em testes automatizados. No componente, toda promessa que pode falhar precisa de <code>{:catch}</code> ou de um <code>.catch()</code>; não existe terceira opção.</p>
+</div>
+
+<hr>
+
+<h2>4. Refazer o pedido</h2>
+
+<p>Quando a pessoa clica em "buscar de novo", o componente precisa de uma promessa <strong>nova</strong>. Promessa é de uso único: uma vez resolvida, ela guarda o resultado para sempre. Para pedir outra coisa, crie outra promessa — e a forma mais limpa é um derivado que depende do estado que mudou.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tentativa = $state(0);
+  let pedido = $derived(buscar(tentativa));
+
+  function buscar(n) {
+    return new Promise((resolver) =&gt; {
+      setTimeout(() =&gt; resolver(`resultado ${n}`), 200);
+    });
+  }
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;buscando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;{valor}&lt;/p&gt;
+{:catch erro}
+  &lt;p&gt;Falhou: {erro.message}&lt;/p&gt;
+{/await}
+
+&lt;button onclick={() =&gt; (tentativa += 1)}&gt;buscar de novo&lt;/button&gt;</pre>
+
+<p>O servidor entrega o estado de espera e o botão:</p>
+
+<pre class="out">&lt;p&gt;buscando…&lt;/p&gt; &lt;button&gt;buscar de novo&lt;/button&gt;</pre>
+
+<p>Três detalhes fazem esse padrão funcionar. O primeiro: <code>$derived(buscar(tentativa))</code> cria uma promessa nova sempre que <code>tentativa</code> muda. O segundo: o bloco <code>{#await}</code> percebe a troca e volta ao estado de espera sozinho, sem você limpar nada. O terceiro: a função <code>buscar</code> recebe o número da tentativa por parâmetro, o que evita que duas buscas seguidas leiam o mesmo valor velho.</p>
+
+<div class="trysvelte" data-goal="clique:button;;depois:200;;out:pedido 1: bolo pedir de novo">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra <code>[object Promise]</code>, porque uma promessa não é o valor dela. Faça o bloco esperar a promessa e mostrar <strong>pedido 1: bolo</strong> depois de um clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let tentativa = $state(0);
+  let pedido = $derived(buscar(tentativa));
+
+  function buscar(n) {
+    return Promise.resolve(n === 0 ? 'pão' : 'bolo');
+  }
+&lt;/script&gt;
+
+&lt;p&gt;pedido {tentativa}: {pedido}&lt;/p&gt;
+&lt;button onclick={() =&gt; (tentativa += 1)}&gt;pedir de novo&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let tentativa = $state(0);
+  let pedido = $derived(buscar(tentativa));
+
+  function buscar(n) {
+    return Promise.resolve(n === 0 ? 'pão' : 'bolo');
+  }
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;pedido {tentativa}: assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;pedido {tentativa}: {valor}&lt;/p&gt;
+{/await}
+
+&lt;button onclick={() =&gt; (tentativa += 1)}&gt;pedir de novo&lt;/button&gt;</pre>
+</div>
+
+<p>O <code>[object Promise]</code> da versão inicial é o sintoma clássico de quem esqueceu de aguardar. Toda vez que um texto na tela mostra <code>[object Promise]</code>, <code>[object Object]</code> ou <code>undefined</code> no lugar de um dado, o problema é que o valor guardado não é o valor final — é o pacote dele.</p>
+
+<hr>
+
+<h2>5. <code>await</code> no topo do componente</h2>
+
+<p>Existe uma forma mais direta de escrever componente assíncrono: usar <code>await</code> direto no corpo do <code>&lt;script&gt;</code>, sem bloco e sem promessa na tela. O componente passa a ser assíncrono; quem o desenha espera o resultado antes de mostrar o conteúdo.</p>
+
+<p>Nesta versão do compilador, essa forma é <strong>experimental</strong> e vem desligada. Sem a opção, o arquivo nem compila: o erro aparece na seção 9, com o arquivo inteiro. A mensagem é comprida e diz exatamente o que fazer, então vale lê-la por partes.</p>
+
+<p>A tradução: "não dá para usar <code>await</code> em derivados, em expressões do template ou no topo de um componente, a menos que a opção <code>experimental.async</code> do compilador seja <code>true</code>". Para ligar, a opção vai nas configurações do compilador, no <code>svelte.config.js</code>, dentro de <code>compilerOptions</code>. É uma escolha de projeto: quem liga assume que a equipe inteira sabe que aquele componente espera dados.</p>
+
+<p>Vale saber por que a opção existe. Um componente que espera muda o desenho inteiro: o servidor precisa esperar antes de responder, o boundary precisa de um estado de espera, e o navegador precisa saber o que mostrar nesse meio-tempo. São decisões grandes demais para virar padrão sem aviso.</p>
+
+<hr>
+
+<h2>6. <code>$derived(await …)</code> e por que não</h2>
+
+<p>A tentação seguinte é usar <code>await</code> dentro de um derivado, para "resolver uma vez e usar em vários lugares". O compilador recusa pelo mesmo motivo do topo do componente — e a recusa é boa: um derivado é síncrono por definição, porque quem o lê espera o valor na hora. O erro 3 da seção 9 mostra a recusa com o código.</p>
+
+<p>Com a opção ligada, o Svelte transforma esse derivado num derivado assíncrono e a tela sabe esperar. Sem ela, a alternativa é a que você já viu: guardar a promessa e desenhar o bloco <code>{#await}</code>. Mais linhas, mais controle, e nenhuma surpresa sobre quando o conteúdo aparece.</p>
+
+<p>Existe ainda o caso da função assíncrona chamada por um evento, que é o mais comum de todos. Ali o <code>await</code> é bem-vindo: a função espera, o estado recebe o resultado quando ele chega, e o componente continua síncrono. O que não pode é o <code>await</code> ficar no caminho do desenho sem que a tela saiba esperar.</p>
+
+<hr>
+
+<h2>7. O boundary e o tempo de espera</h2>
+
+<p>O <code>svelte:boundary</code> da aula anterior tem um segundo snippet, chamado <code>pending</code>, que aparece enquanto o conteúdo assíncrono do boundary ainda está a caminho. Ele é o par natural do componente assíncrono: em vez de cada componente desenhar o próprio "carregando", o boundary desenha um para a área inteira.</p>
+
+<p>Esse snippet só entra em ação quando há conteúdo assíncrono de verdade dentro do boundary — componente com <code>await</code> no topo, com a opção ligada. Com o bloco <code>{#await}</code> comum, quem desenha a espera é o próprio bloco, e o <code>pending</code> fica sem uso. Escolher entre os dois é escolher entre controle local e controle de área.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Abordagem</th><th>Quem desenha a espera</th><th>Bom para</th></tr>
+<tr><td><code>{#await}</code></td><td>o próprio bloco</td><td>um pedido específico, com mensagem própria</td></tr>
+<tr><td><code>svelte:boundary</code> + <code>pending</code></td><td>o boundary</td><td>área inteira que espera dados</td></tr>
+<tr><td>estado de carregamento manual</td><td>um <code>{#if}</code> com uma variável</td><td>quando o pedido tem várias etapas</td></tr>
+<tr><td>componente assíncrono com <code>await</code></td><td>quem desenha o componente</td><td>quando a opção experimental está ligada</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>8. Carregando, erro e vazio</h2>
+
+<p>São três estados diferentes e todo mundo confunde. <strong>Carregando</strong> é "ainda não sei"; <strong>erro</strong> é "tentei e não deu"; <strong>vazio</strong> é "deu certo e não tem nada". Mostrar "nenhum produto" enquanto os dados vêm é mentira; mostrar "carregando" depois de um erro é pior, porque a pessoa espera para sempre.</p>
+
+<p>O texto de cada estado tem uma função. O de carregando promete o que vem ("buscando os preços…"); o de erro explica o que fazer ("não deu para carregar; tente de novo"); o de vazio orienta o próximo passo ("nenhum produto com esse nome; tente outra palavra"). Nenhum dos três precisa de ponto de exclamação.</p>
+
+<p>Para leitores de tela, o estado precisa ser anunciado. Uma região com <code>aria-live="polite"</code> em volta da mensagem faz o leitor anunciar a mudança sem interromper o que a pessoa está fazendo. Sem isso, a tela muda e quem não vê não fica sabendo.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>await</code> no topo sem a opção</strong>
+<p>O caso mais comum de todos, porque todo tutorial de dados na web começa com um <code>await</code> no topo. Nesta versão, ele precisa de opção ligada.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const resposta = await fetch('/api/produtos');
+  let produtos = $state(await resposta.json());
+&lt;/script&gt;
+
+&lt;p&gt;{produtos.length} produtos&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 19): Cannot use `await` in deriveds and template expressions, or at the top level of a component, unless the `experimental.async` compiler option is `true`</pre>
+<p>Leia a mensagem por partes: "não dá para usar <code>await</code> em derivados e expressões do template, ou no topo de um componente" — e a condição no fim. As três proibições vêm juntas porque a causa é a mesma: o desenho síncrono não sabe esperar.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — bloco <code>{#await}</code> sem fechamento</strong>
+<p>Quem esquece o <code>{/await}</code> deixa o compilador procurando o fim do bloco até o fim do arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedido = Promise.resolve('pão');
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;pronto: {valor}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>"Block was left open" quer dizer "o bloco ficou aberto". A linha apontada é o fim do arquivo, não o começo do bloco: conte os pares — cada <code>{#await}</code> precisa de um <code>{/await}</code>, cada <code>{:then}</code> vive dentro do mesmo par.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>await</code> dentro de <code>$derived</code></strong>
+<p>A mesma mensagem do erro 1, com outra posição. Aqui a tentativa foi transformar a promessa em valor derivado.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let dados = $derived(await Promise.resolve('pão'));
+&lt;/script&gt;
+
+&lt;p&gt;{dados}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 23): Cannot use `await` in deriveds and template expressions, or at the top level of a component, unless the `experimental.async` compiler option is `true`</pre>
+<p>O compilador aponta a coluna do <code>await</code>. A correção é tirar o <code>await</code> do derivado e deixar a promessa inteira: <code>let pedido = $derived(buscar(tentativa))</code>, com o bloco <code>{#await}</code> desenhando os três estados.</p>
+</div>
+
+<hr>
+
+<h2>10. Testar código que demora</h2>
+
+<p>Testar promessa exige paciência organizada. O teste precisa esperar o desfecho, e esperar demais esconde erro de tempo; esperar de menos faz o teste falhar sem motivo. A regra prática é esperar pelo <em>sinal</em>, não pelo relógio: quando o texto esperado aparece, o teste segue.</p>
+
+<p>Nas caixas desta aula, o sinal é o texto. O passo <code>depois:</code> dá o tempo, e a verificação confere o resultado. Em teste automatizado de verdade, o mesmo papel é feito por uma espera ativa — procurar o texto até um limite de tempo. O limite existe para o teste não ficar preso para sempre quando algo dá errado.</p>
+
+<p>Para ver o componente no projeto da Ana, o build e o preview continuam sendo os mesmos comandos:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DcQ6hB4X.js  39.53 kB │ gzip: 15.20 kB
+✓ built in 1.02s</pre>
+
+<p>O bundle não espera promessa nenhuma: ele baixa, monta e o componente começa a buscar. É por isso que o estado de espera precisa existir — o arquivo chega antes dos dados, sempre.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> loja@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escreva</th><th>Mostra</th></tr>
+<tr><td><code>{#await promessa}</code></td><td>o conteúdo de espera</td></tr>
+<tr><td><code>{:then valor}</code></td><td>o conteúdo de sucesso, com o valor resolvido</td></tr>
+<tr><td><code>{:catch erro}</code></td><td>o conteúdo de falha, com o motivo</td></tr>
+<tr><td><code>{/await}</code></td><td>fecha o bloco</td></tr>
+<tr><td><code>$derived(buscar(tentativa))</code></td><td>uma promessa nova quando a tentativa muda</td></tr>
+<tr><td><code>pending</code> no boundary</td><td>a espera de uma área assíncrona inteira</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td><code>[object Promise]</code> na tela</td><td>a promessa foi impressa em vez do valor</td><td>envolver no <code>{#await}</code></td></tr>
+<tr><td>a tela fica em "carregando" para sempre</td><td>rejeição sem <code>{:catch}</code></td><td>tratar a falha</td></tr>
+<tr><td>o valor não atualiza ao clicar de novo</td><td>a mesma promessa foi reutilizada</td><td>criar promessa nova com derivado</td></tr>
+<tr><td>Cannot use <code>await</code>…</td><td>falta a opção <code>experimental.async</code></td><td>ligar a opção ou usar <code>{#await}</code></td></tr>
+<tr><td>Block was left open</td><td>falta <code>{/await}</code></td><td>fechar o bloco</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o bloco <code>{#await}</code> desenha antes de a promessa resolver?</p>
+<label><input type="radio" name="q1"> a ramificação <code>{:then}</code></label>
+<label><input type="radio" name="q1"> a ramificação <code>{:catch}</code></label>
+<label><input type="radio" name="q1"> o conteúdo que vem logo depois da abertura do bloco</label>
+<label><input type="radio" name="q1"> nada, sempre</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que a saída do servidor mostra o estado de espera?</p>
+<label><input type="radio" name="q1"> porque o servidor não tem acesso à rede</label>
+<label><input type="radio" name="q1"> porque o Svelte proíbe promessas no servidor</label>
+<label><input type="radio" name="q1"> porque o servidor desenha uma vez e não fica esperando a promessa</label>
+<label><input type="radio" name="q1"> porque a promessa é cancelada ao sair do navegador</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Como pedir dados novos quando a pessoa clica em "buscar de novo"?</p>
+<label><input type="radio" name="q1"> criar uma promessa nova, por exemplo com um derivado que depende da tentativa</label>
+<label><input type="radio" name="q1"> chamar <code>.then()</code> na mesma promessa outra vez</label>
+<label><input type="radio" name="q1"> recarregar a página inteira</label>
+<label><input type="radio" name="q1"> trocar o <code>{:then}</code> de lugar</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#await pedido}<br>&nbsp;&nbsp;&lt;p&gt;assando…&lt;/p&gt;<br><input data-answer="{:then valor}|{:then}">&nbsp;&nbsp;<br>&nbsp;&nbsp;&lt;p&gt;Pronto: {valor}&lt;/p&gt;<br>{/await}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Promessa é o valor futuro: resolve com um resultado ou rejeita com um erro.</li>
+  <li><code>{#await}</code> desenha a espera; <code>{:then}</code> o sucesso; <code>{:catch}</code> a falha.</li>
+  <li>O servidor não espera promessa: o HTML do servidor mostra o estado de espera.</li>
+  <li>Promessa é de uso único; para pedir de novo, crie outra — um derivado resolve isso.</li>
+  <li><code>[object Promise]</code> na tela é sinal de que faltou aguardar.</li>
+  <li><code>await</code> no topo do componente e em <code>$derived</code> exige <code>experimental.async</code> nesta versão.</li>
+  <li>O snippet <code>pending</code> do boundary cobre a espera de uma área inteira.</li>
+  <li>Carregando, erro e vazio são três estados distintos, com textos distintos.</li>
+  <li>Anuncie a mudança com <code>aria-live</code>; quem não vê também precisa saber.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

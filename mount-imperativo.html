@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mount() e flushSync — colocar o componente na página | Guia Svelte</title>
+<meta name="description" content="mount, unmount, props e flushSync em Svelte 5: o main.js que pendura o componente na página, como medir o DOM na hora certa e por que mount não existe no servidor.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">mount() e flushSync</span></h1>
+
+<p class="intro">A Ana comprou um quadro novo para a parede da padaria, mas o quadro estava apoiado no chão: bonito, pronto, e ninguém via. Um componente <code>.svelte</code> é assim — ele descreve a tela, mas não aparece em lugar nenhum até alguém <strong>pendurar</strong> na página. Quem pendura é a função <code>mount()</code>, e é ela que o arquivo <code>main.js</code> do projeto chama. Esta aula mostra o caminho completo: o alvo, as props, o que fazer para desmontar e como medir a tela no instante certo com <code>flushSync</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que <code>mount()</code> faz e por que ele não é opcional num app Svelte.</li>
+  <li>Como é o <code>main.js</code> e o que cada pedaço dele significa.</li>
+  <li>Como passar props para um componente montado à mão.</li>
+  <li>O que <code>mount()</code> devolve e como usar <code>unmount()</code>.</li>
+  <li>Por que o DOM não muda na mesma linha em que o estado muda.</li>
+  <li>Como <code>flushSync()</code> aplica as mudanças antes da próxima leitura.</li>
+  <li>Quando trocar <code>mount</code> por <code>hydrate</code>.</li>
+  <li>Por que <code>mount()</code> não existe no servidor.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: pendurar o quadro na parede</h2>
+
+<p>Um componente pronto não é uma tela. Ele é uma <em>receita</em> de tela: diz que existe um título, um botão e uma lista, mas não sabe onde isso vai ficar. O lugar é uma tag vazia na página, quase sempre uma <code>div</code> com um <code>id</code>. Pendurar o quadro nessa parede é o trabalho do <code>mount</code>.</p>
+
+<p>A palavra vem do inglês e quer dizer "montar". Montar é criar os elementos de verdade no documento, ligar os eventos, guardar o estado e deixar o componente vivo. Antes do mount existe a descrição; depois dele existe a tela. Se o componente nunca é montado, nada acontece — nenhum erro, nenhum aviso, nenhuma tela.</p>
+
+<p>Quem faz esse trabalho num projeto com SvelteKit é o próprio framework, e você nunca escreve <code>mount</code> na mão. Num projeto sem SvelteKit — o da Ana — esse trabalho é seu, e cabe em cinco linhas de <code>main.js</code>. As duas situações usam a mesma função; só muda quem chama.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No projeto</th></tr>
+<tr><td>O quadro pronto, apoiado no chão</td><td>o arquivo <code>App.svelte</code></td></tr>
+<tr><td>O prego na parede</td><td><code>&lt;div id="app"&gt;&lt;/div&gt;</code></td></tr>
+<tr><td>Pendurar o quadro no prego</td><td><code>mount(App, { target })</code></td></tr>
+<tr><td>Tirar o quadro para reformar</td><td><code>unmount(app)</code></td></tr>
+<tr><td>O recado escrito antes de pendurar</td><td>as <code>props</code> passadas ao mount</td></tr>
+<tr><td>Conferir a parede com o quadro já no lugar</td><td><code>flushSync()</code> antes de medir</td></tr>
+</table>
+</div>
+
+<p>O vocabulário: <em>alvo</em> (<code>target</code>) é o elemento onde o componente vive; <em>montar</em> é criar a tela; <em>desmontar</em> é removê-la e limpar o que ela criou; e <em>flush</em> é o ato de aplicar as mudanças pendentes de uma vez. Quatro palavras que explicam o resto da aula.</p>
+
+<hr>
+
+<h2>2. O <code>main.js</code> de sempre</h2>
+
+<p>O projeto da Ana tem dois arquivos no caminho da montagem: a página HTML, que traz a parede, e o <code>main.js</code>, que traz o prego. A página é a mesma que você já viu em qualquer site:</p>
+
+<pre class="file">&#60;!doctype html&gt;
+&#60;html lang="pt-BR"&gt;
+  &#60;head&gt;
+    &#60;meta charset="utf-8" /&gt;
+    &#60;title&gt;Loja da Ana&#60;/title&gt;
+  &#60;/head&gt;
+  &#60;body&gt;
+    &#60;div id="app"&gt;&#60;/div&gt;
+    &#60;script type="module" src="/src/main.js"&gt;&#60;/script&gt;
+  &#60;/body&gt;
+&#60;/html&gt;</pre>
+
+<p>Repare na <code>div</code> vazia: ela é o alvo. Repare também que a página carrega <code>main.js</code> como módulo — o navegador precisa desse tipo de script para aceitar <code>import</code>. O arquivo em si é curto:</p>
+
+<pre class="file">import { mount } from 'svelte';
+import App from './App.svelte';
+
+const app = mount(App, { target: document.getElementById('app') });
+
+export default app;</pre>
+
+<dl class="anatomy">
+  <dt>import { mount } from 'svelte'</dt><dd>a função vem do pacote <code>svelte</code>. Ela é a única peça do framework que o <code>main.js</code> precisa.</dd>
+  <dt>import App from './App.svelte'</dt><dd>o componente em si. O Vite transforma o <code>.svelte</code> em JavaScript antes de o navegador ver.</dd>
+  <dt>mount(App, { … })</dt><dd>a montagem. O primeiro argumento é o componente; o segundo é um objeto de opções, com pelo menos o <code>target</code>.</dd>
+  <dt>target: document.getElementById('app')</dt><dd>o elemento onde a tela vai viver. Precisa existir no documento <strong>antes</strong> desta linha rodar.</dd>
+  <dt>export default app</dt><dd>o resultado da montagem, exportado para quem precisar desmontar ou conversar com o componente.</dd>
+</dl>
+
+<p>O <code>id="app"</code> da página e o <code>getElementById('app')</code> do script precisam combinar. Se um dos dois mudar sem o outro, o mount recebe <code>null</code> e o componente não aparece — sem mensagem clara na tela, só um erro no console.</p>
+
+<p>O <code>type="module"</code> da tag de script não é enfeite: sem ele, o navegador trata o arquivo como script antigo, recusa os <code>import</code> e a página fica em branco com um erro de sintaxe. Todo projeto Svelte com Vite usa módulos, e é por isso que você vê esse atributo em todo <code>index.html</code> da internet moderna.</p>
+
+<hr>
+
+<h2>3. Props: o recado que vai junto</h2>
+
+<p>Montar com props é como pendurar o quadro com um bilhete: o mesmo componente serve para vários casos, e o recado diz qual. As props são o primeiro argumento do componente, do lado de dentro, e um objeto no mount, do lado de fora.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { nome = 'Ana', cidade = 'São Paulo' } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}! Pães frescos em {cidade}.&lt;/p&gt;</pre>
+
+<p>Sem props vindas de fora, o componente usa os valores padrão que ele mesmo declara:</p>
+
+<pre class="out">&lt;p&gt;Olá, Ana! Pães frescos em São Paulo.&lt;/p&gt;</pre>
+
+<p>Do lado do <code>main.js</code>, o recado vai num objeto chamado <code>props</code>:</p>
+
+<pre class="file">import { mount } from 'svelte';
+import Saudacao from './Saudacao.svelte';
+
+const app = mount(Saudacao, {
+  target: document.getElementById('app'),
+  props: { nome: 'Bia', cidade: 'Campinas' }
+});</pre>
+
+<p>O nome da chave no objeto precisa ser igual ao nome que o componente espera. <code>nome</code> com <code>nome</code>, <code>cidade</code> com <code>cidade</code>. Um erro de digitação não dá erro: o componente simplesmente usa o valor padrão, e a pessoa vê "Ana" onde deveria ver "Bia".</p>
+
+<div class="trysvelte" data-goal="outre:^Olá, Ana!">
+<p class="try-task"><strong>Missão:</strong> o componente espera a prop <code>nome</code>, mas o valor não chegou e a tela mostra "Olá, !". Dê um valor padrão para a prop e mostre <strong>Olá, Ana!</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { nome } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}!&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'Ana' } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}!&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>4. O que o mount devolve</h2>
+
+<p>O <code>mount</code> devolve a instância do componente. Guardar essa instância numa variável serve para dois usos: desmontar depois e conversar com o componente por meio do que ele exporta. O primeiro é o mais comum.</p>
+
+<pre class="file">import { mount, unmount } from 'svelte';
+import App from './App.svelte';
+
+const app = mount(App, { target: document.getElementById('app') });
+
+// mais tarde, ao fechar o painel:
+unmount(app);</pre>
+
+<p>Desmontar não é esconder. Esconder deixa os elementos na página e os eventos ligados; desmontar remove os elementos, cancela efeitos, limpa temporizadores registrados com as funções certas e libera a memória. Num app de página única, isso raramente aparece; num widget que abre e fecha dentro de um site antigo, é a diferença entre um site leve e um site que engorda a cada clique.</p>
+
+<p>O <code>unmount</code> é assíncrono na versão atual: ele devolve uma promessa que resolve quando a limpeza termina. Se você precisa saber que a área já está vazia antes de montar outra coisa no mesmo lugar, use <code>await unmount(app)</code> dentro de uma função assíncrona.</p>
+
+<p>A instância também serve para conversar com o componente. Um componente pode expor funções e valores para quem o montou; elas ficam disponíveis no objeto devolvido. É o caminho para um site antigo mandar um comando para a ilha Svelte — abrir o painel, trocar o produto — sem passar por props e sem recriar a tela.</p>
+
+<hr>
+
+<h2>5. <code>flushSync</code>: medir na hora certa</h2>
+
+<p>Aqui está o detalhe que pega todo mundo. Quando você muda um estado, o Svelte não redesenha na mesma linha: ele anota a mudança e desenha no fim do trabalho atual. Isso é ótimo para desempenho — dez mudanças viram um desenho — e péssimo quando você precisa <em>ler</em> o DOM logo depois.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { flushSync } from 'svelte';
+
+  let itens = $state(['pão', 'bolo', 'broa']);
+  let antes = $state(0);
+  let depois = $state(0);
+
+  function medir() {
+    itens = [...itens, 'sonho', 'torta'];
+    antes = document.querySelectorAll('li').length;
+    flushSync();
+    depois = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;antes: {antes} · depois: {depois}&lt;/p&gt;
+&lt;button onclick={medir}&gt;medir&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Na primeira renderização, nenhuma medição aconteceu, e o HTML mostra zeros:</p>
+
+<pre class="out">&lt;p&gt;antes: 0 · depois: 0&lt;/p&gt; &lt;button&gt;medir&lt;/button&gt; &lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;li&gt;bolo&lt;/li&gt;&lt;li&gt;broa&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>No navegador, depois de um clique em "medir", a tela mostra a diferença que dá nome à função:</p>
+
+<pre class="out">antes: 3 · depois: 5 medir pão bolo broa sonho torta</pre>
+
+<dl class="anatomy">
+  <dt>itens = [...itens, …]</dt><dd>a mudança de estado. A lista em memória já tem cinco itens no instante seguinte — o DOM não.</dd>
+  <dt>document.querySelectorAll('li')</dt><dd>a leitura do DOM. Antes do <code>flushSync</code>, ela vê os três elementos antigos.</dd>
+  <dt>flushSync()</dt><dd>aplica agora as mudanças pendentes. Depois desta linha, o DOM reflete o estado novo.</dd>
+  <dt>depois = …</dt><dd>a segunda medição, agora com cinco. É a prova de que o flush aconteceu no meio da função.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:button;;out:antes: 3 · depois: 5 medir pão bolo broa sonho torta">
+<p class="try-task"><strong>Missão:</strong> o botão acrescenta dois itens e mede duas vezes, mas as duas medidas dão 3. Faça a segunda medida acontecer depois do desenho e mostrar <strong>depois: 5</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'bolo', 'broa']);
+  let antes = $state(0);
+  let depois = $state(0);
+
+  function medir() {
+    itens = [...itens, 'sonho', 'torta'];
+    antes = document.querySelectorAll('li').length;
+    depois = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;antes: {antes} · depois: {depois}&lt;/p&gt;
+&lt;button onclick={medir}&gt;medir&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { flushSync } from 'svelte';
+
+  let itens = $state(['pão', 'bolo', 'broa']);
+  let antes = $state(0);
+  let depois = $state(0);
+
+  function medir() {
+    itens = [...itens, 'sonho', 'torta'];
+    antes = document.querySelectorAll('li').length;
+    flushSync();
+    depois = document.querySelectorAll('li').length;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;antes: {antes} · depois: {depois}&lt;/p&gt;
+&lt;button onclick={medir}&gt;medir&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>O <code>flushSync</code> também aceita uma função e devolve o que ela devolver: <code>flushSync(() =&gt; { … })</code>. Serve para deixar claro que aquele bloco precisa do DOM atualizado e para agrupar as mudanças de uma vez. O custo é real: aplicar no meio do handler quebra o agrupamento automático, então use quando a leitura é necessária — medir altura, posicionar um tooltip, dar foco — e não por hábito.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:pão bolo itens na tela: 2 abrir">
+<p class="try-task"><strong>Missão:</strong> o botão abre dois avisos e mede zero, porque o DOM ainda não mudou. Aplique as mudanças antes da medição e mostre <strong>itens na tela: 2</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(false);
+  let caixas = $state(0);
+
+  function abrir() {
+    aberto = true;
+    caixas = document.querySelectorAll('.item').length;
+  }
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p class="item"&gt;pão&lt;/p&gt;
+  &lt;p class="item"&gt;bolo&lt;/p&gt;
+{/if}
+
+&lt;p&gt;itens na tela: {caixas}&lt;/p&gt;
+&lt;button onclick={abrir}&gt;abrir&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { flushSync } from 'svelte';
+
+  let aberto = $state(false);
+  let caixas = $state(0);
+
+  function abrir() {
+    aberto = true;
+    flushSync();
+    caixas = document.querySelectorAll('.item').length;
+  }
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p class="item"&gt;pão&lt;/p&gt;
+  &lt;p class="item"&gt;bolo&lt;/p&gt;
+{/if}
+
+&lt;p&gt;itens na tela: {caixas}&lt;/p&gt;
+&lt;button onclick={abrir}&gt;abrir&lt;/button&gt;</pre>
+</div>
+
+<hr>
+
+<h2>6. <code>hydrate</code>: quando o HTML já vem pronto</h2>
+
+<p>Existe uma segunda forma de colocar o componente na página, e ela serve para quando o HTML já chegou desenhado do servidor. Em vez de criar tudo do zero, o Svelte <strong>hidrata</strong>: aproveita o HTML existente e liga o comportamento a ele.</p>
+
+<pre class="file">import { hydrate } from 'svelte';
+import App from './App.svelte';
+
+hydrate(App, {
+  target: document.getElementById('app'),
+  props: { nome: 'Ana' }
+});</pre>
+
+<p>A diferença importa. Com <code>mount</code>, o conteúdo do alvo é substituído pelo que o componente desenhar. Com <code>hydrate</code>, o conteúdo é preservado e só ganha vida — o que evita a tela piscar e mantém o que o servidor já entregou. Usar <code>hydrate</code> sem HTML do servidor funciona, mas não ganha nada; usar <code>mount</code> sobre HTML do servidor joga fora o trabalho de renderizar no servidor.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>O que faz com o conteúdo do alvo</th><th>Quando usar</th></tr>
+<tr><td><code>mount(App, { target })</code></td><td>substitui</td><td>app no navegador, sem HTML pronto</td></tr>
+<tr><td><code>hydrate(App, { target })</code></td><td>aproveita e liga</td><td>HTML vindo do servidor</td></tr>
+<tr><td><code>unmount(app)</code></td><td>remove e limpa</td><td>widget que fecha, teste que termina</td></tr>
+<tr><td><code>flushSync()</code></td><td>aplica mudanças pendentes</td><td>ler o DOM logo após mudar estado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>7. Quando usar mount na mão</h2>
+
+<p>Num projeto SvelteKit, nunca: o framework monta o componente da rota por você, e um <code>main.js</code> extra montaria a mesma tela duas vezes. Num projeto Vite puro, como o da Ana, sempre — é o <code>main.js</code>. Existem ainda três situações em que esse conhecimento aparece fora do comum.</p>
+
+<p>A primeira é a <strong>ilha</strong>: um site antigo, feito em outra tecnologia, que ganha um pedaço interativo em Svelte. Você monta o componente numa <code>div</code> específica da página e o resto do site continua como estava. A segunda é o <strong>widget</strong> que abre e fecha: monta quando o painel abre, desmonta quando fecha, e o site não engorda. A terceira é o <strong>teste</strong>: montar o componente num alvo de teste, interagir e medir é o que a maioria das ferramentas de teste faz por baixo.</p>
+
+<p>Em todos os casos, o cuidado é o mesmo: o alvo precisa existir antes, e a montagem precisa acontecer uma vez só. Montar duas vezes no mesmo alvo cria duas telas sobrepostas, com dois estados independentes e eventos duplicados — o tipo de bug que parece fantasma.</p>
+
+<p>Numa ilha, o alvo costuma ser uma <code>div</code> com um identificador próprio, no meio de uma página que o Svelte não escreveu. O CSS escopado do componente continua valendo ali dentro, porque o selo do compilador vai nas tags. O que não funciona é contar com o CSS da página para estilizar o componente: os dois mundos vivem separados, e é essa separação que impede a ilha de quebrar o resto.</p>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do renderizador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>mount()</code> no servidor</strong>
+<p><code>mount</code> é uma função de navegador: ela cria elementos no documento. No servidor não existe documento, e o Svelte recusa com um erro próprio.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { mount } from 'svelte';
+
+  const app = mount();
+&lt;/script&gt;
+
+&lt;p&gt;montado&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: lifecycle_function_unavailable
+`mount(...)` is not available on the server
+https://svelte.dev/e/lifecycle_function_unavailable</pre>
+<p>A mensagem tem três linhas: o código do erro, a explicação ("mount(...) não está disponível no servidor") e o endereço da documentação. A correção é chamar <code>mount</code> no <code>main.js</code>, que só roda no navegador, ou dentro de um <code>onMount</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — procurar o alvo no corpo do componente</strong>
+<p><code>document</code> também é do navegador. Buscar o alvo no topo do <code>&lt;script&gt;</code> faz o componente funcionar no navegador e quebrar no servidor.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let alvo = document.getElementById('app');
+&lt;/script&gt;
+
+&lt;p&gt;{alvo ? 'achei' : 'não achei'}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: document is not defined</pre>
+<p>"document is not defined" é o mesmo aviso para <code>window</code>, <code>localStorage</code> e qualquer API do navegador. A busca do alvo pertence ao <code>main.js</code>, onde o documento já existe.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>flushSync</code> sem importar</strong>
+<p>A função não é global: ela vem do pacote <code>svelte</code>. Esquecer o <code>import</code> deixa o nome desconhecido.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  flushSync();
+&lt;/script&gt;
+
+&lt;p&gt;ok&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: flushSync is not defined</pre>
+<p>"flushSync is not defined" quer dizer que o nome não existe no arquivo. As duas funções desta aula vêm do mesmo lugar: <code>import { flushSync, mount, unmount, hydrate } from 'svelte'</code>.</p>
+</div>
+
+<hr>
+
+<h2>9. Cuidados que economizam uma tarde</h2>
+
+<p>O primeiro cuidado é a ordem. O <code>main.js</code> roda quando a página carrega; se ele rodar antes de a <code>div#app</code> existir, o alvo é <code>null</code>. Colocar o script no fim do <code>body</code>, como no exemplo da seção 2, resolve o caso mais comum. A alternativa é esperar o evento de documento pronto.</p>
+
+<p>O segundo é a repetição. Uma função de inicialização chamada duas vezes monta dois componentes no mesmo alvo. Guarde a instância e verifique se ela já existe antes de montar de novo; ou desmonte antes de montar.</p>
+
+<p>O terceiro é a memória. Temporizador, ouvinte de evento e observador criados pelo componente precisam ser limpos quando ele é desmontado. O <code>unmount</code> cuida do que o Svelte conhece — efeitos, por exemplo —, mas não adivinha o que você criou por fora. Use <code>onDestroy</code> ou a função de limpeza do <code>$effect</code> para o que você mesmo abriu.</p>
+
+<p>O quarto é não confundir <code>flushSync</code> com "desenhar mais rápido". Ele não acelera nada: ele só antecipa o desenho para o meio do seu código. Na maioria das vezes, o certo é não medir o DOM — guardar a informação no estado e deixar o Svelte desenhar quando for a hora.</p>
+
+<p>O quinto é escolher entre <code>main.js</code> e <code>onMount</code>. O <code>main.js</code> é o dono da montagem e roda uma vez por página; o <code>onMount</code> roda a cada componente que aparece, inclusive quando são dez iguais. Trabalho de página vai no primeiro; trabalho de componente vai no segundo. Misturar os dois é a receita para buscar os mesmos dados dez vezes.</p>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escreva</th><th>Faz</th><th>Vem de</th></tr>
+<tr><td><code>mount(App, { target, props })</code></td><td>cria a tela dentro do alvo</td><td><code>svelte</code></td></tr>
+<tr><td><code>unmount(app)</code></td><td>remove a tela e limpa</td><td><code>svelte</code></td></tr>
+<tr><td><code>hydrate(App, { target })</code></td><td>liga o comportamento ao HTML pronto</td><td><code>svelte</code></td></tr>
+<tr><td><code>flushSync(fn?)</code></td><td>aplica as mudanças pendentes agora</td><td><code>svelte</code></td></tr>
+<tr><td><code>let { nome = 'Ana' } = $props()</code></td><td>recebe a prop com valor padrão</td><td>runas</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td>a página fica vazia</td><td><code>target</code> nulo</td><td>conferir o <code>id</code> e a ordem dos scripts</td></tr>
+<tr><td>duas telas sobrepostas</td><td>montou duas vezes no mesmo alvo</td><td>guardar a instância e desmontar antes</td></tr>
+<tr><td>a medição do DOM vem velha</td><td>faltou <code>flushSync()</code></td><td>aplicar antes de ler</td></tr>
+<tr><td>a prop chega vazia</td><td>nome da chave diferente</td><td>igualar ao nome esperado</td></tr>
+<tr><td>mount is not available on the server</td><td><code>mount</code> chamado no SSR</td><td>mover para o <code>main.js</code></td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BFEfazZg.js  41.51 kB │ gzip: 15.99 kB
+✓ built in 1.50s</pre>
+
+<p>O <code>main.js</code> entra nesse arquivo como mais um módulo: o Vite junta a montagem, o componente e o runtime do Svelte num só arquivo com hash. Quando você abre o site, esse arquivo roda e a chamada de <code>mount</code> acontece uma vez.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> loja@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o segundo argumento de <code>mount</code> precisa ter, no mínimo?</p>
+<label><input type="radio" name="q1"> um <code>id</code> novo</label>
+<label><input type="radio" name="q1"> o <code>target</code>, o elemento onde a tela vai viver</label>
+<label><input type="radio" name="q1"> uma função de limpeza</label>
+<label><input type="radio" name="q1"> o nome do arquivo <code>.svelte</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que a leitura do DOM logo após mudar o estado devolve o valor antigo?</p>
+<label><input type="radio" name="q1"> porque o estado não foi alterado de verdade</label>
+<label><input type="radio" name="q1"> porque o DOM é somente leitura</label>
+<label><input type="radio" name="q1"> porque o Svelte desenha depois, no fim do trabalho atual</label>
+<label><input type="radio" name="q1"> porque falta importar <code>document</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Quando usar <code>hydrate</code> em vez de <code>mount</code>?</p>
+<label><input type="radio" name="q1"> quando o HTML já foi desenhado pelo servidor</label>
+<label><input type="radio" name="q1"> quando o componente tem props</label>
+<label><input type="radio" name="q1"> quando o alvo tem mais de uma <code>div</code></label>
+<label><input type="radio" name="q1"> sempre, porque é mais rápido</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { <input data-answer="mount"> } from 'svelte';<br>import App from './App.svelte';<br><br>const app = mount(App, { target: document.getElementById('app') });</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um componente descreve a tela; <code>mount()</code> cria a tela de verdade num alvo.</li>
+  <li>O <code>main.js</code> importa o componente e o monta em <code>div#app</code>.</li>
+  <li>O alvo precisa existir antes da montagem; script no fim do <code>body</code> resolve.</li>
+  <li><code>props</code> passam valores para o componente; nome errado cai no valor padrão sem erro.</li>
+  <li><code>mount</code> devolve a instância; <code>unmount</code> remove e limpa.</li>
+  <li>O Svelte desenha no fim do trabalho atual; <code>flushSync()</code> antecipa o desenho.</li>
+  <li><code>flushSync</code> serve para medir e posicionar; quebra o agrupamento automático.</li>
+  <li><code>hydrate</code> aproveita o HTML do servidor em vez de substituí-lo.</li>
+  <li><code>mount</code> não existe no servidor: a mensagem é <code>lifecycle_function_unavailable</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

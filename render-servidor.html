@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>render() no Servidor — o HTML que sai pronto | Guia Svelte</title>
+<meta name="description" content="render() de svelte/server em Svelte 5: body e head, o que não roda no servidor, escape de texto, build SSR com Vite e hydration, com saídas reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">render() no Servidor</span></h1>
+
+<p class="intro">A Ana descobriu que metade dos clientes abre o site da padaria no celular, na rua, com internet ruim. Hoje a página chega vazia e só depois de baixar e rodar o JavaScript é que o pão aparece — nos primeiros segundos, a pessoa vê uma tela em branco. Existe outro caminho: montar o HTML na cozinha (o servidor) e entregar pronto, deixando o navegador só para o que precisa de interação. Quem faz esse trabalho é a função <code>render()</code>, e é dela que trata esta aula.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre desenhar no servidor e desenhar no navegador.</li>
+  <li>Como chamar <code>render()</code> e o que ela devolve.</li>
+  <li>Por que o <code>head</code> vem separado do <code>body</code>.</li>
+  <li>O que não roda no servidor: efeitos, <code>onMount</code> e APIs do navegador.</li>
+  <li>Como o texto é escapado e por que isso protege a página.</li>
+  <li>Como passar props para o componente renderizado.</li>
+  <li>O caminho completo: build SSR com Vite e execução no Node.</li>
+  <li>O que é hydration e onde ela entra.</li>
+  <li>Os três erros reais desta aula, com a mensagem do renderizador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: cozinha e mesa</h2>
+
+<p>Existem dois jeitos de servir um jantar. No primeiro, a cozinha prepara o prato e o garçom leva pronto; o cliente só come. No segundo, a cozinha manda os ingredientes e o cliente monta o prato na mesa. O primeiro é mais rápido para quem tem fome e não quer pensar; o segundo é mais flexível, mas exige que o cliente saiba cozinhar — ou, no caso da web, que o navegador baixe e execute o programa antes de mostrar qualquer coisa.</p>
+
+<p>Renderizar no servidor é o primeiro jeito. O servidor roda o componente, produz uma string de HTML e manda essa string na resposta. O navegador recebe texto pronto e desenha na hora, mesmo antes de o JavaScript chegar. Depois, quando o JavaScript chega, o componente "ganha vida" — botões passam a responder, o estado começa a existir. Esse segundo momento se chama <strong>hydration</strong> (hidratação): o HTML seco ganha comportamento.</p>
+
+<p>O ganho é a primeira impressão: a pessoa vê o conteúdo antes de o programa carregar. O custo é que o mesmo componente é desenhado duas vezes — uma no servidor, outra no navegador, para conferir que o HTML bate — e que o servidor precisa saber executar o componente, o que significa ter Node rodando atrás da página.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O prato pronto que sai da cozinha</td><td>o HTML devolvido por <code>render()</code></td></tr>
+<tr><td>A etiqueta com validade e origem</td><td>o <code>head</code> com título e descrição</td></tr>
+<tr><td>O garçom que leva o prato</td><td>a resposta HTTP do servidor</td></tr>
+<tr><td>O cliente que tempera na mesa</td><td>a hydration no navegador</td></tr>
+<tr><td>A cozinha que não tem forno de cliente</td><td>o servidor, sem <code>window</code> e sem <code>document</code></td></tr>
+</table>
+</div>
+
+<p>O vocabulário: <em>SSR</em> é renderização no servidor; <em>CSR</em> é renderização no cliente; <em>hydration</em> é o momento em que o HTML pronto ganha comportamento; e <em>string</em> é o texto que o servidor devolve. Quatro palavras que separam "a página aparece rápido" de "a página aparece quando o JavaScript termina".</p>
+
+<hr>
+
+<h2>2. <code>render()</code>: o componente vira texto</h2>
+
+<p>A função vem de <code>svelte/server</code>, um caminho separado do pacote principal porque ela só existe no servidor. Ela recebe o componente e um objeto de opções, e devolve dois pedaços: o <code>body</code>, com o conteúdo da tela, e o <code>head</code>, com o que o componente pediu para colocar na cabeça do documento.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { nome = 'Ana', cidade = 'São Paulo' } = $props();
+&lt;/script&gt;
+
+&lt;svelte:head&gt;
+  &lt;title&gt;Vitrine da padaria&lt;/title&gt;
+  &lt;meta name="description" content="Pães frescos todos os dias" /&gt;
+&lt;/svelte:head&gt;
+
+&lt;h1&gt;Olá, {nome}&lt;/h1&gt;
+&lt;p&gt;Pães frescos em {cidade}.&lt;/p&gt;</pre>
+
+<p>O corpo que o renderizador devolve é este. O <code>head</code> vem no mesmo objeto, como a próxima seção mostra — e a seção 8 traz o texto cru que sai do Node, com os dois pedaços:</p>
+
+<pre class="out">&lt;h1&gt;Olá, Ana&lt;/h1&gt; &lt;p&gt;Pães frescos em São Paulo.&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>render(App, { props })</dt><dd>recebe o componente e as props. Devolve um objeto com <code>head</code> e <code>body</code>, os dois como texto.</dd>
+  <dt>&lt;svelte:head&gt;</dt><dd>o pedaço do componente que escreve no cabeçalho do documento: título, descrição, endereço canônico.</dd>
+  <dt>let { nome = 'Ana' } = $props()</dt><dd>as props com valor padrão. No servidor, quem não manda usa o padrão — igual ao navegador.</dd>
+  <dt>head</dt><dd>o que vai dentro de <code>&lt;head&gt;</code>: aqui, o <code>title</code> e a <code>meta</code> de descrição.</dd>
+  <dt>body</dt><dd>o que vai dentro de <code>&lt;body&gt;</code>: os elementos da tela, já com os valores calculados.</dd>
+</dl>
+
+<p>O HTML do <code>body</code> vem com comentários estranhos, do tipo <code>&lt;!--[--&gt;</code> e <code>&lt;!--]--&gt;</code>. Eles são âncoras internas do Svelte: marcam onde começa e onde termina um bloco, para a hydration saber o que aproveitar. Não atrapalham nada e não aparecem na tela; o <code>pre.out</code> desta aula usa a versão sem eles, e a seção 8 mostra o texto cru que sai do Node.</p>
+
+<hr>
+
+<h2>3. O <code>head</code> separado do <code>body</code></h2>
+
+<p>Quem monta a página final junta os dois pedaços num documento. O <code>head</code> vai para dentro da tag <code>&lt;head&gt;</code>; o <code>body</code> vai para dentro da tag <code>&lt;body&gt;</code>. Essa separação é o que permite o servidor entregar um documento completo, com título e descrição, sem que ninguém escreva o título à mão na página.</p>
+
+<p>O <code>head</code> também carrega o selo do componente, o mesmo <code>svelte-xxxxx</code> que aparece no CSS escopado. É por isso que o título e a descrição de um componente não se misturam com os de outro: cada um escreve o seu pedaço, e o Svelte sabe de quem é cada linha.</p>
+
+<pre class="file">import { render } from 'svelte/server';
+import App from './App.svelte';
+
+const { head, body } = render(App, { props: { nome: 'Ana' } });
+
+const pagina = `&#60;!doctype html&#62;
+&#60;html lang="pt-BR"&#62;
+&#60;head&#62;${head}&#60;/head&#62;
+&#60;body&#62;&#60;div id="app"&#62;${body}&#60;/div&#62;&#60;/body&#62;
+&#60;/html&#62;`;</pre>
+
+<p>Esse é o desenho geral de qualquer SSR: um molde de página com dois buracos, um para o <code>head</code> e outro para o <code>body</code>. O resto do arquivo é o mesmo HTML de sempre, com a <code>div#app</code> que a hydration vai usar como alvo.</p>
+
+<hr>
+
+<h2>4. O que não roda no servidor</h2>
+
+<p>O servidor não tem tela, não tem janela e não tem navegador. O que existe é o Node: memória, arquivos, rede. Por isso o Svelte desliga, durante o <code>render()</code>, tudo o que depende do navegador: efeitos não rodam, <code>onMount</code> não é chamado, e as APIs como <code>window</code>, <code>document</code>, <code>localStorage</code> e <code>matchMedia</code> simplesmente não existem.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let visitas = $state(0);
+
+  $effect(() =&gt; {
+    visitas += 1;
+  });
+
+  onMount(() =&gt; {
+    console.log('montou no navegador');
+  });
+&lt;/script&gt;
+
+&lt;p&gt;visitas: {visitas}&lt;/p&gt;</pre>
+
+<p>O componente tem um efeito que incrementa o contador de visitas e um <code>onMount</code> que escreve no console. O HTML devolvido mostra o estado inicial, sem nenhum dos dois:</p>
+
+<pre class="out">&lt;p&gt;visitas: 0&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let visitas = $state(0)</dt><dd>o estado começa em zero. No servidor ele fica em zero, porque ninguém interage com a página.</dd>
+  <dt>$effect(() =&gt; …)</dt><dd>não roda no servidor. Efeito é para sincronizar com algo de fora, e no servidor não há de fora.</dd>
+  <dt>onMount(() =&gt; …)</dt><dd>também não roda. O nome já diz: é para quando o componente <strong>monta</strong> no navegador.</dd>
+  <dt>visitas: {visitas}</dt><dd>o texto sai com o valor inicial. É esse número que a pessoa vê antes de o JavaScript chegar.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="out:interativo">
+<p class="try-task"><strong>Missão:</strong> o parágrafo está escrito à mão com "só HTML" e nunca muda. Use o estado e o efeito, que já existem no arquivo, para mostrar <strong>interativo</strong> depois que o componente montar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let montado = $state(false);
+
+  $effect(() =&gt; {
+    montado = true;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;só HTML&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let montado = $state(false);
+
+  $effect(() =&gt; {
+    montado = true;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{montado ? 'interativo' : 'só HTML'}&lt;/p&gt;</pre>
+</div>
+
+<p>Esse é o motivo pelo qual um componente que mostra "carregando" precisa de cuidado: no servidor ele desenha "carregando" e é isso que a pessoa vê primeiro. Se o efeito que busca os dados demora, a pessoa fica com o texto de espera na tela — e é exatamente o comportamento correto, desde que o texto seja honesto.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Recurso</th><th>No servidor</th><th>No navegador</th></tr>
+<tr><td><code>$effect</code></td><td>não roda</td><td>roda depois do desenho</td></tr>
+<tr><td><code>onMount</code></td><td>não roda</td><td>roda uma vez, na montagem</td></tr>
+<tr><td><code>window</code>, <code>document</code></td><td>não existem</td><td>existem</td></tr>
+<tr><td><code>localStorage</code></td><td>não existe</td><td>existe</td></tr>
+<tr><td><code>setTimeout</code></td><td>existe (é do Node)</td><td>existe</td></tr>
+<tr><td><code>fetch</code></td><td>existe, mas exige endereço completo</td><td>existe, aceita caminho relativo</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. <code>render</code>, <code>mount</code> e <code>hydrate</code></h2>
+
+<p>As três funções fazem coisas diferentes, e confundi-las é a origem de metade dos problemas de SSR. O <code>render</code> só produz texto: não cria elemento, não liga evento, não guarda estado. O <code>mount</code> cria tudo do zero no navegador. O <code>hydrate</code> aproveita o texto que já está na página e liga o comportamento a ele.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Onde roda</th><th>Devolve</th><th>Para que serve</th></tr>
+<tr><td><code>render</code></td><td>servidor (Node)</td><td><code>{ head, body }</code></td><td>gerar o HTML da resposta</td></tr>
+<tr><td><code>mount</code></td><td>navegador</td><td>a instância</td><td>criar a tela do zero</td></tr>
+<tr><td><code>hydrate</code></td><td>navegador</td><td>a instância</td><td>ligar comportamento ao HTML pronto</td></tr>
+</table>
+</div>
+
+<p>O par certo é sempre <code>render</code> no servidor com <code>hydrate</code> no navegador. Misturar — <code>render</code> com <code>mount</code> — funciona, mas joga fora o HTML do servidor e faz a página piscar: o navegador apaga o que veio pronto e desenha de novo.</p>
+
+<p>A aula <a href="mount-imperativo.html">mount() e flushSync</a> mostra o lado do navegador com calma; aqui o assunto é o lado da cozinha.</p>
+
+<hr>
+
+<h2>6. Texto escapado: por que <code>&lt;b&gt;</code> não vira negrito</h2>
+
+<p>Quando o Svelte escreve um valor dentro de uma tag, ele escapa os caracteres que poderiam virar marcação. O menor que vira <code>&amp;lt;</code>, e o navegador mostra o sinal em vez de interpretar como começo de tag. É uma proteção: sem ela, qualquer texto vindo de fora poderia injetar HTML na sua página.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aviso = '&lt;b&gt;Pão quentinho&lt;/b&gt; às 7h';
+&lt;/script&gt;
+
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+
+<p>O HTML devolvido mostra o sinal escapado no começo de cada tag — e o maior que fica como está, porque sozinho ele não abre nada:</p>
+
+<pre class="out">&lt;p&gt;&amp;lt;b&gt;Pão quentinho&amp;lt;/b&gt; às 7h&lt;/p&gt;</pre>
+
+<div class="trysvelte" data-goal="out:<b>Pão quentinho</b>">
+<p class="try-task"><strong>Missão:</strong> o aviso é interpretado como HTML e o negrito aparece, escondendo as tags. Faça a tela mostrar o texto literal <strong>&lt;b&gt;Pão quentinho&lt;/b&gt;</strong>, com os sinais visíveis.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aviso = '&lt;b&gt;Pão quentinho&lt;/b&gt;';
+&lt;/script&gt;
+
+&lt;p&gt;{@html aviso}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aviso = '&lt;b&gt;Pão quentinho&lt;/b&gt;';
+&lt;/script&gt;
+
+&lt;p&gt;{aviso}&lt;/p&gt;</pre>
+</div>
+
+<div class="warning">
+<strong><code>{@html}</code> é uma porta aberta</strong>
+<p>A tag <code>{@html texto}</code> insere o texto sem escapar. Ela existe para conteúdo que você mesmo gera e controla — um trecho de marcação vindo do seu banco, um ícone. Com texto digitado por outra pessoa, ela é um buraco de segurança: um script escondido no texto roda na página de quem lê. Se a origem não é confiável, use <code>{texto}</code> e deixe o escape acontecer.</p>
+</div>
+
+<hr>
+
+<h2>7. Props no servidor</h2>
+
+<p>Props funcionam no servidor do mesmo jeito que no navegador, com uma diferença de responsabilidade: quem chama o <code>render</code> decide os valores. É o servidor que sabe qual produto foi pedido, qual é o nome de quem entrou e qual idioma usar — e é ele que passa isso para o componente.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { nome = 'Ana', cidade = 'São Paulo' } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome} — entregamos em {cidade}.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Olá, Ana — entregamos em São Paulo.&lt;/p&gt;</pre>
+
+<div class="trysvelte" data-goal="outre:^Olá, Ana!">
+<p class="try-task"><strong>Missão:</strong> o componente espera a prop <code>nome</code> e mostra "Olá, !". Dê um valor padrão para a prop, como o servidor faria quando não recebe o dado, e mostre <strong>Olá, Ana!</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let { nome } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}!&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let { nome = 'Ana' } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}!&lt;/p&gt;</pre>
+</div>
+
+<p>Valor padrão em prop não é preguiça: é contrato. O componente declara o que aceita e o que acontece quando o dado falta. Num SSR isso importa mais, porque o servidor pode não ter o dado na hora e a página precisa sair mesmo assim, sem quebrar.</p>
+
+<hr>
+
+<h2>8. O caminho completo, com Vite</h2>
+
+<p>Para rodar o SSR num projeto Vite, existem duas construções: a do cliente, que é a de sempre, e uma segunda, com a opção <code>--ssr</code>, que gera um arquivo para o Node executar. O comando abaixo é real, rodado no projeto da Ana com um arquivo de entrada que chama o <code>render</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npx vite build --ssr src/entry-server.js --outDir dist-ssr
+vite v7.3.8 building ssr environment for production...
+transforming...
+✓ 54 modules transformed.
+rendering chunks...
+dist-ssr/entry-server.js  37.75 kB
+✓ built in 450ms</pre>
+
+<p>Repare no número de módulos: 54, bem menos que os 111 da construção do cliente. O motivo é que o SSR não precisa do runtime de interface no navegador — só do código que produz texto. O arquivo gerado é um módulo Node, e rodar é executar:</p>
+
+<pre class="term">ana@notebook:~/loja$ node dist-ssr/entry-server.js
+HEAD: <!--1n46o8q--><meta name="description" content="Pães frescos todos os dias"/><!----><title>Vitrine da padaria</title>
+BODY: <!--[--><h1>Olá, Ana</h1> <p>Pães frescos em São Paulo.</p><!--]--></pre>
+
+<p>É esse texto que o servidor manda na resposta. O <code>head</code> traz o título e a descrição com o selo do componente; o <code>body</code> traz a tela pronta, com os comentários-âncora que a hydration usa. O <code>console.log</code> é só para ver o resultado: num servidor de verdade, esse texto entraria no molde da seção 3 e viraria a resposta HTTP.</p>
+
+<p>Depois de responder, o navegador baixa a construção do cliente e chama <code>hydrate</code> no mesmo alvo. A partir daí, os botões respondem, o estado existe e a página é a mesma de antes — só que já nasceu com conteúdo.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do renderizador desta versão, copiadas como estão. Todas são erros de SSR: o componente funciona no navegador e quebra no servidor.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>localStorage</code> no servidor</strong>
+<p>Guardar o carrinho na memória do navegador é comum. Fazer isso no corpo do <code>&lt;script&gt;</code> significa fazer também no servidor, onde essa memória não existe.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const salvo = localStorage.getItem('carrinho') ?? '';
+&lt;/script&gt;
+
+&lt;p&gt;{salvo || 'carrinho vazio'}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: localStorage is not defined</pre>
+<p>"localStorage is not defined" quer dizer "esse nome não existe aqui". A correção é ler a memória dentro de um <code>onMount</code> ou de um <code>$effect</code>, com um valor inicial que sirva para o servidor.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>matchMedia</code> no servidor</strong>
+<p>Descobrir o tema do sistema com <code>matchMedia</code> é outra API de navegador. No servidor, ela não existe — e o componente nem chega a desenhar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const resposta = await fetch('/api/produtos');
+  const produtos = await resposta.json();
+&lt;/script&gt;
+
+&lt;p&gt;{produtos.length} produtos&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 19): Cannot use `await` in deriveds and template expressions, or at the top level of a component, unless the `experimental.async` compiler option is `true`</pre>
+<p>A tradução é a mesma: nome desconhecido no servidor. A saída é usar um valor padrão e ajustar no navegador depois da montagem, aceitando que a primeira pintura pode vir no tema claro.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — componente que lança no desenho</strong>
+<p>Um erro de dado — uma lista que devia existir e não existe — derruba a renderização do servidor. Não há boundary que salve aqui: o <code>svelte:boundary</code> atua no navegador.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const resposta = {};
+&lt;/script&gt;
+
+&lt;p&gt;{resposta.produtos.length} produtos&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of undefined (reading 'length')</pre>
+<p>A mensagem é o texto do erro que o componente lançou. No servidor, o tratamento é da camada de cima: responder 500, registrar o problema e mostrar uma página de erro. O componente deve validar o dado antes de desenhar.</p>
+</div>
+
+<hr>
+
+<h2>10. O custo do SSR</h2>
+
+<p>SSR não é de graça. O servidor passa a executar o componente a cada requisição, o que consome processador; o componente é desenhado duas vezes, o que dobra a chance de divergência; e o código precisa ficar atento a tudo o que só existe no navegador. Em troca, a primeira pintura chega antes, e quem tem internet ruim agradece.</p>
+
+<p>Vale a pena quando o conteúdo importa para quem chega — uma vitrine, uma notícia, um catálogo. Vale menos quando a página é uma ferramenta que só funciona depois de o JavaScript carregar de qualquer jeito. A decisão é de produto, não de gosto.</p>
+
+<p>Num projeto com SvelteKit, todo esse caminho já está montado: o framework chama o <code>render</code>, junta com o molde e liga a hydration. Num projeto Vite puro, como o da Ana, você monta as peças — e é por isso que esta aula existe.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escreva</th><th>Faz</th><th>Vem de</th></tr>
+<tr><td><code>render(App, { props })</code></td><td>devolve <code>{ head, body }</code></td><td><code>svelte/server</code></td></tr>
+<tr><td><code>&lt;svelte:head&gt;</code></td><td>escreve no cabeçalho do documento</td><td>marcação do componente</td></tr>
+<tr><td><code>hydrate(App, { target })</code></td><td>liga comportamento ao HTML pronto</td><td><code>svelte</code></td></tr>
+<tr><td><code>vite build --ssr</code></td><td>gera o arquivo que o Node executa</td><td>Vite</td></tr>
+<tr><td><code>{texto}</code> / <code>{@html texto}</code></td><td>escapa / não escapa</td><td>marcação</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa</th><th>Correção</th></tr>
+<tr><td>localStorage is not defined</td><td>API de navegador no servidor</td><td>ler dentro de <code>onMount</code> ou <code>$effect</code></td></tr>
+<tr><td>matchMedia is not defined</td><td>idem, para o tema</td><td>valor padrão e ajuste depois de montar</td></tr>
+<tr><td>window is not defined</td><td>idem, para qualquer coisa da janela</td><td>mover para o navegador</td></tr>
+<tr><td>a página pisca ao carregar</td><td><code>mount</code> sobre HTML do servidor</td><td>usar <code>hydrate</code></td></tr>
+<tr><td>a tela chega vazia</td><td>nada foi renderizado no servidor</td><td>chamar <code>render</code> e montar o molde</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>render(App)</code> devolve?</p>
+<label><input type="radio" name="q1"> a instância do componente</label>
+<label><input type="radio" name="q1"> um objeto com <code>head</code> e <code>body</code>, os dois como texto</label>
+<label><input type="radio" name="q1"> uma promessa que resolve com o HTML</label>
+<label><input type="radio" name="q1"> o elemento do documento já montado</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que <code>$effect</code> e <code>onMount</code> não rodam no servidor?</p>
+<label><input type="radio" name="q1"> porque o servidor não tem JavaScript</label>
+<label><input type="radio" name="q1"> porque o Svelte os desliga para economizar memória</label>
+<label><input type="radio" name="q1"> porque eles existem para sincronizar com o navegador, que não está lá</label>
+<label><input type="radio" name="q1"> porque só funcionam dentro de um boundary</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual par de funções combina SSR com navegador?</p>
+<label><input type="radio" name="q1"> <code>render</code> no servidor e <code>hydrate</code> no navegador</label>
+<label><input type="radio" name="q1"> <code>render</code> no servidor e <code>mount</code> no navegador</label>
+<label><input type="radio" name="q1"> <code>mount</code> no servidor e <code>render</code> no navegador</label>
+<label><input type="radio" name="q1"> <code>hydrate</code> no servidor e <code>mount</code> no navegador</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { <input data-answer="render"> } from 'svelte/server';<br>import App from './App.svelte';<br><br>const { head, body } = render(App, { props: { nome: 'Ana' } });</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>SSR desenha o componente no servidor e entrega HTML pronto; o navegador só hidrata.</li>
+  <li><code>render(App, { props })</code> vem de <code>svelte/server</code> e devolve <code>{ head, body }</code>.</li>
+  <li><code>head</code> e <code>body</code> vão para lugares diferentes do documento final.</li>
+  <li>No servidor não existem <code>window</code>, <code>document</code>, <code>localStorage</code> nem <code>matchMedia</code>.</li>
+  <li><code>$effect</code> e <code>onMount</code> não rodam no servidor; o HTML sai com o estado inicial.</li>
+  <li>O par correto é <code>render</code> no servidor e <code>hydrate</code> no navegador.</li>
+  <li>Texto é escapado por padrão; <code>{@html}</code> desliga o escape e exige confiança na origem.</li>
+  <li><code>vite build --ssr</code> gera o arquivo Node que executa o <code>render</code>.</li>
+  <li>SSR custa processador no servidor e atenção dobrada ao código; o ganho é a primeira pintura.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
