@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formulário em Etapas — o projeto em três versões | Guia Svelte</title>
+<meta name="description" content="O formulário de encomendas da Ana em três versões reais: uma tela com validação, etapas com $state e snippets. Saídas do compilador Svelte 5 e do navegador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projetos · <span class="hl">Formulário em Etapas</span></h1>
+
+<p class="intro">A Ana vende bolo por encomenda e recebe os pedidos por mensagem. Metade das mensagens chega pela metade: "quero um bolo", sem nome, sem telefone, sem sabor. Ela quer uma ficha que pergunte na ordem certa e que não deixe ninguém confirmar um pedido incompleto. Nesta aula você constrói essa ficha do zero, em <strong>três versões</strong>: uma tela só, depois em etapas, e por fim com o resumo montado por <em>snippet</em>. As três versões rodam de verdade, e o que aparece aqui saiu do compilador do Svelte 5.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como transformar uma ficha de papel em um componente com campos.</li>
+  <li>O que <code>bind:value</code> faz entre o campo e a variável de estado.</li>
+  <li>Por que <code>onsubmit</code> precisa de <code>preventDefault()</code>.</li>
+  <li>A validar um campo vazio com <code>trim()</code> antes de deixar passar.</li>
+  <li>Como dividir um formulário em etapas com um único <code>$state</code>.</li>
+  <li>O padrão da função que segura o avanço: valida, avisa e só então muda.</li>
+  <li>Como <code>{#snippet}</code> e <code>{@render}</code> evitam repetir marcação.</li>
+  <li>Por que o selo <code>svelte-xxxxx</code> muda quando o arquivo muda de lugar.</li>
+  <li>As três mensagens de erro que este projeto provoca de verdade.</li>
+  <li>O que <code>npm run dev</code>, o HMR e <code>npm run build</code> imprimem.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ficha de papel que chega pela metade</h2>
+
+<p>Toda padaria tem uma ficha de encomenda: um papel com linhas em branco para nome, telefone, sabor, tamanho e dia da retirada. A ficha funciona porque <strong>pergunta uma coisa de cada vez</strong> e porque quem preenche vê o que ainda falta. Quando a Ana troca a ficha pelo celular, perde as duas coisas.</p>
+
+<p>Um formulário é a ficha do papel traduzida para a tela. Cada linha vira um campo, cada campo vira uma variável no <code>&lt;script&gt;</code>, e a ordem das perguntas vira a ordem dos elementos no HTML. A parte nova é a <em>validação</em>: o papel aceita qualquer coisa escrita, mas o componente pode recusar um pedido sem nome antes de registrar. Validar é escrever a regra da padaria em código.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A ficha de papel com linhas em branco</td><td>O <code>&lt;form&gt;</code> com os campos</td></tr>
+<tr><td>O que o cliente escreveu na linha "nome"</td><td>A variável <code>nome</code>, criada com <code>$state</code></td></tr>
+<tr><td>A regra "sem nome não aceito"</td><td>A função <code>enviar()</code> que confere antes de seguir</td></tr>
+<tr><td>O carimbo "faltou preencher"</td><td>A mensagem guardada em <code>erro</code></td></tr>
+<tr><td>Separar a ficha em três folhas numeradas</td><td>O estado <code>etapa</code> com <code>{#if}</code></td></tr>
+</table>
+</div>
+
+<p>Combine o vocabulário: <strong>campo</strong> é a caixinha onde se digita; <strong>valor</strong> é o que está dentro dela; <strong>estado</strong> é a variável que guarda esse valor e avisa a tela quando ele muda.</p><hr>
+
+<h2>2. Versão 1 — tudo numa tela</h2>
+
+<p>A primeira versão é a mais direta: dois campos, um botão e a frase que confirma o pedido. Repare que cada campo tem um <code>bind:value</code> apontando para uma variável diferente, e que a frase do fim lê as duas variáveis ao mesmo tempo.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let sabor = $state('chocolate');
+  let erro = $state('');
+
+  function enviar() {
+    if (nome.trim() === '') {
+      erro = 'Informe o nome de quem encomenda';
+      return;
+    }
+    erro = '';
+  }
+&lt;/script&gt;
+
+&lt;form onsubmit={(e) =&gt; { e.preventDefault(); enviar(); }}&gt;
+  &lt;label&gt;Nome &lt;input bind:value={nome}&gt;&lt;/label&gt;
+  &lt;label&gt;Sabor
+    &lt;select bind:value={sabor}&gt;
+      &lt;option&gt;chocolate&lt;/option&gt;
+      &lt;option&gt;morango&lt;/option&gt;
+    &lt;/select&gt;
+  &lt;/label&gt;
+  &lt;button&gt;Encomendar&lt;/button&gt;
+&lt;/form&gt;
+
+{#if erro}
+  &lt;p class="erro"&gt;{erro}&lt;/p&gt;
+{/if}
+
+&lt;p&gt;Pedido de {nome || 'ninguém'} — bolo de {sabor}&lt;/p&gt;
+
+&lt;style&gt;
+  .erro { color: #b3261e; font-weight: 600; }
+&lt;/style&gt;</pre>
+
+<p>O compilador devolve o HTML abaixo. Note três coisas: o <code>&lt;script&gt;</code> não existe mais no arquivo que o navegador recebe; o campo de nome saiu com <code>value=""</code>, porque a variável começou vazia; e o sabor já vem com <code>selected=""</code>, porque <code>sabor</code> começa valendo <code>'chocolate'</code>.</p>
+
+<pre class="out">&lt;form&gt;&lt;label&gt;Nome &lt;input value=""/&gt;&lt;/label&gt; &lt;label&gt;Sabor &lt;select&gt;&lt;option selected=""&gt;chocolate&lt;/option&gt;&lt;option&gt;morango&lt;/option&gt;&lt;/select&gt;&lt;/label&gt; &lt;button&gt;Encomendar&lt;/button&gt;&lt;/form&gt;  &lt;p&gt;Pedido de ninguém — bolo de chocolate&lt;/p&gt;</pre>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>let nome = $state('')</dt><dd>o estado do campo. Começa com texto vazio: a ficha nasce em branco, como o papel.</dd>
+  <dt>bind:value={nome}</dt><dd>liga o campo à variável <strong>nas duas direções</strong>: digitar muda <code>nome</code>, e mudar <code>nome</code> muda o que o campo mostra.</dd>
+  <dt>onsubmit={(e) =&gt; { … }}</dt><dd>roda quando o formulário é enviado — pelo botão ou pela tecla Enter.</dd>
+  <dt>e.preventDefault()</dt><dd>cancela o comportamento padrão do navegador, que é recarregar a página. Sem isso, a validação desaparece no primeiro envio.</dd>
+  <dt>{#if erro} … {/if}</dt><dd>só desenha a mensagem quando existe texto em <code>erro</code>. Texto vazio conta como falso.</dd>
+  <dt>{nome || 'ninguém'}</dt><dd>o operador <code>||</code> devolve o lado direito quando o esquerdo é vazio. É o "se não tiver nome, escreva ninguém".</dd>
+</dl>
+
+<p>O custo desta versão é o tamanho da tela. Com seis campos — nome, telefone, sabor, tamanho, dia, observação — o cliente do celular vê um bloco comprido e erra um campo no meio. É esse o problema que a versão 2 ataca.</p>
+
+<hr>
+
+<h2>3. O botão que aceita qualquer coisa</h2>
+
+<p>Na versão 1, o botão <em>Encomendar</em> chamava <code>enviar()</code>, e <code>enviar()</code> conferia o nome. Tire a conferência e o formulário aceita um pedido sem nome: a frase final vira "Pedido de ninguém". A regra da casa não está no HTML — está na função.</p>
+
+<pre class="file">function enviar() {
+  if (nome.trim() === '') {
+    erro = 'Informe o nome de quem encomenda';
+    return;
+  }
+  erro = '';
+}</pre>
+
+<p>Leia de cima para baixo, em voz alta: "se o nome, sem espaços nas pontas, for igual a texto vazio, então guarde a mensagem de erro e <strong>saia da função</strong>". O <code>return</code> é a saída antecipada: nada depois dele roda naquela chamada. Sem o <code>return</code>, a função continuaria, apagaria o erro na linha seguinte e o aviso nunca apareceria.</p>
+
+<p>O <code>trim()</code> existe por causa do espaço. Se o cliente digitar só a barra de espaço, o valor não é vazio — é um texto com um caractere. <code>trim()</code> remove os espaços das pontas antes da comparação, e é a diferença entre um formulário que funciona e um que aceita lixo.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Informe seu nome antes de enviar">
+<p class="try-task"><strong>Missão:</strong> o botão confirma mesmo sem nome. Faça o componente <strong>recusar</strong> o envio vazio e mostrar a frase "Informe seu nome antes de enviar".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let enviado = $state(false);
+&lt;/script&gt;
+
+&lt;input bind:value={nome} placeholder="Seu nome"&gt;
+&lt;button onclick={() =&gt; (enviado = true)}&gt;Enviar&lt;/button&gt;
+
+{#if enviado}
+  &lt;p&gt;Obrigada{nome ? ', ' + nome : ''}!&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let erro = $state('');
+  let enviado = $state(false);
+
+  function enviar() {
+    if (nome.trim() === '') {
+      erro = 'Informe seu nome antes de enviar';
+      return;
+    }
+    erro = '';
+    enviado = true;
+  }
+&lt;/script&gt;
+
+&lt;input bind:value={nome} placeholder="Seu nome"&gt;
+&lt;button onclick={enviar}&gt;Enviar&lt;/button&gt;
+
+{#if erro}
+  &lt;p&gt;{erro}&lt;/p&gt;
+{/if}
+{#if enviado}
+  &lt;p&gt;Obrigada, {nome}!&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Cliente fez</th><th><code>erro</code></th><th><code>enviado</code></th><th>Na tela</th></tr>
+<tr><td>nada ainda</td><td>""</td><td>false</td><td>campo e botão</td></tr>
+<tr><td>clicou sem digitar</td><td>"Informe…"</td><td>false</td><td>a mensagem de erro</td></tr>
+<tr><td>digitou Ana e clicou</td><td>""</td><td>true</td><td>"Obrigada, Ana!"</td></tr>
+<tr><td>digitou só espaços e clicou</td><td>"Informe…"</td><td>false</td><td>a mensagem de erro</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>4. Versão 2 — o formulário em etapas</h2>
+
+<p>Agora a ficha vira três folhas numeradas. A pergunta muda conforme o número da etapa, e os botões <em>Voltar</em> e <em>Avançar</em> mudam esse número. Existe <strong>um</strong> estado controlando qual pedaço aparece: <code>passo</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let passo = $state(1);
+  let nome = $state('');
+  let telefone = $state('');
+  let sabor = $state('chocolate');
+  let tamanho = $state('médio');
+  let erro = $state('');
+
+  function avancar() {
+    erro = '';
+    if (passo === 1 &amp;&amp; nome.trim() === '') {
+      erro = 'Informe o nome de quem encomenda';
+      return;
+    }
+    if (passo === 2 &amp;&amp; telefone.trim().length &lt; 8) {
+      erro = 'Telefone com pelo menos 8 dígitos';
+      return;
+    }
+    if (passo &lt; 3) passo += 1;
+  }
+
+  function voltar() {
+    erro = '';
+    if (passo &gt; 1) passo -= 1;
+  }
+&lt;/script&gt;
+
+&lt;div class="barra"&gt;
+  {#each [1, 2, 3] as n}
+    &lt;span class:atual={n === passo}&gt;etapa {n}&lt;/span&gt;
+  {/each}
+&lt;/div&gt;
+
+{#if passo === 1}
+  &lt;h2&gt;Quem encomenda&lt;/h2&gt;
+  &lt;label&gt;Nome &lt;input bind:value={nome} placeholder="Ana"&gt;&lt;/label&gt;
+  &lt;label&gt;Telefone &lt;input bind:value={telefone} placeholder="11999990000"&gt;&lt;/label&gt;
+{:else if passo === 2}
+  &lt;h2&gt;O bolo&lt;/h2&gt;
+  &lt;label&gt;Sabor
+    &lt;select bind:value={sabor}&gt;
+      &lt;option&gt;chocolate&lt;/option&gt;
+      &lt;option&gt;morango&lt;/option&gt;
+      &lt;option&gt;cenoura&lt;/option&gt;
+    &lt;/select&gt;
+  &lt;/label&gt;
+  &lt;label&gt;Tamanho
+    &lt;select bind:value={tamanho}&gt;
+      &lt;option&gt;pequeno&lt;/option&gt;
+      &lt;option&gt;médio&lt;/option&gt;
+      &lt;option&gt;grande&lt;/option&gt;
+    &lt;/select&gt;
+  &lt;/label&gt;
+{:else}
+  &lt;h2&gt;Confira&lt;/h2&gt;
+  &lt;p&gt;{nome} — {telefone}&lt;/p&gt;
+  &lt;p&gt;Bolo de {sabor}, tamanho {tamanho}&lt;/p&gt;
+{/if}
+
+{#if erro}
+  &lt;p class="erro"&gt;{erro}&lt;/p&gt;
+{/if}
+
+&lt;div class="botoes"&gt;
+  &lt;button onclick={voltar} disabled={passo === 1}&gt;Voltar&lt;/button&gt;
+  &lt;button onclick={avancar}&gt;{passo === 3 ? 'Confirmar' : 'Avançar'}&lt;/button&gt;
+&lt;/div&gt;
+
+&lt;style&gt;
+  .barra { display: flex; gap: 8px; margin-bottom: 12px; }
+  .barra span { padding: 2px 8px; border: 1px solid #ccc; border-radius: 6px; }
+  .barra .atual { background: #2e7d32; color: white; border-color: #2e7d32; }
+  label { display: block; margin: 8px 0; }
+  .erro { color: #b3261e; font-weight: 600; }
+  .botoes { display: flex; gap: 8px; margin-top: 12px; }
+&lt;/style&gt;</pre>
+
+<p>Com <code>passo</code> valendo 1, só a primeira folha é desenhada. O compilador entrega exatamente isto:</p>
+
+<pre class="out">&lt;div class="barra svelte-1n46o8q"&gt;&lt;span class="svelte-1n46o8q atual"&gt;etapa 1&lt;/span&gt;&lt;span class="svelte-1n46o8q"&gt;etapa 2&lt;/span&gt;&lt;span class="svelte-1n46o8q"&gt;etapa 3&lt;/span&gt;&lt;/div&gt; &lt;h2&gt;Quem encomenda&lt;/h2&gt; &lt;label class="svelte-1n46o8q"&gt;Nome &lt;input value="" placeholder="Ana"/&gt;&lt;/label&gt; &lt;label class="svelte-1n46o8q"&gt;Telefone &lt;input value="" placeholder="11999990000"/&gt;&lt;/label&gt;  &lt;div class="botoes svelte-1n46o8q"&gt;&lt;button disabled=""&gt;Voltar&lt;/button&gt; &lt;button&gt;Avançar&lt;/button&gt;&lt;/div&gt;</pre>
+
+<p>Duas coisas mudaram em relação à versão 1. O bloco <code>{#if}</code> escolheu um galho e <strong>descartou</strong> os outros — não há vestígio da etapa 2 no HTML. E "Voltar" saiu com <code>disabled=""</code>, porque <code>passo === 1</code> é verdade.</p>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>let passo = $state(1)</dt><dd>o número da folha atual. É o único estado que decide <em>qual</em> marcação aparece.</dd>
+  <dt>{#if passo === 1}</dt><dd>um galho por etapa. O <code>{:else if}</code> testa a próxima condição quando a anterior é falsa.</dd>
+  <dt>{:else}</dt><dd>o galho final: o resumo. Ele não testa nada, entra quando os outros dois falharam.</dd>
+  <dt>class:atual={n === passo}</dt><dd>põe a classe <code>atual</code> só no item que corresponde à etapa. É uma condicional curta dentro do atributo.</dd>
+  <dt>disabled={passo === 1}</dt><dd>desliga o botão na primeira etapa. Expressão booleana vira atributo presente ou ausente.</dd>
+  <dt>passo += 1</dt><dd>o mesmo que <code>passo = passo + 1</code>. Como <code>passo</code> é estado, a tela se redesenha.</dd>
+</dl>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Critério</th><th>Uma tela (v1)</th><th>Em etapas (v2)</th></tr>
+<tr><td>Quantos estados de campo</td><td>2</td><td>4, mais o <code>passo</code></td></tr>
+<tr><td>O que o cliente vê</td><td>tudo de uma vez</td><td>uma pergunta por vez</td></tr>
+<tr><td>Onde a validação acontece</td><td>toda no envio</td><td>um pedaço por etapa</td></tr>
+<tr><td>Custo</td><td>tela comprida no celular</td><td>mais funções e mais condicionais</td></tr>
+<tr><td>Quando faz sentido</td><td>2 ou 3 campos</td><td>ficha longa, público no celular</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. A função que segura o avanço</h2>
+
+<p>Repare na ordem das linhas de <code>avancar()</code>. Primeiro ela limpa o erro antigo, depois confere a etapa atual, e só no fim muda o número. Essa ordem é o que faz o botão se comportar como uma porta: ou passa, ou mostra o motivo de não passar — nunca as duas coisas.</p>
+
+<p>O teste <code>if (passo === 1 &amp;&amp; nome.trim() === '')</code> tem duas condições ligadas por <code>&amp;&amp;</code> ("e"). As duas precisam ser verdadeiras para o erro aparecer. Sem a primeira, o telefone seria exigido já na etapa do nome, e o cliente veria uma mensagem sobre um campo que não está na tela. Validar por etapa é validar <strong>o que está visível</strong>.</p>
+
+<p>Existe uma armadilha comum aqui: confiar no <code>disabled</code>. Ele impede o clique, mas não a tecla Enter no último campo, nem um leitor de tela que dispare o envio. O <code>disabled</code> é conforto; a validação dentro da função é a regra.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;outre:^Passo 1 de 3">
+<p class="try-task"><strong>Missão:</strong> o botão avança mesmo com o campo vazio. Faça ele <strong>não sair do passo 1</strong> enquanto o nome estiver vazio — dois cliques e a tela tem de continuar mostrando "Passo 1 de 3".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let passo = $state(1);
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;input bind:value={nome} placeholder="Seu nome"&gt;
+&lt;p&gt;Passo {passo} de 3&lt;/p&gt;
+&lt;button onclick={() =&gt; (passo = Math.min(passo + 1, 3))}&gt;Avançar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let passo = $state(1);
+  let nome = $state('');
+
+  function avancar() {
+    if (nome.trim() === '' || passo === 3) return;
+    passo += 1;
+  }
+&lt;/script&gt;
+
+&lt;input bind:value={nome} placeholder="Seu nome"&gt;
+&lt;p&gt;Passo {passo} de 3&lt;/p&gt;
+&lt;button onclick={avancar}&gt;Avançar&lt;/button&gt;</pre>
+</div>
+
+<p>A solução usa <code>||</code> ("ou") para juntar duas razões de parar: campo vazio ou já estar na última etapa. As duas levam ao mesmo <code>return</code>. Quando várias condições têm a mesma consequência, juntar com <code>||</code> deixa a função mais curta e mais fácil de ler do que dois <code>if</code> separados.</p>
+
+<hr>
+
+<h2>6. Versão 3 — snippets para não repetir marcação</h2>
+
+<p>A terceira versão resolve um incômodo da segunda: o resumo precisa de uma linha por campo, e escrever quatro <code>&lt;tr&gt;</code> na mão é convite a erro. O Svelte 5 guarda um pedaço de marcação com nome e o reaproveita: o <em>snippet</em>. Ele fica no HTML entre chaves e é chamado com <code>{@render}</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let etapa = $state(1);
+  let nome = $state('');
+  let telefone = $state('');
+  let sabor = $state('chocolate');
+  let tamanho = $state('médio');
+  let erro = $state('');
+  let enviado = $state(false);
+
+  let resumo = $derived([
+    ['Nome', nome],
+    ['Telefone', telefone],
+    ['Sabor', sabor],
+    ['Tamanho', tamanho]
+  ]);
+
+  function avancar() {
+    erro = '';
+    if (etapa === 1 &amp;&amp; nome.trim() === '') {
+      erro = 'Informe o nome de quem encomenda';
+      return;
+    }
+    if (etapa === 2 &amp;&amp; telefone.replace(/\D/g, '').length &lt; 8) {
+      erro = 'Telefone com 8 dígitos ou mais';
+      return;
+    }
+    if (etapa === 3) {
+      enviado = true;
+      return;
+    }
+    etapa += 1;
+  }
+
+  function voltar() {
+    erro = '';
+    if (etapa &gt; 1) etapa -= 1;
+  }
+
+  function recomecar() {
+    enviado = false;
+    etapa = 1;
+    erro = '';
+  }
+&lt;/script&gt;
+
+{#snippet linha(rotulo, valor)}
+  &lt;tr&gt;&lt;th&gt;{rotulo}&lt;/th&gt;&lt;td&gt;{valor}&lt;/td&gt;&lt;/tr&gt;
+{/snippet}
+
+{#if enviado}
+  &lt;h2&gt;Encomenda registrada&lt;/h2&gt;
+  &lt;p&gt;Obrigada, {nome}! O bolo de {sabor} fica pronto amanhã.&lt;/p&gt;
+  &lt;button onclick={recomecar}&gt;Nova encomenda&lt;/button&gt;
+{:else}
+  &lt;p class="progresso"&gt;Etapa {etapa} de 3&lt;/p&gt;
+
+  {#if etapa === 1}
+    &lt;label&gt;Nome &lt;input bind:value={nome}&gt;&lt;/label&gt;
+  {:else if etapa === 2}
+    &lt;label&gt;Telefone &lt;input bind:value={telefone}&gt;&lt;/label&gt;
+  {:else}
+    &lt;table&gt;
+      &lt;tbody&gt;
+        {#each resumo as [rotulo, valor]}
+          {@render linha(rotulo, valor || '—')}
+        {/each}
+      &lt;/tbody&gt;
+    &lt;/table&gt;
+  {/if}
+
+  {#if erro}
+    &lt;p class="erro"&gt;{erro}&lt;/p&gt;
+  {/if}
+
+  &lt;button onclick={voltar} disabled={etapa === 1}&gt;Voltar&lt;/button&gt;
+  &lt;button onclick={avancar}&gt;{etapa === 3 ? 'Confirmar' : 'Avançar'}&lt;/button&gt;
+{/if}
+
+&lt;style&gt;
+  .progresso { color: #555; font-size: .9rem; }
+  .erro { color: #b3261e; font-weight: 600; }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { text-align: left; padding: 4px 10px; border-bottom: 1px solid #ddd; }
+&lt;/style&gt;</pre>
+
+<p>Com o componente recém-aberto, a tela mostra pouca coisa — e é essa a prova de que só a primeira etapa existe:</p>
+
+<pre class="out">Etapa 1 de 3 Nome Voltar Avançar</pre>
+
+<p>Três detalhes dessa saída. O <code>&lt;p class="progresso"&gt;</code> virou texto comum, sem tags, porque o <code>--texto</code> mostra o que a pessoa lê. O <code>&lt;input&gt;</code> não aparece: campo vazio não tem texto. E "Voltar" aparece sem conteúdo próprio, mas existe — só está desabilitado.</p>
+
+<h3>A anatomia da versão 3</h3>
+
+<dl class="anatomy">
+  <dt>{#snippet linha(rotulo, valor)}</dt><dd>uma marcação com nome e dois parâmetros. Ela não desenha nada sozinha: fica guardada para ser chamada.</dd>
+  <dt>{@render linha(rotulo, valor)}</dt><dd>o momento em que o snippet é desenhado, com os valores daquela linha. É o substituto do antigo <code>&lt;slot&gt;</code>.</dd>
+  <dt>{#each resumo as [rotulo, valor]}</dt><dd>desmonta cada par da lista em duas variáveis. O resumo é uma lista de pares <code>[nome do campo, valor]</code>.</dd>
+  <dt>let resumo = $derived([...])</dt><dd>um valor que se recalcula sozinho quando <code>nome</code>, <code>telefone</code>, <code>sabor</code> ou <code>tamanho</code> mudam.</dd>
+  <dt>{valor || '—'}</dt><dd>mostra um traço quando o campo ainda está vazio. Um resumo com buracos em branco parece defeito.</dd>
+  <dt>telefone.replace(/\D/g, '')</dt><dd>tira tudo que não é dígito antes de contar. Assim "(11) 99999-0000" conta 11 caracteres numéricos, não 15.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:#enviar;;outre:registrada;;clique:#editar;;outre:^Etapa 1 de 3">
+<p class="try-task"><strong>Missão:</strong> depois de confirmar, o botão "Editar" volta para o resumo, mas a etapa continua em 3. Faça "Editar" <strong>recomeçar da etapa 1</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let etapa = $state(3);
+  let enviado = $state(false);
+&lt;/script&gt;
+
+{#if enviado}
+  &lt;h2&gt;Encomenda registrada&lt;/h2&gt;
+  &lt;button id="editar" onclick={() =&gt; (enviado = false)}&gt;Editar&lt;/button&gt;
+{:else}
+  &lt;p&gt;Etapa {etapa} de 3&lt;/p&gt;
+  &lt;button id="enviar" onclick={() =&gt; (enviado = true)}&gt;Confirmar&lt;/button&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let etapa = $state(3);
+  let enviado = $state(false);
+
+  function editar() {
+    enviado = false;
+    etapa = 1;
+  }
+&lt;/script&gt;
+
+{#if enviado}
+  &lt;h2&gt;Encomenda registrada&lt;/h2&gt;
+  &lt;button id="editar" onclick={editar}&gt;Editar&lt;/button&gt;
+{:else}
+  &lt;p&gt;Etapa {etapa} de 3&lt;/p&gt;
+  &lt;button id="enviar" onclick={() =&gt; (enviado = true)}&gt;Confirmar&lt;/button&gt;
+{/if}</pre>
+</div>
+
+<p>É o tipo de defeito que passa em revisão rápida: o botão faz <em>algo</em> e a tela muda. O que falta é zerar os <strong>dois</strong> estados — "enviado" e a etapa — quando o ciclo recomeça.</p>
+
+<hr>
+
+<h2>7. O que o navegador mostra</h2>
+
+<p>A saída do compilador é o HTML do primeiro desenho. Depois, quem manda é o navegador: cada clique e cada tecla atualizam o estado e o Svelte redesenha só o pedaço que mudou. Abaixo, o que a versão 3 mostrou no servidor de desenvolvimento da Ana, com o texto lido da tela a cada passo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ação</th><th>Texto que apareceu na tela</th></tr>
+<tr><td>abrir a página</td><td><code>Etapa 1 de 3 Nome Voltar Avançar</code></td></tr>
+<tr><td>clicar em Avançar sem digitar</td><td><code>Etapa 1 de 3 Nome Informe o nome de quem encomenda Voltar Avançar</code></td></tr>
+<tr><td>digitar "Ana" e clicar em Avançar</td><td><code>Etapa 2 de 3 Telefone Voltar Avançar</code></td></tr>
+</table>
+</div>
+
+<p>A primeira linha é igual à saída do compilador na seção 6: o HTML do servidor é o mesmo que o navegador monta no primeiro instante. A diferença começa no segundo clique, quando quem desenha é o JavaScript do componente.</p>
+
+<p>Vale notar o que <strong>não</strong> mudou entre as linhas: o rótulo "Nome" continua na tela durante o erro, e o botão "Avançar" também. O Svelte não joga a tela no lixo a cada mudança — atualiza o parágrafo de erro e, quando ele some, remove só aquele parágrafo. Por isso o cursor não pula do campo e o foco não se perde.</p>
+
+<hr>
+
+<h2>8. O selo do estilo e o nome do arquivo</h2>
+
+<p>A versão 3 não é a única com estilo. A versão 2 tinha uma barra de etapas, e o componente abaixo é o menor pedaço dela: um parágrafo com uma classe e duas regras de CSS. Pedindo o CSS ao compilador, sai isto:</p>
+
+<pre class="file" data-file="src/Etapa.svelte">&lt;script&gt;
+  let etapa = $state(1);
+&lt;/script&gt;
+
+&lt;p class="contador"&gt;Etapa {etapa} de 3&lt;/p&gt;
+
+&lt;style&gt;
+  .contador {
+    color: #2e7d32;
+    font-weight: 600;
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">.contador.svelte-dvr9tu {
+  color: #2e7d32;
+  font-weight: 600;
+}</pre>
+
+<p>O seletor escrito foi <code>.contador</code>; o seletor publicado é <code>.contador.svelte-dvr9tu</code>. O compilador acrescentou um selo para que a regra só valha dentro deste componente. E o mesmo selo vai para a tag no HTML:</p>
+
+<p>Na tela, o parágrafo sai como <code>&lt;p class="contador svelte-dvr9tu"&gt;Etapa 1 de 3&lt;/p&gt;</code>: duas classes, a sua e a do compilador. É a segunda que fecha o escopo.</p>
+
+<p>Aqui vem uma descoberta que economiza meia hora de susto. O selo <strong>não</strong> é calculado a partir do CSS: ele vem do <em>nome do arquivo</em>. O mesmo componente compilado como <code>src/App.svelte</code> recebe <code>svelte-1n46o8q</code>; compilado como <code>src/Etapa.svelte</code>, recebe <code>svelte-dvr9tu</code>. Mudar a cor de uma regra não troca o selo; mudar o caminho do arquivo, sim.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Nome passado ao compilador</th><th>Selo que sai no CSS</th></tr>
+<tr><td><code>src/App.svelte</code></td><td><code>svelte-1n46o8q</code></td></tr>
+<tr><td><code>src/Etapa.svelte</code></td><td><code>svelte-dvr9tu</code></td></tr>
+<tr><td><code>src/lib/Campo.svelte</code></td><td><code>svelte-82495</code></td></tr>
+</table>
+</div>
+
+<p>Por que isso importa? Porque toda saída deste guia depende do caminho usado na compilação. Se você rodar o mesmo código em um arquivo com outro nome, o selo muda e o CSS parece "diferente" — mas o comportamento é idêntico. E dois componentes com a mesma classe <code>contador</code> nunca brigam pelo estilo.</p>
+
+<hr>
+
+<h2>9. Rodando no computador da Ana</h2>
+
+<p>O projeto fica em <code>~/loja</code> com o <code>src/App.svelte</code> da versão 3. O primeiro comando liga o servidor de desenvolvimento:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1815 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help</pre>
+
+<p>1815 é o tempo até o servidor aceitar conexões, em milissegundos. <code>Local</code> é o endereço para abrir no navegador; <code>Network</code> lembra que ninguém de fora da máquina alcança aquele endereço. Nada foi publicado.</p>
+
+<p>Com a página aberta, salvar o arquivo aparece no terminal como uma linha de HMR (<em>hot module replacement</em>, troca de módulo a quente) — a prova de que o servidor viu a mudança e mandou só o pedaço novo:</p>
+
+<pre class="term">5:07:32 PM [vite] (client) hmr update /src/App.svelte?svelte&type=style&lang.css</pre>
+
+<p>Repare no fim da linha: <code>type=style&amp;lang.css</code>. A mudança era só de CSS, então o Vite trocou o estilo sem remontar o componente — o que estava digitado não se perdeu.</p>
+
+<p>Quando o assunto é publicar, o comando é o de build. Ele compila tudo, junta os arquivos e mostra o tamanho final de cada um:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-DjPSWCNk.css   0.26 kB │ gzip:  0.18 kB
+dist/assets/index-DdgZ075K.js   45.91 kB │ gzip: 17.68 kB
+✓ built in 3.75s</pre>
+
+<p>São 112 módulos: cada <code>.svelte</code> e cada arquivo do Vite que entrou no pacote. O <code>gzip</code> é o tamanho depois da compressão — é esse número que conta no 4G. Os nomes com hash (<code>index-DdgZ075K.js</code>) permitem cache para sempre: se o conteúdo mudar, o nome muda junto.</p>
+
+<p>Para conferir o resultado sem subir um servidor de verdade, existe o modo de pré-visualização:</p><pre class="term">ana@notebook:~/loja$ npm run preview
+
+> loja@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>A porta é outra (4173) porque é outro servidor: ele serve os arquivos já compilados de <code>dist/</code>. Abrir o <code>dist/index.html</code> com dois cliques não funciona — o navegador bloqueia módulos vindos de <code>file://</code>.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão, com a linha e a coluna que ele aponta. Todas foram provocadas pelo mesmo projeto deste capítulo.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>bind:value</code> no lugar errado</strong>
+<p>O <code>bind:</code> só existe para elementos que guardam valor. Colocar em um parágrafo parece inofensivo, e o compilador recusa na hora.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;p bind:value={nome}&gt;{nome}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 3): `bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</pre>
+<p>A mensagem lista os três elementos que aceitam ligação de valor. Se a intenção era mostrar o valor, o caminho é <code>{nome}</code>; se era editar, o caminho é um <code>&lt;input&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — bloco aberto e não fechado</strong>
+<p>Aqui o <code>{#if}</code> ficou sem o <code>{/if}</code> no fim. O compilador avisa no ponto onde desistiu de esperar, que é o fim do arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let etapa = $state(1);
+&lt;/script&gt;
+
+{#if etapa === 1}
+  &lt;p&gt;Etapa 1&lt;/p&gt;
+{:else}
+  &lt;p&gt;Etapa {etapa}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>"Block was left open" quer dizer "o bloco ficou aberto". A linha apontada é o começo do bloco, não o fim do arquivo — é ali que falta o fechamento.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>$state</code> sem <code>let</code></strong>
+<p>Sem a palavra <code>let</code>, o compilador não tem onde guardar o estado. É o erro mais comum de quem está começando, e a mensagem é comprida porque a runa vale em três lugares diferentes.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  etapa = $state(1);
+&lt;/script&gt;
+
+&lt;p&gt;{etapa}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 10): `$state(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+<p>Para quem está começando, a tradução é uma só: escreva <code>let</code> antes do nome. A coluna 10 aponta exatamente o <code>$state</code>, que é onde o compilador percebeu que não havia declaração.</p>
+</div>
+
+<div class="warning">
+<strong>O aviso que não impede a compilação</strong>
+<p>Uma tabela com <code>&lt;tr&gt;</code> solto dentro de <code>&lt;table&gt;</code>, sem <code>&lt;tbody&gt;</code>, compila e mostra o conteúdo — mas o compilador avisa: <em>"`&lt;tr&gt;` cannot be a child of `&lt;table&gt;`…"</em>. O navegador conserta a estrutura ao montar a página, e o resultado pode não ser o que você escreveu. Por isso a versão 3 tem um <code>&lt;tbody&gt;</code> em volta do <code>{#each}</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Para que serve neste projeto</th><th>Versão</th></tr>
+<tr><td><code>bind:value={nome}</code></td><td>liga o campo à variável nos dois sentidos</td><td>1, 2 e 3</td></tr>
+<tr><td><code>onsubmit</code> + <code>preventDefault()</code></td><td>trata o envio sem recarregar a página</td><td>1</td></tr>
+<tr><td><code>nome.trim() === ''</code></td><td>detecta campo vazio ignorando espaços</td><td>1, 2 e 3</td></tr>
+<tr><td><code>let passo = $state(1)</code></td><td>decide qual etapa aparece</td><td>2 e 3</td></tr>
+<tr><td><code>{:else if}</code></td><td>encadeia os galhos das etapas</td><td>2 e 3</td></tr>
+<tr><td><code>{#snippet}</code> + <code>{@render}</code></td><td>guarda e repete a linha do resumo</td><td>3</td></tr>
+<tr><td><code>$derived</code></td><td>monta a lista do resumo a partir dos campos</td><td>3</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>bind:value can only be used with…</code></td><td>o elemento não guarda valor</td><td>use <code>{valor}</code> para mostrar, <code>input</code> para editar</td></tr>
+<tr><td><code>Block was left open</code></td><td>falta o fechamento do bloco</td><td>conte os pares <code>{#if}</code>/<code>{/if}</code></td></tr>
+<tr><td><code>$state(...) can only be used as…</code></td><td>a runa não está numa declaração</td><td>escreva <code>let</code> antes do nome</td></tr>
+<tr><td><code>is not defined</code></td><td>nome usado e nunca declarado</td><td>confira letra por letra o nome da variável</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>bind:value={nome}</code> faz em um <code>&lt;input&gt;</code>?</p>
+<label><input type="radio" name="pf1"> copia o valor da variável para dentro do campo, uma vez só</label>
+<label><input type="radio" name="pf1"> liga o campo à variável nos dois sentidos: digitar muda a variável e mudar a variável muda o campo</label>
+<label><input type="radio" name="pf1"> impede que o campo fique vazio</label>
+<label><input type="radio" name="pf1"> formata o texto em maiúsculas</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que a função de validação precisa de <code>return</code> depois de guardar a mensagem de erro?</p>
+<label><input type="radio" name="pf2"> para devolver o valor do campo ao navegador</label>
+<label><input type="radio" name="pf2"> para fechar o bloco <code>{#if}</code></label>
+<label><input type="radio" name="pf2"> porque sem ele a função continua e apaga o erro nas linhas seguintes</label>
+<label><input type="radio" name="pf2"> porque o Svelte exige um <code>return</code> em toda função</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. De onde vem o selo <code>svelte-1n46o8q</code> que aparece no CSS do componente?</p>
+<label><input type="radio" name="pf3"> do nome do arquivo passado ao compilador, como <code>src/App.svelte</code></label>
+<label><input type="radio" name="pf3"> das cores usadas nas regras de estilo</label>
+<label><input type="radio" name="pf3"> do tamanho do arquivo compilado</label>
+<label><input type="radio" name="pf3"> é escolhido por você dentro do <code>&lt;style&gt;</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let etapa = <input data-answer="$state(1)">;<br><br>function avancar() {<br>&nbsp;&nbsp;if (etapa &lt; 3) etapa += 1;<br>}<br><br>// a etapa começa em 1 e cada clique soma um, até o limite de 3</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um formulário é um conjunto de estados mais uma regra que decide quando estão completos.</li>
+  <li><code>bind:value</code> liga o campo à variável nos dois sentidos, e só existe em <code>input</code>, <code>textarea</code> e <code>select</code>.</li>
+  <li><code>onsubmit</code> com <code>e.preventDefault()</code> trata o envio sem recarregar.</li>
+  <li><code>trim()</code> antes de comparar evita que um campo só com espaços passe por preenchido.</li>
+  <li>A validação mora na função; o <code>disabled</code> é conforto, não regra.</li>
+  <li><code>return</code> cedo encerra a função e impede que o erro seja apagado logo depois de criado.</li>
+  <li>Um único estado (<code>passo</code> ou <code>etapa</code>) decide qual pedaço aparece.</li>
+  <li><code>{#snippet}</code> guarda marcação com nome e <code>{@render}</code> a desenha — é o par que substitui o <code>&lt;slot&gt;</code>.</li>
+  <li><code>$derived</code> recalcula o resumo quando os campos mudam.</li>
+  <li>O selo <code>svelte-xxxxx</code> depende do nome do arquivo, não das regras de CSS.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

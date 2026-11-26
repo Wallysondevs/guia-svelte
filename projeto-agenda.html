@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agenda — compromissos, horas e ordem | Guia Svelte</title>
+<meta name="description" content="A agenda da Ana em três versões: lista com concluir, cadastro com hora validada e agrupamento por período. Saídas reais do compilador Svelte 5 e do Node.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projetos · <span class="hl">Agenda</span></h1>
+
+<p class="intro">A Ana anota os compromissos da padaria num caderno: "8:30 retirar bolo da Dona Bia", "10:00 encomenda de 30 pães". O caderno tem dois defeitos que nenhum papel resolve. Ela não consegue riscar um item sem sujar a página, e a ordem das linhas é a ordem em que ela lembrou — não a ordem do dia. Nesta aula a agenda vira uma tela em <strong>três versões</strong>, com concluir, cadastrar e agrupar por período. A ordem das horas é o problema mais interessante, e ele aparece no terminal de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como marcar e desmarcar um item com um clique, sem apagar nada.</li>
+  <li>Por que um contador calculado com <code>let</code> comum não se atualiza.</li>
+  <li>A diferença entre mudar um item da lista e trocar a lista inteira.</li>
+  <li>Como validar uma hora digitada com expressão regular.</li>
+  <li>Por que ordenar horário como texto coloca 10:00 antes de 8:30.</li>
+  <li>Como transformar "8:30" em número de minutos para comparar.</li>
+  <li>O que <code>$derived.by</code> resolve quando há agrupamento.</li>
+  <li>Como <code>{@const}</code> e <code>{#snippet}</code> deixam a lista mais limpa.</li>
+  <li>O que o terminal mostra quando o build roda.</li>
+  <li>As três mensagens de erro que esta agenda provoca de verdade.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. O caderno e o que ele não faz</h2>
+
+<p>Um caderno de compromissos guarda três informações por linha: a hora, o que fazer e se já foi feito. O papel aceita as três, mas não sabe responder a duas perguntas simples. "Quantos ainda faltam hoje?" exige contar à mão. "Qual é o próximo?" exige varrer as linhas com o dedo, porque a ordem é a de escrita.</p>
+
+<p>Na tela, cada linha vira um objeto com três campos, e as duas perguntas viram <strong>valores derivados</strong>: uma contagem e uma lista ordenada. Nada disso é guardado — é calculado a partir da lista de compromissos. Essa é a diferença central da aula: o caderno guarda linhas; a agenda calcula respostas.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No caderno</th><th>No componente</th></tr>
+<tr><td>Uma linha escrita à mão</td><td>Um objeto <code>{ hora, nome, feito }</code></td></tr>
+<tr><td>O risco de caneta sobre o item feito</td><td>A classe <code>feito</code> com <code>class:feito</code></td></tr>
+<tr><td>Contar as linhas não riscadas</td><td><code>$derived</code> com <code>filter</code> e <code>length</code></td></tr>
+<tr><td>Reescrever o dia em ordem de hora</td><td><code>sort</code> com a função de minutos</td></tr>
+<tr><td>Separar a manhã da tarde</td><td><code>$derived.by</code> devolvendo dois grupos</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Versão 1 — a lista com "concluir"</h2>
+
+<p>A primeira versão guarda três compromissos e deixa marcar cada um como feito. O botão muda de texto conforme o estado do item, e o contador do topo diz quantos faltam.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([
+    { id: 1, hora: '8:30', nome: 'Retirar bolo da Dona Bia', feito: false },
+    { id: 2, hora: '9:00', nome: 'Abrir a padaria', feito: false },
+    { id: 3, hora: '10:00', nome: 'Encomenda de 30 pães', feito: false }
+  ]);
+
+  let pendentes = $derived(itens.filter((i) =&gt; !i.feito).length);
+&lt;/script&gt;
+
+&lt;p&gt;{pendentes} pendente(s) hoje&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each itens as item (item.id)}
+    &lt;li&gt;
+      &lt;button onclick={() =&gt; (item.feito = !item.feito)}&gt;
+        {item.feito ? 'refazer' : 'concluir'}
+      &lt;/button&gt;
+      {item.hora} — {item.nome}
+    &lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Como nada foi marcado ainda, o contador mostra três e todos os botões dizem "concluir":</p>
+
+<pre class="out">&lt;p&gt;3 pendente(s) hoje&lt;/p&gt; &lt;ul&gt;&lt;li&gt;&lt;button&gt;concluir&lt;/button&gt; 8:30 — Retirar bolo da Dona Bia&lt;/li&gt;&lt;li&gt;&lt;button&gt;concluir&lt;/button&gt; 9:00 — Abrir a padaria&lt;/li&gt;&lt;li&gt;&lt;button&gt;concluir&lt;/button&gt; 10:00 — Encomenda de 30 pães&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O <code>!i.feito</code> do filtro é o "não feito": o ponto de exclamação inverte um booleano. Quem está com <code>feito: false</code> sobra na lista de pendentes, e o <code>.length</code> no fim devolve o número em vez da lista.</p>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>let itens = $state([...])</dt><dd>uma lista de objetos. O <code>$state</code> deixa o Svelte observar também o que está dentro de cada objeto.</dd>
+  <dt>item.feito = !item.feito</dt><dd>troca o valor do item <em>dentro</em> da lista. Não é preciso criar outra lista: o objeto é observado.</dd>
+  <dt>{item.feito ? 'refazer' : 'concluir'}</dt><dd>o texto do botão depende do estado do item. Uma condicional curta dentro das chaves.</dd>
+  <dt>{#each itens as item (item.id)}</dt><dd>a chave é o <code>id</code>: quando a lista muda, o Svelte sabe qual <code>&lt;li&gt;</code> corresponde a qual item.</dd>
+  <dt>$derived(itens.filter(...).length)</dt><dd>recalcula sozinho quando algum <code>feito</code> muda. É a contagem do caderno, feita pelo computador.</dd>
+</dl>
+
+<hr>
+
+<h2>3. Por que o contador precisa ser derivado</h2>
+
+<p>Este é o erro de raciocínio mais comum de quem vem de outra linguagem. Se você escrever <code>let pendentes = itens.filter((i) =&gt; !i.feito).length</code>, sem <code>$derived</code>, o valor é calculado <strong>uma vez</strong>, quando o componente nasce. Marcar um item como feito muda a lista, mas não muda <code>pendentes</code>: ninguém mandou recalcular.</p>
+
+<p>Em JavaScript puro, esse valor é uma foto do momento. Em Svelte 5, <code>$derived</code> é uma receita: "sempre que algo aqui dentro mudar, refaça". A diferença aparece na tela no primeiro clique — o risco do item aparece, o número do topo continua velho.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que acontece no clique</th><th>Quando serve</th></tr>
+<tr><td><code>let pendentes = itens.filter(…)</code></td><td>o número fica parado no valor inicial</td><td>quase nunca</td></tr>
+<tr><td><code>let pendentes = $derived(itens.filter(…))</code></td><td>o número é recalculado</td><td>sempre que deriva de estado</td></tr>
+<tr><td><code>let pendentes = $state(0)</code> e atualizar à mão</td><td>funciona, mas você tem de lembrar em todo lugar</td><td>quando o valor não deriva de nada</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^1 pendente">
+<p class="try-task"><strong>Missão:</strong> clicar em "concluir o primeiro" risca o item, mas o contador continua em 2. Faça o contador <strong>cair para 1</strong> depois do clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state([{ nome: 'Bolo', feito: false }, { nome: 'Pão', feito: false }]);
+  let pendentes = itens.filter((i) =&gt; !i.feito);
+&lt;/script&gt;
+
+&lt;p&gt;{pendentes.length} pendente(s)&lt;/p&gt;
+&lt;ul&gt;
+  {#each itens as i}
+    &lt;li&gt;{i.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; (itens[0].feito = true)}&gt;concluir o primeiro&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state([{ nome: 'Bolo', feito: false }, { nome: 'Pão', feito: false }]);
+  let pendentes = $derived(itens.filter((i) =&gt; !i.feito));
+&lt;/script&gt;
+
+&lt;p&gt;{pendentes.length} pendente(s)&lt;/p&gt;
+&lt;ul&gt;
+  {#each itens as i}
+    &lt;li&gt;{i.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={() =&gt; (itens[0].feito = true)}&gt;concluir o primeiro&lt;/button&gt;</pre>
+</div>
+
+<p>A solução muda uma palavra e conserta o comportamento. Repare que a lista de itens continua a mesma: o que faltava era a receita de recalcular a contagem, não um novo dado.</p>
+
+<hr>
+
+<h2>4. Versão 2 — cadastrar com hora</h2>
+
+<p>A segunda versão acrescenta o formulário. Dois campos, uma regra de formato para a hora, uma regra de conteúdo para o nome, e a lista sempre ordenada por horário — mesmo que os itens tenham sido digitados fora de ordem.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([
+    { id: 1, hora: '8:30', nome: 'Retirar bolo da Dona Bia', feito: false },
+    { id: 2, hora: '10:00', nome: 'Encomenda de 30 pães', feito: false }
+  ]);
+  let hora = $state('');
+  let nome = $state('');
+  let erro = $state('');
+
+  function minutos(h) {
+    const [hh, mm] = h.split(':').map(Number);
+    return hh * 60 + (mm || 0);
+  }
+
+  function adicionar() {
+    erro = '';
+    if (!/^\d{1,2}:\d{2}$/.test(hora)) {
+      erro = 'Hora no formato 9:30';
+      return;
+    }
+    if (nome.trim() === '') {
+      erro = 'Escreva o compromisso';
+      return;
+    }
+    itens = [...itens, { id: Date.now(), hora, nome, feito: false }];
+    hora = '';
+    nome = '';
+  }
+
+  let ordenados = $derived(
+    [...itens].sort((a, b) =&gt; minutos(a.hora) - minutos(b.hora))
+  );
+&lt;/script&gt;
+
+&lt;form onsubmit={(e) =&gt; { e.preventDefault(); adicionar(); }}&gt;
+  &lt;input bind:value={hora} placeholder="9:30"&gt;
+  &lt;input bind:value={nome} placeholder="Compromisso"&gt;
+  &lt;button&gt;Adicionar&lt;/button&gt;
+&lt;/form&gt;
+
+{#if erro}
+  &lt;p class="erro"&gt;{erro}&lt;/p&gt;
+{/if}
+
+&lt;ul&gt;
+  {#each ordenados as item (item.id)}
+    &lt;li class:feito={item.feito}&gt;
+      {item.hora} — {item.nome}
+    &lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;style&gt;
+  .erro { color: #b3261e; font-weight: 600; }
+  .feito { text-decoration: line-through; color: #777; }
+&lt;/style&gt;</pre>
+
+<p>Na tela, os campos não aparecem por conteúdo — só o botão e as duas linhas:</p>
+
+<pre class="out">Adicionar 8:30 — Retirar bolo da Dona Bia 10:00 — Encomenda de 30 pães</pre>
+
+<p>Duas decisões de projeto estão nesse código. A primeira: <code>itens = [...itens, {...}]</code> cria uma <strong>lista nova</strong> em vez de usar <code>itens.push(...)</code>. As duas funcionam no Svelte 5, mas a lista nova deixa claro que o valor mudou, e é o que você vai encontrar em todo exemplo de código que precisa avisar outro sistema. A segunda: <code>[...itens]</code> antes do <code>sort</code> copia a lista antes de ordenar, porque <code>sort</code> embaralha o array original.</p>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>/^\d{1,2}:\d{2}$/</dt><dd>expressão regular que exige um ou dois dígitos, dois pontos e dois dígitos. O <code>^</code> e o <code>$</code> prendem o começo e o fim, então "às 9:30" não passa.</dd>
+  <dt>.test(hora)</dt><dd>devolve <code>true</code> ou <code>false</code>. O <code>!</code> na frente inverte: o erro aparece quando o teste falha.</dd>
+  <dt>h.split(':').map(Number)</dt><dd>quebra "8:30" em <code>['8', '30']</code> e converte cada pedaço em número: <code>[8, 30]</code>.</dd>
+  <dt>hh * 60 + (mm || 0)</dt><dd>converte a hora em minutos desde a meia-noite. O <code>|| 0</code> cobre a hora sem minutos, como "9".</dd>
+  <dt>[...itens]</dt><dd>cópia rasa da lista. O <code>sort</code> mexe nessa cópia, não na lista de estado.</dd>
+  <dt>Date.now()</dt><dd>um número que muda a cada milissegundo. Serve como <code>id</code> temporário para o item novo.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Escreva o compromisso">
+<p class="try-task"><strong>Missão:</strong> o botão aceita um compromisso em branco e cria uma linha vazia. Faça ele recusar e mostrar <strong>"Escreva o compromisso"</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['Pão às 8h']);
+  let novo = $state('');
+&lt;/script&gt;
+
+&lt;input bind:value={novo} placeholder="Compromisso"&gt;
+&lt;button onclick={() =&gt; (itens = [...itens, novo])}&gt;Adicionar&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each itens as i}
+    &lt;li&gt;{i}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['Pão às 8h']);
+  let novo = $state('');
+  let erro = $state('');
+
+  function adicionar() {
+    if (novo.trim() === '') {
+      erro = 'Escreva o compromisso';
+      return;
+    }
+    erro = '';
+    itens = [...itens, novo];
+    novo = '';
+  }
+&lt;/script&gt;
+
+&lt;input bind:value={novo} placeholder="Compromisso"&gt;
+&lt;button onclick={adicionar}&gt;Adicionar&lt;/button&gt;
+
+{#if erro}
+  &lt;p&gt;{erro}&lt;/p&gt;
+{/if}
+
+&lt;ul&gt;
+  {#each itens as i}
+    &lt;li&gt;{i}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<hr>
+
+<h2>5. O horário é texto, não número</h2>
+
+<p>Ordenar horário com o <code>sort</code> padrão é uma armadilha silenciosa: sem função de comparação, o JavaScript compara os itens como texto, caractere por caractere. "10:00" começa com "1", "8:30" começa com "8", e o "1" vem antes do "8" na tabela de caracteres. O resultado é 10:00 primeiro. O terminal mostra isso sem rodeio:</p>
+
+<pre class="term">ana@notebook:~/loja$ node
+Welcome to Node.js v22.23.5.
+Type ".help" for more information.
+> ['10:00', '9:00', '8:30'].sort()
+[ '10:00', '8:30', '9:00' ]
+> const minutos = (h) => { const [hh, mm] = h.split(':').map(Number); return hh * 60 + (mm || 0); }
+undefined
+> ['10:00', '9:00', '8:30'].sort((a, b) => minutos(a) - minutos(b))
+[ '8:30', '9:00', '10:00' ]</pre>
+
+<p>O <code>undefined</code> na terceira linha é o resultado da declaração: uma função não devolve nada ao ser criada, e o console registra isso. Na última linha, a função de comparação devolve a diferença em minutos, e aí a ordem sai certa.</p>
+
+<p>Guardar a hora como texto tem um custo. Cada comparação precisa converter de novo, e formatos diferentes ("9:30" e "09:30") são textos diferentes. A alternativa é guardar minutos desde a meia-noite e formatar na hora de mostrar — o mesmo princípio da aula de preço, em que o número fica guardado e o texto é só a roupa.</p>
+
+<div class="trysvelte" data-goal="outre:^8:30 9:00 10:00">
+<p class="try-task"><strong>Missão:</strong> a lista sai na ordem errada. Faça os horários aparecerem em ordem de verdade: <strong>8:30, 9:00, 10:00</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let horarios = $state(['10:00', '9:00', '8:30']);
+  let ordenados = $derived([...horarios].sort());
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each ordenados as h}
+    &lt;li&gt;{h}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let horarios = $state(['10:00', '9:00', '8:30']);
+
+  function minutos(h) {
+    const [hh, mm] = h.split(':').map(Number);
+    return hh * 60 + (mm || 0);
+  }
+
+  let ordenados = $derived([...horarios].sort((a, b) =&gt; minutos(a) - minutos(b)));
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each ordenados as h}
+    &lt;li&gt;{h}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<hr>
+
+<h2>6. Versão 3 — agrupar por período</h2>
+
+<p>A terceira versão responde à pergunta que o caderno não responde: "o que é de manhã e o que é de tarde?". O cálculo tem dois passos — filtrar e depois separar em dois grupos —, e é aí que entra <code>$derived.by</code>. A linha de cada compromisso vira um <em>snippet</em>, porque ela aparece em dois lugares.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([
+    { id: 1, hora: '8:30', nome: 'Retirar bolo da Dona Bia', feito: false },
+    { id: 2, hora: '9:00', nome: 'Abrir a padaria', feito: true },
+    { id: 3, hora: '10:00', nome: 'Encomenda de 30 pães', feito: false },
+    { id: 4, hora: '15:00', nome: 'Entregar cesta da firma', feito: false }
+  ]);
+  let soPendentes = $state(false);
+
+  function minutos(h) {
+    const [hh, mm] = h.split(':').map(Number);
+    return hh * 60 + (mm || 0);
+  }
+
+  function alternar(item) {
+    item.feito = !item.feito;
+  }
+
+  let visiveis = $derived(
+    itens
+      .filter((i) =&gt; (soPendentes ? !i.feito : true))
+      .sort((a, b) =&gt; minutos(a.hora) - minutos(b.hora))
+  );
+
+  let periodos = $derived.by(() =&gt; [
+    { titulo: 'manhã', lista: visiveis.filter((i) =&gt; minutos(i.hora) &lt; 12 * 60) },
+    { titulo: 'tarde', lista: visiveis.filter((i) =&gt; minutos(i.hora) &gt;= 12 * 60) }
+  ]);
+&lt;/script&gt;
+
+{#snippet linha(item)}
+  &lt;li class:feito={item.feito}&gt;
+    &lt;button onclick={() =&gt; alternar(item)}&gt;{item.feito ? 'refazer' : 'concluir'}&lt;/button&gt;
+    {item.hora} — {item.nome}
+  &lt;/li&gt;
+{/snippet}
+
+&lt;label&gt;
+  &lt;input type="checkbox" bind:checked={soPendentes}&gt;
+  só o que falta fazer
+&lt;/label&gt;
+
+{#if visiveis.length === 0}
+  &lt;p&gt;Tudo em ordem: nenhum compromisso pendente.&lt;/p&gt;
+{:else}
+  {#each periodos as periodo}
+    {#if periodo.lista.length &gt; 0}
+      &lt;h3&gt;{periodo.titulo}&lt;/h3&gt;
+      &lt;ul&gt;
+        {#each periodo.lista as item (item.id)}
+          {@render linha(item)}
+        {/each}
+      &lt;/ul&gt;
+    {/if}
+  {/each}
+{/if}
+
+&lt;style&gt;
+  .feito { text-decoration: line-through; color: #777; }
+&lt;/style&gt;</pre>
+
+<p>Com a caixinha desmarcada, os quatro compromissos aparecem, separados pela hora do meio-dia:</p>
+
+<pre class="out">só o que falta fazer manhã concluir 8:30 — Retirar bolo da Dona Bia refazer 9:00 — Abrir a padaria concluir 10:00 — Encomenda de 30 pães tarde concluir 15:00 — Entregar cesta da firma</pre>
+
+<p>Repare que "Abrir a padaria" aparece com o botão "refazer", porque já está marcado como feito. E repare no que não aparece: nenhum título "tarde" vazio. O <code>{#if periodo.lista.length &gt; 0}</code> impede o cabeçalho de um grupo sem itens — um detalhe pequeno que separa uma tela polida de uma tela com um "tarde" solto no rodapé.</p>
+
+<h3>A anatomia da versão 3</h3>
+
+<dl class="anatomy">
+  <dt>$derived.by(() =&gt; [ … ])</dt><dd>para cálculos de vários passos. Aqui devolve uma lista de grupos, cada um com título e itens.</dd>
+  <dt>soPendentes ? !i.feito : true</dt><dd>quando a caixinha está marcada, só passa quem não foi feito; senão, passa todo mundo.</dd>
+  <dt>minutos(i.hora) &lt; 12 * 60</dt><dd>antes do meio-dia é manhã. Comparar em minutos evita comparar texto.</dd>
+  <dt>{#snippet linha(item)}</dt><dd>a marcação de uma linha, com nome. Chamada duas vezes, uma em cada grupo.</dd>
+  <dt>{@render linha(item)}</dt><dd>desenha o snippet com o item da vez. A chave <code>(item.id)</code> continua valendo.</dd>
+  <dt>alternar(item)</dt><dd>uma função para o clique. O mesmo código serve para os quatro itens, em qualquer grupo.</dd>
+</dl>
+
+<hr>
+
+<h2>7. O que o navegador mostrou</h2>
+
+<p>A tabela abaixo é o texto lido da tela na versão 3, depois de cada ação, rodando no servidor de desenvolvimento.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ação</th><th>Texto que apareceu</th></tr>
+<tr><td>abrir a página</td><td><code>só o que falta fazer manhã concluir 8:30 — … refazer 9:00 — Abrir a padaria …</code></td></tr>
+<tr><td>marcar "só o que falta fazer"</td><td><code>… manhã concluir 8:30 — Retirar bolo … concluir 10:00 — Encomenda de 30 pães tarde concluir 15:00 — …</code></td></tr>
+<tr><td>clicar em "concluir" no primeiro</td><td><code>… manhã concluir 10:00 — Encomenda de 30 pães …</code></td></tr>
+</table>
+</div>
+
+<p>Na segunda linha, "Abrir a padaria" sumiu — era o único item feito. Na terceira, o primeiro compromisso também sumiu, porque acabou de virar feito e o filtro está ligado. A lista encolhe na frente do usuário, sem nenhuma linha de código de "remover da tela": o derivado recalcula, o <code>{#each}</code> compara com o que estava desenhado e remove o que sobrou.</p>
+
+<hr>
+
+<h2>8. Terminal: build e a pasta do projeto</h2>
+
+<p>Com a versão 3 no lugar, o build mostra o peso final da agenda:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-BOdtKiXU.css   0.06 kB │ gzip:  0.08 kB
+dist/assets/index-Dy6HGDV8.js   45.43 kB │ gzip: 17.53 kB
+✓ built in 1.17s</pre>
+
+<p>O CSS tem 0,06 kB porque esta versão pinta pouca coisa: uma linha riscada e uma cor. Todo o resto é estrutura. Já o JS carrega o Svelte inteiro mais o seu componente, e por isso fica na casa dos 45 kB antes da compressão.</p>
+
+<p>Quem trabalha num projeto pequeno não precisa de mais do que duas pastas dentro de <code>src</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls src
+App.svelte
+main.js</pre>
+
+<p><code>App.svelte</code> é o componente que você escreveu; <code>main.js</code> é o ponto de entrada, o arquivo que pega esse componente e monta na página. Quando a agenda crescer, ela vira vários arquivos — <code>Item.svelte</code>, <code>Formulario.svelte</code> — e o <code>App.svelte</code> passa a só juntar as peças.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — ler uma propriedade de <code>null</code></strong>
+<p>Compila e quebra ao desenhar. Este é o erro de lista mais comum: um item vazio no meio dos dados.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([null]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">Erro ao renderizar: Cannot read properties of null (reading 'nome')</pre>
+<p>A mensagem diz exatamente qual leitura falhou. Se a lista pode começar vazia, comece com <code>[]</code> — lista vazia não tem item nenhum para quebrar.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>{@const}</code> no lugar errado</strong>
+<p>O <code>{@const}</code> só pode ser filho direto de um bloco. Colocá-lo solto no meio do HTML faz o compilador listar todos os lugares onde ele seria aceito.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let horarios = $state(['10:00', '9:00']);
+&lt;/script&gt;
+
+&lt;p&gt;{@const primeiro = horarios[0]}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 3): `{@const}` must be the immediate child of `{#snippet}`, `{#if}`, `{:else if}`, `{:else}`, `{#each}`, `{:then}`, `{:catch}`, `&lt;svelte:fragment&gt;`, `&lt;svelte:boundary&gt;` or `&lt;Component&gt;`</pre>
+<p>A lista comprida é uma ajuda, não um castigo: são os blocos que criam um escopo onde a constante pode viver. Dentro de um <code>{#each}</code>, o <code>{@const}</code> é aceito e costuma simplificar contas repetidas.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>{@render}</code> de snippet que não existe</strong>
+<p>O componente compila; o erro aparece na hora de desenhar, porque o nome não foi declarado em nenhum lugar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;{@render linha(nome)}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: linha is not defined</pre>
+<p>Para usar <code>{@render linha(item)}</code>, a página precisa de um <code>{#snippet linha(item)} … {/snippet}</code> no mesmo arquivo. O nome é uma variável como qualquer outra: se não existe, o JavaScript reclama.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz na agenda</th><th>Versão</th></tr>
+<tr><td><code>$state([...])</code></td><td>guarda a lista de compromissos</td><td>1, 2 e 3</td></tr>
+<tr><td><code>item.feito = !item.feito</code></td><td>marca e desmarca sem remover</td><td>1 e 3</td></tr>
+<tr><td><code>$derived</code> com <code>filter</code></td><td>conta pendentes e filtra a lista</td><td>1, 2 e 3</td></tr>
+<tr><td><code>[^...itens].sort(...)</code></td><td>ordena uma cópia e preserva o estado</td><td>2 e 3</td></tr>
+<tr><td><code>$derived.by</code></td><td>separa manhã e tarde</td><td>3</td></tr>
+<tr><td><code>{#snippet}</code> + <code>{@render}</code></td><td>desenha a mesma linha em dois grupos</td><td>3</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>Cannot read properties of null</code></td><td>um item da lista é <code>null</code></td><td>comece com <code>[]</code> ou filtre antes de ler</td></tr>
+<tr><td><code>{@const} must be the immediate child of…</code></td><td>o <code>{@const}</code> está fora de um bloco</td><td>mova para dentro do <code>{#each}</code></td></tr>
+<tr><td><code>linha is not defined</code></td><td>o <code>{@render}</code> aponta para snippet inexistente</td><td>declare o <code>{#snippet}</code> no mesmo arquivo</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Por que a contagem de pendentes com <code>let pendentes = itens.filter(…)</code> não se atualiza?</p>
+<label><input type="radio" name="pa1"> porque <code>filter</code> devolve uma lista nova</label>
+<label><input type="radio" name="pa1"> porque o valor foi calculado uma vez, sem <code>$derived</code> para recalculá-lo</label>
+<label><input type="radio" name="pa1"> porque <code>$state</code> não observa listas</label>
+<label><input type="radio" name="pa1"> porque o contador precisa de <code>bind:value</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>['10:00', '9:00', '8:30'].sort()</code> devolve?</p>
+<label><input type="radio" name="pa2"> <code>['8:30', '9:00', '10:00']</code></label>
+<label><input type="radio" name="pa2"> <code>['9:00', '8:30', '10:00']</code></label>
+<label><input type="radio" name="pa2"> <code>['10:00', '8:30', '9:00']</code>, porque compara como texto</label>
+<label><input type="radio" name="pa2"> dá erro, porque texto não tem ordem</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Para que serve o <code>[...itens]</code> antes do <code>sort</code>?</p>
+<label><input type="radio" name="pa3"> para ordenar uma cópia, sem embaralhar a lista guardada no estado</label>
+<label><input type="radio" name="pa3"> para transformar a lista em texto</label>
+<label><input type="radio" name="pa3"> para ordenar só os itens que não foram feitos</label>
+<label><input type="radio" name="pa3"> para criar um novo estado reativo</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let ordenados = $derived(<input data-answer="[...itens].sort((a, b) =&gt; minutos(a.hora) - minutos(b.hora))">&nbsp;);<br><br>// a lista sai em ordem de horário, sem mexer na lista original</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um compromisso é um objeto com hora, nome e um booleano de "feito".</li>
+  <li><code>item.feito = !item.feito</code> marca e desmarca sem tirar o item da lista.</li>
+  <li>Valor calculado uma vez (<code>let</code> comum) não acompanha o estado; <code>$derived</code> acompanha.</li>
+  <li>Toda vez que um valor é consequência de outro, ele é derivado — e não deve ser estado.</li>
+  <li>Hora como texto precisa de conversão para minutos antes de qualquer comparação.</li>
+  <li><code>sort()</code> sem função compara texto; com função, compara o que você mandar.</li>
+  <li><code>[...itens]</code> copia a lista para o <code>sort</code> não alterar o estado.</li>
+  <li><code>$derived.by</code> organiza cálculos de vários passos, como separar manhã e tarde.</li>
+  <li>Cabeçalho de grupo vazio se evita com <code>{#if lista.length &gt; 0}</code>.</li>
+  <li>Lista que pode começar vazia começa com <code>[]</code>, nunca com um item nulo.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

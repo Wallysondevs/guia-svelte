@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel com Filtros — a mesma tela em três versões | Guia Svelte</title>
+<meta name="description" content="O painel de vendas da Ana em três versões: busca com $derived, filtros que se somam com reduce e ordenação com $derived.by. Saídas reais do compilador Svelte 5.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projetos · <span class="hl">Painel com Filtros</span></h1>
+
+<p class="intro">Na parede da padaria, a Ana pendura um quadro com os produtos mais vendidos da semana. Ela olha aquele quadro antes de encomendar farinha. O problema é que o quadro é de papel: para ver só os bolos, ela precisa passar o dedo por cima da lista inteira. Nesta aula o quadro vira uma tela com busca, filtro por categoria e ordenação — em <strong>três versões</strong>, cada uma rodando de verdade. Você vai ver a saída do compilador e o que o navegador mostrou a cada clique.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre um dado de <strong>estado</strong> e um dado <strong>derivado</strong>.</li>
+  <li>Como filtrar uma lista com <code>filter</code> e <code>includes</code>.</li>
+  <li>Por que comparar texto sem baixar a caixa nunca encontra o que se procura.</li>
+  <li>Como três filtros se somam sem virar um emaranhado de <code>if</code>.</li>
+  <li>O que <code>reduce</code> faz e por que ele é o irmão de <code>filter</code>.</li>
+  <li>Quando usar <code>$derived.by</code> em vez de <code>$derived</code>.</li>
+  <li>Como ordenar sem estragar a lista original.</li>
+  <li>O que mostrar quando nenhum produto passa pelos filtros.</li>
+  <li>O que fazer quando a porta 5173 já está ocupada.</li>
+  <li>As três mensagens de erro que este painel provoca de verdade.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. O quadro de vendas e a pergunta certa</h2>
+
+<p>Quem trabalha com números faz sempre duas perguntas diferentes. A primeira é "quais são os dados?" — a lista de produtos, com nome, categoria e quantidade vendida. A segunda é "quais desses eu quero ver agora?" — só os bolos, só o que vendeu mais de cinquenta, só o que acabou no estoque. A lista de dados quase nunca muda; a pergunta muda o tempo todo.</p>
+
+<p>Separar as duas é o que torna o painel fácil de escrever. Os dados ficam guardados uma vez, e cada pergunta vira uma <strong>expressão derivada</strong>: um valor calculado a partir dos dados e das escolhas do usuário. No Svelte 5, essa expressão é <code>$derived</code>. Ela não guarda memória própria — ela se recalcula quando algo de que depende muda.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O caderno com todos os produtos</td><td>A lista <code>produtos</code></td></tr>
+<tr><td>O dedo da Ana passando pela lista</td><td>O filtro em <code>$derived</code></td></tr>
+<tr><td>A palavra escrita no papel de busca</td><td><code>busca</code>, criada com <code>$state</code></td></tr>
+<tr><td>O total somado no fim do dia</td><td><code>reduce</code> dentro de outro <code>$derived</code></td></tr>
+<tr><td>Reordenar a lista do maior para o menor</td><td><code>sort</code> antes de devolver</td></tr>
+</table>
+</div>
+
+<p>Repare no vocabulário, porque ele volta o resto da aula. <strong>Estado</strong> é o que o usuário controla: o texto da busca, a categoria escolhida, a ordem. <strong>Derivado</strong> é o que o computador calcula a partir do estado: a lista visível, o total vendido, a contagem. Quem tenta guardar o derivado num <code>$state</code> acaba com dois valores que discordam entre si na primeira atualização.</p>
+
+<hr>
+
+<h2>2. Versão 1 — a lista e a busca</h2>
+
+<p>A primeira versão tem uma caixa de busca e uma lista. A lista mostra o resultado do filtro, e o filtro lê o texto digitado. São quatro produtos fixos, porque o objetivo aqui é entender o mecanismo antes de plugar uma fonte de dados de verdade.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let busca = $state('');
+
+  let produtos = [
+    { id: 1, nome: 'Pão francês', categoria: 'pães', vendidos: 120 },
+    { id: 2, nome: 'Bolo de chocolate', categoria: 'bolos', vendidos: 34 },
+    { id: 3, nome: 'Pão de queijo', categoria: 'salgados', vendidos: 88 },
+    { id: 4, nome: 'Bolo de cenoura', categoria: 'bolos', vendidos: 21 }
+  ];
+
+  let visiveis = $derived(
+    produtos.filter((p) =&gt; p.nome.includes(busca))
+  );
+&lt;/script&gt;
+
+&lt;input bind:value={busca} placeholder="Buscar produto"&gt;
+
+&lt;ul&gt;
+  {#each visiveis as produto (produto.id)}
+    &lt;li&gt;{produto.nome} — {produto.vendidos} vendidos&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Com a busca vazia, <code>includes('')</code> é verdadeiro para todo texto — então todos os produtos passam. O compilador entrega a lista completa:</p>
+
+<pre class="out">&lt;input value="" placeholder="Buscar produto"/&gt; &lt;ul&gt;&lt;li&gt;Pão francês — 120 vendidos&lt;/li&gt;&lt;li&gt;Bolo de chocolate — 34 vendidos&lt;/li&gt;&lt;li&gt;Pão de queijo — 88 vendidos&lt;/li&gt;&lt;li&gt;Bolo de cenoura — 21 vendidos&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O <code>undefined</code> que você poderia temer não aparece: não há classe, não há atributo estranho. O <code>{#each}</code> desenhou quatro <code>&lt;li&gt;</code> e o <code>$derived</code> não deixou rastro no HTML — ele é cálculo, não marcação.</p>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>let busca = $state('')</dt><dd>o texto digitado. É estado porque quem muda é o usuário.</dd>
+  <dt>let produtos = [...]</dt><dd>a lista de dados. Aqui é uma constante de exemplo; num app de verdade viria de um arquivo ou de uma API.</dd>
+  <dt>let visiveis = $derived(...)</dt><dd>a lista filtrada. Não é estado: ninguém atribui valor a ela, ela se recalcula.</dd>
+  <dt>produtos.filter((p) =&gt; ...)</dt><dd>percorre a lista e devolve uma lista nova só com os itens em que a função devolveu verdadeiro.</dd>
+  <dt>p.nome.includes(busca)</dt><dd>verdadeiro quando o nome contém o texto da busca. É a busca "em qualquer pedaço", não só no começo.</dd>
+  <dt>{#each visiveis as produto (produto.id)}</dt><dd>o parêntese no fim é a chave: o Svelte usa o <code>id</code> para saber qual item é qual quando a lista muda de ordem.</dd>
+</dl>
+
+<p>O custo desta versão aparece no primeiro uso real. A busca diferencia maiúsculas: digitar <code>PÃO</code> não encontra <code>Pão francês</code>. E não há como ver só os bolos. É o que as versões 2 e 3 resolvem.</p>
+
+<hr>
+
+<h2>3. Estado × derivado</h2>
+
+<p>A confusão mais comum de quem começa é tratar o resultado do filtro como estado. Se você escrever <code>let visiveis = $state(produtos)</code> e tentar atualizar a lista dentro de uma função, cria duas fontes de verdade: a lista original e a filtrada. Na primeira vez que alguém esquecer de atualizar uma delas, a tela mostra um número e a lista mostra outro.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Resposta</th><th>Como escrever</th></tr>
+<tr><td>Quem muda este valor?</td><td>o usuário, digitando ou clicando</td><td><code>$state</code></td></tr>
+<tr><td>Quem muda este valor?</td><td>o próprio código, a partir de outro valor</td><td><code>$derived</code></td></tr>
+<tr><td>Preciso atribuir a este valor?</td><td>sim</td><td><code>$state</code></td></tr>
+<tr><td>Preciso atribuir a este valor?</td><td>não, só ler</td><td><code>$derived</code></td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="digitar:input=PÃO;;outre:Pão francês">
+<p class="try-task"><strong>Missão:</strong> digitar <code>PÃO</code> em maiúsculas não encontra nada. Faça a busca <strong>ignorar maiúsculas e minúsculas</strong> e encontrar "Pão francês".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let produtos = ['Pão francês', 'Bolo de chocolate', 'Pão de queijo'];
+  let visiveis = $derived(produtos.filter((p) =&gt; p.includes(busca)));
+&lt;/script&gt;
+
+&lt;input bind:value={busca} placeholder="Buscar"&gt;
+
+&lt;ul&gt;
+  {#each visiveis as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let produtos = ['Pão francês', 'Bolo de chocolate', 'Pão de queijo'];
+  let visiveis = $derived(
+    produtos.filter((p) =&gt; p.toLowerCase().includes(busca.toLowerCase()))
+  );
+&lt;/script&gt;
+
+&lt;input bind:value={busca} placeholder="Buscar"&gt;
+
+&lt;ul&gt;
+  {#each visiveis as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>A solução baixa a caixa dos <strong>dois</strong> lados: o nome do produto e o texto digitado. Baixar só um lado não resolve — é a comparação que precisa acontecer entre iguais. Esse mesmo cuidado vale para acentos: <code>Pão</code> não é igual a <code>Pao</code>, e resolver isso exige normalizar o texto antes de comparar.</p>
+
+<hr>
+
+<h2>4. Versão 2 — três filtros que se somam</h2>
+
+<p>A segunda versão acrescenta categoria, um aviso de estoque e dois números no topo. O segredo está no corpo do <code>filter</code>: cada condição que reprova o produto faz <code>return false</code> na hora. Quem sobrevive a todas as condições chega ao <code>return true</code> do fim.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let categoria = $state('todas');
+  let soAcabou = $state(false);
+
+  let produtos = [
+    { id: 1, nome: 'Pão francês', categoria: 'pães', vendidos: 120, estoque: 40 },
+    { id: 2, nome: 'Bolo de chocolate', categoria: 'bolos', vendidos: 34, estoque: 0 },
+    { id: 3, nome: 'Pão de queijo', categoria: 'salgados', vendidos: 88, estoque: 12 },
+    { id: 4, nome: 'Bolo de cenoura', categoria: 'bolos', vendidos: 21, estoque: 0 }
+  ];
+
+  let visiveis = $derived(
+    produtos.filter((p) =&gt; {
+      if (!p.nome.toLowerCase().includes(busca.toLowerCase())) return false;
+      if (categoria !== 'todas' &amp;&amp; p.categoria !== categoria) return false;
+      if (soAcabou &amp;&amp; p.estoque &gt; 0) return false;
+      return true;
+    })
+  );
+
+  let totalVendido = $derived(
+    visiveis.reduce((soma, p) =&gt; soma + p.vendidos, 0)
+  );
+&lt;/script&gt;
+
+&lt;div class="filtros"&gt;
+  &lt;input bind:value={busca} placeholder="Buscar produto"&gt;
+  &lt;select bind:value={categoria}&gt;
+    &lt;option value="todas"&gt;todas as categorias&lt;/option&gt;
+    &lt;option value="pães"&gt;pães&lt;/option&gt;
+    &lt;option value="bolos"&gt;bolos&lt;/option&gt;
+    &lt;option value="salgados"&gt;salgados&lt;/option&gt;
+  &lt;/select&gt;
+  &lt;label&gt;&lt;input type="checkbox" bind:checked={soAcabou}&gt; só o que acabou&lt;/label&gt;
+&lt;/div&gt;
+
+&lt;p class="resumo"&gt;{visiveis.length} produto(s) · {totalVendido} vendidos&lt;/p&gt;
+
+{#if visiveis.length === 0}
+  &lt;p&gt;Nenhum produto com esses filtros.&lt;/p&gt;
+{:else}
+  &lt;ul&gt;
+    {#each visiveis as produto (produto.id)}
+      &lt;li class:acabou={produto.estoque === 0}&gt;
+        {produto.nome} — {produto.vendidos} vendidos
+      &lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}
+
+&lt;style&gt;
+  .filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .resumo { font-size: .9rem; color: #555; }
+  .acabou { color: #b3261e; }
+&lt;/style&gt;</pre>
+
+<p>Sem nenhum filtro aplicado, os quatro produtos aparecem e o total é a soma de todos os vendidos. O compilador confirma:</p>
+
+<pre class="out">&lt;div class="filtros svelte-1n46o8q"&gt;&lt;input value="" placeholder="Buscar produto"/&gt; &lt;select&gt;&lt;option value="todas" selected=""&gt;todas as categorias&lt;/option&gt;&lt;option value="pães"&gt;pães&lt;/option&gt;&lt;option value="bolos"&gt;bolos&lt;/option&gt;&lt;option value="salgados"&gt;salgados&lt;/option&gt;&lt;/select&gt; &lt;label&gt;&lt;input type="checkbox"/&gt; só o que acabou&lt;/label&gt;&lt;/div&gt; &lt;p class="resumo svelte-1n46o8q"&gt;4 produto(s) · 263 vendidos&lt;/p&gt; &lt;ul&gt;&lt;li class="svelte-1n46o8q"&gt;Pão francês — 120 vendidos&lt;/li&gt;&lt;li class="svelte-1n46o8q acabou"&gt;Bolo de chocolate — 34 vendidos&lt;/li&gt;&lt;li class="svelte-1n46o8q"&gt;Pão de queijo — 88 vendidos&lt;/li&gt;&lt;li class="svelte-1n46o8q acabou"&gt;Bolo de cenoura — 21 vendidos&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Dois detalhes valem atenção. O <code>selected=""</code> está na opção "todas" porque <code>categoria</code> começa valendo <code>'todas'</code>. E os dois bolos saíram com a classe extra <code>acabou</code>, porque o estoque deles é zero — a classe condicional <code>class:acabou={...}</code> não é um teste no CSS, é uma decisão tomada na hora de desenhar.</p>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>filter((p) =&gt; { … })</dt><dd>com chaves, o corpo pode ter várias linhas. Sem chaves, cabe só uma expressão.</dd>
+  <dt>return false</dt><dd>a reprovação imediata daquele item. O <code>filter</code> passa para o próximo sem testar o resto.</dd>
+  <dt>categoria !== 'todas' &amp;&amp; …</dt><dd>a primeira metade evita que "todas" filtre alguma coisa. As duas condições precisam ser verdadeiras.</dd>
+  <dt>bind:checked={soAcabou}</dt><dd>liga a caixinha a um booleano: marcada é <code>true</code>, desmarcada é <code>false</code>.</dd>
+  <dt>reduce((soma, p) =&gt; soma + p.vendidos, 0)</dt><dd>percorre a lista carregando um acumulador. O <code>0</code> do fim é o valor inicial.</dd>
+  <dt>class:acabou={condição}</dt><dd>acrescenta a classe só quando a condição é verdadeira. A classe não existe no HTML quando é falsa.</dd>
+</dl>
+
+<hr>
+
+<h2>5. Filtrar escolhe, somar acumula</h2>
+
+<p><code>filter</code> e <code>reduce</code> recebem uma função e percorrem a lista, mas devolvem coisas diferentes: <code>filter</code> devolve uma <strong>lista</strong> de itens escolhidos; <code>reduce</code> devolve <strong>um valor só</strong>, o acumulado. Os dois são derivados, e é comum um depender do outro — o total aqui é calculado sobre a lista já filtrada, não sobre a lista inteira. Mude a categoria e o total muda junto, sem nenhuma linha extra.</p>
+
+<p>Essa ligação em cadeia é o que dá a sensação de "painel vivo". O Svelte não refaz os cálculos na ordem em que você escreveu; ele acompanha quem depende de quem. Se <code>totalVendido</code> depende de <code>visiveis</code>, e <code>visiveis</code> depende de <code>busca</code>, então digitar na busca atualiza os dois na ordem certa, uma vez só.</p>
+
+<div class="trysvelte" data-goal="digitar:input=chocolate;;outre:^1 de 3">
+<p class="try-task"><strong>Missão:</strong> o número do topo mostra sempre o tamanho da lista inteira. Faça ele mostrar <strong>quantos sobraram depois da busca</strong>: digite "chocolate" e a tela tem de começar com "1 de 3".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let produtos = ['Pão francês', 'Bolo de chocolate', 'Pão de queijo'];
+  let visiveis = $derived(produtos.filter((p) =&gt; p.includes(busca)));
+&lt;/script&gt;
+
+&lt;p&gt;{produtos.length} de {produtos.length}&lt;/p&gt;
+&lt;input bind:value={busca} placeholder="Buscar"&gt;
+
+&lt;ul&gt;
+  {#each visiveis as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let produtos = ['Pão francês', 'Bolo de chocolate', 'Pão de queijo'];
+  let visiveis = $derived(produtos.filter((p) =&gt; p.includes(busca)));
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.length} de {produtos.length}&lt;/p&gt;
+&lt;input bind:value={busca} placeholder="Buscar"&gt;
+
+&lt;ul&gt;
+  {#each visiveis as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>A diferença entre <code>produtos.length</code> e <code>visiveis.length</code> é a diferença entre "quantos eu tenho" e "quantos eu estou vendo". Os dois números são úteis, e um painel bom mostra os dois lado a lado — por isso a frase da solução mantém o total no fim.</p>
+
+<hr>
+
+<h2>6. Versão 3 — ordenar e não repetir</h2>
+
+<p>A terceira versão acrescenta a ordenação. Aqui o cálculo deixa de caber numa expressão só, porque são dois passos: filtrar e depois ordenar. Para isso existe <code>$derived.by</code>, que recebe uma função e usa o que ela devolver.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let categoria = $state('todas');
+  let ordem = $state('vendidos');
+
+  let produtos = [
+    { id: 1, nome: 'Pão francês', categoria: 'pães', vendidos: 120, estoque: 40 },
+    { id: 2, nome: 'Bolo de chocolate', categoria: 'bolos', vendidos: 34, estoque: 0 },
+    { id: 3, nome: 'Pão de queijo', categoria: 'salgados', vendidos: 88, estoque: 12 },
+    { id: 4, nome: 'Bolo de cenoura', categoria: 'bolos', vendidos: 21, estoque: 0 }
+  ];
+
+  let visiveis = $derived.by(() =&gt; {
+    let lista = produtos.filter((p) =&gt; {
+      if (!p.nome.toLowerCase().includes(busca.toLowerCase())) return false;
+      if (categoria !== 'todas' &amp;&amp; p.categoria !== categoria) return false;
+      return true;
+    });
+    if (ordem === 'nome') lista.sort((a, b) =&gt; a.nome.localeCompare(b.nome));
+    else lista.sort((a, b) =&gt; b.vendidos - a.vendidos);
+    return lista;
+  });
+
+  let totalVendido = $derived(
+    visiveis.reduce((soma, p) =&gt; soma + p.vendidos, 0)
+  );
+&lt;/script&gt;
+
+{#snippet linha(produto)}
+  &lt;li class:acabou={produto.estoque === 0}&gt;
+    {produto.nome} — &lt;strong&gt;{produto.vendidos}&lt;/strong&gt; vendidos
+  &lt;/li&gt;
+{/snippet}
+
+&lt;div class="filtros"&gt;
+  &lt;input bind:value={busca} placeholder="Buscar produto"&gt;
+  &lt;select bind:value={categoria}&gt;
+    &lt;option value="todas"&gt;todas as categorias&lt;/option&gt;
+    &lt;option value="pães"&gt;pães&lt;/option&gt;
+    &lt;option value="bolos"&gt;bolos&lt;/option&gt;
+    &lt;option value="salgados"&gt;salgados&lt;/option&gt;
+  &lt;/select&gt;
+&lt;/div&gt;
+
+&lt;div class="ordem"&gt;
+  &lt;button class:ativo={ordem === 'vendidos'} onclick={() =&gt; (ordem = 'vendidos')}&gt;
+    mais vendidos
+  &lt;/button&gt;
+  &lt;button class:ativo={ordem === 'nome'} onclick={() =&gt; (ordem = 'nome')}&gt;
+    por nome
+  &lt;/button&gt;
+&lt;/div&gt;
+
+&lt;p class="resumo"&gt;{visiveis.length} produto(s) · {totalVendido} vendidos&lt;/p&gt;
+
+{#if visiveis.length === 0}
+  &lt;p&gt;Nenhum produto com esses filtros.&lt;/p&gt;
+{:else}
+  &lt;ul&gt;
+    {#each visiveis as produto (produto.id)}
+      {@render linha(produto)}
+    {/each}
+  &lt;/ul&gt;
+{/if}
+
+&lt;style&gt;
+  .filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .ordem { display: flex; gap: 6px; margin-bottom: 8px; }
+  .ordem .ativo { background: #2e7d32; color: white; }
+  .resumo { font-size: .9rem; color: #555; }
+  .acabou { color: #b3261e; }
+&lt;/style&gt;</pre>
+
+<p>A ordem inicial é por quantidade vendida, do maior para o menor. É isso que o texto da tela mostra:</p>
+
+<pre class="out">todas as categorias pães bolos salgados mais vendidos por nome 4 produto(s) · 263 vendidos Pão francês — 120 vendidos Pão de queijo — 88 vendidos Bolo de chocolate — 34 vendidos Bolo de cenoura — 21 vendidos</pre>
+
+<p>Compare com a versão 2: lá a lista saía na ordem do arquivo (pão francês, bolo de chocolate, pão de queijo…). Aqui o pão de queijo subiu para segundo, porque tem 88 vendidos e o bolo de chocolate tem 34. A ordenação acontece dentro do derivado, antes de o <code>{#each}</code> receber a lista.</p>
+
+<h3>A anatomia da versão 3</h3>
+
+<dl class="anatomy">
+  <dt>$derived.by(() =&gt; { … })</dt><dd>para cálculos de vários passos. A função roda de novo quando qualquer valor lido dentro dela muda.</dd>
+  <dt>let lista = produtos.filter(...)</dt><dd>uma lista nova, só com o que passou nos filtros. O <code>filter</code> nunca altera a lista original.</dd>
+  <dt>lista.sort((a, b) =&gt; …)</dt><dd>ordena a lista nova no lugar. O número negativo devolvido pela função diz "a vem antes de b".</dd>
+  <dt>a.nome.localeCompare(b.nome)</dt><dd>compara texto respeitando acentos e maiúsculas do idioma. Melhor que <code>&gt;</code> e <code>&lt;</code> para nomes.</dd>
+  <dt>b.vendidos - a.vendidos</dt><dd>a subtração invertida (<code>b</code> menos <code>a</code>) produz a ordem do maior para o menor.</dd>
+  <dt>{@render linha(produto)}</dt><dd>desenha o snippet com um produto. Se a linha mudar, muda num lugar só.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="digitar:input=xyz;;outre:Nenhum produto com esse nome">
+<p class="try-task"><strong>Missão:</strong> quando nada casa com a busca, sobra uma lista vazia e nenhuma explicação. Mostre a frase <strong>"Nenhum produto com esse nome."</strong> nesse caso.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let produtos = ['Pão francês', 'Bolo de chocolate'];
+  let visiveis = $derived(produtos.filter((p) =&gt; p.includes(busca)));
+&lt;/script&gt;
+
+&lt;input bind:value={busca} placeholder="Buscar"&gt;
+
+&lt;ul&gt;
+  {#each visiveis as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('');
+  let produtos = ['Pão francês', 'Bolo de chocolate'];
+  let visiveis = $derived(produtos.filter((p) =&gt; p.includes(busca)));
+&lt;/script&gt;
+
+&lt;input bind:value={busca} placeholder="Buscar"&gt;
+
+{#if visiveis.length === 0}
+  &lt;p&gt;Nenhum produto com esse nome.&lt;/p&gt;
+{:else}
+  &lt;ul&gt;
+    {#each visiveis as p}
+      &lt;li&gt;{p}&lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}</pre>
+</div>
+
+<p>Uma lista vazia sem mensagem é o pior resultado possível de uma busca: o usuário não sabe se errou a letra, se o produto não existe ou se a página quebrou. O estado vazio é parte do projeto, não um detalhe para depois.</p>
+
+<hr>
+
+<h2>7. O que o navegador mostrou</h2>
+
+<p>As saídas acima são do primeiro desenho. Abaixo está o que a versão 3 mostrou de verdade no navegador, com o texto lido da tela depois de cada ação.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ação</th><th>Texto que apareceu</th></tr>
+<tr><td>abrir a página</td><td><code>… 4 produto(s) · 263 vendidos Pão francês — 120 vendidos Pão de queijo — 88 …</code></td></tr>
+<tr><td>digitar "bolo" na busca</td><td><code>… 2 produto(s) · 55 vendidos Bolo de chocolate — 34 vendidos Bolo de cenoura — 21 vendidos</code></td></tr>
+<tr><td>clicar em "por nome"</td><td><code>… Bolo de cenoura — 21 vendidos Bolo de chocolate — 34 vendidos Pão de queijo — 88 vendidos Pão francês — 120 vendidos</code></td></tr>
+<tr><td>escolher a categoria "bolos"</td><td><code>… 2 produto(s) · 55 vendidos Bolo de cenoura — 21 … Bolo de chocolate — 34 …</code></td></tr>
+</table>
+</div>
+
+<p>Três coisas para guardar dessa tabela. A primeira: o total mudou junto com a lista, sem nenhuma linha de código ligando os dois — é o encadeamento de derivados. A segunda: "bolo" com minúscula encontrou "Bolo de chocolate" porque a versão 3 compara os dois lados em minúsculas. A terceira: ao ordenar por nome, "Bolo de cenoura" veio antes de "Bolo de chocolate" — o <code>localeCompare</code> olha letra por letra, e <code>c</code> vem antes de <code>ch</code>.</p>
+
+<hr>
+
+<h2>8. Terminal: servidor, build e a porta ocupada</h2>
+
+<p>O projeto da Ana fica em <code>~/loja</code>. Ao rodar o servidor de desenvolvimento, desta vez apareceu uma linha a mais antes do endereço:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+Port 5173 is in use, trying another one...
+
+  VITE v7.3.8  ready in 921 ms
+
+  ➜  Local:   http://localhost:5174/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help</pre>
+
+<p>A porta 5173 é o número pelo qual o navegador encontra o servidor. Se outra coisa já está usando esse número — outro projeto aberto, um servidor antigo que ficou rodando —, o Vite não desiste: ele tenta a próxima e avisa. Por isso o endereço aqui é 5174. Nada quebrou; só o número mudou.</p>
+
+<p>Quando o trabalho está pronto para publicar, o comando de build mostra o tamanho final de cada arquivo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-Cx7_p4mB.css   0.31 kB │ gzip:  0.19 kB
+dist/assets/index-Bgw8ARHY.js   48.11 kB │ gzip: 18.53 kB
+✓ built in 3.75s</pre>
+
+<p>Repare que o JS cresceu em relação a um contador simples — são 48,11 kB com o painel inteiro dentro. E o CSS tem só 0,31 kB porque quase tudo neste componente é estrutura, não pintura. Para ver o que foi gerado, é só listar a pasta:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls dist/assets
+index-Bgw8ARHY.js
+index-Cx7_p4mB.css</pre>
+
+<p>Dois arquivos, e os nomes que o build mostrou na tela anterior. O hash no meio do nome (<code>Bgw8ARHY</code>) muda quando o conteúdo muda: é o que permite pedir ao navegador que guarde aquele arquivo em cache sem medo de servir uma versão velha.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — filtrar algo que não é lista</strong>
+<p>Este compila e quebra na hora de desenhar. <code>$state({})</code> cria um objeto vazio, e objeto não tem <code>filter</code>.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state({});
+  let visiveis = $derived(produtos.filter((p) =&gt; p.vendidos &gt; 0));
+&lt;/script&gt;
+
+&lt;p&gt;{visiveis.length}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: produtos.filter is not a function</pre>
+<p>A mensagem diz onde: <code>produtos</code>. Se o valor inicial precisa ser uma lista vazia, escreva <code>$state([])</code> — colchetes para lista, chaves para objeto.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>bind:checked</code> em campo de texto</strong>
+<p>Cada tipo de <code>bind</code> tem um dono. <code>bind:checked</code> pertence à caixinha de marcar; num campo de texto, o compilador recusa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let busca = $state('');
+&lt;/script&gt;
+
+&lt;input type="text" bind:checked={busca}&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 19): `bind:checked` can only be used with `&lt;input type="checkbox"&gt;`</pre>
+<p>Para texto, o certo é <code>bind:value</code>. A coluna aponta o começo do atributo, e a mensagem já diz qual é o elemento compatível.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — o <code>{/each}</code> incompleto</strong>
+<p>Faltou uma chave no fechamento do bloco. O compilador reclama no fim do arquivo, esperando o token que não veio.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let lista = $state([{ nome: 'pão' }, { nome: 'bolo' }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each lista as item}
+    &lt;li&gt;{item.nome}&lt;/li&gt;
+  {/each
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 9, coluna 0): Expected token }</pre>
+<p>"Expected token }" é "eu esperava uma chave aqui". O fechamento de bloco é sempre <code>{/each}</code>, com as duas chaves.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>O que faz</th><th>Versão</th></tr>
+<tr><td><code>filter((p) =&gt; condição)</code></td><td>devolve uma lista nova só com os aprovados</td><td>1, 2 e 3</td></tr>
+<tr><td><code>includes(texto)</code></td><td>verdadeiro quando o texto aparece em qualquer posição</td><td>1, 2 e 3</td></tr>
+<tr><td><code>reduce((soma, p) =&gt; soma + p.vendidos, 0)</code></td><td>transforma a lista num valor só</td><td>2 e 3</td></tr>
+<tr><td><code>$derived.by(() =&gt; { … })</code></td><td>derivado de vários passos, com variáveis locais</td><td>3</td></tr>
+<tr><td><code>sort((a, b) =&gt; …)</code></td><td>ordena a lista no lugar</td><td>3</td></tr>
+<tr><td><code>{#snippet}</code> + <code>{@render}</code></td><td>guarda a linha do produto uma vez só</td><td>3</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que usar</th><th>Por quê</th></tr>
+<tr><td>o usuário digita ou escolhe</td><td><code>$state</code></td><td>é a fonte da verdade da escolha</td></tr>
+<tr><td>a lista que aparece</td><td><code>$derived</code></td><td>é consequência dos dados e da escolha</td></tr>
+<tr><td>o total do rodapé</td><td><code>$derived</code></td><td>muda junto com a lista filtrada</td></tr>
+<tr><td>nada casa com o filtro</td><td><code>{#if} … {:else}</code></td><td>o vazio precisa de explicação na tela</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Por que a lista filtrada deve ser <code>$derived</code> e não <code>$state</code>?</p>
+<label><input type="radio" name="pp1"> porque <code>$state</code> não aceita listas</label>
+<label><input type="radio" name="pp1"> porque <code>$derived</code> é mais rápido para listas grandes</label>
+<label><input type="radio" name="pp1"> porque o valor é consequência de outros valores e não deve ser atribuído à mão</label>
+<label><input type="radio" name="pp1"> porque <code>$derived</code> funciona sem <code>let</code></label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que <code>reduce((soma, p) =&gt; soma + p.vendidos, 0)</code> devolve?</p>
+<label><input type="radio" name="pp2"> uma lista com os produtos que venderam</label>
+<label><input type="radio" name="pp2"> um único número: a soma dos vendidos</label>
+<label><input type="radio" name="pp2"> um texto com todos os nomes juntos</label>
+<label><input type="radio" name="pp2"> a média dos vendidos</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. Você digitou <code>PÃO</code> e a busca não encontrou "Pão francês". Qual é a causa?</p>
+<label><input type="radio" name="pp3"> o <code>filter</code> não funciona com texto</label>
+<label><input type="radio" name="pp3"> o <code>$derived</code> não observa o campo de busca</label>
+<label><input type="radio" name="pp3"> o <code>includes</code> só compara o começo do texto</label>
+<label><input type="radio" name="pp3"> a comparação diferencia maiúsculas de minúsculas; é preciso baixar a caixa dos dois lados</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let visiveis = <input data-answer="$derived(produtos.filter((p) =&gt; p.nome.includes(busca)))|$derived(produtos.filter((p) =&gt; p.nome.includes(busca)));">&nbsp;<br><br>// a lista que aparece é sempre o resultado do filtro pela busca</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>$state</code> é o que o usuário controla; <code>$derived</code> é o que o código calcula.</li>
+  <li><code>filter</code> devolve lista; <code>reduce</code> devolve um valor só.</li>
+  <li><code>includes('')</code> é sempre verdadeiro, e por isso a busca vazia mostra tudo.</li>
+  <li>Comparar texto sem baixar a caixa dos dois lados não encontra o que se procura.</li>
+  <li>Vários <code>return false</code> dentro do <code>filter</code> somam filtros sem <code>if</code> aninhado.</li>
+  <li><code>$derived.by</code> serve para cálculos de vários passos, com variáveis locais.</li>
+  <li>Um derivado pode depender de outro: a lista filtrada alimenta o total.</li>
+  <li><code>sort</code> ordena a lista nova; <code>localeCompare</code> compara nomes respeitando o idioma.</li>
+  <li>Lista vazia pede mensagem: o vazio sem explicação parece defeito.</li>
+  <li>Se a porta 5173 estiver ocupada, o Vite sobe na próxima e avisa no terminal.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
