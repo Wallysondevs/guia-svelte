@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O que é SvelteKit — o Svelte com endereços e servidor | Guia Svelte</title>
+<meta name="description" content="SvelteKit explicado do zero: o que ele acrescenta ao Svelte, por que o HTML já chega pronto do servidor, app.html e os erros reais de servidor e navegador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">O que é SvelteKit</span></h1>
+
+<p class="intro">A Ana passou as últimas semanas aprendendo Svelte e montou um componente de lista de pães que funciona lindamente. Aí a cliente perguntou o endereço do site. A Ana abriu a boca e não tinha resposta: o componente dela não tem endereço, não abre sozinho, não aparece no Google. É a diferença entre um forno e uma padaria. O forno faz o pão; a padaria tem porta, endereço, vitrine e horário. O <strong>SvelteKit</strong> é a padaria em volta do forno — e nesta aula você vai ver o que ele põe a mais, com o HTML que o servidor manda de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre <strong>Svelte</strong> (o compilador de componentes) e <strong>SvelteKit</strong> (a aplicação inteira).</li>
+  <li>Quais problemas o Kit resolve de uma vez: rotas, servidor, dados, formulários, publicação.</li>
+  <li>Por que o HTML chega pronto do servidor e o que isso muda para quem visita.</li>
+  <li>O que é <em>hidratação</em> e por que o mesmo componente roda duas vezes.</li>
+  <li>O papel de <code>src/app.html</code> e dos marcadores <code>%sveltekit.head%</code> e <code>%sveltekit.body%</code>.</li>
+  <li>Como o <code>data</code> do <code>load</code> chega ao componente.</li>
+  <li>Que <code>page.url</code> só pode ser lido no servidor durante o desenho.</li>
+  <li>O que o SvelteKit <strong>não</strong> é, para não esperar dele o que ele não faz.</li>
+  <li>Os três avisos e erros reais desta aula, com a saída do terminal.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o forno e a padaria</h2>
+
+<p>Um componente Svelte é um forno excelente. Ele recebe dados, assa (desenha) e devolve HTML. Mas um forno na garagem não vende pão: falta a porta na rua, o endereço que o cliente digita, a vitrine que mostra o que tem hoje, o caixa e a entrega. Nada disso é responsabilidade do forno — e é exatamente isso que o SvelteKit faz.</p>
+
+<p>Na prática, o Kit é um conjunto de decisões já tomadas em cima do Svelte: as páginas moram em <code>src/routes</code> e a pasta vira endereço; existe um servidor que desenha a página antes de mandar; existe um jeito padrão de buscar dados antes do desenho; e existe uma saída de build que você publica numa plataforma. Você não precisa inventar nada disso, e pode trocar cada peça se quiser.</p>
+
+<p>Svelte sozinho é uma biblioteca: você escreve um componente, monta num ponto do HTML e pronto. Quem decide qual componente aparece em qual endereço é você, com código. O Kit assume essa decisão por você, do jeito que a maioria dos sites precisa — e é por isso que a documentação oficial recomenda o Kit como ponto de partida, não o Svelte puro.</p>
+
+<h3>No dia a dia × no SvelteKit</h3>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th></tr>
+<tr><td>O forno que assa o pão</td><td>O componente <code>.svelte</code> e o compilador</td></tr>
+<tr><td>O endereço na fachada</td><td>A rota: <code>src/routes/paes/+page.svelte</code></td></tr>
+<tr><td>A vitrine montada antes de abrir</td><td>O HTML que o servidor manda pronto</td></tr>
+<tr><td>O atendente que continua o serviço</td><td>O JavaScript que assume a página no navegador</td></tr>
+<tr><td>O caderno de encomendas da cozinha</td><td>O <code>load</code>, que busca dados antes do desenho</td></tr>
+<tr><td>O caminhão de entrega</td><td>O adaptador, que embala o build para a plataforma</td></tr>
+</table>
+</div>
+
+<p>Repare que a tabela não tem uma linha "o Kit substitui o Svelte". Ele não substitui: ele usa. Todo componente que você aprendeu no Nível 1 continua igual dentro do Kit — <code>$state</code>, <code>$props</code>, <code>{#if}</code>, <code>{#each}</code>, <code>onclick</code>, <code>&lt;style&gt;</code> escopado. O que muda é o que está em volta.</p>
+
+<h2>2. Svelte × SvelteKit</h2>
+
+<p>A confusão entre os dois nomes é a primeira coisa a resolver, porque ela faz a pessoa procurar respostas no lugar errado. A tabela separa as responsabilidades:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Svelte</th><th>SvelteKit</th></tr>
+<tr><td>Quem compila <code>.svelte</code> em JavaScript?</td><td>o compilador do Svelte</td><td>usa o compilador do Svelte</td></tr>
+<tr><td>Quem decide qual página responde em <code>/paes</code>?</td><td>ninguém: você monta à mão</td><td>o roteador do Kit, pela pasta</td></tr>
+<tr><td>Quem gera o HTML no servidor?</td><td>não faz parte</td><td>o servidor do Kit</td></tr>
+<tr><td>Quem busca dados antes do desenho?</td><td>você, com <code>fetch</code> e <code>$effect</code></td><td><code>load</code>, com <code>+page.js</code></td></tr>
+<tr><td>Quem prepara o build para publicar?</td><td>o Vite empacota</td><td>o adaptador escolhido</td></tr>
+</table>
+</div>
+
+<p>Uma forma de guardar: <strong>Svelte é a linguagem; SvelteKit é a aplicação</strong>. Quando você lê "Svelte 5", o assunto é a linguagem, as runas, os componentes. Quando lê "SvelteKit", o assunto é rotas, servidor, dados, publicação. Os dois evoluem juntos, mas são coisas diferentes — e a maior parte dos erros de iniciante vem de procurar uma resposta de um no lugar do outro.</p>
+
+<h2>3. O que o Kit resolve de uma vez</h2>
+
+<p>Cinco problemas aparecem em qualquer site que cresce, e o Kit já tem resposta para os cinco. A tabela é o mapa; as próximas aulas abrem cada linha.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Problema</th><th>Resposta do Kit</th><th>Aula</th></tr>
+<tr><td>Qual arquivo responde em qual endereço?</td><td>pastas em <code>src/routes</code></td><td><a href="rotas.html">Rotas por Arquivo</a></td></tr>
+<tr><td>Como não repetir o menu em todas as páginas?</td><td><code>+layout.svelte</code></td><td><a href="layout.html">+layout.svelte</a></td></tr>
+<tr><td>Como buscar dados antes de desenhar?</td><td><code>load</code> em <code>+page.js</code></td><td><a href="parametros.html">Parâmetros de Rota</a></td></tr>
+<tr><td>Como tratar endereço inexistente e falha?</td><td><code>+error.svelte</code> e <code>error(…) </code></td><td><a href="pagina-de-erro.html">+error.svelte</a></td></tr>
+<tr><td>Como trocar de página sem recarregar?</td><td>links + <code>goto</code></td><td><a href="navegar.html">Navegando com goto</a></td></tr>
+</table>
+</div>
+
+<p>Existe ainda uma sexta linha, invisível e importante: o Kit decide <em>onde</em> cada pedaço roda. O componente da página roda nos dois lados; o <code>+page.server.js</code> roda só no servidor; o <code>onclick</code> roda só no navegador. Essa separação é o que permite falar com banco de dados sem vazar segredo para o navegador — e é a origem do erro mais confuso desta aula, na seção 8.</p>
+
+<h2>4. O HTML já vem pronto: a prova</h2>
+
+<p>A promessa do Kit mais fácil de provar é esta: quando alguém pede uma página, o servidor já manda o HTML montado. Não é uma tela em branco que o navegador preenche depois. Veja o que o servidor da Ana respondeu para <code>/paes</code>:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -s -i localhost:4173/paes | head -4
+HTTP/1.1 200 OK
+content-type: text/html
+x-sveltekit-page: true
+
+ana@notebook:~/loja/kit$ curl -s localhost:4173/paes | sed -e 's/&lt;!--[^&gt;]*--&gt;//g' | grep -o '&lt;main.*&lt;/main&gt;'
+&lt;main&gt;&lt;h1&gt;Pães&lt;/h1&gt; &lt;ul&gt;&lt;li&gt;&lt;a href="/paes/frances"&gt;Pão francês&lt;/a&gt;&lt;/li&gt; &lt;li&gt;&lt;a href="/paes/forma"&gt;Pão de forma&lt;/a&gt;&lt;/li&gt; &lt;li&gt;&lt;a href="/paes/queijo"&gt;Pão de queijo&lt;/a&gt;&lt;/li&gt;&lt;/ul&gt;&lt;/main&gt;</pre>
+
+<p>O <code>&lt;h1&gt;Pães&lt;/h1&gt;</code> e a lista inteira vieram dentro da resposta, escritos pelo servidor. O <code>curl</code> não executa JavaScript: o que ele recebeu é o que o navegador recebe no primeiro pedido. Isso é <strong>renderização no servidor</strong> (SSR).</p>
+
+<p>Três consequências práticas. A primeira: a página aparece com conteúdo antes de qualquer script carregar, então não existe aquele piscar branco. A segunda: robôs de busca que não executam JavaScript leem o conteúdo inteiro — o que muda o posicionamento no Google. A terceira: quem está num celular ruim e numa rede lenta vê o texto antes de o JavaScript chegar.</p>
+
+<h2>5. As duas execuções do mesmo componente</h2>
+
+<p>Se o servidor já mandou o HTML, por que o navegador baixa JavaScript? Porque HTML pronto é foto, não aplicação: sem JavaScript, um clique não muda nada. O Kit faz as duas coisas — manda o HTML e depois <em>hidrata</em> a página, que é o nome do processo de ligar o JavaScript ao HTML que já está na tela.</p>
+
+<p>Na hidratação, o componente roda de novo no navegador, encontra o HTML que o servidor deixou e assume o controle. A partir daí, <code>$state</code> funciona, <code>onclick</code> responde, e a navegação entre páginas passa a ser do jeito rápido, sem recarregar. O usuário vê uma página que já estava lá e que, um instante depois, ganha vida.</p>
+
+<dl class="anatomy">
+  <dt>SSR</dt><dd>"server-side rendering": o HTML é montado no servidor, a cada pedido.</dd>
+  <dt>hidratação</dt><dd>o JavaScript do navegador assume o HTML existente, sem redesenhar do zero.</dd>
+  <dt>duas execuções</dt><dd>o mesmo arquivo <code>.svelte</code> roda no servidor (para gerar HTML) e no navegador (para reagir).</dd>
+  <dt>código de servidor</dt><dd>o que só pode rodar no servidor: <code>+page.server.js</code>, <code>+server.js</code>, <code>hooks.server.js</code>.</dd>
+  <dt>código de navegador</dt><dd>o que só pode rodar no navegador: <code>onclick</code>, <code>goto</code>, <code>localStorage</code>, <code>window</code>.</dd>
+</dl>
+
+<p>Essa dupla execução explica quase todos os erros de "funciona no meu computador, quebra no servidor": você usou algo de navegador na parte que roda no servidor. A regra é simples de enunciar e chata de seguir: se a função só existe no navegador, ela precisa estar dentro de um evento ou de um <code>$effect</code>.</p>
+
+<h2>6. <code>src/app.html</code>: o molde de todas as páginas</h2>
+
+<p>Falta uma peça para entender o caminho do HTML. O componente da página não tem <code>&lt;html&gt;</code> nem <code>&lt;head&gt;</code> — ele é só o miolo. Quem monta o documento completo é o Kit, usando um molde chamado <code>src/app.html</code>. Este é o do projeto da Ana:</p>
+
+<pre class="file" data-file="src/app.html">&lt;!doctype html&gt;
+&lt;html lang="en"&gt;
+	&lt;head&gt;
+		&lt;meta charset="utf-8" /&gt;
+		&lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;
+		&lt;meta name="text-scale" content="scale" /&gt;
+		%sveltekit.head%
+	&lt;/head&gt;
+	&lt;body data-sveltekit-preload-data="hover"&gt;
+		&lt;div style="display: contents"&gt;%sveltekit.body%&lt;/div&gt;
+	&lt;/body&gt;
+&lt;/html&gt;</pre>
+
+<p>Os dois marcadores são substituídos na hora de responder. <code>%sveltekit.head%</code> vira as tags que o layout ou a página injetaram com <code>&lt;svelte:head&gt;</code> — título, favicon, meta de descrição. <code>%sveltekit.body%</code> vira o HTML do layout com a página dentro. Repare também no <code>data-sveltekit-preload-data="hover"</code> no <code>&lt;body&gt;</code>: é ele que faz o Kit buscar a próxima página quando o mouse passa por cima de um link.</p>
+
+<p>Um detalhe para quem fala português: o molde nasce com <code>lang="en"</code>. Para um site em português, essa linha precisa virar <code>lang="pt-BR"</code> — é ela que diz ao leitor de tela e ao navegador em que idioma a página está, e afeta até a tradução automática. É uma edição de um caractere que quase todo mundo esquece.</p>
+
+<h2>7. Experimente: a página recebe dados de fora</h2>
+
+<p>O <code>load</code> busca os dados e o Kit entrega ao componente como uma prop chamada <code>data</code>. A página não sabe de onde o dado veio — se de um arquivo, de um banco ou de uma API. Ela só sabe que recebeu. A caixa abaixo mostra esse contrato, com o dado chegando pela prop em vez do servidor.</p>
+
+<div class="trysvelte" data-goal="out:Padaria da Ana">
+<p class="try-task"><strong>Missão:</strong> o <code>load</code> falhou e o componente recebeu <code>data</code> nulo. Faça a página mostrar <code>Padaria da Ana</code> quando não houver dado nenhum.</p>
+<pre class="script" data-file="Pagina.svelte">&lt;script&gt;
+  // no SvelteKit este objeto chega pronto do load: let { data } = $props();
+  let { data = null } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{data.titulo}&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="Pagina.svelte">&lt;script&gt;
+  // no SvelteKit este objeto chega pronto do load: let { data } = $props();
+  let { data = null } = $props();
+&lt;/script&gt;
+
+{#if data}
+  &lt;h1&gt;{data.titulo}&lt;/h1&gt;
+{:else}
+  &lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+{/if}</pre>
+</div>
+
+<p>Sem a proteção, o componente estoura ao ler <code>data.titulo</code> — e você já viu no guia como isso aparece: um <code>500</code> e a página de erro. Com <code>{#if}</code>, a página tem um caminho para quando o dado existe e outro para quando não existe. Esse segundo caminho é o que separa um site que aguenta uma falha de um site que fica em branco.</p>
+
+<h2>8. Cuidado com o lado: <code>page.url</code> no lugar errado</h2>
+
+<p>Agora a armadilha que só existe porque o Kit roda código nos dois lados. O objeto <code>page</code>, de <code>$app/state</code>, descreve a página atual — mas "atual" significa coisas diferentes conforme o lado. No navegador, é a página que a pessoa está vendo. No servidor, é <em>a requisição que está sendo atendida naquele instante</em>, e o servidor atende várias pessoas ao mesmo tempo.</p>
+
+<p>A Ana tentou ler <code>page.url.pathname</code> dentro de um <code>+page.server.js</code>, para saber em que endereço estava. O servidor recusou, e com uma explicação que vale a pena ler inteira:</p>
+
+<pre class="term">SvelteKit error: state_read_outside_render
+Can only read `page.url` on the server during rendering (not in e.g. `load` functions), as it is bound to the current request via component context. This prevents state from leaking between users.
+https://svelte.dev/e/kit/state_read_outside_render
+    at load (src/routes/sobre/+page.server.js:4:25)
+500 GET /sobre</pre>
+
+<p>A frase "prevents state from leaking between users" é o motivo: se o <code>page</code> pudesse ser lido livremente no servidor, um pedido poderia enxergar o endereço de outro. Em vez de correr esse risco, o Kit proíbe e mostra o caminho certo. E o caminho certo depende do que você precisa: dentro de um <code>load</code>, o endereço chega no argumento (<code>load({ url })</code>); dentro do componente, <code>page.url</code> funciona; dentro de um <code>+page.server.js</code>, o endereço também chega em <code>load({ url })</code> — sem precisar importar <code>page</code>.</p>
+
+<h2>9. O que o SvelteKit não é</h2>
+
+<p>Meia hora de expectativa errada economizada. O Kit não é banco de dados, não é CSS, não é hospedagem, não é sistema de login pronto. Ele é a estrutura da aplicação; o resto você escolhe e liga.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você pode achar que…</th><th>Na verdade…</th></tr>
+<tr><td>o Kit guarda os dados</td><td>ele lê e escreve onde você mandar: arquivo, banco, API</td></tr>
+<tr><td>o Kit tem login pronto</td><td>ele tem o lugar do login: <code>hooks.server.js</code>, cookies, <code>+layout.server.js</code></td></tr>
+<tr><td>o Kit é o servidor web</td><td>em produção ele roda dentro do Node, do Deno ou da plataforma, conforme o adaptador</td></tr>
+<tr><td>o Kit estiliza a página</td><td>o CSS é seu; o Kit só garante o escopo do <code>&lt;style&gt;</code></td></tr>
+<tr><td>o Kit substitui o Svelte</td><td>ele usa o Svelte por dentro: mesmo componente, mesma sintaxe</td></tr>
+</table>
+</div>
+
+<p>Isso ajuda a decidir onde procurar quando algo não funciona. Se o erro é de sintaxe no componente, o assunto é Svelte. Se o erro é de endereço, dados ou publicação, o assunto é Kit. Se o erro é de rede, porta ou DNS, não é nenhum dos dois — é infraestrutura.</p>
+
+<div class="trysvelte" data-goal="out:Pães 3 na prateleira">
+<p class="try-task"><strong>Missão:</strong> o servidor mandou três pães em <code>data.paes</code>, mas o contador está fixo em <code>0</code>. Faça o número vir do tamanho da lista usando <code>$derived</code>.</p>
+<pre class="script" data-file="Total.svelte">&lt;script&gt;
+  let { data = { paes: ['francês', 'forma', 'queijo'] } } = $props();
+  let total = 0;
+&lt;/script&gt;
+
+&lt;h1&gt;Pães&lt;/h1&gt;
+&lt;p&gt;{total} na prateleira&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Total.svelte">&lt;script&gt;
+  let { data = { paes: ['francês', 'forma', 'queijo'] } } = $props();
+  let total = $derived(data.paes.length);
+&lt;/script&gt;
+
+&lt;h1&gt;Pães&lt;/h1&gt;
+&lt;p&gt;{total} na prateleira&lt;/p&gt;</pre>
+</div>
+
+<p><code>$derived</code> diz "este valor é calculado a partir de outro". Quando <code>data.paes</code> muda — porque o <code>load</code> rodou de novo —, <code>total</code> se recalcula sem que ninguém escreva <code>total = …</code>. A diferença para <code>let total = data.paes.length</code> é justamente essa: sem <code>$derived</code>, o valor é calculado uma vez e congela.</p>
+
+<h2>10. Experimente: o trecho que precisa ser desenhado</h2>
+
+<p>O último conceito que separa "Svelte" de "SvelteKit" na cabeça de quem começa: um trecho de marcação pode ser guardado numa função e desenhado depois, em outro lugar. É assim que o Kit encaixa a página dentro do layout e o layout dentro do molde. Em Svelte 5 isso se chama <code>snippet</code>, e a instrução para desenhar é <code>{@render}</code>.</p>
+
+<div class="trysvelte" data-goal="out:FRANCÊS FORMA QUEIJO">
+<p class="try-task"><strong>Missão:</strong> o trecho <code>cartao</code> foi declarado mas nunca desenhado, e a lista saiu vazia. Desenhe-o com <code>{@render cartao(p)}</code> dentro do <code>{#each}</code>.</p>
+<pre class="script" data-file="Lista.svelte">&lt;script&gt;
+  let paes = ['francês', 'forma', 'queijo'];
+&lt;/script&gt;
+
+{#snippet cartao(nome)}
+  &lt;li&gt;{nome.toUpperCase()}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each paes as p}
+    {cartao(p)}
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="Lista.svelte">&lt;script&gt;
+  let paes = ['francês', 'forma', 'queijo'];
+&lt;/script&gt;
+
+{#snippet cartao(nome)}
+  &lt;li&gt;{nome.toUpperCase()}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each paes as p}
+    {@render cartao(p)}
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p><code>{cartao(p)}</code> sem o <code>@render</code> não é um erro de sintaxe: o Svelte tenta transformar o resultado da função em texto e não consegue desenhar o trecho. O <code>{@render}</code> é a ordem explícita de desenhar ali. É a mesma peça que aparece no <code>{@render children()}</code> do <code>+layout.svelte</code> — e é por isso que as duas aulas se parecem tanto.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Os três casos abaixo são do projeto da Ana. Os dois primeiros são erros do SvelteKit; o terceiro é um aviso do compilador que aparece no projeto criado por esta versão, porque o Kit força o modo moderno.</p>
+
+<div class="cenario">
+<strong>Erro 1 — o molde perdeu o marcador do corpo</strong>
+<p>Ao editar o <code>src/app.html</code> para trocar o idioma, a Ana apagou sem querer a linha do <code>%sveltekit.body%</code>. Sem ela não há onde encaixar a página, e o build para:</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+
+&gt; kit@0.0.1 build
+&gt; vite build
+
+error during build:
+SvelteKit error: app_template_tag_missing
+src/app.html is missing `%sveltekit.body%`
+https://svelte.dev/e/kit/app_template_tag_missing</pre>
+<p>O nome do erro é literal: falta uma tag no molde do app. Os dois marcadores obrigatórios são <code>%sveltekit.head%</code> e <code>%sveltekit.body%</code>; se um deles desaparecer, o Kit não tenta adivinhar onde colocar o conteúdo — ele avisa e para.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — ler <code>page.url</code> fora do desenho</strong>
+<p>Este é o erro da seção 8, na versão que aparece no terminal do servidor de desenvolvimento. O componente compila, o build passa e a página responde <code>500</code> na hora do pedido:</p>
+<pre class="term">SvelteKit error: state_read_outside_render
+Can only read `page.url` on the server during rendering (not in e.g. `load` functions), as it is bound to the current request via component context. This prevents state from leaking between users.
+https://svelte.dev/e/kit/state_read_outside_render
+    at load (src/routes/sobre/+page.server.js:4:25)
+500 GET /sobre</pre>
+<p>A mensagem já entrega o conselho: use o argumento do <code>load</code>. Em vez de importar <code>page</code>, escreva <code>load({ url })</code> e leia <code>url.pathname</code>. O valor é o mesmo, mas chega amarrado àquela requisição — sem risco de um usuário ver o endereço do outro.</p>
+</div>
+
+<div class="cenario">
+<strong>Aviso 3 — sintaxe antiga de eventos</strong>
+<p>Como o projeto força o modo moderno, o hábito antigo de escrever <code>on:click</code> gera aviso a cada build. Não impede nada, mas polui a saída e some daqui a algumas versões:</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+vite v8.4.0 building ssr environment for production...
+transforming...
+5:02:13 PM [vite-plugin-svelte] src/routes/sobre/+page.svelte:5:8 Using `on:click` to listen to the click event is deprecated. Use the event attribute `onclick` instead
+https://svelte.dev/e/event_directive_deprecated
+3: &lt;/script&gt;
+4:
+5: &lt;button on:click={() =&gt; n++}&gt;cliques: {n}&lt;/button&gt;
+                               ^
+6:</pre>
+<p>"deprecated" quer dizer "desaconselhado, vai sair". A troca é de duas letras: <code>on:click</code> vira <code>onclick</code>. O guia usa a forma nova em todas as aulas, e o aviso é o compilador confirmando que você está no caminho certo.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Papel no SvelteKit</th><th>Roda onde</th></tr>
+<tr><td><code>src/app.html</code></td><td>molde do documento, com os dois marcadores</td><td>servidor</td></tr>
+<tr><td><code>src/routes/+page.svelte</code></td><td>a página da rota</td><td>servidor e navegador</td></tr>
+<tr><td><code>src/routes/+layout.svelte</code></td><td>a moldura das páginas</td><td>servidor e navegador</td></tr>
+<tr><td><code>src/routes/+page.js</code></td><td><code>load</code> universal (dados)</td><td>servidor e navegador</td></tr>
+<tr><td><code>src/routes/+page.server.js</code></td><td><code>load</code> só do servidor (segredos)</td><td>servidor</td></tr>
+<tr><td><code>src/routes/+server.js</code></td><td>resposta crua, sem página (API)</td><td>servidor</td></tr>
+</table>
+</div>
+
+<p>Um resumo em três frases, para levar: o Svelte compila componentes; o SvelteKit transforma componentes em site, decidindo endereço, dados e lado de execução; o HTML sai pronto do servidor e o navegador assume em seguida. Se você entender essas três, o resto das aulas de Kit é detalhe de cada arquivo.</p>
+
+<h2>13. O caminho até aqui</h2>
+
+<p>A Ana agora sabe responder a pergunta da cliente: o endereço existe porque a pasta existe, o site abre rápido porque o HTML vem pronto e continua vivo porque o navegador hidrata. Sabe também onde cada coisa pode rodar — e por isso não vai mais tentar ler <code>page.url</code> na cozinha.</p>
+
+<p>O próximo passo natural é criar o projeto de verdade, com o comando que monta a estrutura: <a href="kit-projeto.html">Criando o Projeto</a>. Se você quer primeiro ver a pasta virando endereço, <a href="rotas.html">Rotas por Arquivo</a>. E se a dúvida é o que já existe pronto no Svelte sem Kit, o Nível 1 começa em <a href="primeiro-componente.html">Seu Primeiro Componente</a>.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual é a diferença entre Svelte e SvelteKit?</p>
+<label><input type="radio" name="i1"> o SvelteKit é uma versão mais nova do Svelte</label>
+<label><input type="radio" name="i1"> o Svelte compila componentes; o SvelteKit monta a aplicação em volta deles</label>
+<label><input type="radio" name="i1"> o Svelte é para o servidor e o SvelteKit para o navegador</label>
+<label><input type="radio" name="i1"> os dois são a mesma coisa, com nomes diferentes</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que o <code>curl -s -i</code> na página <code>/paes</code> mostrou?</p>
+<label><input type="radio" name="i1"> uma tela em branco até o JavaScript rodar</label>
+<label><input type="radio" name="i1"> apenas o código-fonte do componente</label>
+<label><input type="radio" name="i1"> o HTML com o <code>&lt;h1&gt;Pães&lt;/h1&gt;</code> e a lista já montados, com status <code>200</code></label>
+<label><input type="radio" name="i1"> um erro 500</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Onde o <code>page.url</code> pode ser lido no servidor?</p>
+<label><input type="radio" name="i1"> durante o desenho do componente, ou pelo argumento <code>url</code> do <code>load</code></label>
+<label><input type="radio" name="i1"> em qualquer lugar, inclusive dentro de <code>+page.server.js</code></label>
+<label><input type="radio" name="i1"> só no <code>src/app.html</code></label>
+<label><input type="radio" name="i1"> em nenhum lugar: no servidor não existe endereço</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">O molde precisa dos dois marcadores que o Kit substitui:<br><br>&lt;head&gt;<br>&nbsp;&nbsp;<input data-answer="%sveltekit.head%"><br>&lt;/head&gt;<br>&lt;body&gt;<br>&nbsp;&nbsp;<input data-answer="%sveltekit.body%"><br>&lt;/body&gt;<br><br>// sem o segundo, o build para com app_template_tag_missing</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Svelte é a linguagem dos componentes; SvelteKit é a aplicação em volta deles.</li>
+  <li>O Kit resolve rotas, layout, dados, erros e publicação com convenções de arquivo.</li>
+  <li>O HTML sai montado do servidor: a página aparece antes do JavaScript carregar.</li>
+  <li>Depois o navegador hidrata: o mesmo componente roda de novo e assume a interação.</li>
+  <li><code>src/app.html</code> é o molde, com <code>%sveltekit.head%</code> e <code>%sveltekit.body%</code>.</li>
+  <li>O <code>load</code> busca dados e entrega ao componente como prop <code>data</code>.</li>
+  <li><code>$derived</code> recalcula quando o dado de fora muda; <code>let x = …</code> congela.</li>
+  <li><code>page.url</code> no servidor só durante o desenho; em <code>load</code>, use o argumento <code>url</code>.</li>
+  <li>O Kit não é banco de dados, CSS, login pronto nem hospedagem: ele é a estrutura.</li>
+  <li><code>{@render}</code> desenha snippets — a mesma peça que encaixa a página no layout.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

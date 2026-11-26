@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Criando o Projeto — do sv create ao primeiro npm run dev | Guia Svelte</title>
+<meta name="description" content="Criação de um projeto SvelteKit do zero: npx sv create, a estrutura de pastas, vite.config.js, npm run dev, build, preview e os erros reais de cada passo.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Criando o Projeto</span></h1>
+
+<p class="intro">A Ana decidiu abrir a filial: uma loja online da padaria, com endereços de verdade, formulário de encomenda e uma área restrita. Ela não vai montar a loja tijolo por tijolo — vai usar uma planta pronta. O comando <code>npx sv create</code> entrega a loja vazia, com as prateleiras no lugar, a fiação passada e um cartaz de boas-vindas na vitrine. Nesta aula você vê o comando rodando de verdade, o que ele deixa no disco, o servidor que ele liga e as três coisas que costumam dar errado no primeiro dia.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que o comando <code>npx sv create</code> faz e quais opções ele aceita.</li>
+  <li>O que aparece no terminal quando o projeto nasce, linha por linha.</li>
+  <li>O que cada arquivo criado faz: <code>app.html</code>, <code>+layout.svelte</code>, <code>vite.config.js</code>.</li>
+  <li>Por que nesta versão <strong>não existe</strong> <code>svelte.config.js</code>.</li>
+  <li>Como ler os <code>scripts</code> do <code>package.json</code>.</li>
+  <li>O que <code>npm run dev</code> mostra e por que a porta pode mudar.</li>
+  <li>A diferença entre desenvolvimento (<code>dev</code>), produção (<code>build</code>) e conferência (<code>preview</code>).</li>
+  <li>Para que serve a pasta <code>.svelte-kit</code> e por que ela não vai para o Git.</li>
+  <li>O aviso do <code>adapter-auto</code> e o que ele quer dizer.</li>
+  <li>Os três erros reais do primeiro dia: bloco aberto, porta ocupada e pasta não vazia.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a loja vazia com as prateleiras montadas</h2>
+
+<p>Quando a Ana abriu a padaria de verdade, ela não começou pelo tijolo. Alugou um ponto que já tinha parede, piso, tomada e porta. Depois comprou as prateleiras, o balcão e o forno. O que ela trouxe foi o <em>conteúdo</em>; a estrutura veio antes. Criar um projeto SvelteKit é o mesmo movimento: você recebe a estrutura pronta e gasta o seu tempo no que só você sabe fazer — a padaria.</p>
+
+<p>A estrutura que vem no pacote não é enfeite. Ela inclui o compilador do Svelte ligado, o servidor de desenvolvimento com recarga automática, a pasta de rotas, o molde do HTML, as configurações de JavaScript e um README dizendo o que rodar. Se você montasse tudo na mão, levaria uma tarde e esqueceria alguma coisa — provavelmente a parte que faz o servidor recompilar ao salvar.</p>
+
+<p>O comando se chama <code>sv</code>, é o CLI oficial do Svelte e vive no npm. Você não precisa instalá-lo: o <code>npx</code> baixa na hora e executa. É por isso que o comando começa com <code>npx</code> e não com <code>npm install</code>. O <code>npx</code> é o "executador de pacotes" que vem junto com o npm.</p>
+
+<h2>2. No dia a dia × no SvelteKit</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No projeto SvelteKit</th></tr>
+<tr><td>O ponto alugado com parede e tomada</td><td>A estrutura criada pelo <code>sv create</code></td></tr>
+<tr><td>As prateleiras e o balcão</td><td>As pastas <code>src/routes</code>, <code>src/lib</code> e <code>static</code></td></tr>
+<tr><td>O cartaz de boas-vindas na vitrine</td><td><code>src/routes/+page.svelte</code></td></tr>
+<tr><td>A fiação elétrica</td><td><code>vite.config.js</code></td></tr>
+<tr><td>O contrato de aluguel com as regras</td><td><code>package.json</code></td></tr>
+<tr><td>O depósito dos materiais de obra</td><td><code>node_modules</code> (não vai para o Git)</td></tr>
+<tr><td>A planta baixa atualizada</td><td><code>.svelte-kit</code> (gerada, não editada à mão)</td></tr>
+</table>
+</div>
+
+<p>Duas dessas linhas merecem atenção desde já, porque voltam em todo projeto: <code>node_modules</code> é o depósito de tudo o que foi baixado do npm, e <code>.svelte-kit</code> é a pasta que o SvelteKit gera sozinho com o mapa de rotas e os tipos. Nenhuma das duas se edita à mão, e as duas ficam fora do Git — o <code>.gitignore</code> que vem no projeto já cuida disso.</p>
+
+<h2>3. O comando que cria o projeto</h2>
+
+<p>Este é o comando, com as opções que respondem às perguntas do assistente de uma vez. Sem elas, o <code>sv</code> pergunta uma por uma: qual modelo, se quer TypeScript, se quer complementos, qual gerenciador de pacotes.</p>
+
+<pre class="term">ana@notebook:~/loja$ npx sv create kit --template minimal --types jsdoc --no-add-ons --install npm
+HINT: Run "sv --help" to get the full list of commands, add-ons, and examples to one-shot and skip interactive prompts.
+┌  Welcome to the Svelte CLI! (v1.7.1)
+│
+◆  Project created
+│
+│  To skip prompts next time, run:
+●  npx sv@1.7.1 create --template minimal --types jsdoc --install npm kit
+│
+◇  Installing dependencies with npm...
+│
+◆  Successfully installed dependencies with npm
+│
+◇  What's next? ───────────────────────────────╮
+│                                              │
+│  📁 Project steps                            │
+│                                              │
+│    1: cd kit                                 │
+│    2: npm run dev -- --open                  │
+│                                              │
+│  To close the dev server, hit Ctrl-C         │
+│                                              │
+│  Stuck? Visit us at https://svelte.dev/chat  │
+│                                              │
+├──────────────────────────────────────────────╯
+│
+└  You're all set!</pre>
+
+<p>Leia o bloco de baixo para cima se quiser o resumo: entre na pasta (<code>cd kit</code>), rode o servidor (<code>npm run dev</code>) e saia com <code>Ctrl-C</code>. O resto é conversa do assistente. As três linhas que importam no meio são "Project created" (a estrutura nasceu), "Installing dependencies with npm" (o depósito foi abastecido) e "Successfully installed" (deu certo).</p>
+
+<dl class="anatomy">
+  <dt>npx sv create</dt><dd>executa o CLI do Svelte sem instalar globalmente. O <code>npx</code> procura, baixa e roda.</dd>
+  <dt>kit</dt><dd>o nome da pasta que vai nascer (e o nome do pacote no <code>package.json</code>).</dd>
+  <dt>--template minimal</dt><dd>o modelo mais enxuto: uma página de boas-vindas e um layout, sem exemplo de contador.</dd>
+  <dt>--types jsdoc</dt><dd>liga a checagem de tipos usando comentários JSDoc em vez de arquivos <code>.ts</code>. Menos barulho para quem começa.</dd>
+  <dt>--no-add-ons</dt><dd>não instala complementos (Prettier, ESLint, Tailwind, Vitest). Dá para acrescentar depois.</dd>
+  <dt>--install npm</dt><dd>roda o <code>npm install</code> no fim, sem perguntar.</dd>
+</dl>
+
+<p>O <code>sv</code> ainda avisa o comando completo com a versão fixa (<code>npx sv@1.7.1 create …</code>). Fixar a versão é boa prática em projeto de equipe: todo mundo cria a mesma estrutura, mesmo que uma versão nova saia no meio do caminho.</p>
+
+<h2>4. O que o comando deixou no disco</h2>
+
+<p>Depois do <code>cd kit</code>, a Ana pediu a listagem. A saída abaixo é a real, com as pastas geradas que já existem no primeiro minuto:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ ls -a
+.
+..
+.gitignore
+.npmrc
+.svelte-kit
+.vscode
+README.md
+jsconfig.json
+node_modules
+package-lock.json
+package.json
+src
+static
+vite.config.js</pre>
+
+<p>Dentro de <code>src</code> e <code>static</code>, os arquivos são poucos — e é de propósito. Este é o projeto da Ana já com as rotas dela, para você ver o formato:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ find src static -type f | sort
+src/app.d.ts
+src/app.html
+src/lib/assets/favicon.svg
+src/lib/index.js
+src/routes/(painel)/+layout.svelte
+src/routes/(painel)/admin/+page.svelte
+src/routes/+error.svelte
+src/routes/+layout.svelte
+src/routes/+page.svelte
+src/routes/contato/+page.svelte
+src/routes/paes/+page.svelte
+src/routes/paes/[slug]/+page.svelte
+src/routes/sobre/+page.svelte
+static/robots.txt</pre>
+
+<p>Quatro arquivos merecem explicação antes de qualquer código seu. O <code>src/app.html</code> é o molde do documento: é nele que ficam o <code>&lt;html&gt;</code>, o <code>&lt;head&gt;</code> e os dois marcadores que o SvelteKit preenche (<code>%sveltekit.head%</code> e <code>%sveltekit.body%</code>). O <code>src/routes/+layout.svelte</code> é a moldura de todas as páginas. O <code>src/routes/+page.svelte</code> é a página inicial. E o <code>static/</code> guarda arquivo público servido na raiz — como o <code>robots.txt</code>, que diz aos robôs de busca o que eles podem visitar.</p>
+
+<p>O <code>src/lib</code> é a pasta de código reaproveitável: componentes, funções, imagens importadas. O <code>sv</code> já liga um apelido esperto para ela no <code>package.json</code>:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ head -14 package.json
+{
+	"name": "kit",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",</pre>
+
+<p>O bloco <code>imports</code> define o apelido <code>#lib</code>. Em vez de escrever <code>import x from '../../../lib/x.js'</code>, você escreve <code>import x from '#lib/x.js'</code> e o Node resolve. É o mesmo apelido que aparece no layout criado pelo <code>sv</code>: <code>import favicon from '#lib/assets/favicon.svg'</code>.</p>
+
+<h2>5. Onde mora a configuração: <code>vite.config.js</code></h2>
+
+<p>Aqui vai uma observação que economiza meia hora de procura: <strong>nesta versão do SvelteKit não existe <code>svelte.config.js</code></strong>. A configuração do Kit mora dentro do <code>vite.config.js</code>, na chamada <code>sveltekit({ … })</code>. Este é o arquivo real do projeto:</p>
+
+<pre class="file" data-file="vite.config.js">import adapter from '@sveltejs/adapter-auto';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+	plugins: [
+		sveltekit({
+			compilerOptions: {
+				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
+				runes: ({ filename }) =&gt;
+					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
+			},
+
+			// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
+			// If your environment is not supported, or you settled on a specific environment, switch out the adapter.
+			// See https://svelte.dev/docs/kit/adapters for more information about adapters.
+			adapter: adapter()
+		})
+	]
+});</pre>
+
+<p>Duas linhas explicam o resto. <code>runes: … true</code> força o modo moderno do Svelte em todo arquivo do projeto — é por isso que <code>export let</code> e <code>&lt;slot /&gt;</code> reclamam nas aulas anteriores, e por isso o guia ensina <code>$props()</code> desde o começo. E <code>adapter: adapter()</code> escolhe o adaptador, que é a peça que traduz o build para a plataforma onde o site vai rodar.</p>
+
+<p>Se você procurar por <code>svelte.config.js</code> em tutoriais de 2024, vai encontrar — versões anteriores do Kit usavam um arquivo separado para isso. Nada quebra se você criar um: o Kit ainda lê. Mas o projeto novo não traz, e misturar os dois é a receita para configurar no lugar errado e não entender por que nada muda.</p>
+
+<h2>6. <code>npm run dev</code>: o servidor que recompila</h2>
+
+<p>Com o projeto criado, o primeiro comando é o servidor de desenvolvimento. Ele compila, serve e observa os arquivos: cada <code>Ctrl+S</code> aparece no navegador em menos de um segundo.</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run dev
+
+&gt; kit@0.0.1 dev
+&gt; vite dev
+
+4:59:28 PM [vite] (ssr) connected.
+Port 5173 is in use, trying another one...
+
+  VITE v8.4.0  ready in 1139 ms
+
+  ➜  Local:   http://localhost:5174/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help</pre>
+
+<p>Três informações na tela. O <code>Local</code> é o endereço para abrir no navegador da própria máquina. O <code>Network</code> só aparece quando você quer acessar de outro aparelho — e, por padrão, o servidor não se expõe na rede; o Vite lembra que existe a opção <code>--host</code> para isso. E a linha "Port 5173 is in use, trying another one" apareceu porque a máquina da Ana já tinha outro projeto rodando na porta padrão: o Vite pulou para a 5174 sem reclamar.</p>
+
+<p>Esse detalhe da porta confunde muita gente no começo. A porta é o número que o servidor usa para atender; a 5173 é só a preferida. Se ela estiver ocupada, o Vite procura a próxima livre e escreve o endereço certo na tela. <strong>Leia sempre a linha "Local"</strong> em vez de decorar o número.</p>
+
+<h2>7. Os scripts do <code>package.json</code></h2>
+
+<p>Todo comando que você roda com <code>npm run</code> está listado ali. A tabela traduz cada um:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Script</th><th>Comando real</th><th>Para que serve</th></tr>
+<tr><td><code>npm run dev</code></td><td><code>vite dev</code></td><td>servidor de desenvolvimento, com recarga automática</td></tr>
+<tr><td><code>npm run build</code></td><td><code>vite build</code></td><td>gera a versão de produção em <code>.svelte-kit/output</code></td></tr>
+<tr><td><code>npm run preview</code></td><td><code>vite preview</code></td><td>serve o build por HTTP, para conferir</td></tr>
+<tr><td><code>npm run check</code></td><td><code>svelte-kit sync &amp;&amp; svelte-check …</code></td><td>confere tipos e avisos do projeto inteiro</td></tr>
+<tr><td><code>npm run prepare</code></td><td><code>svelte-kit sync || echo ''</code></td><td>gera os tipos das rotas; roda sozinho no <code>npm install</code></td></tr>
+</table>
+</div>
+
+<p>O <code>prepare</code> merece uma nota porque assusta: ele começa com <code>svelte-kit sync</code>, que lê a pasta <code>src/routes</code> e escreve os arquivos de tipo em <code>.svelte-kit</code>. O <code>|| echo ''</code> no fim faz o script não falhar quando a pasta de rotas ainda não existe (caso de uma instalação limpa em CI). É um detalhe de robustez, não um erro.</p>
+
+<div class="trysvelte" data-goal="outre:^dev: vite dev">
+<p class="try-task"><strong>Missão:</strong> a lista de scripts aparece como <code>dev,vite dev</code>, tudo grudado. Corrija o <code>{#each}</code> para desestruturar cada par e mostrar <code>dev: vite dev</code> na primeira linha.</p>
+<pre class="script" data-file="Scripts.svelte">&lt;script&gt;
+  let scripts = {
+    dev: 'vite dev',
+    build: 'vite build',
+    preview: 'vite preview'
+  };
+  let lista = Object.entries(scripts);
+&lt;/script&gt;
+
+{#each lista as item}
+  &lt;p&gt;{item}&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="Scripts.svelte">&lt;script&gt;
+  let scripts = {
+    dev: 'vite dev',
+    build: 'vite build',
+    preview: 'vite preview'
+  };
+  let lista = Object.entries(scripts);
+&lt;/script&gt;
+
+{#each lista as [nome, comando]}
+  &lt;p&gt;{nome}: {comando}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p><code>Object.entries</code> transforma o objeto numa lista de pares: <code>[['dev', 'vite dev'], …]</code>. Sem a desestruturação, o <code>{item}</code> mostra o par inteiro convertido em texto, com vírgula no meio. Com <code>as [nome, comando]</code>, cada metade ganha um nome — e a saída fica legível. Esse padrão volta toda vez que você quiser listar as chaves de um objeto.</p>
+
+<h2>8. <code>build</code> e <code>preview</code>: a versão de produção</h2>
+
+<p>O servidor de desenvolvimento é confortável e pesado: ele traz ferramentas de depuração e recompila tudo na hora. O site publicado não precisa disso. O <code>npm run build</code> gera a versão final, e o fim da saída é o mais informativo:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 144 modules transformed.
+...
+✓ built in 282ms
+Analysing routes
+Building app
+vite v8.4.0 building client environment for production...
+transforming...
+✓ 189 modules transformed.
+...
+✓ built in 466ms
+
+Run npm run preview to preview your production build locally.
+
+&gt; Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app to run on the platform of your choosing
+✔ done</pre>
+
+<p>(No meio da saída há uma linha de tamanho por arquivo gerado; cortei para caber.) Dois builds acontecem: o <strong>ssr</strong>, que gera o código que roda no servidor, e o <strong>client</strong>, que gera o que vai para o navegador. O SvelteKit faz os dois porque as páginas são desenhadas no servidor e continuam no navegador — é o que faz o primeiro carregamento ser rápido.</p>
+
+<p>O aviso do <code>adapter-auto</code> não é erro: ele diz que não reconheceu a plataforma de publicação. Localmente, tudo funciona — o adaptador só escolhe o formato de saída quando você publica numa Netlify, Vercel, Cloudflare ou num servidor Node. Quando chegar a hora de publicar, você troca o adaptador; o assunto está na aula <a href="adapters.html">Adaptadores</a>.</p>
+
+<p>Para conferir o build sem publicar, o <code>npm run preview</code> serve a saída por HTTP:</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run preview
+
+&gt; kit@0.0.1 preview
+&gt; vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>A porta padrão do preview é a 4173. É este servidor que o guia usa para os <code>curl</code> das aulas: ele responde igual ao site publicado, com o HTML já montado no servidor, sem as ferramentas de desenvolvimento no meio.</p>
+
+<h2>9. A pasta <code>.svelte-kit</code></h2>
+
+<p>Uma pasta gerada que aparece na listagem e assusta: <code>.svelte-kit</code>. Ela não é código seu e não se edita. O SvelteKit escreve ali o mapa de rotas que descobriu em <code>src/routes</code>, os tipos para o editor e a saída do build.</p>
+
+<pre class="term">ana@notebook:~/loja/kit$ ls .svelte-kit
+generated
+output
+types</pre>
+
+<p><code>generated</code> tem os módulos internos que ligam as rotas; <code>types</code> tem os arquivos que dão autocompletar no editor; <code>output</code> só existe depois do build, com as versões <code>server</code> e <code>client</code>. Se algo parecer estranho — uma rota que existe no disco e não aparece no site —, apagar <code>.svelte-kit</code> e reiniciar o servidor costuma resolver: ele é reconstruído do zero a cada <code>npm run dev</code>.</p>
+
+<div class="trysvelte" data-goal="out:3 páginas">
+<p class="try-task"><strong>Missão:</strong> o contador soma tudo o que está em <code>src/routes</code>, inclusive o layout, e mostra <code>4 arquivos</code>. Conte só as páginas (<code>+page.svelte</code>) e mostre <code>3 páginas</code>.</p>
+<pre class="script" data-file="Contagem.svelte">&lt;script&gt;
+  let arquivos = [
+    '+layout.svelte',
+    '+page.svelte',
+    'paes/+page.svelte',
+    'sobre/+page.svelte'
+  ];
+  let rotas = $derived(arquivos.length);
+&lt;/script&gt;
+
+&lt;p&gt;{rotas} arquivos&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Contagem.svelte">&lt;script&gt;
+  let arquivos = [
+    '+layout.svelte',
+    '+page.svelte',
+    'paes/+page.svelte',
+    'sobre/+page.svelte'
+  ];
+  let rotas = $derived(arquivos.filter((a) =&gt; a.endsWith('+page.svelte')).length);
+&lt;/script&gt;
+
+&lt;p&gt;{rotas} páginas&lt;/p&gt;</pre>
+</div>
+
+<p><code>filter</code> devolve uma lista nova só com os itens aprovados no teste; <code>endsWith</code> confere o fim do texto. Como <code>rotas</code> é <code>$derived</code>, se a lista de arquivos mudar, a contagem se atualiza sozinha. É o mesmo raciocínio que o SvelteKit usa para montar o mapa de rotas: ele lê nomes de arquivo, filtra os que importam e conta.</p>
+
+<h2>10. A página inicial que veio no pacote</h2>
+
+<p>O <code>--template minimal</code> entrega uma página de boas-vindas. Ela é o seu primeiro alvo: apagar e substituir pela página da padaria. O conteúdo original é este:</p>
+
+<pre class="file" data-file="src/routes/+page.svelte">&lt;h1&gt;Welcome to SvelteKit&lt;/h1&gt;
+&lt;p&gt;Visit &lt;a href="https://svelte.dev/docs/kit"&gt;svelte.dev/docs/kit&lt;/a&gt; to read the documentation&lt;/p&gt;</pre>
+
+<p>Não há nada de mágico nesse arquivo: é um componente Svelte, com HTML e um link. Trocar o conteúdo é a primeira edição de verdade do projeto, e é o que confirma que o servidor de desenvolvimento está observando os arquivos — salve e veja a página mudar sem recarregar.</p>
+
+<div class="trysvelte" data-goal="outre:^Padaria da Ana">
+<p class="try-task"><strong>Missão:</strong> a página de boas-vindas ainda é a do pacote. Troque o título por <code>Padaria da Ana</code> e o parágrafo por <code>Pão francês saindo do forno às 6h.</code></p>
+<pre class="script" data-file="App.svelte">&lt;h1&gt;Welcome to SvelteKit&lt;/h1&gt;
+&lt;p&gt;Visit &lt;a href="https://svelte.dev/docs/kit"&gt;svelte.dev/docs/kit&lt;/a&gt; to read the documentation&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;p&gt;Pão francês saindo do forno às 6h.&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>+page.svelte</code> que veio no pacote tem um link externo com <code>https://</code>. O SvelteKit não intercepta links externos: eles recarregam a página, como em qualquer site. Só os endereços do próprio projeto ganham a navegação rápida — o que faz sentido, porque o servidor não tem como montar a outra ponta.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Os três casos abaixo são do primeiro dia do projeto da Ana. O primeiro é do build, o segundo do servidor de desenvolvimento e o terceiro do próprio comando de criação.</p>
+
+<div class="cenario">
+<strong>Erro 1 — bloco aberto no arquivo da página</strong>
+<p>Ela começou um <code>{#if}</code> e salvou antes de fechar. O build mostra o trecho do arquivo, com o circunflexo no ponto exato:</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build
+vite v8.4.0 building ssr environment for production...
+transforming...
+✓ 143 modules transformed.
+✗ Build failed in 166ms
+error during build:
+Build failed with 1 error:
+
+RolldownError: src/routes/sobre/+page.svelte:5:0 Block was left open
+https://svelte.dev/e/block_unclosed
+ 3 |  &lt;/script&gt;
+ 4 |
+ 5 |  {#if temPao}
+       ^
+ 6 |    &lt;p&gt;Tem pão na prateleira.&lt;/p&gt;
+ 7 |</pre>
+<p>"Block was left open" é o compilador do Svelte dizendo que o bloco ficou sem fechamento. A posição <code>5:0</code> é a linha do <code>{#if}</code>. Enquanto isso, no servidor de desenvolvimento, a página quebra na hora de abrir e o erro aparece no terminal a cada recarregamento.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — a porta escolhida está ocupada</strong>
+<p>Ao fixar a porta com <code>--strictPort</code>, o Vite não pula para outra livre: ele para. A mensagem é curta e direta, e a pilha de chamadas abaixo dela é ruído para quem está começando.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run dev -- --port 5173 --strictPort
+
+&gt; kit@0.0.1 dev
+&gt; vite dev --port 5173 --strictPort
+
+error when starting dev server:
+Error: Port 5173 is already in use</pre>
+<p>Sem <code>--strictPort</code>, o mesmo comando teria subido na 5174 e avisado "trying another one". A opção existe para quando você <em>precisa</em> daquele número (um link fixo, um proxy, um teste automatizado). Para o dia a dia, deixe o Vite escolher e leia a linha "Local".</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — criar em cima de uma pasta que já tem coisa</strong>
+<p>A Ana rodou o comando duas vezes na mesma pasta. O <code>sv</code> não sobrescreve nada em silêncio: pergunta. Como a resposta padrão é "No", ele sai sem tocar nos arquivos.</p>
+<pre class="term">ana@notebook:~/loja$ npx sv create kit
+◆  Directory not empty:
+│  Continue?
+│  ○ Yes  ● No
+└  Exiting.</pre>
+<p>(A pergunta mostra também o caminho completo da pasta; cortei aqui.) A saída é segura por desenho: o padrão é não mexer. Se você quer mesmo usar a pasta existente, responda "Yes" ou acrescente <code>--no-dir-check</code>; se foi engano, apague a pasta e rode de novo com outro nome.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo ou pasta</th><th>O que é</th><th>Edita à mão?</th></tr>
+<tr><td><code>src/routes/</code></td><td>as rotas do site</td><td>sim</td></tr>
+<tr><td><code>src/lib/</code></td><td>código reaproveitável, com o apelido <code>#lib</code></td><td>sim</td></tr>
+<tr><td><code>src/app.html</code></td><td>o molde do documento, com <code>%sveltekit.head%</code> e <code>%sveltekit.body%</code></td><td>sim, com cuidado</td></tr>
+<tr><td><code>static/</code></td><td>arquivos públicos servidos na raiz</td><td>sim</td></tr>
+<tr><td><code>vite.config.js</code></td><td>plugins, adaptador e opções do compilador</td><td>sim</td></tr>
+<tr><td><code>package.json</code></td><td>nome, scripts, dependências e apelidos</td><td>sim</td></tr>
+<tr><td><code>node_modules/</code></td><td>o que veio do npm</td><td>não</td></tr>
+<tr><td><code>.svelte-kit/</code></td><td>mapa de rotas, tipos e saída do build</td><td>não</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Comando</th></tr>
+<tr><td>criar o projeto</td><td><code>npx sv create kit</code></td></tr>
+<tr><td>entrar na pasta</td><td><code>cd kit</code></td></tr>
+<tr><td>programar com recarga automática</td><td><code>npm run dev</code></td></tr>
+<tr><td>gerar a versão de produção</td><td><code>npm run build</code></td></tr>
+<tr><td>conferir o build por HTTP</td><td><code>npm run preview</code></td></tr>
+<tr><td>checar tipos e avisos</td><td><code>npm run check</code></td></tr>
+</table>
+</div>
+
+<h2>13. O caminho até aqui</h2>
+
+<p>Em quinze minutos a Ana saiu de uma pasta vazia para um site respondendo em <code>localhost</code>, com página inicial, layout, favicon e robôs de busca configurados. Ela não escreveu nenhuma configuração: o <code>sv</code> escreveu, e o papel dela foi escolher as opções e trocar o conteúdo da vitrine.</p>
+
+<p>O que ficou de fora é o que faz esse site virar <em>o site da padaria</em>: as rotas. Isso é <a href="rotas.html">Rotas por Arquivo</a>, a próxima aula. Se você quer entender primeiro a ideia geral do Kit, <a href="kit-intro.html">O que é SvelteKit</a> vem antes. E quando aparecer a dúvida "onde coloco esse arquivo?", a resposta está na <a href="estrutura-do-projeto.html">Estrutura do Projeto</a> do Nível 1.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Para que serve o <code>npx</code> no começo do comando?</p>
+<label><input type="radio" name="k1"> instalar o Svelte globalmente</label>
+<label><input type="radio" name="k1"> criar a pasta do projeto</label>
+<label><input type="radio" name="k1"> executar um pacote do npm sem precisar instalá-lo antes</label>
+<label><input type="radio" name="k1"> rodar o servidor de desenvolvimento</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. Onde fica a configuração do SvelteKit no projeto criado por esta versão?</p>
+<label><input type="radio" name="k1"> dentro do <code>vite.config.js</code>, na chamada <code>sveltekit({ … })</code></label>
+<label><input type="radio" name="k1"> no <code>svelte.config.js</code>, que sempre existe</label>
+<label><input type="radio" name="k1"> no <code>src/app.html</code></label>
+<label><input type="radio" name="k1"> no <code>package-lock.json</code></label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. O aviso "Could not detect a supported production environment" no fim do build significa que…</p>
+<label><input type="radio" name="k1"> o build falhou e o site não roda</label>
+<label><input type="radio" name="k1"> falta instalar o Svelte</label>
+<label><input type="radio" name="k1"> o <code>npm run dev</code> vai parar de funcionar</label>
+<label><input type="radio" name="k1"> o <code>adapter-auto</code> não reconheceu a plataforma de publicação; localmente está tudo certo</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">Crie o projeto e entre na pasta:<br><br>ana@notebook:~/loja$ <input data-answer="npx sv create kit"><br>ana@notebook:~/loja$ <input data-answer="cd kit|cd kit/"> <br>ana@notebook:~/loja/kit$ npm run dev<br><br>// o comando baixa o CLI, monta a estrutura e instala as dependências</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>npx sv create kit</code> cria a estrutura; o <code>npx</code> executa o CLI sem instalar globalmente.</li>
+  <li>As opções <code>--template</code>, <code>--types</code>, <code>--no-add-ons</code> e <code>--install</code> respondem ao assistente de uma vez.</li>
+  <li>O projeto nasce com <code>src/routes</code>, <code>src/lib</code>, <code>static</code>, <code>app.html</code>, layout e página inicial.</li>
+  <li>Nesta versão não existe <code>svelte.config.js</code>: a configuração mora no <code>vite.config.js</code>.</li>
+  <li><code>runes: true</code> força o modo moderno do Svelte no projeto inteiro.</li>
+  <li><code>npm run dev</code> liga o servidor; se a porta 5173 estiver ocupada, ele usa a próxima e avisa.</li>
+  <li><code>npm run build</code> gera duas saídas: <code>ssr</code> e <code>client</code>.</li>
+  <li><code>npm run preview</code> serve o build na porta 4173, para conferir antes de publicar.</li>
+  <li><code>.svelte-kit</code> e <code>node_modules</code> são geradas: não se editam e não vão para o Git.</li>
+  <li>O aviso do <code>adapter-auto</code> só importa na hora de publicar.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
