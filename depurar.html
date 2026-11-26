@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Depurando — perguntas pequenas, respostas visíveis | Guia Svelte</title>
+<meta name="description" content="Depurar um componente Svelte: console.log no lugar certo, $inspect, grep no arquivo, ler o NaN e o [object Object], com as saídas reais do console.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Depurando</span></h1>
+
+<p class="intro">A Ana passou uma tarde inteira atrás de um erro de três letras. O botão não somava, e ela trocou de tudo: o nome da função, a ordem das linhas, o <code>$state</code> de lugar. Quando cansou e colocou um <code>console.log</code> no lugar certo, viu em dois segundos que a função recebia texto em vez de número. Nesta aula ela aprende a fazer perguntas pequenas em vez de mexer em tudo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é depurar, na prática, e por que “mexer até funcionar” custa caro.</li>
+  <li>As quatro ferramentas que resolvem quase tudo: console, <code>$inspect</code>, busca no arquivo e redução do caso.</li>
+  <li>Onde colocar o <code>console.log</code> para ele mostrar o valor certo.</li>
+  <li>Por que o <code>console.log</code> no topo do script mostra um valor que nunca muda.</li>
+  <li>Como ler <code>NaN</code>, <code>undefined</code> e <code>[object Object]</code> na tela.</li>
+  <li>Como usar <code>grep -n</code> para achar todas as aparições de um nome.</li>
+  <li>Como reduzir o problema pela metade até sobrar uma linha.</li>
+  <li>O que fazer quando o componente não desenha nada e não dá erro.</li>
+  <li>Os três casos desta aula, com a saída real de cada um.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: depurar é perguntar, não adivinhar</h2>
+
+<p>Existe uma diferença grande entre consertar e adivinhar. Adivinhar é trocar uma linha, salvar, olhar a tela e repetir. Consertar é formular uma pergunta que tenha resposta sim ou não: “o valor que chega na função é número ou texto?”.</p>
+
+<p>A pergunta bem feita tem duas qualidades. Primeira: é pequena — dá para responder olhando uma linha. Segunda: a resposta aparece em algum lugar que você consegue ver — a tela, o console, o terminal. Pergunta cuja resposta está na sua cabeça não serve.</p>
+
+<p>Na padaria, a Ana faz isso com o forno: “a resistência está quente?” é uma pergunta que se responde com a mão perto, não com palpite. No código, o equivalente é imprimir o valor. Toda esta aula é sobre imprimir o valor no lugar certo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Pôr a mão perto da resistência</td><td><code>console.log(valor)</code> dentro da função</td></tr>
+<tr><td>Olhar o termômetro do forno</td><td><code>$inspect(estado)</code> no componente</td></tr>
+<tr><td>Procurar a etiqueta na prateleira</td><td><code>grep -n nome src/App.svelte</code></td></tr>
+<tr><td>Assar metade da receita</td><td>Comentar metade do HTML e ver o que resta</td></tr>
+<tr><td>Anotar o que mudou</td><td>Uma mudança por vez, e olhar o resultado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. As quatro ferramentas</h2>
+
+<p>Não é preciso mais do que quatro coisas para depurar um componente Svelte. Cada uma responde a um tipo de pergunta:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ferramenta</th><th>Responde</th><th>Onde fica</th></tr>
+<tr><td><code>console.log</code></td><td>“qual é o valor agora, neste ponto?”</td><td>no seu código, dentro de função ou evento</td></tr>
+<tr><td><code>$inspect(estado)</code></td><td>“quanto vale este estado e quando ele muda?”</td><td>no <code>&lt;script&gt;</code> do componente</td></tr>
+<tr><td>Busca no arquivo</td><td>“onde este nome aparece no projeto?”</td><td>no editor ou com <code>grep</code> no terminal</td></tr>
+<tr><td>Reduzir o caso</td><td>“qual pedaço de código é o culpado?”</td><td>no próprio arquivo, comentando metade</td></tr>
+</table>
+</div>
+
+<p>Repare que nenhuma delas é um programa novo para instalar. Depurar é uma habilidade de leitura, não uma assinatura de ferramenta. O que muda entre pessoas experientes é a ordem das perguntas: quem já viu o erro muitas vezes vai direto ao ponto.</p>
+
+<p>Antes de usar qualquer ferramenta, porém, leia a mensagem. Um erro que já diz <code>preco.toFixed is not a function</code> não precisa de <code>console.log</code> nenhum: ele conta que o valor é texto. A ferramenta serve quando o código roda sem erro e o resultado está errado — o caso mais difícil.</p>
+
+<hr>
+
+<h2>3. O <code>console.log</code> no lugar certo</h2>
+
+<p>A função abaixo soma um clique e registra o valor no console. O registro está dentro da função, então roda a cada clique:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let contador = $state(0);
+
+  function somar() {
+    contador++;
+    console.log('contador agora vale', contador);
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;Cliques: {contador}&lt;/button&gt;</pre>
+
+<p>Depois de um clique, o console do navegador mostra uma linha:</p>
+
+<pre class="term">console do navegador:
+
+contador agora vale 1</pre>
+
+<p>Uma linha, com o texto que você escreveu e o valor. Repare que <code>console.log</code> aceita vários pedaços separados por vírgula: o texto entre aspas aparece literalmente, e o valor da variável é resolvido na hora. Essa mistura de texto e valor é o que torna o registro legível.</p>
+
+<dl class="anatomy">
+  <dt>console</dt><dd>o objeto de registro do navegador. Ele existe em qualquer página, sem importar nada.</dd>
+  <dt>.log</dt><dd>o tipo de registro. Também existem <code>console.warn</code> (amarelo) e <code>console.error</code> (vermelho), que se destacam na lista.</dd>
+  <dt>'contador agora vale'</dt><dd>o texto, entre aspas. O que está entre aspas não é avaliado — aparece como está escrito.</dd>
+  <dt>, contador</dt><dd>o valor. Vai separado por vírgula e é avaliado no momento da chamada: aqui, o contador já incrementado.</dd>
+</dl>
+
+<p>O lugar do registro é o que decide o que ele mostra. Dentro da função, ele roda quando a função roda. No corpo do script, ele roda uma vez, quando o componente é criado — e nunca mais. Essa diferença é a origem do erro mais chato de depuração, e é o assunto da próxima seção.</p>
+
+<hr>
+
+<h2>4. O registro que mostra o valor de ontem</h2>
+
+<p>A Ana quis ver o nome sempre que ele mudasse, e colocou o registro no topo do script:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  console.log('nome agora é', nome);
+&lt;/script&gt;
+
+&lt;input bind:value={nome} /&gt;
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+
+<p>O console mostra <code>nome agora é Ana</code> uma única vez. Digitando no campo, a frase da tela muda — e o console fica parado. Isso não é bug: o corpo do script roda uma vez, na criação do componente. O que muda depois é o valor, não o script.</p>
+
+<p>Ao compilar esse arquivo, o Svelte ainda deixa um aviso apontando o problema:</p>
+
+<pre class="term">aviso na compilação:
+
+state_referenced_locally (linha 3): This reference only captures the initial value of `nome`. Did you mean to reference it inside a closure instead?</pre>
+
+<p>“Esta referência só captura o valor inicial de <code>nome</code>. Você quis dizer que era para referenciar dentro de uma função?” A palavra <em>closure</em> aqui quer dizer “um trecho que roda depois” — uma função, um handler, um efeito. É exatamente a diferença entre o registro no topo e o registro dentro da função.</p>
+
+<div class="warning">
+<strong>Aviso de valor inicial é quase sempre bug de depuração</strong>
+<p>Se o seu <code>console.log</code> mostra o valor de antes, o registro está no lugar errado. Mova para dentro da função que muda o valor, ou use <code>$inspect</code>, que acompanha as mudanças sozinho.</p>
+</div>
+
+<hr>
+
+<h2>5. <code>$inspect</code>: o registro que acompanha o estado</h2>
+
+<p>Quando o que você quer observar é um estado reativo, o Svelte tem uma runa própria. Ela registra o valor na criação e a cada mudança:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let contador = $state(0);
+  $inspect(contador);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; contador++}&gt;Cliques: {contador}&lt;/button&gt;</pre>
+
+<p>Na criação, o console mostra <code>0</code>. Depois de cada clique, mostra o valor novo:</p>
+
+<pre class="term">console do navegador:
+
+0
+1</pre>
+
+<p>Junto de cada registro, o navegador oferece a pilha de chamadas — o caminho de funções que levou até ali. Nos testes desta aula, essa pilha aparece como uma entrada separada, com o rótulo <code>stack trace</code>, que você abre clicando na setinha. É por ali que se descobre <em>quem</em> mudou o valor, e não só qual é o valor novo.</p>
+
+<p>A diferença prática entre <code>$inspect</code> e <code>console.log</code>: o <code>$inspect</code> não precisa ser chamado de dentro de uma função. Você declara uma vez, no topo, e ele acompanha. Em produção, o <code>$inspect</code> não gera nada — o compilador remove a chamada —, então ele não deixa registro sobrando no site publicado.</p>
+
+<div class="tip">
+<strong>Lembre de apagar depois</strong>
+<p>Nenhum dos dois é para ficar. <code>console.log</code> esquecido polui o console de quem visita a página; <code>$inspect</code> some sozinho no build, mas continua no código. Depure, responda a pergunta e remova o registro.</p>
+</div>
+
+<hr>
+
+<h2>6. Quando o valor é um objeto</h2>
+
+<p>Objetos e listas criados com <code>$state</code> são <em>proxies</em>: uma camada que avisa o Svelte quando algo dentro muda. Registrar um proxy com <code>console.log</code> tem um efeito colateral estranho — e o próprio Svelte avisa:</p>
+
+<pre class="term">console do navegador:
+
+[svelte] console_log_state
+Your `console.log` contained `$state` proxies. Consider using `$inspect(...)` or `$state.snapshot(...)` instead
+https://svelte.dev/e/console_log_state</pre>
+
+<p>“Seu <code>console.log</code> continha proxies de <code>$state</code>. Considere usar <code>$inspect(...)</code> ou <code>$state.snapshot(...)</code>.” O motivo é que o argumento que chega ao console é o proxy, não uma fotografia do valor: se você clicar na setinha depois, pode ver um valor já diferente do que existia na hora do registro. <code>$state.snapshot(objeto)</code> tira uma foto comum, sem proxy.</p>
+
+<p>Na prática, para ver o conteúdo de um objeto agora, as duas formas funcionam: <code>$inspect(objeto)</code> para acompanhar, <code>console.log($state.snapshot(objeto))</code> para fotografar. O que não funciona é registrar o proxy e acreditar no que aparece meia hora depois.</p>
+
+<hr>
+
+<h2>7. Ler o que a tela mostra: <code>NaN</code>, <code>undefined</code> e <code>[object Object]</code></h2>
+
+<p>Nem todo bug tem mensagem. Alguns aparecem como texto esquisito no lugar do valor certo, e cada texto esquisito aponta para uma causa diferente:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na tela</th><th>O que costuma ser</th><th>Primeira pergunta</th></tr>
+<tr><td><code>NaN</code></td><td>conta com algo que não é número, ou função chamada sem argumento</td><td>todos os argumentos foram passados?</td></tr>
+<tr><td><code>undefined</code></td><td>nome que existe mas não tem valor: propriedade não passada, item fora da lista</td><td>quem deveria dar esse valor?</td></tr>
+<tr><td><code>[object Object]</code></td><td>um objeto inteiro usado onde se esperava texto</td><td>faltou escolher uma propriedade com ponto?</td></tr>
+<tr><td>nada (vazio)</td><td>o bloco não rodou, ou a lista estava vazia</td><td>a condição é verdadeira?</td></tr>
+<tr><td>o valor de antes</td><td>variável sem <code>$state</code>, ou registro no lugar errado</td><td>quem avisa a tela?</td></tr>
+</table>
+</div>
+
+<p><code>NaN</code> quer dizer <em>not a number</em> — “não é um número”. Ele nasce quando uma conta recebe algo que não consegue converter. Não é erro que para o programa: é um valor que se espalha. Uma vez <code>NaN</code>, toda conta que depende dele também vira <code>NaN</code>, e a tela inteira fica estranha.</p>
+
+<div class="trysvelte" data-goal="out:Total: R$ 2.25">
+<p class="try-task"><strong>Missão:</strong> a tela mostra <code>Total: R$ NaN</code>. A função <code>comDesconto</code> precisa de dois valores: o preço e o desconto. Descubra qual faltou e acerte a chamada para o total dar <code>R$ 2.25</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(2.5);
+
+  function comDesconto(valor, desconto) {
+    return valor - valor * desconto;
+  }
+
+  let total = $state(comDesconto(preco));
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(2.5);
+
+  function comDesconto(valor, desconto) {
+    return valor - valor * desconto;
+  }
+
+  let total = $state(comDesconto(preco, 0.1));
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>O caminho para achar isso sem sorte é perguntar: “quais valores a função recebe?”. Um <code>console.log(valor, desconto)</code> na primeira linha da função mostraria <code>2.5 undefined</code> — e a resposta apareceria antes de qualquer tentativa de conserto.</p>
+
+<hr>
+
+<h2>8. Busca no arquivo: onde este nome aparece?</h2>
+
+<p>Metade dos bugs de estado vem de um nome usado em dois lugares com intenções diferentes. Antes de entender o fluxo, é bom ver todos os pontos onde ele aparece. No terminal, <code>grep -n</code> faz isso e mostra o número da linha:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -n contador src/App.svelte
+2:  let contador = 0;
+5:    contador++;
+10:&lt;button onclick={somar}&gt;Cliques: {contador}&lt;/button&gt;</pre>
+
+<p>Três aparições: a declaração, o incremento dentro da função e o uso na tela. Com isso na frente, a pergunta fica fácil: o incremento está <em>antes</em> do uso, mas o valor não aparece na tela — então o problema é de reatividade, não de ordem. O <code>grep -n</code> mostra também que a declaração é <code>let contador = 0</code>, sem <code>$state</code>.</p>
+
+<dl class="anatomy">
+  <dt>grep</dt><dd>o comando que procura texto dentro de arquivos. Ele imprime as linhas que casam com o padrão.</dd>
+  <dt>-n</dt><dd>a opção que acrescenta o número da linha no começo de cada resultado.</dd>
+  <dt>contador</dt><dd>o que você procura. Pode ser um pedaço de palavra: <code>preco</code> também acha <code>precoUnitario</code>.</dd>
+  <dt>src/App.svelte</dt><dd>onde procurar. Um arquivo, ou uma pasta inteira com <code>src/</code> no lugar.</dd>
+</dl>
+
+<p>O editor faz o mesmo com <code>Ctrl</code> + <code>Shift</code> + <code>F</code> e mostra o resultado agrupado por arquivo. O terminal é útil quando você quer um resultado limpo, que dá para copiar e colar numa anotação.</p>
+
+<hr>
+
+<h2>9. Reduzir o caso pela metade</h2>
+
+<p>Quando o arquivo tem trinta linhas, a busca visual funciona. Com trezentas, não. A técnica é sempre a mesma: apague (ou comente) metade e veja se o problema continua. Se continuar, ele está na metade que sobrou; se desaparecer, está na que você tirou.</p>
+
+<p>Em duas ou três rodadas o problema fica do tamanho de uma linha — e uma linha se lê inteira. O cuidado é não misturar: reduza o HTML primeiro, depois o script, nunca os dois na mesma rodada. Cada rodada responde uma pergunta e muda seu palpite.</p>
+
+<p>Existe uma variação mais rápida dessa técnica: trocar o valor por um fixo. Se a tela mostra o certo com o valor fixo, o problema está em quem produz o valor, não em quem desenha. Essa única troca separa “a conta está errada” de “a tela está errada” e economiza meia hora.</p>
+
+<div class="trysvelte" data-goal="out:1 2 3">
+<p class="try-task"><strong>Missão:</strong> o componente não desenha nada e não mostra erro — o pior tipo de bug. A lista está dentro de um objeto chamado <code>dados</code>, e o <code>{#each}</code> está apontando para o objeto inteiro. Faça ele percorrer a lista certa.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let dados = $state({ itens: [1, 2, 3] });
+&lt;/script&gt;
+
+{#each dados as item}
+  &lt;p&gt;{item}&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let dados = $state({ itens: [1, 2, 3] });
+&lt;/script&gt;
+
+{#each dados.itens as item}
+  &lt;p&gt;{item}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p>Vale guardar este caso: <code>{#each}</code> sobre um objeto não dá erro. Objeto não é lista, e o resultado é uma tela vazia, sem mensagem no console. É o exemplo perfeito de bug que só o <code>console.log(dados)</code> resolve — imprimir o valor mostra que ele é um objeto com a lista dentro.</p>
+
+<div class="trysvelte" data-goal="out:R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> o componente quebra com <code>preco.toFixed is not a function</code>. O preço chegou como texto. Descubra onde está o problema e faça a placa mostrar <code>R$ 0.90</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state('0.90');
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(Number('0.90'));
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>A solução usa <code>Number('0.90')</code> em vez de apagar as aspas. As duas funcionam aqui; a diferença aparece quando o valor vem de um campo de texto, onde você não controla o que a pessoa digita e precisa converter na entrada.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três saídas abaixo saíram do compilador e do renderizador desta versão, copiadas como estão. As duas primeiras não geram erro: geram um valor esquisito na tela, que é o tipo de problema que a aula inteira tenta encurtar.</p>
+
+<div class="cenario">
+<strong>Caso 1 — <code>NaN</code> na conta</strong>
+<p>A função espera dois números e recebeu um. O JavaScript não reclama: devolve <code>NaN</code>, e a tela mostra o resultado da conta com ele.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(2.5);
+
+  function somar(a, b) {
+    return a + b;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {somar(preco)}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;Total: R$ NaN&lt;/p&gt;</pre>
+<p>“R$ NaN” na tela quer dizer que a conta recebeu <code>undefined</code>. Contar os argumentos da chamada resolve; contar os parâmetros da função confirma. Um <code>console.log(a, b)</code> na primeira linha mostraria os dois valores lado a lado.</p>
+</div>
+
+<div class="cenario">
+<strong>Caso 2 — <code>[object Object]</code> na tela</strong>
+<p>Chaves duplas: o Svelte entende a de fora como expressão e a de dentro como um objeto literal vazio com uma propriedade dentro. O resultado é um objeto, e todo objeto vira esse texto quando é obrigado a virar texto.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let contador = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{{contador}}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;[object Object]&lt;/p&gt;</pre>
+<p>É um erro de digitação com consequência silenciosa: nenhum aviso, nenhum erro, só um texto feio. Sempre que aparecer <code>[object Object]</code>, procure chaves dobradas ou um objeto usado sem ponto.</p>
+</div>
+
+<div class="cenario">
+<strong>Caso 3 — <code>{@render}</code> de algo que não é chamada</strong>
+<p><code>{@render}</code> espera uma chamada de snippet, com parênteses. Passar um nome solto é recusado na compilação.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{@render nome}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 9): `{@render ...}` tags can only contain call expressions</pre>
+<p>“As tags <code>{@render ...}</code> só podem conter expressões de chamada.” A coluna 9 é onde começa o <code>nome</code> dentro das chaves. A correção é chamar o snippet: <code>{@render linha()}</code>, com os parênteses.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Escreva</th><th>Onde</th></tr>
+<tr><td>ver um valor no momento em que a função roda</td><td><code>console.log('rótulo', valor)</code></td><td>dentro da função</td></tr>
+<tr><td>acompanhar um estado reativo</td><td><code>$inspect(estado)</code></td><td>no topo do <code>&lt;script&gt;</code></td></tr>
+<tr><td>fotografar um objeto sem proxy</td><td><code>console.log($state.snapshot(objeto))</code></td><td>onde precisar</td></tr>
+<tr><td>achar um nome no arquivo</td><td><code>grep -n nome src/App.svelte</code></td><td>no terminal</td></tr>
+<tr><td>saber se o problema é a conta ou a tela</td><td>trocar o valor por um fixo</td><td>no código</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Texto na tela</th><th>Causa provável</th></tr>
+<tr><td><code>NaN</code></td><td>conta com <code>undefined</code> ou texto não numérico</td></tr>
+<tr><td><code>undefined</code></td><td>propriedade não passada, item inexistente na lista</td></tr>
+<tr><td><code>[object Object]</code></td><td>chaves dobradas, ou objeto mostrado sem ponto</td></tr>
+<tr><td>vazio</td><td>condição falsa, lista vazia, <code>{#each}</code> sobre objeto</td></tr>
+<tr><td>valor antigo</td><td>variável sem <code>$state</code> ou registro fora da função</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Onde o <code>console.log</code> mostra o valor que muda a cada clique?</p>
+<label><input type="radio" name="q1"> no topo do <code>&lt;script&gt;</code>, antes de tudo</label>
+<label><input type="radio" name="q1"> dentro do bloco <code>&lt;style&gt;</code></label>
+<label><input type="radio" name="q1"> dentro da função que roda no clique</label>
+<label><input type="radio" name="q1"> fora do componente, no <code>main.js</code></label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O que <code>$inspect(contador)</code> faz de diferente do <code>console.log</code>?</p>
+<label><input type="radio" name="q1"> mostra o valor só uma vez, na criação</label>
+<label><input type="radio" name="q1"> registra o valor na criação e a cada mudança, sem precisar estar dentro de uma função</label>
+<label><input type="radio" name="q1"> grava o valor num arquivo de log</label>
+<label><input type="radio" name="q1"> impede que o valor mude durante os testes</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. A tela mostra <code>NaN</code>. Qual é a primeira pergunta a fazer?</p>
+<label><input type="radio" name="q1"> todos os argumentos e valores da conta são números de verdade?</label>
+<label><input type="radio" name="q1"> o componente tem bloco <code>&lt;style&gt;</code>?</label>
+<label><input type="radio" name="q1"> o navegador está atualizado?</label>
+<label><input type="radio" name="q1"> o nome do arquivo está em PascalCase?</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">function somar() {<br>&nbsp;&nbsp;contador++;<br>&nbsp;&nbsp;<input data-answer="console.log('contador', contador)">;<br>}<br><br>// registre o valor novo no console, com um rótulo</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Depurar é fazer perguntas pequenas com resposta visível — não trocar linha até funcionar.</li>
+  <li>Quatro ferramentas bastam: <code>console.log</code>, <code>$inspect</code>, busca no arquivo e reduzir o caso.</li>
+  <li><code>console.log</code> aceita texto e valores separados por vírgula.</li>
+  <li>O corpo do script roda uma vez; registro ali mostra o valor inicial para sempre.</li>
+  <li><code>state_referenced_locally</code> avisa exatamente esse caso.</li>
+  <li><code>$inspect(estado)</code> acompanha as mudanças e não existe no build de produção.</li>
+  <li><code>$state.snapshot(objeto)</code> tira a foto sem proxy; o Svelte avisa quando você registra o proxy.</li>
+  <li><code>NaN</code> é conta com valor que não é número; <code>undefined</code> é nome sem valor; <code>[object Object]</code> é objeto virando texto.</li>
+  <li><code>grep -n</code> lista todas as linhas em que um nome aparece, com o número.</li>
+  <li>Reduza pela metade, uma mudança por vez, e anote o que viu.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

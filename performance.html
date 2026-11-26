@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medindo Performance — o número antes da opinião | Guia Svelte</title>
+<meta name="description" content="Como medir um componente Svelte de verdade: tamanho do build com e sem biblioteca, quantas vezes o cálculo roda, $derived no lugar de $effect e chaves na lista.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Medindo Performance</span></h1>
+
+<p class="intro">A Ana quis deixar a vitrine mais rápida e começou pelo lugar errado: reescreveu a lista, trocou os nomes das funções, mexeu no CSS. Nada mudou. Quando finalmente rodou o build e olhou o tamanho do arquivo, descobriu que a biblioteca de ordenação que ela importou pesava mais que o site inteiro. Nesta aula ela aprende a medir antes de mexer.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que “performance” quer dizer para quem visita a página.</li>
+  <li>As quatro etapas em que o tempo de uma página se gasta.</li>
+  <li>Como ler o build e comparar o peso antes e depois.</li>
+  <li>O custo real de importar uma biblioteca inteira para usar uma função.</li>
+  <li>Como contar quantas vezes um cálculo roda, com o console.</li>
+  <li>Por que <code>$effect</code> não serve para sincronizar valor calculado.</li>
+  <li>Quando <code>$derived</code> economiza e quando ele apenas muda o lugar do custo.</li>
+  <li>O papel da chave no <code>{#each}</code> em listas longas.</li>
+  <li>Os três erros desta aula, com a mensagem real de cada um.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: performance é o tempo de quem usa</h2>
+
+<p>Performance não é sobre o código bonito nem sobre o número que aparece no relatório. É sobre quanto tempo a Ana espera até ver o preço na tela, e quanto tempo o celular dela gasta de bateria para isso. Duas medidas, ambas do lado de quem usa.</p>
+
+<p>A primeira é o <strong>download</strong>: quantos bytes o navegador precisa baixar antes de desenhar algo. A segunda é o <strong>trabalho</strong>: quanto cálculo e quanta atualização de tela acontecem depois. A primeira se mede no build; a segunda, no navegador.</p>
+
+<p>Existe uma regra que vale para as duas: <strong>medir antes de mexer</strong>. Sem número, otimização é opinião. E otimização sem número costuma deixar o código mais difícil de ler sem deixar a página mais rápida — o pior dos dois mundos.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>Na página</th></tr>
+<tr><td>Quanto tempo o cliente espera na fila</td><td>Quanto tempo até o conteúdo aparecer</td></tr>
+<tr><td>Quantas viagens o entregador faz</td><td>Quantos arquivos o navegador baixa</td></tr>
+<tr><td>O peso da sacola</td><td>O tamanho do JavaScript</td></tr>
+<tr><td>Repetir a mesma conta três vezes</td><td>Recalcular a cada desenho</td></tr>
+<tr><td>Anotar o tempo de cada fornada</td><td>Medir o build e o console</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Onde o tempo vai</h2>
+
+<p>Antes de otimizar, saiba em qual das quatro etapas o tempo está sendo gasto. Cada uma tem uma ferramenta e um conserto diferente:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Etapa</th><th>O que acontece</th><th>Como se mede</th></tr>
+<tr><td>Baixar</td><td>o navegador busca HTML, CSS e JavaScript</td><td>build, aba Network do navegador</td></tr>
+<tr><td>Interpretar</td><td>o navegador lê e monta o JavaScript</td><td>aba Performance do navegador</td></tr>
+<tr><td>Desenhar</td><td>o navegador pinta os elementos na tela</td><td>aba Performance, contagem de elementos</td></tr>
+<tr><td>Recalcular</td><td>o Svelte atualiza valores quando o estado muda</td><td>contador no console, <code>$inspect</code></td></tr>
+</table>
+</div>
+
+<p>Na maioria dos projetos pequenos, a etapa que mais pesa é a primeira — e ela é a mais fácil de medir, porque o build imprime os números no terminal. Se o site baixa 200 kB de JavaScript para mostrar uma lista de dez preços, o problema não está no laço: está no que você importou.</p>
+
+<hr>
+
+<h2>3. A primeira medida: o build</h2>
+
+<p>O comando de produção imprime o tamanho de cada arquivo gerado. É a medida mais barata que existe: um comando, uma tela de números.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DxYuqrUd.js  41.11 kB │ gzip: 15.82 kB
+✓ built in 1.27s</pre>
+
+<p>Leia três números. <strong>111 módulos</strong>: quantos arquivos entraram no pacote, contando o Svelte, o seu componente e cada dependência. <strong>41.11 kB</strong>: o tamanho do JavaScript gerado. <strong>gzip: 15.82 kB</strong>: quanto isso ocupa depois da compressão que todo servidor faz — é esse número que o visitante baixa.</p>
+
+<p>Guarde a linha do <code>gzip</code>. Ela é a que importa para quem está no celular com internet ruim, e é a que muda quando você adiciona uma biblioteca. O tamanho sem compressão serve para comparar entre builds; o comprimido serve para imaginar a espera real.</p>
+
+<dl class="anatomy">
+  <dt>✓ 111 modules transformed</dt><dd>o sinal de certo quer dizer que a etapa terminou. Cada <code>.svelte</code> vira JavaScript antes de entrar nessa conta.</dd>
+  <dt>dist/index.html</dt><dd>a página inicial gerada. Pequena porque só aponta para o JavaScript.</dd>
+  <dt>dist/assets/index-DxYuqrUd.js</dt><dd>o pacote com todo o JavaScript. O pedaço depois do hífen muda quando o conteúdo muda, para o navegador não usar uma versão velha do cache.</dd>
+  <dt>gzip: 15.82 kB</dt><dd>o tamanho comprimido. É o que viaja pela rede.</dd>
+</dl>
+
+<hr>
+
+<h2>4. O peso das dependências</h2>
+
+<p>A Ana precisava ordenar dois produtos por preço. Ela instalou uma biblioteca de utilidades e importou a função de ordenação. O build respondeu:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 751 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-B_8awAYC.js  57.17 kB │ gzip: 21.60 kB
+✓ built in 1.85s</pre>
+
+<p>Setecentos e cinquenta e um módulos e 21,60 kB comprimidos — contra 111 módulos e 15,82 kB antes. A diferença é de quase 6 kB comprimidos e de 640 arquivos a mais para o navegador interpretar. Para ordenar dois itens.</p>
+
+<p>O mesmo resultado com o <code>sort</code> que já existe na linguagem:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Sonho', preco: 2.5 }
+  ]);
+
+  let ordenados = $derived([...produtos].sort((a, b) =&gt; a.preco - b.preco));
+&lt;/script&gt;
+
+&lt;h1&gt;Vitrine&lt;/h1&gt;
+
+&lt;ul&gt;
+  {#each ordenados as produto}
+    &lt;li&gt;{produto.nome}: R$ {produto.preco.toFixed(2)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Vitrine&lt;/h1&gt; &lt;ul&gt;&lt;li&gt;Pão francês: R$ 0.90&lt;/li&gt;&lt;li&gt;Sonho: R$ 2.50&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>E o build desse arquivo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DxYuqrUd.js  41.11 kB │ gzip: 15.82 kB
+✓ built in 1.32s</pre>
+
+<p>Voltou a 111 módulos e 15,82 kB. As três versões, lado a lado:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Como a Ana ordenou</th><th>Módulos</th><th>JS</th><th>gzip</th></tr>
+<tr><td>biblioteca inteira (<code>import _ from 'lodash'</code>)</td><td>115</td><td>114.12 kB</td><td>42.79 kB</td></tr>
+<tr><td>só a função, versão modular (<code>lodash-es</code>)</td><td>751</td><td>57.17 kB</td><td>21.60 kB</td></tr>
+<tr><td><code>sort</code> da própria linguagem</td><td>111</td><td>41.11 kB</td><td>15.82 kB</td></tr>
+</table>
+</div>
+
+<p>A lição não é “nunca use biblioteca”. É: <strong>saiba quanto custa</strong> antes de importar. Uma biblioteca de datas com fuso horário, idioma e calendário pode valer cada kB; uma função de ordenar dois números, não. O build responde em quinze segundos, e a resposta é um número.</p>
+
+<div class="warning">
+<strong>O <code>[...produtos]</code> não é decoração</strong>
+<p><code>sort</code> muda a lista original. Copiar com <code>[...produtos]</code> antes de ordenar evita mexer no estado que a tela está usando. Sem a cópia, a lista de origem muda de ordem sem que ninguém peça.</p>
+</div>
+
+<hr>
+
+<h2>5. Contando quantas vezes o cálculo roda</h2>
+
+<p>A segunda medida é de trabalho, não de bytes. Para saber quantas vezes uma função é chamada, conte dentro dela e imprima o total. O componente abaixo mostra quatro valores e usa a função duas vezes por linha:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([1, 2, 3]);
+  let execucoes = 0;
+
+  function dobrar(valor) {
+    execucoes += 1;
+    return valor * 2;
+  }
+
+  function adicionar() {
+    itens = [...itens, 4];
+  }
+
+  $effect(() =&gt; {
+    console.log('tela com', itens.length, 'itens: dobrar rodou', execucoes, 'vezes');
+  });
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar item&lt;/button&gt;
+
+{#each itens as item}
+  &lt;p&gt;{dobrar(item)} - {dobrar(item)}&lt;/p&gt;
+{/each}</pre>
+
+<p>Na criação, o console mostra seis execuções (três itens, duas chamadas cada). Depois de um clique, mostra oito:</p>
+
+<pre class="term">console do navegador:
+
+tela com 3 itens: dobrar rodou 6 vezes
+tela com 4 itens: dobrar rodou 8 vezes</pre>
+
+<p>Oito, e não quatorze. O Svelte refez o desenho só da linha que mudou, e essa linha chama a função duas vezes. As três linhas antigas não foram tocadas. Isso contraria a intuição de quem imagina que “a tela inteira é redesenhada”: o Svelte atualiza o que depende do valor que mudou.</p>
+
+<p>Agora a mesma tela com o cálculo numa runa derivada:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([1, 2, 3]);
+  let execucoes = 0;
+
+  let dobrados = $derived.by(() =&gt; {
+    execucoes += itens.length;
+    return itens.map((item) =&gt; item * 2);
+  });
+
+  function adicionar() {
+    itens = [...itens, 4];
+  }
+
+  $effect(() =&gt; {
+    console.log('tela com', itens.length, 'itens: o cálculo rodou', execucoes, 'vezes');
+  });
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar item&lt;/button&gt;
+
+{#each dobrados as valor}
+  &lt;p&gt;{valor} - {valor}&lt;/p&gt;
+{/each}</pre>
+
+<pre class="term">console do navegador:
+
+tela com 3 itens: o cálculo rodou 3 vezes
+tela com 4 itens: o cálculo rodou 7 vezes</pre>
+
+<p>Três, depois sete: o <code>$derived</code> refez a lista inteira, quatro itens de uma vez. É o oposto do caso anterior. Nenhum dos dois está errado — e é justamente por isso que medir importa: o custo não está onde a intuição diz.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escolha</th><th>O que se repete</th><th>Quando vale</th></tr>
+<tr><td>função no HTML</td><td>só nos pedaços que mudaram</td><td>cálculo barato, usado uma vez</td></tr>
+<tr><td><code>$derived</code></td><td>o cálculo inteiro, uma vez por mudança</td><td>cálculo caro, usado em vários lugares</td></tr>
+</table>
+</div>
+
+<p>O critério prático: se o mesmo valor calculado aparece em três pontos da tela, o <code>$derived</code> cobra uma vez; a função no HTML cobra três por linha. Se cada linha mostra um valor diferente, a função no HTML já está no melhor lugar — e o <code>$derived</code> só troca o custo de lugar.</p>
+
+<hr>
+
+<h2>6. O valor calculado não se guarda em <code>$effect</code></h2>
+
+<p>Existe um padrão que parece organizado e é uma armadilha de performance: usar <code>$effect</code> para copiar o resultado de um cálculo para uma variável de estado. Veja o que acontece quando o efeito escreve na variável que ele mesmo lê:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $state(0);
+
+  $effect(() =&gt; {
+    total = total + 1;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<p>O efeito muda <code>total</code>, o que agenda o efeito de novo, que muda <code>total</code> outra vez. O Svelte corta o laço com um erro:</p>
+
+<pre class="term">console do navegador:
+
+Uncaught Error: https://svelte.dev/e/effect_update_depth_exceeded</pre>
+
+<p><code>effect_update_depth_exceeded</code> quer dizer “o efeito se atualizou fundo demais”: um laço de atualizações. O mesmo desenho, sem laço e sem trabalho repetido, é uma runa derivada:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $derived(precos.reduce((soma, p) =&gt; soma + p, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 3.40&lt;/p&gt;</pre>
+
+<p>Uma linha em vez de cinco, e nenhuma chance de laço. O <code>$derived</code> não guarda um segundo valor: ele sabe calcular o valor a partir do que já existe. Isso é menos estado para o navegador acompanhar — e menos estado é sempre mais rápido de manter coerente.</p>
+
+<div class="trysvelte" data-goal="out:Total: R$ 3.40">
+<p class="try-task"><strong>Missão:</strong> o componente quebra com um laço de atualizações, porque o <code>$effect</code> escreve na variável que ele mesmo lê. Troque o efeito por um <code>$derived</code> que soma os preços da lista.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $state(0);
+
+  $effect(() =&gt; {
+    total = total + 1;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $derived(precos.reduce((soma, p) =&gt; soma + p, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>7. O total que envelhece</h2>
+
+<p>Outro jeito de guardar duas verdades: um total fixo que só está certo no começo. A cada item novo, ele fica mais velho.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $state(3.4);
+
+  function adicionar() {
+    precos = [...precos, 4];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar item&lt;/button&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<p>Depois do clique, a lista tem três preços e o total continua <code>3.40</code>. Ninguém vê erro nenhum: só um número errado. Além de ser um bug, é trabalho desperdiçado — alguém vai precisar lembrar de atualizar o total em cada lugar que mexe na lista.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Adicionar item Total: R$ 7.40">
+<p class="try-task"><strong>Missão:</strong> a lista ganha um item novo no clique, mas o total ficou preso em <code>3.40</code>. Faça o total acompanhar a lista, sem atualizar à mão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $state(3.4);
+
+  function adicionar() {
+    precos = [...precos, 4];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar item&lt;/button&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $derived(precos.reduce((soma, p) =&gt; soma + p, 0));
+
+  function adicionar() {
+    precos = [...precos, 4];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar item&lt;/button&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>O ganho aqui não é de milissegundos: é de garantia. Com o total derivado, não existe estado em que a lista tenha três itens e o total diga dois. Em tela pequena, essa diferença não se mede; em código grande, ela evita a classe de bug mais difícil de achar.</p>
+
+<hr>
+
+<h2>8. Ordenar uma vez, não a cada desenho</h2>
+
+<p>Ordenar dentro do HTML funciona e é fácil de ler. O problema é quando a mesma ordenação precisa valer para dois lugares — a lista e o texto “o mais barato é…”. Aí ela roda duas vezes, com dois resultados possíveis se alguém mudar um dos lados.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([2.5, 0.9, 4]);
+&lt;/script&gt;
+
+{#each precos as preco}
+  &lt;p&gt;{preco.toFixed(2)}&lt;/p&gt;
+{/each}</pre>
+
+<pre class="out">&lt;p&gt;2.50&lt;/p&gt;&lt;p&gt;0.90&lt;/p&gt;&lt;p&gt;4.00&lt;/p&gt;</pre>
+
+<p>A lista sai na ordem em que os preços foram guardados. Para sair do mais barato ao mais caro, ordenar uma vez numa runa derivada resolve para todos os usos:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([2.5, 0.9, 4]);
+  let ordenados = $derived([...precos].sort((a, b) =&gt; a - b));
+&lt;/script&gt;
+
+{#each ordenados as preco}
+  &lt;p&gt;{preco.toFixed(2)}&lt;/p&gt;
+{/each}</pre>
+
+<pre class="out">&lt;p&gt;0.90&lt;/p&gt;&lt;p&gt;2.50&lt;/p&gt;&lt;p&gt;4.00&lt;/p&gt;</pre>
+
+<div class="trysvelte" data-goal="out:0.90 2.50 4.00">
+<p class="try-task"><strong>Missão:</strong> a lista sai na ordem em que os preços foram guardados. Faça ela sair do mais barato ao mais caro, numa runa derivada que ordena uma vez só.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([2.5, 0.9, 4]);
+&lt;/script&gt;
+
+{#each precos as preco}
+  &lt;p&gt;{preco.toFixed(2)}&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([2.5, 0.9, 4]);
+  let ordenados = $derived([...precos].sort((a, b) =&gt; a - b));
+&lt;/script&gt;
+
+{#each ordenados as preco}
+  &lt;p&gt;{preco.toFixed(2)}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p>Repare na cópia <code>[...precos]</code> de novo. Ela existe porque <code>sort</code> embaralha a lista original, e a lista original é o estado que a tela acompanha. Ordenar o estado por dentro faria a ordem dos dados depender da ordem em que a tela foi desenhada — o tipo de efeito colateral que aparece só em produção.</p>
+
+<hr>
+
+<h2>9. Lista longa e a chave do <code>{#each}</code></h2>
+
+<p>Quando a lista muda — um item entra, outro sai, a ordem troca —, o Svelte precisa decidir quais pedaços de tela reaproveitar. Sem chave, ele reaproveita por posição: o primeiro item continua no primeiro lugar, o segundo no segundo. Com chave, ele reaproveita pelo identificador.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 1, nome: 'Pão francês' },
+    { id: 2, nome: 'Sonho' }
+  ]);
+&lt;/script&gt;
+
+{#each produtos as produto (produto.id)}
+  &lt;p&gt;{produto.nome}&lt;/p&gt;
+{/each}</pre>
+
+<pre class="out">&lt;p&gt;Pão francês&lt;/p&gt;&lt;p&gt;Sonho&lt;/p&gt;</pre>
+
+<p>A diferença aparece quando a ordem muda ou um item do meio sai. Sem chave, o texto do primeiro lugar é reescrito com o dado do novo primeiro item — a tela fica certa, mas todo o conteúdo daquele pedaço é substituído. Com chave, o Svelte move o pedaço inteiro, junto com o que estava dentro dele: um campo de texto digitado, por exemplo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação da lista</th><th>Chave é…</th></tr>
+<tr><td>lista curta, que só cresce no fim</td><td>opcional</td></tr>
+<tr><td>lista que reordena ou filtra</td><td>recomendada, com o <code>id</code></td></tr>
+<tr><td>itens com campo de texto ou checkbox dentro</td><td>obrigatória na prática, senão o valor digitado pula de linha</td></tr>
+</table>
+</div>
+
+<p>Uma ressalva que só aparece quando se mede: a chave custa um pouco. O Svelte mantém um mapa de identificadores, e para listas de milhares de itens isso tem preço. A regra é começar sem chave nas listas simples e adicionar quando houver reordenação, remoção no meio ou campos dentro do item.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três saídas abaixo são reais: as duas primeiras vêm do renderizador desta versão, a terceira do console do navegador. Repare que nenhuma delas fala em “performance” — mas todas são trabalho demais para o que a tela precisava.</p>
+
+<div class="cenario">
+<strong>Erro 1 — o dado não tem a forma esperada</strong>
+<p>O objeto tem uma lista dentro, e o código chamou <code>map</code> no objeto. O erro diz exatamente qual valor não tem a função.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let dados = $state({ itens: [1, 2, 3] });
+  let dobrados = $derived(dados.map((n) =&gt; n * 2));
+&lt;/script&gt;
+
+{#each dobrados as valor}
+  &lt;p&gt;{valor}&lt;/p&gt;
+{/each}</pre>
+<pre class="out">dados.map is not a function</pre>
+<p>A correção é <code>dados.itens.map(...)</code>. Antes de otimizar, vale conferir a forma do dado com <code>console.log(dados)</code>: metade das “lentidões” suspeitas é dado com formato diferente do que o código supõe.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — trabalho sem fim</strong>
+<p>Uma função que chama a si mesma sem condição de parada enche a pilha de chamadas. Não é lentidão: é trabalho infinito.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function contar(n) {
+    return contar(n + 1);
+  }
+
+  let resultado = $state(contar(1));
+&lt;/script&gt;
+
+&lt;p&gt;{resultado}&lt;/p&gt;</pre>
+<pre class="out">Maximum call stack size exceeded</pre>
+<p>“Tamanho máximo da pilha de chamadas excedido”. Toda recursão precisa de um caso que para — <code>if (n &gt; 10) return n;</code>, por exemplo. Sem ele, nenhuma otimização ajuda, porque o cálculo nunca termina.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — o efeito que se alimenta</strong>
+<p>Este não aparece no HTML: acontece no navegador, quando um efeito escreve na variável que ele lê. O Svelte detecta o laço e para o componente.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+
+  $effect(() =&gt; {
+    total = total + 1;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="term">console do navegador:
+
+Uncaught Error: https://svelte.dev/e/effect_update_depth_exceeded</pre>
+<p>“Profundidade de atualização do efeito excedida”. A saída é tirar o valor do efeito e deixá-lo como <code>$derived</code>: valor calculado não precisa de lugar próprio.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que você quer medir</th><th>Comando ou lugar</th></tr>
+<tr><td>tamanho do que o navegador baixa</td><td><code>npm run build</code>, linha do <code>gzip</code></td></tr>
+<tr><td>quantos módulos entraram no pacote</td><td><code>npm run build</code>, linha <code>modules transformed</code></td></tr>
+<tr><td>quantas vezes um cálculo roda</td><td>contador + <code>console.log</code> dentro da função</td></tr>
+<tr><td>quando um estado muda</td><td><code>$inspect(estado)</code></td></tr>
+<tr><td>tempo de cada etapa no navegador</td><td>aba Performance do DevTools</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Padrão caro</th><th>Alternativa</th></tr>
+<tr><td><code>$effect</code> copiando cálculo para <code>$state</code></td><td><code>$derived</code></td></tr>
+<tr><td>biblioteca inteira por uma função</td><td>função própria, ou importar só o módulo</td></tr>
+<tr><td>ordenar dentro do HTML em dois lugares</td><td>uma runa derivada, usada nos dois</td></tr>
+<tr><td><code>{#each}</code> sem chave em lista que reordena</td><td><code>{#each itens as item (item.id)}</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual número do build mais se aproxima do que o visitante baixa?</p>
+<label><input type="radio" name="q1"> a quantidade de módulos transformados</label>
+<label><input type="radio" name="q1"> o tamanho com <code>gzip</code></label>
+<label><input type="radio" name="q1"> o tempo em segundos do <code>built in</code></label>
+<label><input type="radio" name="q1"> o tamanho do <code>index.html</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Um valor que pode ser calculado a partir de uma lista deve ser…</p>
+<label><input type="radio" name="q1"> guardado em <code>$state</code> e atualizado por um <code>$effect</code></label>
+<label><input type="radio" name="q1"> recalculado dentro do HTML em cada lugar que precisa</label>
+<label><input type="radio" name="q1"> escrito como constante, calculada uma vez na criação</label>
+<label><input type="radio" name="q1"> uma runa <code>$derived</code>, que acompanha a lista sozinha</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que a função usada no HTML rodou só duas vezes depois de um item novo?</p>
+<label><input type="radio" name="q1"> porque o Svelte atualiza apenas o pedaço que depende do valor que mudou</label>
+<label><input type="radio" name="q1"> porque o navegador guarda o resultado da função em cache</label>
+<label><input type="radio" name="q1"> porque a lista tinha menos itens depois do clique</label>
+<label><input type="radio" name="q1"> porque <code>{#each}</code> só desenha o primeiro item</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let precos = $state([0.9, 2.5]);<br>let total = <input data-answer="$derived(precos.reduce((soma, p) =&gt; soma + p, 0))">;<br><br>&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Performance é o tempo de quem usa: baixar, interpretar, desenhar e recalcular.</li>
+  <li><code>npm run build</code> dá o número mais barato de todos: módulos, tamanho e <code>gzip</code>.</li>
+  <li>Uma biblioteca inteira por causa de uma função pode triplicar o peso do site.</li>
+  <li>Contar execuções com <code>console.log</code> mostra o trabalho real, sem palpite.</li>
+  <li>Função no HTML roda só nos pedaços que mudaram; <code>$derived</code> refaz o cálculo inteiro.</li>
+  <li><code>$effect</code> que escreve no que lê gera <code>effect_update_depth_exceeded</code>.</li>
+  <li>Valor calculado é <code>$derived</code>, nunca um segundo <code>$state</code> sincronizado à mão.</li>
+  <li>Ordene e filtre numa runa derivada, com cópia da lista antes de <code>sort</code>.</li>
+  <li>Chave no <code>{#each}</code> vale quando a lista reordena, perde item do meio ou tem campo dentro.</li>
+  <li>Meça, mude uma coisa, meça de novo — e guarde os dois números.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

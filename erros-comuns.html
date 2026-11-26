@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Erros Comuns — os cinco que voltam sempre | Guia Svelte</title>
+<meta name="description" content="Os erros que mais aparecem no começo com Svelte 5: texto somado como número, estado sem $state, bloco aberto e bind no lugar errado, com mensagens reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Erros Comuns</span></h1>
+
+<p class="intro">A Ana anotou num caderno os erros que a fizeram perder tempo no primeiro mês. Eram sempre os mesmos cinco: o número que virou texto, o estado que ninguém avisa, o bloco que abre e não fecha, a propriedade que não chega e o <code>bind</code> no lugar errado. Nesta aula, cada um aparece com a mensagem de verdade que o compilador escreve — e com o conserto.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As três telas onde um erro do Svelte pode aparecer.</li>
+  <li>Como ler uma mensagem: linha, coluna e tipo.</li>
+  <li>Por que somar texto com número dá <code>0.900.1</code> em vez de <code>1.00</code>.</li>
+  <li>O que muda no componente quando você usa a primeira runa.</li>
+  <li>Como o aviso <code>non_reactive_update</code> denuncia o estado esquecido.</li>
+  <li>O que fazer quando um bloco <code>{#if}</code> fica aberto.</li>
+  <li>Por que <code>bind:value</code> só funciona em campo de formulário.</li>
+  <li>A ordem certa de olhar os erros quando aparece mais de um.</li>
+  <li>Os três casos desta aula com a saída real do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: os erros se repetem</h2>
+
+<p>Quem começa a programar imagina que vai encontrar milhares de erros diferentes. Na prática, encontra os mesmos cinco, várias vezes, com roupa diferente. Saber reconhecer o padrão economiza mais tempo do que decorar sintaxe.</p>
+
+<p>Isso acontece porque erro de programação quase nunca é aleatório. Ele nasce de uma suposição errada sobre o que a linguagem faz: que texto soma como número, que qualquer variável atualiza a tela, que o bloco fecha sozinho no fim do arquivo. Cada suposição dessas tem uma mensagem própria — e a mensagem diz exatamente qual foi a suposição.</p>
+
+<p>O caminho é sempre o mesmo: ler a mensagem inteira, achar a linha, olhar o trecho, testar uma hipótese de cada vez. O resto desta aula é esse caminho aplicado aos cinco casos mais comuns no projeto da Ana.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O pão que não cresceu</td><td>A tela que não atualizou</td></tr>
+<tr><td>O sal trocado pelo açúcar</td><td>O texto usado onde precisava de número</td></tr>
+<tr><td>A forma que ficou aberta no forno</td><td>O bloco <code>{#if}</code> sem <code>{/if}</code></td></tr>
+<tr><td>O pedido que ninguém anotou</td><td>A propriedade que não foi passada</td></tr>
+<tr><td>A etiqueta colada no pote errado</td><td><code>bind</code> numa tag que não guarda valor</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Onde cada erro aparece</h2>
+
+<p>Antes de procurar o que está errado, descubra <em>quem</em> está reclamando. Existem três lugares, e cada um vê uma parte diferente do problema.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Lugar</th><th>Quando aparece</th><th>Cara da mensagem</th></tr>
+<tr><td>Terminal, na compilação</td><td>o arquivo <code>.svelte</code> não pode ser traduzido</td><td><code>Erro de compilação (linha 5, coluna 0): Block was left open</code></td></tr>
+<tr><td>Terminal, no build</td><td>um arquivo importado não existe ou um nome não foi exportado</td><td><code>Could not resolve …</code>, <code>"x" is not exported by …</code></td></tr>
+<tr><td>Console do navegador</td><td>o componente compilou mas quebrou ao desenhar</td><td><code>preco.toFixed is not a function</code></td></tr>
+<tr><td>Console do navegador (aviso)</td><td>o componente funciona, mas algo não vai se atualizar</td><td><code>[svelte] non_reactive_update</code></td></tr>
+</table>
+</div>
+
+<p>A diferença importa porque muda o que você faz em seguida. Erro de compilação impede o projeto de rodar: nada aparece na tela e a mensagem está no terminal. Erro de desenho só aparece quando a página carrega, e vem no console do navegador, junto com o caminho do arquivo compilado. Aviso não impede nada — e é o mais perigoso, porque a tela sai incompleta sem quebrar.</p>
+
+<p>Para ver as duas telas ao mesmo tempo, a Ana deixa o servidor de desenvolvimento rodando num terminal e abre o console do navegador no outro:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+5:11:58 PM [vite] (client) Forced re-optimization of dependencies
+
+  VITE v7.3.8  ready in 1543 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Enquanto esse comando estiver rodando, cada arquivo salvo é recompilado e a página recarrega sozinha. O botão direito na página, “Inspecionar”, abre o console à direita — é lá que os erros de desenho aparecem, em vermelho, com a setinha para abrir o detalhe.</p>
+
+<hr>
+
+<h2>3. A anatomia de uma mensagem</h2>
+
+<p>Toda mensagem de compilação do Svelte tem a mesma forma. Aprender a ler cada pedaço vale para os cinco erros desta aula e para os próximos.</p>
+
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+
+<dl class="anatomy">
+  <dt>Erro de compilação</dt><dd>quem reclamou. Aqui é o compilador do Svelte, antes de qualquer coisa rodar no navegador.</dd>
+  <dt>(linha 5, coluna 0)</dt><dd>onde. A linha é contada a partir do topo do arquivo <code>.svelte</code>; a coluna começa em zero, contando caracteres da esquerda.</dd>
+  <dt>:</dt><dd>o fim do endereço e o começo da explicação. Tudo o que vem depois é a mensagem em inglês — curta, técnica e específica.</dd>
+  <dt>Block was left open</dt><dd>“o bloco ficou aberto”. Um <code>{#if}</code> começou e o compilador nunca encontrou o <code>{/if}</code> correspondente.</dd>
+</dl>
+
+<p>A coluna zero é uma pista forte. Ela quase sempre aponta para o começo de uma linha, e no Svelte as linhas que começam com <code>{#</code>, <code>{:</code> ou <code>{/</code> são justamente as que abrem e fecham blocos. Quando a coluna é 0, olhe primeiro para essas chaves.</p>
+
+<div class="tip">
+<strong>Leia a mensagem em voz alta em inglês técnico</strong>
+<p>“Block was left open” não quer dizer “bloco deixado aberto” no sentido de arquivo aberto no editor. Quer dizer “sobrou um bloco sem fechamento”. As mensagens do Svelte são curtas porque descrevem o estado do compilador, não o seu problema de negócio.</p>
+</div>
+
+<hr>
+
+<h2>4. Erro clássico 1: o número que virou texto</h2>
+
+<p>Este é o campeão. A Ana recebeu o valor pago como texto, porque veio de um campo de formulário, e tentou somar:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pago = '0.90';
+&lt;/script&gt;
+
+&lt;p&gt;{pago + 0.1}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;0.900.1&lt;/p&gt;</pre>
+
+<p>Não é bug do Svelte: é como o JavaScript funciona. O sinal de mais tem dois empregos — somar números e juntar textos. Quando um dos lados é texto, o outro é convertido em texto e os dois são colados. <code>'0.90'</code> é texto com aspas; <code>0.1</code> é número; o resultado é a colagem <code>0.900.1</code>.</p>
+
+<p>A consequência mais confusa vem depois: a variável continua sendo texto, e texto não tem <code>toFixed</code>. O componente então quebra na hora de desenhar:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state('0.90');
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">preco.toFixed is not a function</pre>
+
+<p>“<code>preco.toFixed</code> não é uma função”: o valor não tem esse método porque é texto. A correção é converter na entrada, com <code>Number(valor)</code>, e guardar número. Calcule com número; formate só na hora de mostrar.</p>
+
+<div class="trysvelte" data-goal="out:R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> o preço foi guardado entre aspas, virou texto e o <code>toFixed</code> não existe nele. Guarde o número de verdade e a placa mostra <code>R$ 0.90</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state('0.90');
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que a diferença entre o código que quebra e o que funciona é só um par de aspas. Por isso este erro é tão comum: o arquivo fica quase igual, e a mensagem fala de uma função que existe na linguagem — mas não naquele valor.</p>
+
+<hr>
+
+<h2>5. Erro clássico 2: o estado que ninguém avisa</h2>
+
+<p>Aqui existe uma sutileza do Svelte 5 que confunde muita gente. Um componente <strong>sem nenhuma runa</strong> é compilado no modo antigo, e nele uma variável comum ainda atualiza a tela. A partir da primeira runa — <code>$state</code>, <code>$derived</code>, <code>$props</code> — o arquivo inteiro passa para o modo runas, e aí a variável comum para de avisar a tela.</p>
+
+<p>A versão abaixo tem uma runa (<code>$state</code> no nome) e um contador declarado sem runa:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let cliques = 0;
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana&lt;/p&gt; &lt;button&gt;Cliques: 0&lt;/button&gt;</pre>
+
+<p>A saída parece normal — e é, no primeiro desenho. O problema aparece no clique: <code>cliques</code> muda de valor, mas ninguém avisa o botão. O compilador sabe que isso vai acontecer e deixa um aviso na compilação:</p>
+
+<pre class="out">non_reactive_update (linha 3): `cliques` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates</pre>
+
+<p>“<code>cliques</code> é atualizado, mas não foi declarado com <code>$state(...)</code>. Mudar o valor não vai disparar as atualizações corretamente.” A linha 3 é a declaração, e a mensagem já diz o conserto. Esse aviso não impede o build: o componente compila, a tela desenha, e só o clique fica sem efeito.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o botão conta no valor, mas o número na tela não muda, porque <code>cliques</code> não é estado reativo. Faça o clique aparecer na tela.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let cliques = 0;
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<p>Uma dica prática que evita o problema: se o valor aparece na tela e muda durante o uso, ele é <code>$state</code>. Se ele nunca muda, pode ser <code>const</code>. Entre os dois não existe meio-termo útil — e é aí que nasce este erro.</p>
+
+<hr>
+
+<h2>6. Erro clássico 3: o bloco que abre e não fecha</h2>
+
+<p>Cada <code>{#if}</code> pede um <code>{/if}</code>, cada <code>{#each}</code> pede um <code>{/each}</code>, cada <code>{#snippet}</code> pede um <code>{/snippet}</code>. Quando falta o fechamento, o compilador reclama do bloco que ficou aberto:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aberto = $state(false);
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p&gt;Aberto&lt;/p&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+
+<p>A linha apontada é a do <code>{#if}</code>, não a do fim do arquivo. Isso ajuda: o problema é o bloco que começou ali e não terminou. Em arquivos grandes, a dica é contar os pares — quantos <code>{#if}</code>, quantos <code>{/if}</code>. Se os números não batem, o erro está no que sobra.</p>
+
+<p>Existe um segundo motivo, mais sutil, para o mesmo erro: o fechamento existe, mas está no lugar errado, dentro de outra tag. O compilador não consegue casar os pares e reclama do bloco aberto.</p>
+
+<div class="trysvelte" data-goal="out:Fechado">
+<p class="try-task"><strong>Missão:</strong> a tela fica vazia quando não há nada aberto, porque o <code>{#if}</code> não tem caminho alternativo. Acrescente o <code>{:else}</code> com a mensagem <code>Fechado</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(false);
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p&gt;Aberto&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(false);
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p&gt;Aberto&lt;/p&gt;
+{:else}
+  &lt;p&gt;Fechado&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>O <code>{:else}</code> não é enfeite: é o caminho que garante que sempre existe algo na tela. Um <code>{#if}</code> sem <code>{:else}</code> é uma tela vazia esperando para acontecer — e a tela vazia nunca dá erro, o que a torna mais difícil de achar.</p>
+
+<hr>
+
+<h2>7. Erro clássico 4: a propriedade que não chega</h2>
+
+<p>Quando um componente recebe propriedades sem valor padrão e ninguém as passa, elas valem <code>undefined</code>. O componente compila e quebra no desenho, com uma mensagem que fala de “propriedades de undefined”:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { preco } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">Cannot read properties of undefined (reading 'toFixed')</pre>
+
+<p>“Não consigo ler propriedades de <code>undefined</code> (lendo ‘toFixed’)”. O valor não existe, então não há de onde tirar o método. Duas correções possíveis: dar valor padrão (<code>let { preco = 0 } = $props()</code>) ou garantir que quem usa o componente sempre passe o preço. A primeira protege mais, porque vale mesmo quando o esquecimento é de outra pessoa.</p>
+
+<hr>
+
+<h2>8. O hábito: um erro por vez, o primeiro primeiro</h2>
+
+<p>Quando aparecem três erros juntos, comece pelo primeiro. Cada erro de compilação pode esconder os seguintes: com um bloco aberto, o compilador não sabe onde o resto começa, e as mensagens de baixo viram consequência.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ordem</th><th>O que conferir</th></tr>
+<tr><td>1</td><td>O primeiro erro do terminal, de cima para baixo</td></tr>
+<tr><td>2</td><td>A linha que ele aponta, com o arquivo aberto nela</td></tr>
+<tr><td>3</td><td>Se há um par de chaves faltando por perto</td></tr>
+<tr><td>4</td><td>Se o valor é do tipo que a operação espera (número, texto, lista)</td></tr>
+<tr><td>5</td><td>Salvar, olhar de novo, e só então o próximo erro</td></tr>
+</table>
+</div>
+
+<p>Vale anotar o que cada mensagem <em>não</em> diz. Ela não diz o que você queria fazer, não diz qual é o conserto e não sabe do seu negócio. Ela descreve o estado do arquivo no ponto em que o compilador desistiu: “sobrou um bloco”, “esse nome não existe”, “esse valor não tem esse método”. Quem traduz isso para a intenção original é você, e é por isso que ler o código em volta ainda é necessário.</p>
+
+<p>Existe um teste que resolve a maioria dos casos em segundos: <strong>reduza o problema</strong>. Comente metade do HTML e veja se o erro continua; se continuar, ele está na metade que sobrou. Faça isso duas ou três vezes e o problema fica do tamanho de uma linha — e uma linha se lê inteira.</p>
+
+<div class="warning">
+<strong>Não conserte no escuro</strong>
+<p>Trocar uma linha de lugar e salvar para “ver se resolve” transforma um problema em dois. Mude uma coisa, olhe o resultado, anote o que viu. Se piorar, desfaça — e o editor tem o atalho de desfazer exatamente para isso.</p>
+</div>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Vale notar que todas as três apontam linha e coluna — e nenhuma delas fala do que você queria fazer, só do que o compilador encontrou.</p>
+
+<div class="cenario">
+<strong>Erro 1 — atribuir a uma constante</strong>
+<p><code>const</code> promete que o valor não muda. Atribuir de novo é recusado na compilação.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const preco = 0.9;
+  preco = 1.2;
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 2): Cannot assign to constant</pre>
+<p>“Não é possível atribuir a uma constante”. A coluna 2 é o começo do nome <code>preco</code> na segunda linha. Se o valor precisa mudar, use <code>let</code> com <code>$state</code>; se não precisa, apague a atribuição.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — bloco aberto sem fechamento</strong>
+<p>O mesmo erro da seção 6, agora visto com o arquivo completo: o <code>{#if}</code> abre na linha 5 e o arquivo termina sem o <code>{/if}</code>.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aberto = $state(false);
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p&gt;Aberto&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>A coluna 0 é o indício de que o problema é uma chave de bloco no começo da linha. Fechar o <code>{#if}</code> faz o erro desaparecer — mesmo que o resultado na tela ainda precise de ajuste.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>bind</code> em tag que não guarda valor</strong>
+<p><code>bind:value</code> liga um campo de formulário a uma variável, nas duas direções. Um parágrafo não tem valor para ligar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p bind:value={nome}&gt;{nome}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 3): `bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</pre>
+<p>“<code>bind:value</code> só pode ser usado com <code>&lt;input&gt;</code>, <code>&lt;textarea&gt;</code> e <code>&lt;select&gt;</code>”. A mensagem lista os três elementos válidos: são os únicos que guardam um valor digitado. Para mostrar texto, use <code>{nome}</code> sem <code>bind</code>.</p>
+</div>
+
+<hr>
+
+<h2>10. Depois do conserto, o build passa</h2>
+
+<p>Consertar erro de compilação tem uma prova objetiva: o comando de produção termina com o sinal de certo. A Ana fechou o bloco, trocou a constante por <code>$state</code> e rodou de novo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-D0rj40xc.js  42.51 kB │ gzip: 16.24 kB
+✓ built in 1.59s</pre>
+
+<p>Repare nas duas linhas que importam quando algo dá errado: <code>✓ 111 modules transformed</code> e <code>✓ built in 1.59s</code>. O sinal de certo no começo da linha é o “terminei”; a ausência dele, junto com <code>✗ Build failed</code>, é o “parei”. Lendo só essas duas linhas você já sabe se o problema é de compilação ou de outra coisa.</p>
+
+<p>O nome do arquivo gerado (<code>index-D0rj40xc.js</code>) muda a cada build em que o conteúdo muda. É de propósito: o navegador guarda em cache pelo nome, então conteúdo novo significa nome novo. Se o nome não mudou, o conteúdo também não — e às vezes isso é a pista de que você salvou o arquivo errado.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma que você vê</th><th>Provável causa</th><th>Conserto</th></tr>
+<tr><td><code>0.900.1</code> em vez de <code>1.00</code></td><td>um dos lados é texto</td><td><code>Number(valor)</code> na entrada</td></tr>
+<tr><td><code>….toFixed is not a function</code></td><td>o valor guardado é texto</td><td>guardar número, formatar na saída</td></tr>
+<tr><td>clique muda o valor e a tela não</td><td>falta <code>$state</code></td><td><code>let x = $state(0)</code></td></tr>
+<tr><td><code>Block was left open</code></td><td>falta <code>{/if}</code>, <code>{/each}</code>…</td><td>contar os pares e fechar</td></tr>
+<tr><td><code>Cannot read properties of undefined</code></td><td>propriedade não passada</td><td>valor padrão em <code>$props()</code></td></tr>
+<tr><td><code>bind:value</code> recusado</td><td>tag não guarda valor</td><td>usar <code>input</code>, <code>textarea</code> ou <code>select</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Aviso</th><th>O que significa</th></tr>
+<tr><td><code>non_reactive_update</code></td><td>variável atualizada sem <code>$state</code> em modo runas</td></tr>
+<tr><td><code>component_name_lowercase</code></td><td>tag de componente em minúscula virou elemento HTML</td></tr>
+<tr><td><code>state_referenced_locally</code></td><td>o valor foi lido fora de um contexto que acompanha mudanças</td></tr>
+<tr><td><code>a11y_click_events_have_key_events</code></td><td>clique em elemento não interativo, sem teclado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Por que <code>'0.90' + 0.1</code> resulta em <code>0.900.1</code>?</p>
+<label><input type="radio" name="q1"> porque o Svelte converte números em texto antes de qualquer conta</label>
+<label><input type="radio" name="q1"> porque <code>0.1</code> não é um número válido em JavaScript</label>
+<label><input type="radio" name="q1"> porque o sinal <code>+</code> junta textos quando um dos lados é texto</label>
+<label><input type="radio" name="q1"> porque o valor tem duas casas decimais</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Um contador declarado com <code>let cliques = 0</code> muda na tela quando clicado?</p>
+<label><input type="radio" name="q1"> sempre, porque <code>let</code> já é reativo por definição</label>
+<label><input type="radio" name="q1"> só se o componente não usar nenhuma runa; com runas, precisa de <code>$state</code></label>
+<label><input type="radio" name="q1"> nunca, em nenhuma versão do Svelte</label>
+<label><input type="radio" name="q1"> apenas quando o valor é um número</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>Cannot read properties of undefined (reading 'toFixed')</code> quer dizer?</p>
+<label><input type="radio" name="q1"> o valor é <code>undefined</code>, então o método <code>toFixed</code> não existe nele</label>
+<label><input type="radio" name="q1"> o <code>toFixed</code> foi removido da linguagem</label>
+<label><input type="radio" name="q1"> o Svelte não aceita <code>toFixed</code> dentro de chaves</label>
+<label><input type="radio" name="q1"> o componente precisa de <code>&lt;style&gt;</code> para formatar números</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let cliques = <input data-answer="$state(0)|$state(0)">;<br>&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;<br><br>// o componente já usa $state em outra variável:<br>// sem esta runa, o clique não aparece na tela</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Erro tem endereço: <strong>linha</strong> e <strong>coluna</strong>, contando a coluna do zero.</li>
+  <li>Três lugares reclamam: compilação, build e console do navegador — cada um vê uma parte.</li>
+  <li>Texto com número soma por colagem: <code>'0.90' + 0.1</code> vira <code>0.900.1</code>.</li>
+  <li><code>….toFixed is not a function</code> quase sempre é valor guardado como texto.</li>
+  <li>Sem nenhuma runa, o componente compila no modo antigo; com a primeira runa, vira modo runas.</li>
+  <li>Em modo runas, variável que muda e aparece na tela precisa de <code>$state</code>.</li>
+  <li><code>non_reactive_update</code> avisa exatamente isso, e não impede o build.</li>
+  <li><code>Block was left open</code> é bloco sem fechamento; a linha apontada é a do <code>{#if}</code>.</li>
+  <li><code>bind:value</code> só vale em <code>input</code>, <code>textarea</code> e <code>select</code>.</li>
+  <li>Comece pelo primeiro erro, reduza o caso pela metade e mude uma coisa por vez.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
