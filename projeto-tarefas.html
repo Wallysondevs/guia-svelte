@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto Lista de Tarefas — do quadro de avisos ao filtro | Guia Svelte</title>
+<meta name="description" content="A lista de tarefas da Ana em três versões reais: {#each} com bind:value, objetos com checkbox e remover, filtros com chave e lista vazia, mais o build no terminal.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Projeto Lista de Tarefas</span></h1>
+
+<p class="intro">Na parede da padaria existe um quadro de avisos com um pedaço de papel para cada coisa a fazer: comprar farinha, assar o pão, passar o café. Quando a Ana termina uma, ela risca o papel — mas o papel continua lá, e é isso que a incomoda: ela quer riscar, apagar, e ver só o que falta. Esta aula transforma o quadro de avisos num componente, em <strong>três versões</strong>: a lista simples, a lista com checkbox e a lista com filtros. Cada saída mostrada aqui foi compilada e rodada de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como guardar uma lista num componente e desenhá-la com <code>{#each}</code>.</li>
+  <li>Como o <code>bind:value</code> do campo de texto acompanha o que a Ana digita.</li>
+  <li>Por que a versão 2 troca textos por objetos com <code>id</code> e <code>feita</code>.</li>
+  <li>O que <code>bind:checked</code> faz num checkbox dentro de uma lista.</li>
+  <li>Como remover um item sem quebrar a contagem, usando <code>filter</code>.</li>
+  <li>Para que serve a chave entre parênteses no <code>{#each … (tarefa.id)}</code>.</li>
+  <li>Como contar o que falta com <code>$derived</code> e mostrar uma frase para a lista vazia.</li>
+  <li>O que o build do Vite faz quando o componente tem <code>&lt;style&gt;</code>: um arquivo CSS separado.</li>
+  <li>Os dois erros de lista que o compilador desta versão mostra de verdade.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: uma lista é um estado com vários valores</h2>
+
+<p>Um contador guarda <em>um</em> número. Uma lista guarda <em>vários</em>, e essa diferença muda o desenho do componente: em vez de um buraco <code>{cliques}</code> na tela, você precisa de um molde que se repita para cada item. O Svelte chama esse molde de <code>{#each}</code> — "para cada item da lista, desenhe este pedaço de HTML".</p>
+
+<p>O quadro de avisos da Ana tem outra propriedade que a lista precisa imitar: cada papel é <em>independente</em>. Riscar o papel do café não pode riscar o papel da farinha. Num componente, isso quer dizer que cada tarefa precisa de um valor próprio que diga se ela está feita, e esse valor precisa ser reativo — mudar um e só um.</p>
+
+<p>Por último, a ordem importa. A Ana põe o papel novo embaixo, e o mais urgente em cima. Uma lista em programação é ordenada por natureza: o primeiro item que entra é o primeiro que aparece. Quando a ordem precisa mudar, você ordena antes de desenhar — e o desenho continua sendo o mesmo molde.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No quadro de avisos</th><th>No componente</th></tr>
+<tr><td>Um papel para cada coisa a fazer</td><td><code>let tarefas = $state([...])</code></td></tr>
+<tr><td>Ler os papéis de cima para baixo</td><td><code>{#each tarefas as tarefa}</code></td></tr>
+<tr><td>Escrever um papel novo</td><td><code>tarefas.push({ … })</code></td></tr>
+<tr><td>Riscar um papel</td><td><code>tarefa.feita = true</code> ou <code>bind:checked</code></td></tr>
+<tr><td>Jogar um papel no lixo</td><td><code>tarefas = tarefas.filter(…)</code></td></tr>
+<tr><td>Pôr os feitos numa pilha separada</td><td>um <code>$derived</code> que filtra</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Versão 1: a lista simples</h2>
+
+<p>A primeira versão guarda só textos, na ordem em que a Ana digitou. O campo de texto usa <code>bind:value</code>: o que está no campo é o que está na variável, sem ouvinte de evento escrito na mão.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tarefas = $state(['comprar farinha', 'assar o pão']);
+  let nova = $state('');
+
+  function adicionar() {
+    tarefas.push(nova);
+    nova = '';
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Lista da padaria&lt;/h1&gt;
+
+&lt;input bind:value={nova} placeholder="o que fazer?" /&gt;
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each tarefas as tarefa}
+    &lt;li&gt;{tarefa}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O HTML gerado tem dois itens, um <code>&lt;li&gt;</code> para cada texto da lista. Repare no campo de texto: o atributo <code>value</code> aparece vazio, porque <code>nova</code> começa como texto vazio.</p>
+
+<pre class="out">&lt;h1&gt;Lista da padaria&lt;/h1&gt; &lt;input value="" placeholder="o que fazer?"/&gt; &lt;button&gt;adicionar&lt;/button&gt; &lt;ul&gt;&lt;li&gt;comprar farinha&lt;/li&gt;&lt;li&gt;assar o pão&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Três coisas merecem atenção nesse resultado. A primeira: o <code>{#each}</code> sumiu do HTML, como o <code>{cliques}</code> sumia no contador — o molde virou tantos <code>&lt;li&gt;</code> quantos itens existiam. A segunda: o <code>bind:value</code> não deixa rastro no HTML; ele é uma ligação de mão dupla que o Svelte monta em JavaScript. A terceira: <code>tarefas.push(nova)</code> funciona porque a lista foi criada com <code>$state</code>. Se ela fosse uma variável comum, o array mudaria e a tela não saberia.</p>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>let tarefas = $state([...])</dt><dd>uma lista reativa. Os colchetes guardam os itens; as aspas dizem que cada item é texto.</dd>
+  <dt>bind:value={nova}</dt><dd>liga o campo à variável nos dois sentidos: digitar muda <code>nova</code>, e mudar <code>nova</code> muda o campo. Sem <code>bind</code>, você precisaria ler <code>evento.target.value</code>.</dd>
+  <dt>{#each tarefas as tarefa}</dt><dd>o molde. Para cada item da lista, o nome <code>tarefa</code> vale o item daquela volta. O <code>{/each}</code> fecha o bloco.</dd>
+  <dt>tarefas.push(nova)</dt><dd>acrescenta um item no fim. <code>push</code> é método de array e devolve o novo tamanho — não é o caso de guardar esse retorno aqui.</dd>
+  <dt>nova = ''</dt><dd>limpa o campo depois de adicionar. Como o <code>bind</code> é de mão dupla, limpar a variável limpa o que está escrito na tela.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="outre:assar o pão">
+<p class="try-task"><strong>Missão:</strong> o componente mostra só o primeiro papel do quadro. Faça os <strong>dois</strong> textos aparecerem, um em cada linha.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let tarefas = $state(['comprar farinha', 'assar o pão']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;{tarefas[0]}&lt;/li&gt;
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let tarefas = $state(['comprar farinha', 'assar o pão']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each tarefas as tarefa}
+    &lt;li&gt;{tarefa}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p><code>tarefas[0]</code> é o primeiro item; <code>tarefas[1]</code> seria o segundo. Escrever um <code>&lt;li&gt;</code> para cada índice funciona enquanto a lista tem tamanho fixo — e deixa de funcionar no instante em que a Ana adiciona o terceiro papel. O <code>{#each}</code> é o que faz o molde acompanhar o tamanho da lista.</p>
+
+<hr>
+
+<h2>3. Versão 2: cada tarefa vira um objeto</h2>
+
+<p>Texto sozinho não guarda "esta tarefa está feita". A versão 2 troca cada item por um objeto com três campos: <code>id</code> (um número único), <code>texto</code> (o que a Ana escreveu) e <code>feita</code> (verdadeiro ou falso). Com isso, o checkbox consegue mexer num item sem tocar nos outros, e o botão de remover consegue achar exatamente qual apagar.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tarefas = $state([
+    { id: 1, texto: 'comprar farinha', feita: false },
+    { id: 2, texto: 'assar o pão', feita: true }
+  ]);
+  let nova = $state('');
+
+  let abertas = $derived(tarefas.filter((t) =&gt; !t.feita).length);
+
+  function adicionar() {
+    const texto = nova.trim();
+    if (!texto) return;
+    tarefas.push({ id: Date.now(), texto, feita: false });
+    nova = '';
+  }
+
+  function remover(id) {
+    tarefas = tarefas.filter((t) =&gt; t.id !== id);
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Lista da padaria&lt;/h1&gt;
+
+&lt;input bind:value={nova} placeholder="o que fazer?" /&gt;
+&lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+
+&lt;p&gt;{abertas} aberta(s)&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each tarefas as tarefa}
+    &lt;li&gt;
+      &lt;input type="checkbox" bind:checked={tarefa.feita} /&gt;
+      &lt;span class:feita={tarefa.feita}&gt;{tarefa.texto}&lt;/span&gt;
+      &lt;button onclick={() =&gt; remover(tarefa.id)}&gt;remover&lt;/button&gt;
+    &lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>Na saída, o segundo checkbox vem marcado e o segundo <code>&lt;span&gt;</code> vem com a classe <code>feita</code>. É o estado de cada tarefa aparecendo no HTML, item por item:</p>
+
+<pre class="out">&lt;h1&gt;Lista da padaria&lt;/h1&gt; &lt;input value="" placeholder="o que fazer?"/&gt; &lt;button&gt;adicionar&lt;/button&gt; &lt;p&gt;1 aberta(s)&lt;/p&gt; &lt;ul&gt;&lt;li&gt;&lt;input type="checkbox"/&gt; &lt;span&gt;comprar farinha&lt;/span&gt; &lt;button&gt;remover&lt;/button&gt;&lt;/li&gt;&lt;li&gt;&lt;input type="checkbox" checked=""/&gt; &lt;span class="feita"&gt;assar o pão&lt;/span&gt; &lt;button&gt;remover&lt;/button&gt;&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O <code>Date.now()</code> gera um número enorme, os milissegundos desde 1970, e serve como <code>id</code> porque dois cliques não acontecem no mesmo milissegundo. É uma solução de projeto pequeno: numa lista que vem de um servidor, o <code>id</code> vem do banco e você não inventa.</p>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>{ id, texto, feita }</dt><dd>o formato de uma tarefa. Três campos, cada um com um papel: identificar, mostrar, marcar.</dd>
+  <dt>bind:checked={tarefa.feita}</dt><dd>liga o checkbox àquele campo daquele item. Marcar na tela muda <code>tarefa.feita</code>; mudar <code>tarefa.feita</code> marca na tela.</dd>
+  <dt>class:feita={tarefa.feita}</dt><dd>põe ou tira a classe <code>feita</code> conforme o valor. Quando é falso, a classe nem aparece no HTML.</dd>
+  <dt>tarefas.filter((t) =&gt; !t.feita)</dt><dd>cria uma lista nova só com as que faltam; <code>.length</code> conta quantas são. A lista original não é tocada.</dd>
+  <dt>tarefas = tarefas.filter(…)</dt><dd>para remover, o filtro cria a lista sem o item e a atribuição troca a lista inteira. Trocar a lista é o que avisa a tela.</dd>
+</dl>
+
+<div class="tip">
+<strong><code>push</code> funciona, mas trocar a lista é mais previsível</strong>
+<p>Guardado em <code>$state</code>, um array avisa a tela tanto quando você chama <code>push</code> quanto quando atribui um array novo. Para remover, porém, <code>filter</code> já devolve outro array — usar o retorno é mais curto do que procurar o índice e chamar <code>splice</code>. Nas duas formas, o resultado na tela é o mesmo.</p>
+</div>
+
+<hr>
+
+<h2>4. Versão 3: filtros, chave e a lista vazia</h2>
+
+<p>A versão pronta responde à pergunta que a Ana faz cinquenta vezes por dia: "o que ainda falta?". Ela tem três botões de filtro, uma lista que muda conforme o filtro, Enter para adicionar sem tirar a mão do teclado e uma frase para quando não há nada para mostrar.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tarefas = $state([
+    { id: 1, texto: 'comprar farinha', feita: false },
+    { id: 2, texto: 'assar o pão', feita: true },
+    { id: 3, texto: 'passar o café', feita: false }
+  ]);
+  let nova = $state('');
+  let filtro = $state('todas');
+
+  let abertas = $derived(tarefas.filter((t) =&gt; !t.feita).length);
+  let visiveis = $derived(
+    tarefas.filter((t) =&gt; filtro === 'todas' || (filtro === 'abertas' ? !t.feita : t.feita))
+  );
+
+  function adicionar() {
+    const texto = nova.trim();
+    if (!texto) return;
+    tarefas.push({ id: Date.now(), texto, feita: false });
+    nova = '';
+  }
+
+  function adicionarComEnter(evento) {
+    if (evento.key === 'Enter') adicionar();
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Lista da padaria&lt;/h1&gt;
+
+&lt;div class="entrada"&gt;
+  &lt;input bind:value={nova} onkeydown={adicionarComEnter} placeholder="o que fazer?" /&gt;
+  &lt;button onclick={adicionar}&gt;adicionar&lt;/button&gt;
+&lt;/div&gt;
+
+&lt;div class="filtros"&gt;
+  &lt;button class:ativo={filtro === 'todas'} onclick={() =&gt; (filtro = 'todas')}&gt;todas&lt;/button&gt;
+  &lt;button class:ativo={filtro === 'abertas'} onclick={() =&gt; (filtro = 'abertas')}&gt;abertas&lt;/button&gt;
+  &lt;button class:ativo={filtro === 'feitas'} onclick={() =&gt; (filtro = 'feitas')}&gt;feitas&lt;/button&gt;
+&lt;/div&gt;
+
+&lt;p&gt;{abertas} de {tarefas.length} em aberto&lt;/p&gt;
+
+{#if visiveis.length === 0}
+  &lt;p class="vazio"&gt;Nada aqui.&lt;/p&gt;
+{:else}
+  &lt;ul&gt;
+    {#each visiveis as tarefa (tarefa.id)}
+      &lt;li class:feita={tarefa.feita}&gt;
+        &lt;input type="checkbox" bind:checked={tarefa.feita} /&gt;
+        {tarefa.texto}
+      &lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}
+
+&lt;style&gt;
+  .feita {
+    text-decoration: line-through;
+    color: #666;
+  }
+  .ativo {
+    font-weight: bold;
+  }
+  .vazio {
+    font-style: italic;
+  }
+&lt;/style&gt;</pre>
+
+<p>Aqui a saída tem uma lição escondida. O selo <code>svelte-1n46o8q</code> aparece nos botões de filtro, no <code>&lt;p&gt;</code> da contagem e nos <code>&lt;li&gt;</code>, mas <strong>não</strong> aparece na <code>div.entrada</code> nem na <code>div.filtros</code>: o compilador só marca os elementos que algum seletor do <code>&lt;style&gt;</code> pode atingir.</p>
+
+<pre class="out">&lt;h1&gt;Lista da padaria&lt;/h1&gt; &lt;div class="entrada"&gt;&lt;input value="" placeholder="o que fazer?"/&gt; &lt;button&gt;adicionar&lt;/button&gt;&lt;/div&gt; &lt;div class="filtros"&gt;&lt;button class="svelte-1n46o8q ativo"&gt;todas&lt;/button&gt; &lt;button class="svelte-1n46o8q"&gt;abertas&lt;/button&gt; &lt;button class="svelte-1n46o8q"&gt;feitas&lt;/button&gt;&lt;/div&gt; &lt;p&gt;2 de 3 em aberto&lt;/p&gt; &lt;ul&gt;&lt;li class="svelte-1n46o8q"&gt;&lt;input type="checkbox"/&gt; comprar farinha&lt;/li&gt;&lt;li class="svelte-1n46o8q feita"&gt;&lt;input type="checkbox" checked=""/&gt; assar o pão&lt;/li&gt;&lt;li class="svelte-1n46o8q"&gt;&lt;input type="checkbox"/&gt; passar o café&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Filtro escolhido</th><th>O que <code>visiveis</code> devolve</th><th>Texto do parágrafo</th></tr>
+<tr><td><code>todas</code></td><td>as três tarefas</td><td><code>2 de 3 em aberto</code></td></tr>
+<tr><td><code>abertas</code></td><td>farinha e café</td><td><code>2 de 3 em aberto</code> (a contagem não muda com o filtro)</td></tr>
+<tr><td><code>feitas</code></td><td>só o pão</td><td><code>2 de 3 em aberto</code></td></tr>
+</table>
+</div>
+
+<p>A chave <code>(tarefa.id)</code> no <code>{#each}</code> diz ao Svelte para reconhecer cada item pelo <code>id</code>, e não pela posição. A diferença aparece quando a lista muda no meio: sem chave, remover o primeiro item faz o Svelte reaproveitar os elementos do HTML e redistribuir os textos entre eles; com chave, cada item leva o seu elemento junto. Em lista com checkbox, isso evita o clássico "marquei uma e a outra apareceu marcada".</p>
+
+<p>O texto da frase que não muda com o filtro também é uma decisão de projeto: <code>abertas</code> conta a lista inteira, não a lista visível. Se a Ana filtrar "feitas" e ler "2 de 3 em aberto", ela sabe que ainda há dois papéis esperando — que é a informação útil.</p>
+
+<div class="trysvelte" data-goal="clique:input;;outre:^0 aberta">
+<p class="try-task"><strong>Missão:</strong> o checkbox marca a tarefa, mas a contagem continua dizendo <code>1 aberta(s)</code> depois do clique. Faça a contagem acompanhar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let tarefas = $state([
+    { texto: 'comprar farinha', feita: false },
+    { texto: 'assar o pão', feita: true }
+  ]);
+  let abertas = tarefas.filter((t) =&gt; !t.feita).length;
+&lt;/script&gt;
+
+&lt;p&gt;{abertas} aberta(s)&lt;/p&gt;
+&lt;ul&gt;
+  {#each tarefas as t}
+    &lt;li&gt;&lt;input type="checkbox" bind:checked={t.feita} /&gt; {t.texto}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let tarefas = $state([
+    { texto: 'comprar farinha', feita: false },
+    { texto: 'assar o pão', feita: true }
+  ]);
+  let abertas = $derived(tarefas.filter((t) =&gt; !t.feita).length);
+&lt;/script&gt;
+
+&lt;p&gt;{abertas} aberta(s)&lt;/p&gt;
+&lt;ul&gt;
+  {#each tarefas as t}
+    &lt;li&gt;&lt;input type="checkbox" bind:checked={t.feita} /&gt; {t.texto}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<hr>
+
+<h2>5. A lista que não tem nada para mostrar</h2>
+
+<p>Toda lista chega um dia no estado vazio, e esse é o momento em que a maioria das telas fica estranha: aparece uma caixa em branco e a Ana não sabe se o programa travou. A defesa é um <code>{#if}</code> antes do <code>{#each}</code>, com uma frase curta que explica o que fazer.</p>
+
+<p>O detalhe importante é que a condição olha para a lista <em>filtrada</em>, não para a original. Se a condição fosse <code>tarefas.length === 0</code>, filtrar por "feitas" numa lista sem nenhuma feita deixaria a tela em branco: a lista original tem três itens, então o <code>{#if}</code> diria que há o que mostrar, e o <code>{#each}</code> não desenharia nada. Com <code>visiveis.length === 0</code>, a frase aparece exatamente quando não há o que desenhar.</p>
+
+<div class="trysvelte" data-goal="clique:#abertas;;out:abertas comprar farinha">
+<p class="try-task"><strong>Missão:</strong> o botão "abertas" muda o filtro, mas a lista continua mostrando o pão, que já está feito. Faça a lista obedecer ao filtro.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let tarefas = $state([
+    { id: 1, texto: 'comprar farinha', feita: false },
+    { id: 2, texto: 'assar o pão', feita: true }
+  ]);
+  let filtro = $state('todas');
+&lt;/script&gt;
+
+&lt;button id="abertas" onclick={() =&gt; (filtro = 'abertas')}&gt;abertas&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each tarefas as t}
+    &lt;li&gt;{t.texto}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let tarefas = $state([
+    { id: 1, texto: 'comprar farinha', feita: false },
+    { id: 2, texto: 'assar o pão', feita: true }
+  ]);
+  let filtro = $state('todas');
+  let visiveis = $derived(tarefas.filter((t) =&gt; filtro === 'todas' || !t.feita));
+&lt;/script&gt;
+
+&lt;button id="abertas" onclick={() =&gt; (filtro = 'abertas')}&gt;abertas&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each visiveis as t}
+    &lt;li&gt;{t.texto}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Note que a solução não filtra dentro do <code>{#each}</code>, e sim antes, num <code>$derived</code>. Filtrar antes tem três vantagens: a lista visível pode ser usada em outros lugares, o <code>{#if}</code> da lista vazia enxerga o mesmo valor e o código de filtro fica num lugar só, fácil de achar quando a regra mudar.</p>
+
+<hr>
+
+<h2>6. Rótulos: o que o leitor de tela lê</h2>
+
+<p>Quem usa leitor de tela não vê o desenho: ouve o que está escrito. Um campo de texto sem rótulo é anunciado como "campo de edição" e nada mais, e um checkbox sem rótulo é anunciado como "caixa de seleção" — sem dizer de qual tarefa. Como a Ana vai usar esse tablet com o filho pequeno no colo, vale escrever o rótulo certo desde já.</p>
+
+<p>A forma mais simples é envolver o campo num <code>&lt;label&gt;</code>: o texto que está dentro do rótulo passa a valer para o campo de dentro. Para o checkbox que fica ao lado do texto da tarefa, o <code>&lt;label&gt;</code> em volta do <code>&lt;input&gt;</code> e do texto resolve a associação sem <code>id</code> nenhum. Quando o texto visível já descreve o botão — "adicionar", "remover" —, não é preciso mais nada: o leitor de tela lê o próprio texto do botão.</p>
+
+<p>O caso que costuma escapar é o botão só com símbolo. Um <code>&lt;button&gt;×&lt;/button&gt;</code> é anunciado como "vezes" e não diz o que faz. Aí entra <code>aria-label="remover tarefa"</code>, que troca o que é falado sem trocar o que aparece. O custo é manter dois textos em sincronia; o benefício é a tela funcionar para quem não vê.</p>
+
+<hr>
+
+<h2>7. O terminal: build com CSS separado</h2>
+
+<p>O projeto da Ana é o mesmo das outras aulas, em <code>~/loja</code>. O servidor de desenvolvimento continua sendo o primeiro comando de todo dia:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> padaria@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 956 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Quando a lista ganhou <code>&lt;style&gt;</code>, o build passou a gerar <strong>dois</strong> arquivos nas assets: um de JavaScript e um de CSS. Compare com o contador, que só gerava JavaScript porque não tinha estilo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> padaria@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-CgDT-uRh.css   0.14 kB │ gzip:  0.12 kB
+dist/assets/index-CJjAA2T8.js   46.02 kB │ gzip: 17.72 kB
+✓ built in 926ms</pre>
+
+<p>O CSS saiu pequeno porque o componente tem três regras. Numa aplicação inteira ele cresce, e o Vite junta tudo num arquivo só — o navegador faz um pedido e recebe o estilo de todos os componentes. O HTML final carrega os dois:</p>
+
+<pre class="term">ana@notebook:~/loja$ ls dist/assets
+index-CJjAA2T8.js
+index-CgDT-uRh.css</pre>
+
+<p>Se você abrir <code>dist/index.html</code> num editor, vai ver que ele aponta para os dois arquivos pelo nome com hash. É esse HTML que o navegador da Ana baixa quando ela abre o tablet: nenhum dos arquivos <code>.svelte</code> chega até ele — o que chega é o resultado da compilação.</p>
+
+<div class="warning">
+<strong>Estilo sem ninguém usando</strong>
+<p>Se você apagar uma classe do HTML e esquecer a regra no <code>&lt;style&gt;</code>, o compilador avisa: <code>Unused CSS selector</code>. Não é erro, e a página funciona; é um lembrete de que aquele CSS virou peso morto. Em projeto pequeno dá para ignorar por um tempo. Em projeto que cresce, limpar esses avisos é o que mantém o CSS legível.</p>
+</div>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<p>Os dois erros abaixo são de lista, e os dois aparecem no mesmo lugar: entre o <code>{#each}</code> e o <code>{/each}</code>. As mensagens foram copiadas do compilador desta versão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — esqueceu o <code>{/each}</code></strong>
+<p>Sem o fechamento do bloco, o compilador continua lendo o HTML de dentro do <code>{#each}</code> — inclusive o <code>&lt;/ul&gt;</code>, que passa a fechar um elemento que ele não abriu dentro do bloco.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tarefas = $state(['comprar farinha', 'assar o pão']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each tarefas as tarefa}
+    &lt;li&gt;{tarefa}&lt;/li&gt;
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 0): `&lt;/ul&gt;` attempted to close an element that was not open</pre>
+<p>A mensagem fala do <code>&lt;/ul&gt;</code>, mas o problema está uma linha acima. Quando o erro apontar uma tag que "não estava aberta", conte os blocos: cada <code>{#each}</code> pede um <code>{/each}</code>, cada <code>{#if}</code> pede um <code>{/if}</code>. O erro aponta o sintoma, não a causa.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>{:else}</code> sem <code>{#if}</code></strong>
+<p>É o erro de quem quis mostrar "lista vazia" e escreveu só a segunda metade. <code>{:else}</code> não existe sozinho: ele pertence a um bloco que começou antes.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let visiveis = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each visiveis as t}
+    &lt;li&gt;{t.texto}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+{:else}
+  &lt;p&gt;Nada aqui.&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 10, coluna 1): {:...} block is invalid at this position (did you forget to close the preceding element or block?)</pre>
+<p>A pergunta da mensagem é a dica: "você esqueceu de fechar o elemento ou bloco anterior?". Aqui o <code>{:else}</code> ficou fora do <code>{#if}</code> que deveria envolvê-lo. A correção é abrir o <code>{#if}</code> antes do <code>&lt;ul&gt;</code> e fechar depois do <code>{:else}</code>, como na versão 3.</p>
+</div>
+
+<hr>
+
+<h2>9. Referência rápida da lista</h2>
+
+<p>As três tabelas abaixo são o resumo que você vai querer à mão: a primeira sobre blocos, a segunda sobre o que cada método de array devolve e a terceira sobre os arquivos do projeto.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Bloco</th><th>Para que serve</th><th>Fecha com</th></tr>
+<tr><td><code>{#each lista as item}</code></td><td>repete o HTML para cada item</td><td><code>{/each}</code></td></tr>
+<tr><td><code>{#each lista as item, i}</code></td><td>idem, com o índice na variável <code>i</code></td><td><code>{/each}</code></td></tr>
+<tr><td><code>{#each lista as item (item.id)}</code></td><td>idem, reconhecendo cada item pela chave</td><td><code>{/each}</code></td></tr>
+<tr><td><code>{#if condição}</code> / <code>{:else}</code></td><td>mostra um dos dois pedaços</td><td><code>{/if}</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Método</th><th>Devolve</th><th>Muda a lista original?</th></tr>
+<tr><td><code>push(item)</code></td><td>o novo tamanho</td><td>sim, acrescenta no fim</td></tr>
+<tr><td><code>filter(fn)</code></td><td>uma lista nova com os aprovados</td><td>não</td></tr>
+<tr><td><code>map(fn)</code></td><td>uma lista nova, um resultado por item</td><td>não</td></tr>
+<tr><td><code>find(fn)</code></td><td>o primeiro item aprovado</td><td>não</td></tr>
+<tr><td><code>trim()</code></td><td>o texto sem espaços nas pontas</td><td>não (texto é imutável)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>O que tem dentro</th></tr>
+<tr><td><code>src/App.svelte</code></td><td>a lista, uma versão por vez</td></tr>
+<tr><td><code>src/main.js</code></td><td>o <code>mount(App, …)</code> que liga tudo</td></tr>
+<tr><td><code>dist/index.html</code></td><td>o HTML do build, com os links para o JS e o CSS</td></tr>
+<tr><td><code>dist/assets/</code></td><td>os arquivos com hash que o navegador baixa</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que o <code>bind:value={nova}</code> faz num <code>&lt;input&gt;</code>?</p>
+<label><input type="radio" name="q1"> cria um ouvinte de <code>input</code> que você precisa escrever</label>
+<label><input type="radio" name="q1"> impede que o campo seja editado</label>
+<label><input type="radio" name="q1"> liga o valor do campo à variável nos dois sentidos</label>
+<label><input type="radio" name="q1"> transforma o texto em número</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Por que a versão 3 usa <code>{#each visiveis as tarefa (tarefa.id)}</code> em vez de <code>{#each tarefas as tarefa}</code>?</p>
+<label><input type="radio" name="q1"> porque <code>tarefas</code> não pode ser usada em <code>{#each}</code></label>
+<label><input type="radio" name="q1"> para cada item ser reconhecido pelo <code>id</code> e levar o próprio elemento junto quando a lista muda</label>
+<label><input type="radio" name="q1"> para ordenar a lista pelo <code>id</code></label>
+<label><input type="radio" name="q1"> para o filtro funcionar; sem chave o filtro não filtra</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que a frase "Nada aqui." olha para <code>visiveis.length</code> e não para <code>tarefas.length</code>?</p>
+<label><input type="radio" name="q1"> porque a lista desenhada é a filtrada: é ela que pode estar vazia</label>
+<label><input type="radio" name="q1"> porque <code>tarefas.length</code> não existe</label>
+<label><input type="radio" name="q1"> porque o <code>{#each}</code> exige uma lista diferente do <code>{#if}</code></label>
+<label><input type="radio" name="q1"> porque a lista original é sempre vazia</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let tarefas = $state(['comprar farinha', 'assar o pão']);<br><br>&lt;ul&gt;<br>&nbsp;&nbsp;{#each tarefas as tarefa}<br>&nbsp;&nbsp;&nbsp;&nbsp;&lt;li&gt;{tarefa}&lt;/li&gt;<br>&nbsp;&nbsp;<input data-answer="{/each}"><br>&lt;/ul&gt;<br><br>// fecha o molde que repete um item por tarefa</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Lista reativa é <code>let tarefas = $state([...])</code>; o molde é <code>{#each tarefas as tarefa}</code> e fecha com <code>{/each}</code>.</li>
+  <li><code>bind:value</code> liga o campo de texto à variável nos dois sentidos; <code>bind:checked</code> faz o mesmo com o checkbox de cada item.</li>
+  <li>A versão 2 troca textos por objetos com <code>id</code>, <code>texto</code> e <code>feita</code> — sem <code>id</code> não há como remover o item certo.</li>
+  <li><code>filter</code> devolve lista nova; atribuir o retorno é a forma mais curta de remover e a mais fácil de ler.</li>
+  <li><code>class:feita={tarefa.feita}</code> põe e tira a classe conforme o valor, sem <code>if</code> no HTML.</li>
+  <li>A chave <code>(tarefa.id)</code> faz o Svelte reconhecer o item pela identidade, não pela posição.</li>
+  <li>A frase de lista vazia fica num <code>{#if}</code> antes do <code>{#each}</code> e olha para a lista filtrada.</li>
+  <li>Com <code>&lt;style&gt;</code>, o build gera também um CSS: <code>dist/assets/index-CgDT-uRh.css</code> neste projeto.</li>
+  <li>Os erros desta aula: <code>`&lt;/ul&gt;` attempted to close an element that was not open</code> e <code>{:...} block is invalid at this position</code>.</li>
+  <li>Testar uma lista significa testar três estados: com itens, com o filtro aplicado e sem nada para mostrar.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

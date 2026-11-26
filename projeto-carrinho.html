@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto Carrinho de Compras — preço, quantidade e total | Guia Svelte</title>
+<meta name="description" content="O carrinho da padaria em três versões reais: lista de itens, quantidade com Math.max, total com $derived, cupom, tabela e o erro de <tr> solto dentro de <table>.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Projeto Carrinho de Compras</span></h1>
+
+<p class="intro">A Ana vende pão por unidade, sonho por unidade e bolo por fatia. No caderno de fiado ela escreve "6 pão 0,90" e depois soma tudo na calculadora; quando erra, o prejuízo é dela. O carrinho é o primeiro projeto em que o número final <em>não</em> é digitado: ele é calculado a partir dos itens, e muda sozinho quando a quantidade muda. As três versões abaixo foram compiladas e rodadas de verdade — inclusive os erros.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A guardar itens com preço e quantidade num array de objetos.</li>
+  <li>Por que <code>{item.preco}</code> mostra <code>0.9</code> e como chegar em <code>0.90</code> com <code>toFixed</code>.</li>
+  <li>A somar uma lista inteira com <code>reduce</code>, sem laço escrito à mão.</li>
+  <li>Como calcular subtotal, desconto, total e quanto falta para o frete com quatro <code>$derived</code>.</li>
+  <li>Como impedir quantidade zero ou negativa com <code>Math.max</code>.</li>
+  <li>Por que uma tabela em Svelte precisa de <code>&lt;tbody&gt;</code> em volta das linhas.</li>
+  <li>O que o compilador faz com o seletor <code>td, th</code> dentro do <code>&lt;style&gt;</code>.</li>
+  <li>As três sessões de terminal: <code>dev</code>, <code>build</code> e <code>preview</code> com <code>curl</code>.</li>
+  <li>O erro de compilação do <code>&lt;tr&gt;</code> e o erro de execução do <code>toFixed</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: preço vezes quantidade</h2>
+
+<p>Todo carrinho é a mesma conta repetida: <strong>preço × quantidade</strong>, item por item, e a soma de tudo no fim. No caderno de fiado, a Ana faz essa conta com a calculadora e escreve o resultado à mão. No componente, ela escreve a conta uma vez e o resultado aparece — e continua certo quando a quantidade muda, porque ninguém digitou o total.</p>
+
+<p>A diferença entre um contador e um carrinho é a quantidade de valores envolvidos. O contador tem um número; o carrinho tem uma lista de objetos, cada um com o seu preço e a sua quantidade, mais quatro números que dependem da lista inteira. O Svelte lida com isso do mesmo jeito que lidava com um número: você declara o que muda com <code>$state</code> e o que é calculado com <code>$derived</code>.</p>
+
+<p>Existe uma armadilha específica de dinheiro que aparece já na primeira versão. O JavaScript guarda <code>0.9</code> como você escreveu, mas mostra <code>0.9</code> na tela — e a placa da padaria precisa de <code>R$ 0,90</code> ou, no padrão do guia, <code>R$ 0.90</code> com duas casas. Formatar é uma operação de exibição, não de cálculo: o valor guardado continua número, quem ganha casas é o texto.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No caderno de fiado</th><th>No componente</th></tr>
+<tr><td>A linha "6 pão 0,90"</td><td><code>{ id: 1, nome: 'Pão francês', preco: 0.9, qtd: 6 }</code></td></tr>
+<tr><td>A conta de cada linha</td><td><code>item.preco * item.qtd</code></td></tr>
+<tr><td>A soma no fim da página</td><td><code>$derived(itens.reduce(…))</code></td></tr>
+<tr><td>Riscar a linha que a cliente desistiu</td><td><code>itens = itens.filter(…)</code></td></tr>
+<tr><td>O cupom de dez por cento</td><td><code>subtotal * 0.1</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Versão 1: a lista com preço cru</h2>
+
+<p>A primeira versão é só a lista desenhada. Sem controles, sem total: o objetivo é ver os dados na tela e descobrir o problema da formatação.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([
+    { nome: 'Pão francês', preco: 0.9, qtd: 6 },
+    { nome: 'Sonho', preco: 4.5, qtd: 1 }
+  ]);
+&lt;/script&gt;
+
+&lt;h1&gt;Carrinho da padaria&lt;/h1&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item.qtd}× {item.nome} — R$ {item.preco}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>A saída mostra o preço como o JavaScript escreve: <code>0.9</code> e <code>4.5</code>. Para uma placa de padaria isso está errado, e não é culpa do Svelte — é o comportamento normal de número em JavaScript.</p>
+
+<pre class="out">&lt;h1&gt;Carrinho da padaria&lt;/h1&gt; &lt;ul&gt;&lt;li&gt;6× Pão francês — R$ 0.9&lt;/li&gt;&lt;li&gt;1× Sonho — R$ 4.5&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>let itens = $state([{ … }, { … }])</dt><dd>uma lista de <strong>objetos</strong>. As chaves <code>{ }</code> aqui são as do JavaScript, não as do HTML: elas montam um valor com campos nomeados.</dd>
+  <dt>nome, preco, qtd</dt><dd>os campos de cada item. <code>preco</code> é número (sem aspas); <code>nome</code> é texto (com aspas).</dd>
+  <dt>item.qtd × item.nome</dt><dd>o ponto lê um campo do objeto. <code>×</code> e <code>—</code> são só texto decorativo no meio da frase.</dd>
+  <dt>{item.preco}</dt><dd>mostra o número como ele é. Nenhuma casa extra, nenhum símbolo de moeda automático — o <code>R$</code> foi escrito por você, antes das chaves.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="out:6× Pão francês — R$ 5.40">
+<p class="try-task"><strong>Missão:</strong> a linha mostra <code>R$ 5.4</code> em vez de <code>R$ 5.40</code>. Formate o resultado da conta com duas casas decimais.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let item = $state({ nome: 'Pão francês', preco: 0.9, qtd: 6 });
+&lt;/script&gt;
+
+&lt;p&gt;{item.qtd}× {item.nome} — R$ {item.preco * item.qtd}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let item = $state({ nome: 'Pão francês', preco: 0.9, qtd: 6 });
+&lt;/script&gt;
+
+&lt;p&gt;{item.qtd}× {item.nome} — R$ {(item.preco * item.qtd).toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Os parênteses em volta da conta são obrigatórios: sem eles, o ponto do <code>toFixed</code> grudaria no <code>qtd</code> — <code>item.qtd.toFixed(2)</code> formataria a quantidade e multiplicaria texto por número. O resultado seria outro, e o compilador não tem como saber que não era o que você queria.</p>
+
+<hr>
+
+<h2>3. Versão 2: quantidade, subtotal e total</h2>
+
+<p>A segunda versão acrescenta os controles e o total. Aqui aparece o <code>reduce</code>, que é o jeito de somar uma lista inteira sem escrever um laço: você entrega uma função que recebe a soma parcial e o item, e devolve a soma nova.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([
+    { id: 1, nome: 'Pão francês', preco: 0.9, qtd: 6 },
+    { id: 2, nome: 'Sonho', preco: 4.5, qtd: 1 }
+  ]);
+
+  let total = $derived(itens.reduce((soma, item) =&gt; soma + item.preco * item.qtd, 0));
+
+  function mudarQtd(item, delta) {
+    item.qtd = Math.max(1, item.qtd + delta);
+  }
+
+  function remover(id) {
+    itens = itens.filter((item) =&gt; item.id !== id);
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Carrinho da padaria&lt;/h1&gt;
+
+{#each itens as item (item.id)}
+  &lt;p&gt;
+    {item.nome} — R$ {item.preco.toFixed(2)}
+    &lt;button onclick={() =&gt; mudarQtd(item, -1)}&gt;-&lt;/button&gt;
+    {item.qtd}
+    &lt;button onclick={() =&gt; mudarQtd(item, 1)}&gt;+&lt;/button&gt;
+    &lt;button onclick={() =&gt; remover(item.id)}&gt;remover&lt;/button&gt;
+  &lt;/p&gt;
+{/each}
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<p>O total já sai formatado e certo: seis pães a noventa centavos dão cinco e quarenta, mais um sonho de quatro e cinquenta, nove e noventa.</p>
+
+<pre class="out">&lt;h1&gt;Carrinho da padaria&lt;/h1&gt; &lt;p&gt;Pão francês — R$ 0.90 &lt;button&gt;-&lt;/button&gt; 6 &lt;button&gt;+&lt;/button&gt; &lt;button&gt;remover&lt;/button&gt;&lt;/p&gt;&lt;p&gt;Sonho — R$ 4.50 &lt;button&gt;-&lt;/button&gt; 1 &lt;button&gt;+&lt;/button&gt; &lt;button&gt;remover&lt;/button&gt;&lt;/p&gt; &lt;p&gt;Total: R$ 9.90&lt;/p&gt;</pre>
+
+<p>Repare que os botões não têm texto de valor: <code>-</code> e <code>+</code> são fixos. Quem muda é o número do meio, que vem de <code>{item.qtd}</code>. A função <code>mudarQtd</code> recebe o item inteiro, não o índice, e isso é o que permite usá-la dentro do <code>{#each}</code> sem se preocupar com a posição.</p>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>itens.reduce((soma, item) =&gt; …, 0)</dt><dd>percorre a lista guardando uma soma parcial. O <code>0</code> no fim é o valor inicial; sem ele, <code>reduce</code> começaria pelo primeiro item e quebraria numa lista vazia.</dd>
+  <dt>item.qtd = Math.max(1, item.qtd + delta)</dt><dd>muda o campo de um objeto que está dentro de uma lista <code>$state</code>. O Svelte enxerga a mudança e atualiza só aquele trecho.</dd>
+  <dt>mudarQtd(item, -1)</dt><dd>passa o item e a direção. A mesma função serve aos dois botões, e a regra de "nunca menos de um" fica num lugar só.</dd>
+  <dt>{#each itens as item (item.id)}</dt><dd>a chave pelo <code>id</code> mantém cada linha ligada ao item certo quando a lista encolhe.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="clique:#mais;;out:Sonho: 2 +1 Total: R$ 9.00">
+<p class="try-task"><strong>Missão:</strong> o botão soma um sonho, mas o total continua <code>R$ 4.50</code>. Faça o total acompanhar a quantidade.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state([{ nome: 'Sonho', preco: 4.5, qtd: 1 }]);
+  let total = itens.reduce((soma, i) =&gt; soma + i.preco * i.qtd, 0);
+
+  function mais() {
+    itens[0].qtd += 1;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Sonho: {itens[0].qtd}&lt;/p&gt;
+&lt;button id="mais" onclick={mais}&gt;+1&lt;/button&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state([{ nome: 'Sonho', preco: 4.5, qtd: 1 }]);
+  let total = $derived(itens.reduce((soma, i) =&gt; soma + i.preco * i.qtd, 0));
+
+  function mais() {
+    itens[0].qtd += 1;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Sonho: {itens[0].qtd}&lt;/p&gt;
+&lt;button id="mais" onclick={mais}&gt;+1&lt;/button&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>O sintoma é sempre o mesmo: a quantidade muda e o total não. A causa é que a conta rodou uma vez, na montagem, e o resultado ficou guardado numa variável comum. <code>$derived</code> transforma essa conta numa conta que o Svelte reexecuta quando <code>itens</code> muda — inclusive quando muda um campo de um item da lista.</p>
+
+<hr>
+
+<h2>4. Versão 3: tabela, cupom e frete</h2>
+
+<p>A versão pronta é a que a Ana mostraria no balcão. Ela tem tabela com cabeçalho, um campo de cupom, o desconto de dez por cento quando o cupom é <code>PAO10</code> e o aviso de quanto falta para o frete grátis. São quatro contas encadeadas: subtotal, desconto, total e falta.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([
+    { id: 1, nome: 'Pão francês', preco: 0.9, qtd: 6 },
+    { id: 2, nome: 'Sonho', preco: 4.5, qtd: 1 }
+  ]);
+  let cupom = $state('');
+
+  const freteMinimo = 30;
+
+  let subtotal = $derived(itens.reduce((soma, item) =&gt; soma + item.preco * item.qtd, 0));
+  let desconto = $derived(cupom.trim().toUpperCase() === 'PAO10' ? subtotal * 0.1 : 0);
+  let total = $derived(subtotal - desconto);
+  let faltaParaFrete = $derived(Math.max(0, freteMinimo - total));
+
+  function mudarQtd(item, delta) {
+    item.qtd = Math.max(1, item.qtd + delta);
+  }
+
+  function remover(id) {
+    itens = itens.filter((item) =&gt; item.id !== id);
+  }
+&lt;/script&gt;
+
+&lt;h1&gt;Carrinho da padaria&lt;/h1&gt;
+
+{#if itens.length === 0}
+  &lt;p class="vazio"&gt;Carrinho vazio. Escolha um pão.&lt;/p&gt;
+{:else}
+  &lt;table&gt;
+    &lt;thead&gt;
+      &lt;tr&gt;&lt;th&gt;Item&lt;/th&gt;&lt;th&gt;Preço&lt;/th&gt;&lt;th&gt;Qtd&lt;/th&gt;&lt;th&gt;Subtotal&lt;/th&gt;&lt;th&gt;&lt;/th&gt;&lt;/tr&gt;
+    &lt;/thead&gt;
+    &lt;tbody&gt;
+      {#each itens as item (item.id)}
+        &lt;tr&gt;
+          &lt;td&gt;{item.nome}&lt;/td&gt;
+          &lt;td&gt;R$ {item.preco.toFixed(2)}&lt;/td&gt;
+          &lt;td&gt;
+            &lt;button onclick={() =&gt; mudarQtd(item, -1)}&gt;-&lt;/button&gt;
+            {item.qtd}
+            &lt;button onclick={() =&gt; mudarQtd(item, 1)}&gt;+&lt;/button&gt;
+          &lt;/td&gt;
+          &lt;td&gt;R$ {(item.preco * item.qtd).toFixed(2)}&lt;/td&gt;
+          &lt;td&gt;&lt;button onclick={() =&gt; remover(item.id)}&gt;remover&lt;/button&gt;&lt;/td&gt;
+        &lt;/tr&gt;
+      {/each}
+    &lt;/tbody&gt;
+  &lt;/table&gt;
+{/if}
+
+&lt;label&gt;
+  Cupom
+  &lt;input bind:value={cupom} placeholder="PAO10" /&gt;
+&lt;/label&gt;
+
+&lt;p&gt;Subtotal: R$ {subtotal.toFixed(2)}&lt;/p&gt;
+&lt;p&gt;Desconto: R$ {desconto.toFixed(2)}&lt;/p&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;
+
+{#if faltaParaFrete &gt; 0}
+  &lt;p&gt;Faltam R$ {faltaParaFrete.toFixed(2)} para o frete grátis.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Frete grátis liberado.&lt;/p&gt;
+{/if}
+
+&lt;style&gt;
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  td, th {
+    border-bottom: 1px solid #ddd;
+    padding: 4px 8px;
+    text-align: left;
+  }
+  .vazio {
+    font-style: italic;
+  }
+&lt;/style&gt;</pre>
+
+<p>A saída mostra dois detalhes que valem parágrafo. O primeiro: o selo <code>svelte-1n46o8q</code> está nas células, mas não está nos <code>&lt;button&gt;</code> — nenhuma regra do <code>&lt;style&gt;</code> atinge botão, então o compilador não precisa marcá-los. O segundo: o cabeçalho aparece com o mesmo selo porque o seletor <code>td, th</code> vale para os dois.</p>
+
+<pre class="out">&lt;h1&gt;Carrinho da padaria&lt;/h1&gt; &lt;table class="svelte-1n46o8q"&gt;&lt;thead&gt;&lt;tr&gt;&lt;th class="svelte-1n46o8q"&gt;Item&lt;/th&gt;&lt;th class="svelte-1n46o8q"&gt;Preço&lt;/th&gt;&lt;th class="svelte-1n46o8q"&gt;Qtd&lt;/th&gt;&lt;th class="svelte-1n46o8q"&gt;Subtotal&lt;/th&gt;&lt;th class="svelte-1n46o8q"&gt;&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td class="svelte-1n46o8q"&gt;Pão francês&lt;/td&gt;&lt;td class="svelte-1n46o8q"&gt;R$ 0.90&lt;/td&gt;&lt;td class="svelte-1n46o8q"&gt;&lt;button&gt;-&lt;/button&gt; 6 &lt;button&gt;+&lt;/button&gt;&lt;/td&gt;&lt;td class="svelte-1n46o8q"&gt;R$ 5.40&lt;/td&gt;&lt;td class="svelte-1n46o8q"&gt;&lt;button&gt;remover&lt;/button&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class="svelte-1n46o8q"&gt;Sonho&lt;/td&gt;&lt;td class="svelte-1n46o8q"&gt;R$ 4.50&lt;/td&gt;&lt;td class="svelte-1n46o8q"&gt;&lt;button&gt;-&lt;/button&gt; 1 &lt;button&gt;+&lt;/button&gt;&lt;/td&gt;&lt;td class="svelte-1n46o8q"&gt;R$ 4.50&lt;/td&gt;&lt;td class="svelte-1n46o8q"&gt;&lt;button&gt;remover&lt;/button&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt; &lt;label&gt;Cupom &lt;input value="" placeholder="PAO10"/&gt;&lt;/label&gt; &lt;p&gt;Subtotal: R$ 9.90&lt;/p&gt; &lt;p&gt;Desconto: R$ 0.00&lt;/p&gt; &lt;p&gt;Total: R$ 9.90&lt;/p&gt; &lt;p&gt;Faltam R$ 20.10 para o frete grátis.&lt;/p&gt;</pre>
+
+<p>E este é o CSS que o compilador gerou. O seletor <code>td, th</code> virou dois seletores, cada um com o selo — porque o escopo é aplicado a cada seletor da lista, não ao grupo inteiro.</p>
+
+<pre class="out">table.svelte-1n46o8q {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  td.svelte-1n46o8q, th.svelte-1n46o8q {
+    border-bottom: 1px solid #ddd;
+    padding: 4px 8px;
+    text-align: left;
+  }
+  .vazio.svelte-1n46o8q {
+    font-style: italic;
+  }</pre>
+
+<div class="trysvelte" data-goal="digitar:input=pao10;;out:Total: R$ 18.00">
+<p class="try-task"><strong>Missão:</strong> o cupom só vale se for digitado em maiúsculas, e a Ana digita <code>pao10</code> no celular. A caixa digita <code>pao10</code>: faça o total ir para <code>R$ 18.00</code> aceitando o cupom em qualquer caixa de letra.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cupom = $state('');
+  let subtotal = $state(20);
+  let total = $derived(cupom === 'PAO10' ? subtotal * 0.9 : subtotal);
+&lt;/script&gt;
+
+&lt;input bind:value={cupom} placeholder="cupom" /&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cupom = $state('');
+  let subtotal = $state(20);
+  let total = $derived(cupom.trim().toUpperCase() === 'PAO10' ? subtotal * 0.9 : subtotal);
+&lt;/script&gt;
+
+&lt;input bind:value={cupom} placeholder="cupom" /&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que <code>toUpperCase()</code> e <code>trim()</code> resolvem dois problemas reais de digitação — maiúsculas e espaços acidentais no fim. São duas chamadas de método que evitam dezenas de reclamações no balcão, e o custo é zero: nenhuma delas muda o texto que a pessoa digitou, elas devolvem um texto novo para comparar.</p>
+
+<hr>
+
+<h2>5. O que muda quando a quantidade muda</h2>
+
+<p>Vale acompanhar a versão 3 passo a passo, porque é aqui que as quatro contas encadeadas mostram o valor delas. A tabela usa os valores iniciais do componente e o cupom vazio.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ação</th><th>Texto na tela</th><th>Contas por trás</th></tr>
+<tr><td>abrir</td><td><code>Total: R$ 9.90</code> e <code>Faltam R$ 20.10 para o frete grátis.</code></td><td>subtotal 9.90, desconto 0, total 9.90</td></tr>
+<tr><td>um clique em <code>+</code> do pão</td><td><code>R$ 6.30</code> na linha e <code>Total: R$ 10.80</code></td><td>7 x 0.90 = 6.30; 6.30 + 4.50 = 10.80</td></tr>
+<tr><td>digitar <code>PAO10</code></td><td><code>Desconto: R$ 1.08</code> e <code>Total: R$ 9.72</code></td><td>desconto 10% de 10.80; total 10.80 − 1.08</td></tr>
+<tr><td>remover o sonho</td><td><code>Total: R$ 5.67</code></td><td>5.67 de desconto e total recalculados</td></tr>
+<tr><td>remover o pão também</td><td><code>Carrinho vazio. Escolha um pão.</code></td><td>o <code>{#if}</code> troca a tabela pela frase</td></tr>
+</table>
+</div>
+
+<p>O encadeamento é a parte que costuma confundir. <code>desconto</code> depende de <code>subtotal</code>, <code>total</code> depende de <code>subtotal</code> e de <code>desconto</code>, e <code>faltaParaFrete</code> depende de <code>total</code>. O Svelte resolve a ordem sozinho: quando <code>subtotal</code> muda, ele recalcula o que depende dele na sequência certa, sem você ordenar as linhas. A única exigência é declarar cada <code>$derived</code> depois das variáveis que ele lê.</p>
+
+<p>Quando a conta cresce, <code>$derived</code> com uma expressão comprida começa a ficar ilegível. Aí entra <code>$derived.by</code>, que aceita uma função com várias linhas e devolve o resultado no <code>return</code>. O comportamento é o mesmo; o que muda é o espaço para escrever a regra com calma.</p>
+
+<hr>
+
+<h2>6. Botão pequeno, dedo grande</h2>
+
+<p>Numa tabela de carrinho, os botões de mais e menos costumam ficar do tamanho de uma unha. No tablet da padaria, isso vira clique errado: a Ana quer dois pães e põe três. Duas decisões resolvem a maior parte do problema e nenhuma delas mexe na lógica.</p>
+
+<p>A primeira é dar área de toque ao botão. Quarenta e quatro pixels é a medida que as diretrizes de acessibilidade recomendam para o dedo; no CSS do componente isso é <code>min-width: 44px; min-height: 44px</code> aplicado a <code>button</code>. Como o estilo é escopado, a regra vale só para os botões deste componente, e não estraga o resto do site.</p>
+
+<p>A segunda é dizer, em palavras, o que cada botão faz. Um botão com <code>-</code> é lido por leitor de tela como "menos", e "menos" não informa de qual item. <code>aria-label="tirar um pão francês"</code> resolve — e como o rótulo depende do nome do item, ele entra no molde do <code>{#each}</code>: <code>aria-label={"tirar um " + item.nome}</code>, com chaves, do mesmo jeito que qualquer outro valor dinâmico.</p>
+
+<hr>
+
+<h2>7. O terminal: desenvolvimento, build e conferência</h2>
+
+<p>O primeiro comando é o do dia a dia. Ele compila o componente a cada arquivo salvo e serve a página em <code>localhost:5173</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> padaria@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1068 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O segundo gera a versão que o cliente recebe. O carrinho tem <code>&lt;style&gt;</code>, então o build produz um CSS além do JavaScript — e o tamanho do CSS cresceu em relação à lista de tarefas, porque agora há regras de tabela:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> padaria@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-C_Pvxfhy.css   0.20 kB │ gzip:  0.15 kB
+dist/assets/index-Lr77Q8vB.js   45.82 kB │ gzip: 17.62 kB
+✓ built in 2.60s</pre>
+
+<p>O terceiro serve o resultado por http na porta <code>4173</code>. Como o carrinho é uma conta, conferir o build significa conferir que os arquivos com hash são os mesmos que o HTML pede:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> padaria@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Noutro terminal, um <code>curl</code> confirma o que o servidor entrega. Repare no <code>&lt;link rel="stylesheet"&gt;</code> apontando para o CSS com hash:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s http://localhost:4173/ | head -8
+&lt;!doctype html&gt;
+&lt;html lang="pt-BR"&gt;
+  &lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;title&gt;Padaria da Ana&lt;/title&gt;
+    &lt;script type="module" crossorigin src="/assets/index-Lr77Q8vB.js"&gt;&lt;/script&gt;
+    &lt;link rel="stylesheet" crossorigin href="/assets/index-C_Pvxfhy.css"&gt;</pre>
+
+<div class="tip">
+<strong>Confira o total com números redondos</strong>
+<p>Antes de mostrar o carrinho para alguém, troque os preços por valores fáceis: tudo a 10,00 e quantidades 1 e 2. Se o total der 30,00, a conta está certa. Preço quebrado esconde erro de arredondamento atrás de um número que parece plausível.</p>
+</div>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<p>O primeiro erro abaixo é de compilação e é específico de tabela. O segundo compila e quebra na hora de desenhar, porque é um erro de tipo — texto onde se esperava número. As duas mensagens foram copiadas das execuções.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>&lt;tr&gt;</code> filho direto de <code>&lt;table&gt;</code></strong>
+<p>Em HTML, o navegador "conserta" uma tabela malformada movendo elementos de lugar. O Svelte se recusa a compilar quando a estrutura é inválida, porque o conserto do navegador quebraria as contas dele sobre onde cada pedaço está.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([{ id: 1, nome: 'Pão francês', preco: 0.9, qtd: 6 }]);
+&lt;/script&gt;
+
+&lt;table&gt;
+  &lt;tr&gt;&lt;th&gt;Item&lt;/th&gt;&lt;th&gt;Preço&lt;/th&gt;&lt;/tr&gt;
+  {#each itens as item (item.id)}
+    &lt;tr&gt;&lt;td&gt;{item.nome}&lt;/td&gt;&lt;td&gt;R$ {item.preco.toFixed(2)}&lt;/td&gt;&lt;/tr&gt;
+  {/each}
+&lt;/table&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 2): `&lt;tr&gt;` cannot be a child of `&lt;table&gt;`. `&lt;table&gt;` only allows these children: `&lt;caption&gt;`, `&lt;colgroup&gt;`, `&lt;tbody&gt;`, `&lt;thead&gt;`, `&lt;tfoot&gt;`, `&lt;style&gt;`, `&lt;script&gt;`, `&lt;template&gt;`. The browser will 'repair' the HTML (by moving, removing, or inserting elements) which breaks Svelte's assumptions about the structure of your components.</pre>
+<p>A correção é pôr as linhas dentro de <code>&lt;thead&gt;</code> e <code>&lt;tbody&gt;</code>, como na versão 3. A mensagem é longa porque explica o motivo, mas a lista de filhos permitidos já entrega a solução: <code>&lt;tr&gt;</code> não está nela, <code>&lt;tbody&gt;</code> está.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — preço guardado como texto</strong>
+<p>O preço foi escrito entre aspas, com vírgula: <code>'0,90'</code>. Isso é texto, e texto não tem <code>toFixed</code>. O arquivo compila — o compilador não olha o conteúdo dos dados — e a página quebra ao desenhar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([{ nome: 'Pão francês', preco: '0,90', qtd: 6 }]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each itens as item}
+    &lt;li&gt;{item.nome} — R$ {item.preco.toFixed(2)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">Erro ao renderizar: item.preco.toFixed is not a function</pre>
+<p>"is not a function" quer dizer que o valor existe, mas não é do tipo que tem aquele método. A cura é guardar número — <code>preco: 0.9</code>, sem aspas e com ponto — e deixar a vírgula só para o texto que aparece: se a Ana precisa ver <code>R$ 0,90</code> com vírgula, troque o ponto na hora de mostrar, com <code>.replace('.', ',')</code>, nunca no dado guardado.</p>
+</div>
+
+<hr>
+
+<h2>9. Referência rápida do carrinho</h2>
+
+<p>Três tabelas para consultar enquanto escreve: a primeira sobre as contas, a segunda sobre os métodos de array que aparecem no carrinho e a terceira sobre formatação de dinheiro.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Variável</th><th>Como nasce</th><th>Depende de</th></tr>
+<tr><td><code>itens</code></td><td><code>$state([...])</code></td><td>nada: é o dado de entrada</td></tr>
+<tr><td><code>cupom</code></td><td><code>$state('')</code></td><td>do que a pessoa digita</td></tr>
+<tr><td><code>subtotal</code></td><td><code>$derived(itens.reduce(…))</code></td><td><code>itens</code></td></tr>
+<tr><td><code>desconto</code></td><td><code>$derived(… ? subtotal * 0.1 : 0)</code></td><td><code>cupom</code> e <code>subtotal</code></td></tr>
+<tr><td><code>total</code></td><td><code>$derived(subtotal - desconto)</code></td><td><code>subtotal</code> e <code>desconto</code></td></tr>
+<tr><td><code>faltaParaFrete</code></td><td><code>$derived(Math.max(0, 30 - total))</code></td><td><code>total</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Método</th><th>O que faz</th><th>Devolve</th></tr>
+<tr><td><code>reduce(fn, 0)</code></td><td>percorre somando com uma semente</td><td>um valor só</td></tr>
+<tr><td><code>filter(fn)</code></td><td>descarta os itens reprovados</td><td>lista nova</td></tr>
+<tr><td><code>toFixed(2)</code></td><td>arredonda para duas casas</td><td>texto, não número</td></tr>
+<tr><td><code>toUpperCase()</code></td><td>deixa tudo em maiúsculas</td><td>texto novo</td></tr>
+<tr><td><code>trim()</code></td><td>tira espaços das pontas</td><td>texto novo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que você quer ver</th><th>Como escrever</th></tr>
+<tr><td><code>R$ 0.90</code></td><td><code>R$ {preco.toFixed(2)}</code></td></tr>
+<tr><td><code>R$ 0,90</code></td><td><code>R$ {preco.toFixed(2).replace('.', ',')}</code></td></tr>
+<tr><td>quantidade nunca zero</td><td><code>Math.max(1, qtd + delta)</code></td></tr>
+<tr><td>frete nunca negativo</td><td><code>Math.max(0, 30 - total)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="1"><p class="mc-q">1. Por que a versão 2 declara <code>let total = $derived(…)</code> e não <code>let total = …</code>?</p>
+<label><input type="radio" name="q1"> porque a conta precisa ser refeita sempre que <code>itens</code> mudar</label>
+<label><input type="radio" name="q1"> porque <code>reduce</code> só funciona dentro de <code>$derived</code></label>
+<label><input type="radio" name="q1"> porque <code>let</code> não aceita números decimais</label>
+<label><input type="radio" name="q1"> porque o total precisa ser gravado no banco</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual é o efeito de <code>Math.max(1, item.qtd + delta)</code>?</p>
+<label><input type="radio" name="q1"> impede que a quantidade passe de cem</label>
+<label><input type="radio" name="q1"> arredonda a quantidade para o inteiro mais próximo</label>
+<label><input type="radio" name="q1"> garante que a quantidade nunca fique menor que um</label>
+<label><input type="radio" name="q1"> transforma a quantidade em texto</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. O que o compilador faz com o seletor <code>td, th</code> escrito dentro do <code>&lt;style&gt;</code>?</p>
+<label><input type="radio" name="q1"> mantém como está e aplica só ao primeiro componente</label>
+<label><input type="radio" name="q1"> separa em <code>td.svelte-xxxx</code> e <code>th.svelte-xxxx</code>, cada um com o selo</label>
+<label><input type="radio" name="q1"> recusa a vírgula em seletores de componente</label>
+<label><input type="radio" name="q1"> troca por <code>:global(td, th)</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let itens = $state([{ nome: 'Pão', preco: 0.9, qtd: 6 }]);<br>let total = <input data-answer="$derived(itens.reduce((soma, i) => soma + i.preco * i.qtd, 0))"><br><br>&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;<br><br>// o total tem de acompanhar qualquer mudança de quantidade</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um carrinho é uma lista de objetos com <code>nome</code>, <code>preco</code> e <code>qtd</code>, mais contas derivadas dela.</li>
+  <li><code>toFixed(2)</code> formata dinheiro na hora de mostrar; o valor guardado continua número.</li>
+  <li>Conta com <code>toFixed</code> precisa de parênteses: <code>{(a * b).toFixed(2)}</code>.</li>
+  <li><code>reduce(fn, 0)</code> soma a lista inteira; a semente <code>0</code> evita quebra com lista vazia.</li>
+  <li>Quatro <code>$derived</code> encadeados bastam para subtotal, desconto, total e frete.</li>
+  <li><code>Math.max(1, …)</code> trava a quantidade mínima; <code>Math.max(0, …)</code> trava o frete.</li>
+  <li>Linhas de tabela ficam dentro de <code>&lt;tbody&gt;</code>; <code>&lt;tr&gt;</code> solto dentro de <code>&lt;table&gt;</code> não compila.</li>
+  <li>O seletor <code>td, th</code> vira dois seletores com o selo <code>svelte-1n46o8q</code>, e só os elementos atingidos ganham a classe.</li>
+  <li>Erros desta aula: <code>`&lt;tr&gt;` cannot be a child of `&lt;table&gt;`</code> e <code>item.preco.toFixed is not a function</code>.</li>
+  <li>Terminal: <code>dev</code> em 5173, <code>build</code> gerando JS e CSS com hash, <code>preview</code> em 4173.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

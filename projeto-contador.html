@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto Contador — a mesma tela em três versões | Guia Svelte</title>
+<meta name="description" content="O contador da Ana em três versões reais: estado com $state, limites com Math.max, histórico com $derived, o clique que desliga o botão e o build colhido no terminal.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Projeto Contador</span></h1>
+
+<p class="intro">A Ana conta pães com um pedaço de giz num papelão: cada pão riscado é um traço, e a cada dez traços ela faz um risco maior. Funciona até alguém esbarrar no papelão. O sobrinho dela pendurou um tablet velho no balcão e pediu uma tela com dois botões: um que soma, um que zera. Esta aula é o primeiro projeto do guia, e ele aparece em <strong>três versões</strong>: a que funciona, a que não deixa a conta furar e a que ela mostraria para um cliente. Cada versão foi compilada e rodada de verdade, e o que você vê aqui é a saída real.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A montar um contador que soma e zera, começando pelo menor componente possível.</li>
+  <li>Por que <code>$state</code> é o que faz o número na tela acompanhar o clique.</li>
+  <li>Como impedir que a conta fique negativa com <code>Math.max</code>, e como parar no limite com <code>Math.min</code>.</li>
+  <li>O que <code>$derived</code> economiza quando um número depende de outro.</li>
+  <li>Como desligar um botão com o atributo <code>disabled</code> ligado a uma expressão.</li>
+  <li>Como ler um <code>&lt;select&gt;</code> com <code>bind:value</code> sem escrever ouvinte de evento.</li>
+  <li>O que muda num componente quando ele guarda uma lista (<code>$state([])</code>) e a empurra com <code>push</code>.</li>
+  <li>As três sessões de terminal do projeto: <code>dev</code>, <code>build</code> e <code>preview</code>.</li>
+  <li>Os dois erros que aparecem de verdade ao montar esse contador, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia antes do código: contar sem perder a conta</h2>
+
+<p>Contar é a operação mais antiga da padaria. A Ana não precisa de um programa para saber quantos pães vendeu às nove da manhã — precisa de um lugar onde o número não se perca. O papelão falha por três motivos: alguém esbarra, a caneta falha, e ninguém sabe se o traço que está ali é de hoje ou de ontem. Um contador na tela resolve os três de uma vez, porque o número fica guardado num lugar só e a tela mostra o que está guardado.</p>
+
+<p>Repare que já existe uma separação importante nessa frase: <em>o lugar onde o número fica guardado</em> e <em>a parte da tela que mostra o número</em>. Em programação, o lugar chama-se <strong>estado</strong> (aquilo que pode mudar) e a parte da tela é o HTML. O trabalho do Svelte é manter os dois de acordo: você muda o estado, ele redesenha o pedaço de tela que usa aquele estado. Nenhum <code>document.getElementById</code>, nenhum <code>innerHTML</code>.</p>
+
+<p>Um contador parece bobo, e é justamente por isso que ele serve de primeiro projeto. Ele tem tudo o que os projetos grandes têm, em miniatura: um valor que muda, um evento que muda o valor, um limite que não pode ser passado, um cálculo que depende do valor e um histórico do que aconteceu. Quem entende essas cinco peças num contador reconhece as mesmas cinco num carrinho de compras.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O número riscado no papelão</td><td><code>let cliques = $state(0)</code></td></tr>
+<tr><td>Fazer mais um traço</td><td><code>onclick={() =&gt; cliques++}</code></td></tr>
+<tr><td>Raspar o papelão e começar de novo</td><td><code>cliques = 0</code></td></tr>
+<tr><td>O aviso "não passes de vinte"</td><td><code>Math.min(maximo, …)</code></td></tr>
+<tr><td>A régua que mostra quanto falta</td><td><code>let restantes = $derived(maximo - cliques)</code></td></tr>
+</table>
+</div>
+
+<p>O custo de fazer isso em Svelte é baixo: o arquivo inteiro cabe em quinze linhas. O custo de fazer isso em JavaScript puro é maior do que parece, porque você teria de criar o elemento, guardar uma referência, escrever o ouvinte de clique e atualizar o texto na mão — e lembrar de fazer o mesmo em cada lugar onde o número aparece.</p>
+
+<hr>
+
+<h2>2. Três versões, um mesmo problema</h2>
+
+<p>O guia inteiro segue a mesma escada: primeiro o componente que funciona, depois o que se comporta bem, depois o que se explica sozinho. Não é enfeite. Cada degrau resolve um problema que o anterior deixou aparecer, e é mais fácil aprender vendo o problema nascer do que recebendo a solução pronta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Versão</th><th>O que ela resolve</th><th>O que entra de novo</th></tr>
+<tr><td><strong>v1</strong> — simples</td><td>somar e zerar</td><td><code>$state</code>, <code>onclick</code>, <code>{ }</code></td></tr>
+<tr><td><strong>v2</strong> — melhor</td><td>não deixa a conta furar: nem negativo, nem acima do limite</td><td><code>$derived</code>, <code>Math.max</code>, <code>Math.min</code>, <code>disabled</code></td></tr>
+<tr><td><strong>v3</strong> — pronta</td><td>o caixa escolhe o passo e vê o que já foi contado</td><td><code>bind:value</code>, lista em <code>$state</code>, função com parâmetro, <code>&lt;style&gt;</code></td></tr>
+</table>
+</div>
+
+<p>As três versões ficam no mesmo arquivo do projeto, sempre chamado <code>src/App.svelte</code>. Trocar de versão é trocar o conteúdo do arquivo e salvar: o servidor de desenvolvimento recarrega sozinho. Guarde os três textos num lugar à mão (um bloco de notas serve) para poder voltar e comparar — comparar versões é o jeito mais rápido de aprender a ler código.</p>
+
+<hr>
+
+<h2>3. Versão 1: o menor contador que funciona</h2>
+
+<p>Comece pelo arquivo completo. Ele tem o bloco de script, dois parágrafos de HTML e dois botões. Nada mais:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;h1&gt;Placar de pães&lt;/h1&gt;
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;
+&lt;button onclick={() =&gt; (cliques = 0)}&gt;zerar&lt;/button&gt;</pre>
+
+<p>O compilador transforma esse arquivo no HTML abaixo. Note que o <code>&lt;script&gt;</code> desapareceu: quem monta a página é ele, e o valor que estava na variável já vem escrito no lugar certo.</p>
+
+<pre class="out">&lt;h1&gt;Placar de pães&lt;/h1&gt; &lt;p&gt;Cliques: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt;</pre>
+
+<p>Se você lesse esse HTML sozinho, sem saber o que é Svelte, concluiria que a página mostra um zero fixo. É aí que entra a segunda metade: o navegador recebe também o JavaScript que liga o botão ao número. Quando o clique acontece, o valor muda e o trecho <code>Cliques: 0</code> é reescrito. O HTML acima é o <em>primeiro</em> desenho, não o único.</p>
+
+<h3>A anatomia da versão 1</h3>
+
+<dl class="anatomy">
+  <dt>&lt;script&gt;</dt><dd>o bloco onde o estado nasce. Fica no topo e roda uma vez, quando o componente é criado.</dd>
+  <dt>let cliques = $state(0)</dt><dd>declara a variável <code>cliques</code> com valor inicial <code>0</code> e avisa o compilador de que ela pode mudar. <code>$state</code> é uma <strong>runa</strong>: uma palavra que só existe dentro de arquivos <code>.svelte</code>.</dd>
+  <dt>{cliques}</dt><dd>o buraco no HTML por onde o valor entra. Toda vez que o valor muda, o Svelte reescreve só esse pedaço.</dd>
+  <dt>onclick={() =&gt; cliques++}</dt><dd>o atributo de evento. A função da direita roda no clique; <code>cliques++</code> soma um ao valor guardado.</dd>
+  <dt>onclick={() =&gt; (cliques = 0)}</dt><dd>a mesma ideia, atribuindo outro valor. Os parênteses em volta mantêm a seta e a atribuição na mesma linha.</dd>
+</dl>
+
+<p>O nome do atributo é o nome do evento com <code>on</code> na frente, tudo em minúsculas: <code>onclick</code>, <code>oninput</code>, <code>onsubmit</code>. Quem vem de versões antigas do Svelte escreve <code>on:click</code>, com dois pontos. Essa forma ainda compila nesta versão, mas o compilador avisa que ela está fora de moda — é o primeiro assunto da próxima caixa.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1 · dobro: 2 +1">
+<p class="try-task"><strong>Missão:</strong> o botão soma, mas a tela continua mostrando <code>Cliques: 0 · dobro: 0</code>. Faça o número subir para <code>1</code> e o dobro para <code>2</code> com um clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = 0;
+  let dobro = $derived(cliques * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques} · dobro: {dobro}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let dobro = $derived(cliques * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques} · dobro: {dobro}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+</div>
+
+<p>O que aconteceu ali merece nome. A variável existia, o clique rodava, o valor dentro dela até mudava — mas nada avisava a tela. Sem <code>$state</code>, uma variável é uma caixa muda. Com <code>$state</code>, ela é uma caixa que avisa. É a diferença entre escrever o preço num papel e escrever numa lousa com alguém de plantão.</p>
+
+<hr>
+
+<h2>4. Versão 2: o limite e o botão que desliga</h2>
+
+<p>A versão 1 tem um defeito que a Ana descobriria no primeiro dia: o botão de menos não existe, e o de mais não tem fim. Se o tablet ficar na mão de uma criança, o número chega a quatrocentos. A versão 2 põe dois limites — nunca abaixo de zero, nunca acima de dez — e mostra quanto falta:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  const maximo = 10;
+
+  let restantes = $derived(maximo - cliques);
+&lt;/script&gt;
+
+&lt;h1&gt;Placar de pães&lt;/h1&gt;
+&lt;p&gt;Cliques: {cliques} de {maximo} · faltam {restantes}&lt;/p&gt;
+
+&lt;button onclick={() =&gt; (cliques = Math.max(0, cliques - 1))} disabled={cliques === 0}&gt;-1&lt;/button&gt;
+&lt;button onclick={() =&gt; (cliques = Math.min(maximo, cliques + 1))} disabled={cliques === maximo}&gt;+1&lt;/button&gt;
+&lt;button onclick={() =&gt; (cliques = 0)}&gt;zerar&lt;/button&gt;</pre>
+
+<p>A saída real mostra o começo da contagem e, no HTML, um detalhe que não aparece na tela: o botão de menos já vem com o atributo <code>disabled</code> vazio, porque zero é o limite de baixo. Atributo vazio em HTML quer dizer "ligado".</p>
+
+<pre class="out">&lt;h1&gt;Placar de pães&lt;/h1&gt; &lt;p&gt;Cliques: 0 de 10 · faltam 10&lt;/p&gt; &lt;button disabled=""&gt;-1&lt;/button&gt; &lt;button&gt;+1&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt;</pre>
+
+<p>Duas runas novas aparecem aqui. <code>$derived</code> diz "este valor não é guardado: ele é calculado a partir de outro, e deve ser recalculado quando o outro mudar". <code>const maximo = 10</code> continua sendo uma constante comum — ela não muda, então não precisa avisar ninguém. A regra prática: <strong>o que muda vira <code>$state</code>, o que é calculado a partir do que muda vira <code>$derived</code>, o que nunca muda fica <code>const</code></strong>.</p>
+
+<h3>A anatomia da versão 2</h3>
+
+<dl class="anatomy">
+  <dt>const maximo = 10</dt><dd>uma constante de configuração. Fica fora do estado de propósito: ninguém muda o limite pelo clique, então não há o que avisar.</dd>
+  <dt>$derived(maximo - cliques)</dt><dd>o valor é <em>recalculado</em> sempre que <code>cliques</code> muda. Você escreve a conta uma vez e nunca mais precisa lembrar de atualizar <code>restantes</code> na mão.</dd>
+  <dt>Math.max(0, cliques - 1)</dt><dd>devolve o maior entre os dois números. Com <code>0</code> na frente, o resultado nunca fica negativo: se <code>cliques</code> for zero, a conta dá <code>-1</code>, e <code>Math.max</code> escolhe o <code>0</code>.</dd>
+  <dt>Math.min(maximo, cliques + 1)</dt><dd>o espelho: devolve o menor entre os dois, então o número para em <code>10</code> mesmo que alguém clique mais.</dd>
+  <dt>disabled={cliques === 0}</dt><dd>o atributo recebe uma expressão. Quando ela é verdadeira, o HTML ganha <code>disabled</code> e o botão não recebe clique; quando é falsa, o atributo some.</dd>
+</dl>
+
+<p>Repare que existem duas proteções para o mesmo problema, e as duas são necessárias. A conta com <code>Math.max</code> é a proteção de verdade: mesmo que o clique chegue, o valor não passa do limite. O <code>disabled</code> é a proteção visível: o botão fica apagado e a Ana entende, sem tentar, que ali não há mais o que somar. Programas bons costumam ter as duas — a regra no cálculo e o aviso na tela.</p>
+
+<div class="trysvelte" data-goal="clique:#menos;;out:Cliques: 0 -1">
+<p class="try-task"><strong>Missão:</strong> o botão de menos está deixando a conta ficar <code>-1</code>. Faça o valor parar em <code>0</code> quando alguém clicar nele.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button id="menos" onclick={() =&gt; cliques--}&gt;-1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button id="menos" onclick={() =&gt; (cliques = Math.max(0, cliques - 1))}&gt;-1&lt;/button&gt;</pre>
+</div>
+
+<p>O seletor <code>#menos</code> na meta da caixa aponta para o botão pelo <code>id</code>. É assim que o guia diz "clique neste botão e não naquele" quando o componente tem mais de um. Você vai usar o mesmo truque nos seus testes manuais: um <code>id</code> em cada botão que precisa ser encontrado.</p>
+
+<hr>
+
+<h2>5. Versão 3: passo, histórico e estilo</h2>
+
+<p>A versão pronta é a que a Ana deixaria no balcão. Ela acrescenta três coisas que parecem pequenas e mudam o uso: o passo (contar de dois em dois, de cinco em cinco, como ela faz com os pães de fermentação longa), o histórico do que já foi contado e uma faixa verde na lateral para o placar não se confundir com o resto da tela.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let passo = $state(1);
+  let historico = $state([]);
+
+  const maximo = 20;
+  let restantes = $derived(maximo - cliques);
+  let podeSomar = $derived(cliques &lt; maximo);
+  let podeSubtrair = $derived(cliques &gt; 0);
+
+  function mover(direcao) {
+    const novo = Math.min(maximo, Math.max(0, cliques + direcao * passo));
+    if (novo === cliques) return;
+    cliques = novo;
+    historico.push(novo);
+  }
+&lt;/script&gt;
+
+&lt;div class="placar"&gt;
+  &lt;h1&gt;Placar de pães&lt;/h1&gt;
+  &lt;p&gt;Cliques: &lt;strong&gt;{cliques}&lt;/strong&gt; de {maximo} · faltam {restantes}&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;label&gt;
+  Passo
+  &lt;select bind:value={passo}&gt;
+    &lt;option value={1}&gt;1&lt;/option&gt;
+    &lt;option value={2}&gt;2&lt;/option&gt;
+    &lt;option value={5}&gt;5&lt;/option&gt;
+  &lt;/select&gt;
+&lt;/label&gt;
+
+&lt;button onclick={() =&gt; mover(-1)} disabled={!podeSubtrair}&gt;-{passo}&lt;/button&gt;
+&lt;button onclick={() =&gt; mover(1)} disabled={!podeSomar}&gt;+{passo}&lt;/button&gt;
+&lt;button onclick={() =&gt; (cliques = 0, historico = [])}&gt;zerar&lt;/button&gt;
+
+{#if historico.length &gt; 0}
+  &lt;p&gt;Histórico: {historico.join(' → ')}&lt;/p&gt;
+{:else}
+  &lt;p&gt;Nenhum clique ainda.&lt;/p&gt;
+{/if}
+
+&lt;style&gt;
+  .placar {
+    border-left: 4px solid #2e7d32;
+    padding-left: 12px;
+  }
+  p {
+    margin: 4px 0;
+  }
+&lt;/style&gt;</pre>
+
+<p>O HTML gerado mostra o selo do escopo em dois lugares — na <code>div</code> e no <code>p</code> — e o <code>&lt;select&gt;</code> já vem com a primeira opção marcada, porque <code>passo</code> vale <code>1</code>:</p>
+
+<pre class="out">&lt;div class="placar svelte-1n46o8q"&gt;&lt;h1&gt;Placar de pães&lt;/h1&gt; &lt;p class="svelte-1n46o8q"&gt;Cliques: &lt;strong&gt;0&lt;/strong&gt; de 20 · faltam 20&lt;/p&gt;&lt;/div&gt; &lt;label&gt;Passo &lt;select&gt;&lt;option value="1" selected=""&gt;1&lt;/option&gt;&lt;option value="2"&gt;2&lt;/option&gt;&lt;option value="5"&gt;5&lt;/option&gt;&lt;/select&gt;&lt;/label&gt; &lt;button disabled=""&gt;-1&lt;/button&gt; &lt;button&gt;+1&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt; &lt;p class="svelte-1n46o8q"&gt;Nenhum clique ainda.&lt;/p&gt;</pre>
+
+<p>E este é o CSS que o compilador gerou para o bloco <code>&lt;style&gt;</code>. O <code>svelte-1n46o8q</code> é o selo deste arquivo: ele aparece tanto no seletor quanto nas tags, e é o que impede que o <code>p</code> da padaria pinte os parágrafos do resto do site.</p>
+
+<pre class="out">.placar.svelte-1n46o8q {
+    border-left: 4px solid #2e7d32;
+    padding-left: 12px;
+  }
+  p.svelte-1n46o8q {
+    margin: 4px 0;
+  }</pre>
+
+<p>Há três ideias novas nesta versão. A primeira é <code>historico.push(novo)</code>: um array guardado em <code>$state</code> continua reativo quando você o modifica no lugar, sem precisar criar outro array. A segunda é <code>bind:value={passo}</code>: o <code>&lt;select&gt;</code> e a variável ficam ligados nos dois sentidos, e o valor que chega é número porque as <code>&lt;option&gt;</code> usam <code>value={1}</code> com chaves, não <code>value="1"</code> com aspas. A terceira é a função <code>mover(direcao)</code>, que recebe <code>-1</code> ou <code>1</code> e faz a conta uma vez só, em vez de repetir a expressão em dois botões.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1 · faltam 9 +1">
+<p class="try-task"><strong>Missão:</strong> depois de um clique, o placar mostra <code>Cliques: 1</code> mas continua dizendo <code>faltam 10</code>. Faça o número que falta acompanhar a contagem.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  const maximo = 10;
+  let faltam = maximo - cliques;
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques} · faltam {faltam}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  const maximo = 10;
+  let faltam = $derived(maximo - cliques);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques} · faltam {faltam}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+</div>
+
+<p>A conta <code>maximo - cliques</code> está certa nas duas versões do código. O que muda é <em>quando</em> ela é feita: sem <code>$derived</code>, ela roda uma vez, quando o componente nasce, e o resultado fica congelado. Com <code>$derived</code>, o Svelte anota de quais valores a conta depende e refaz quando algum deles muda.</p>
+
+<hr>
+
+<h2>6. O que o navegador mostra a cada clique</h2>
+
+<p>Uma tabela vale mais que três parágrafos quando o assunto é comportamento. Abaixo, o texto que aparece na tela da versão 3 depois de cada ação, na ordem em que a Ana usaria o tablet. A coluna da direita é o que o estado guarda naquele momento.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ação</th><th>Texto na tela</th><th>Estado</th></tr>
+<tr><td>abrir a página</td><td><code>Cliques: 0 de 20 · faltam 20</code></td><td><code>cliques = 0</code>, histórico vazio</td></tr>
+<tr><td>um clique em <code>+1</code></td><td><code>Cliques: 1 de 20 · faltam 19</code></td><td><code>cliques = 1</code>, histórico <code>[1]</code></td></tr>
+<tr><td>escolher passo 5 e clicar em <code>-5</code></td><td><code>Cliques: 0 de 20 · faltam 20</code> — o botão de menos apaga</td><td><code>cliques = 0</code>, histórico <code>[1, 0]</code></td></tr>
+<tr><td>passo 5 e quatro cliques em <code>+5</code></td><td><code>Cliques: 20 de 20 · faltam 0</code> — o botão de mais apaga</td><td><code>cliques = 20</code>, histórico com cinco números</td></tr>
+<tr><td><code>zerar</code></td><td><code>Cliques: 0 de 20 · faltam 20</code> e <code>Nenhum clique ainda.</code></td><td><code>cliques = 0</code>, histórico <code>[]</code></td></tr>
+</table>
+</div>
+
+<p>Duas coisas dessa tabela não são óbvias e valem a explicação. A primeira: quando o passo é 5 e o valor é 18, o botão de mais leva a <code>20</code>, não a <code>23</code> — o <code>Math.min</code> corta no teto. A segunda: <code>zerar</code> aparece com duas atribuições separadas por vírgula dentro dos parênteses. A vírgula executa as duas, da esquerda para a direita, e o valor da expressão é o da última. Quando o corpo da função cresce, é hora de trocar a seta por uma <code>function</code> de verdade, como <code>mover</code> faz.</p>
+
+<hr>
+
+<h2>7. As três sessões de terminal do projeto</h2>
+
+<p>O projeto da Ana tem três comandos, e cada um serve a um momento diferente. O primeiro é o do dia a dia, enquanto se escreve o código:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> padaria@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 562 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>A linha <code>ready in 562 ms</code> é o tempo que o Vite levou para preparar a primeira versão da página. Depois disso ele não prepara mais nada do zero: cada arquivo salvo vira uma atualização pequena, e o navegador mostra o resultado em menos de um segundo. O endereço <code>localhost:5173</code> só existe na sua máquina — nada foi publicado na internet.</p>
+
+<p>O segundo comando é o que transforma o projeto no que o cliente recebe. Ele roda uma vez, quando o trabalho está pronto:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> padaria@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BWeJb9Kv.js  41.34 kB │ gzip: 15.95 kB
+✓ built in 2.18s</pre>
+
+<p>O número final é o que importa para a Ana: <code>15.95 kB</code> comprimido é o que o tablet dela precisa baixar para o contador funcionar. O nome <code>index-BWeJb9Kv.js</code> tem um pedaço aleatório de propósito: quando o código muda, o nome muda, e o navegador sabe que precisa baixar de novo em vez de usar a cópia velha.</p>
+
+<p>O terceiro comando serve a pasta gerada por http, para conferir com os próprios olhos o que o cliente vai ver:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> padaria@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Repare no número da porta: <code>4173</code>, não <code>5173</code>. São dois servidores diferentes, e eles podem ficar ligados ao mesmo tempo. Uma conferência rápida com <code>curl</code> mostra que o HTML servido já aponta para o arquivo com hash:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s http://localhost:4173/ | head -6
+&lt;!doctype html&gt;
+&lt;html lang="pt-BR"&gt;
+  &lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;title&gt;Padaria da Ana&lt;/title&gt;
+    &lt;script type="module" crossorigin src="/assets/index-BWeJb9Kv.js"&gt;&lt;/script&gt;</pre>
+
+<div class="warning">
+<strong>Não abra <code>dist/index.html</code> com dois cliques</strong>
+<p>O arquivo gerado usa módulos ES, e o navegador bloqueia módulos carregados por <code>file://</code>. A página abre em branco e o console mostra um erro de CORS. Para conferir o build, use <code>npm run preview</code>: ele serve a mesma pasta por http, com o tipo certo em cada arquivo.</p>
+</div>
+
+<hr>
+
+<h2>8. Quando dá errado</h2>
+
+<p>Os dois erros abaixo saíram do compilador desta versão, copiados como estão. O primeiro é o mais comum de todos quando se usa <code>&lt;select&gt;</code>, e o segundo é o que aparece quando alguém cola um exemplo antigo de tutorial.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>bind</code> apontando para um nome que não existe</strong>
+<p>O <code>&lt;select&gt;</code> foi ligado a <code>passos</code>, no plural, mas a variável declarada é <code>passo</code>. O compilador não tenta adivinhar: ele exige que o alvo do <code>bind</code> seja estado ou propriedade declarada.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let passo = $state(1);
+&lt;/script&gt;
+
+&lt;select bind:value={passos}&gt;
+  &lt;option value={1}&gt;1&lt;/option&gt;
+  &lt;option value={2}&gt;2&lt;/option&gt;
+&lt;/select&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 20): Can only bind to state or props</pre>
+<p>A tradução: "só posso ligar a um estado ou a uma propriedade". A linha e a coluna apontam para o lugar exato do nome errado, dentro das chaves. Corrigir é trocar <code>passos</code> por <code>passo</code> — e vale conferir se a variável foi declarada com <code>$state</code>, porque <code>bind</code> em variável comum também cai nesta mesma mensagem.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>export let</code> num componente com runas</strong>
+<p>Este arquivo mistura os dois mundos: usa <code>$state</code> (runas) e também <code>export let</code> (a forma antiga de declarar propriedade). O Svelte 5 não aceita a mistura.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  export let maximo = 10;
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques} de {maximo}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
+<p>"Cannot use <code>export let</code> in runes mode" quer dizer que, num componente que já usa runas, a porta de entrada de valores de fora é <code>$props()</code>. Se o contador fosse um componente reutilizável, ele começaria com <code>let { maximo = 10 } = $props()</code>. Repare que o erro aponta a linha 3 e a coluna 2 — o começo da declaração, não o fim do arquivo.</p>
+</div>
+
+<hr>
+
+<h2>9. Referência rápida das três versões</h2>
+
+<p>Esta é a parte para consultar depois, quando você estiver escrevendo o seu próprio contador. A primeira tabela lista o que cada runa faz neste projeto; a segunda, os operadores que põem limites; e a última, os arquivos que existem no projeto.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Runa</th><th>O que faz aqui</th><th>Quando trocar</th></tr>
+<tr><td><code>$state(0)</code></td><td>guarda o número que o clique muda</td><td>quando o valor precisa sobreviver ao recarregar a página</td></tr>
+<tr><td><code>$state([])</code></td><td>guarda o histórico; <code>push</code> continua reativo</td><td>quando a lista precisa ser compartilhada entre componentes</td></tr>
+<tr><td><code>$derived(…)</code></td><td>calcula o que falta e se o botão deve estar ligado</td><td>quando a conta tem várias linhas: aí use <code>$derived.by</code></td></tr>
+<tr><td><code>bind:value</code></td><td>liga o <code>&lt;select&gt;</code> ao <code>passo</code> nos dois sentidos</td><td>quando você precisa validar antes de aceitar o valor</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Expressão</th><th>Resultado</th></tr>
+<tr><td><code>Math.max(0, -1)</code></td><td><code>0</code> — nunca abaixo do piso</td></tr>
+<tr><td><code>Math.min(10, 13)</code></td><td><code>10</code> — nunca acima do teto</td></tr>
+<tr><td><code>cliques === 0</code></td><td><code>true</code> ou <code>false</code>; é o que liga e desliga o <code>disabled</code></td></tr>
+<tr><td><code>!podeSomar</code></td><td>o contrário de <code>podeSomar</code>: o <code>!</code> inverte um booleano</td></tr>
+<tr><td><code>historico.join(' → ')</code></td><td>junta os números numa frase: <code>1 → 3 → 8</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo do projeto</th><th>Para que serve</th></tr>
+<tr><td><code>src/App.svelte</code></td><td>o contador: as três versões moram aqui, uma de cada vez</td></tr>
+<tr><td><code>src/main.js</code></td><td>chama <code>mount(App, …)</code> e liga o componente ao <code>&lt;div id="app"&gt;</code></td></tr>
+<tr><td><code>index.html</code></td><td>a página que carrega o <code>main.js</code></td></tr>
+<tr><td><code>vite.config.js</code></td><td>liga o plugin do Svelte no Vite</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que acontece com o texto da tela quando o valor muda e ele <strong>não</strong> foi declarado com <code>$state</code>?</p>
+<label><input type="radio" name="q1"> a tela atualiza, mas devagar</label>
+<label><input type="radio" name="q1"> a tela não atualiza: ninguém avisa o HTML de que o valor mudou</label>
+<label><input type="radio" name="q1"> o compilador recusa o arquivo</label>
+<label><input type="radio" name="q1"> a página recarrega sozinha</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que a versão 2 usa <code>Math.max(0, cliques - 1)</code> em vez de <code>cliques--</code>?</p>
+<label><input type="radio" name="q1"> porque <code>cliques--</code> não existe em Svelte</label>
+<label><input type="radio" name="q1"> porque <code>Math.max</code> deixa o número par</label>
+<label><input type="radio" name="q1"> porque <code>Math.max</code> escolhe o maior entre zero e a conta, e o resultado nunca fica negativo</label>
+<label><input type="radio" name="q1"> porque o botão fica desabilitado sozinho</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual é a diferença entre <code>const maximo = 10</code> e <code>let cliques = $state(0)</code>?</p>
+<label><input type="radio" name="q1"> o primeiro nunca muda e não avisa ninguém; o segundo muda e avisa a tela</label>
+<label><input type="radio" name="q1"> o primeiro é mais rápido de ler</label>
+<label><input type="radio" name="q1"> o segundo não pode ser usado em expressões</label>
+<label><input type="radio" name="q1"> não há diferença: os dois são estado</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let cliques = $state(0);<br>const maximo = 20;<br>let restantes = <input data-answer="$derived(maximo - cliques)">;<br><br>&lt;p&gt;Faltam {restantes}&lt;/p&gt;<br><br>// o que falta tem de acompanhar cada clique, sem ninguém mandar</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um contador é estado (<code>$state</code>), um evento que muda o estado (<code>onclick</code>) e um buraco na tela que mostra o estado (<code>{ }</code>).</li>
+  <li>A versão 1 é a menor que funciona: sete linhas de Svelte e dois botões.</li>
+  <li>A versão 2 põe limites com <code>Math.max</code> e <code>Math.min</code> e desliga o botão com <code>disabled</code>; a regra fica no cálculo, o aviso fica na tela.</li>
+  <li>A versão 3 acrescenta passo com <code>bind:value</code>, histórico em <code>$state([])</code> e um bloco <code>&lt;style&gt;</code> com selo <code>svelte-1n46o8q</code>.</li>
+  <li><code>$derived</code> é para o que é calculado a partir do que muda; <code>const</code> é para o que nunca muda.</li>
+  <li><code>npm run dev</code> serve em <code>localhost:5173</code>; <code>npm run build</code> gera <code>dist/</code> e informa o tamanho comprimido; <code>npm run preview</code> serve o build em <code>localhost:4173</code>.</li>
+  <li>O build deixa <code>dist/index.html</code> e um único JS com hash no nome; abrir o arquivo por <code>file://</code> não funciona.</li>
+  <li>Os erros desta aula: <code>Can only bind to state or props</code> e <code>Cannot use `export let` in runes mode</code>.</li>
+  <li>Antes de publicar, rode as três versões e clique em tudo — inclusive no botão que já deveria estar desligado.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
