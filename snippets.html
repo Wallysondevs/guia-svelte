@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedaços com nome: {#snippet} e {@render} | Guia Svelte</title>
+<meta name="description" content="Como declarar e usar snippets no Svelte 5: {#snippet nome()}, {@render nome()}, o que muda em relação a funções e por que <slot> saiu de moda.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Pedaços com nome: {#snippet}</span></h1>
+
+<p class="intro">A Ana tem um carimbo de borracha com o cabeçalho da padaria: nome, endereço e horário. Em vez de escrever tudo à mão em cada comanda, ela bate o carimbo. O carimbo é uma coisa só, guardada num lugar só, e pode ser usado quantas vezes ela quiser. No Svelte, o carimbo se chama <strong>snippet</strong> ("retalho", em inglês): um pedaço de marcação com nome, guardado no componente, que você carimba na tela com <code>{@render}</code>. Nesta aula você vai aprender a criar o carimbo e a usá-lo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um <strong>snippet</strong> e por que ele não é uma tag nem um componente.</li>
+  <li>A declarar com <code>{#snippet nome()}…{/snippet}</code> e a usar com <code>{@render nome()}</code>.</li>
+  <li>Que o snippet só existe de verdade quando é renderizado.</li>
+  <li>Por que a chamada precisa de parênteses, tanto na declaração quanto no uso.</li>
+  <li>Que a posição da declaração não importa: o snippet é içado para o topo.</li>
+  <li>O que acontece quando o snippet está dentro de um bloco e você o chama fora.</li>
+  <li>Como o snippet convive com o estado reativo do componente.</li>
+  <li>Que <code>&lt;slot&gt;</code> está fora de moda e o que usar no lugar.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Quando vale a pena criar um snippet e quando é código demais.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o carimbo da padaria</h2>
+
+<p>Existe um tipo de repetição que o <code>{#each}</code> não resolve. O <code>{#each}</code> repete por <strong>item de uma lista</strong> — três pedidos, três linhas. Mas às vezes você quer repetir o <em>mesmo</em> pedaço de marcação em lugares diferentes do arquivo, sem lista nenhuma: o cabeçalho no topo e no rodapé, o mesmo cartão de produto em duas seções, o mesmo aviso de horário em duas telas.</p>
+
+<p>Copiar e colar resolve até o dia em que o horário muda e você tem de lembrar de todos os lugares. O snippet existe para isso: você escreve o pedaço uma vez, dá um nome a ele e usa o nome quantas vezes quiser. Mudou o pedaço, mudou em todos os lugares.</p>
+
+<p>A comparação com o carimbo da Ana é boa por dois motivos. Primeiro, porque o carimbo é <em>guardado</em>, não aparece sozinho: fica na gaveta até alguém usar. Segundo, porque carimbar não é copiar à mão: é sempre o mesmo desenho, com a tinta do dia. No componente, o "desenho" é o HTML e a "tinta" são as variáveis reativas — se o nome da padaria muda, todos os carimbos mudam juntos.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O carimbo guardado na gaveta</td><td><code>{#snippet cartao()}…{/snippet}</code></td></tr>
+<tr><td>Bater o carimbo no papel</td><td><code>{@render cartao()}</code></td></tr>
+<tr><td>O nome escrito na lateral do carimbo</td><td>o nome do snippet, depois de <code>#snippet</code></td></tr>
+<tr><td>Carimbar cinco comandas</td><td>cinco <code>{@render cartao()}</code> no arquivo</td></tr>
+<tr><td>O carimbo guardado e nunca usado</td><td>snippet declarado sem <code>{@render}</code>: não aparece</td></tr>
+</table>
+</div>
+
+<p>Uma distinção que evita confusão: snippet <strong>não é componente</strong>. Um componente é um arquivo <code>.svelte</code> com vida própria, que pode ser importado e montado em outro lugar. Um snippet mora dentro de um componente e não existe fora dele. Você vai ver, na aula de <code>children</code>, como um snippet atravessa a fronteira de um componente — mas isso é assunto para depois.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>{#snippet}</code></h2>
+
+<p>A declaração tem uma abertura com nome e parênteses, o HTML no meio e um fechamento. O uso é uma linha com <code>{@render}</code> e a chamada.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao()}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+{@render cartao()}</pre>
+
+<p>O compilador coloca na página o conteúdo do snippet, no lugar onde ele foi chamado:</p>
+<pre class="out">&lt;p&gt;Pedido de Ana&lt;/p&gt;</pre>
+
+<p>O HTML gerado não tem nenhuma marca do snippet: nenhuma tag <code>&lt;snippet&gt;</code>, nenhum atributo. O bloco de declaração não desenha nada — ele só guarda. Quem desenha é o <code>{@render}</code>.</p>
+
+<h3>A anatomia do par</h3>
+<dl class="anatomy">
+  <dt>{#snippet cartao()}</dt><dd>a <strong>declaração</strong>: a cerquilha com a palavra <code>snippet</code>, o <strong>nome</strong> e os <strong>parênteses</strong> — mesmo quando não há parâmetro nenhum.</dd>
+  <dt><p>Pedido de {nome}</p></dt><dd>o <strong>corpo</strong> do carimbo. Pode usar qualquer variável do componente, inclusive as reativas.</dd>
+  <dt>{/snippet}</dt><dd>o <strong>fechamento</strong> da declaração. Entre a abertura e ele, nada aparece na tela.</dd>
+  <dt>{@render cartao()}</dt><dd>o <strong>uso</strong>: arroba, a palavra <code>render</code> e a <strong>chamada</strong> com parênteses. É aqui que o HTML entra na página.</dd>
+</dl>
+
+<p>Repare no par de sinais: <code>{#snippet}</code> tem cerquilha e fecha com nome; <code>{@render}</code> tem arroba e não fecha nada. As duas marcas parecem irmãs, e são, mas com funções diferentes: uma declara, a outra usa. Quem confunde as duas escreve <code>{#render}</code> ou <code>{@snippet}</code>, e o compilador reclama na hora.</p>
+
+<div class="tip">
+<strong>Parênteses sempre</strong>
+<p>O snippet se parece com uma função: nome, parênteses, corpo. Os parênteses são obrigatórios mesmo sem parâmetro, na declaração e na chamada. É a diferença mais fácil de esquecer e a que gera as mensagens mais diretas do compilador.</p>
+</div>
+
+<hr>
+
+<h2>3. Declarado não é desenhado</h2>
+
+<p>Esse é o primeiro tropeço de quem vem de outras linguagens: achar que declarar já mostra. Não mostra. Se você declarar o snippet e não chamar, a tela fica sem ele.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao()}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+&lt;p&gt;nada&lt;/p&gt;</pre>
+<pre class="out">nada</pre>
+
+<p>O componente compila sem aviso e mostra só o parágrafo de fora. O snippet "Pedido de Ana" ficou na gaveta. Isso é útil de propósito: dá para declarar vários carimbos no fim do arquivo e usar só os que a tela daquele momento precisa.</p>
+
+<p>E o contrário funciona: chamar antes de declarar. O snippet é <strong>içado</strong> — o compilador o conhece antes de olhar o resto do arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{@render cartao()}
+
+{#snippet cartao()}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}</pre>
+<pre class="out">&lt;p&gt;Pedido de Ana&lt;/p&gt;</pre>
+
+<p>Esse comportamento é diferente do JavaScript, onde usar uma variável antes de declarar dá erro. Aproveite para organizar o arquivo como for mais legível — normalmente as declarações no fim, para o HTML principal ficar no topo —, mas saiba que a ordem não quebra nada.</p>
+
+<p>O içamento tem uma consequência prática que vale conhecer: o snippet pode ser chamado de dentro de outro snippet, mesmo que a declaração venha depois. Isso permite montar carimbos a partir de carimbos menores — um "rodapé" que usa o "selo", por exemplo —, sem se preocupar com a ordem em que você escreveu cada um. O compilador resolve os nomes primeiro e desenha depois. É por isso que projetos grandes conseguem ter dezenas de snippets num arquivo sem virar um quebra-cabeça de ordem.</p>
+
+<hr>
+
+<h2>4. Experimente: carimbe o pedido</h2>
+
+<p>A caixa abaixo declara o carimbo e não usa. Sua missão é fazer o pedido aparecer na tela.</p>
+<div class="trysvelte" data-goal="out:Pedido de Ana">
+<p class="try-task"><strong>Missão:</strong> o snippet <code>cartao</code> está declarado e a tela mostra só "nada". Troque o parágrafo pela chamada <code>{@render cartao()}</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao()}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+&lt;p&gt;nada&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao()}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+{@render cartao()}</pre>
+</div>
+
+<p>Depois da correção, o texto da tela é o do snippet. Repare que o conteúdo do carimbo veio com o valor de <code>nome</code> — <code>Ana</code> —, e não com a palavra "nome". O snippet enxerga as variáveis do componente, e continua enxergando quando elas mudam.</p>
+
+<p>Teste isso: na solução, troque <code>'Ana'</code> por <code>'Bia'</code> e clique em Rodar. A tela acompanha. O snippet não guarda uma cópia do valor; ele guarda o <em>desenho</em> que usa o valor na hora de carimbar.</p>
+
+<hr>
+
+<h2>5. Snippet não é função</h2>
+
+<p>A semelhança com função é grande, e é aí que mora a confusão. Uma função devolve um valor; um snippet devolve <strong>marcação</strong>, e o Svelte só sabe desenhá-la num lugar preparado para isso. Por isso o uso é <code>{@render nome()}</code>, e não <code>{nome()}</code>.</p>
+
+<p>Se você esquecer o <code>@render</code> e escrever só a chamada, o componente quebra. O erro que aparece no navegador não é nada amigável:</p>
+
+<pre class="out">Cannot read properties of undefined (reading 'before')</pre>
+
+<p>Traduzindo: o motor tentou desenhar o resultado da chamada como se fosse texto, e o que veio foi uma função interna dele. Sempre que você vir um erro falando de <code>before</code> ou <code>push</code> dentro de uma chave, desconfie de uma chamada de snippet sem <code>@render</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Coisa</th><th>Devolve</th><th>Como se usa</th></tr>
+<tr><td>função comum</td><td>um valor: número, texto, objeto</td><td><code>{minhaFuncao()}</code></td></tr>
+<tr><td>snippet</td><td>marcação</td><td><code>{@render meuSnippet()}</code></td></tr>
+<tr><td>componente</td><td>uma tela com vida própria</td><td><code>&lt;MeuComponente /&gt;</code></td></tr>
+<tr><td>valor comum</td><td>ele mesmo</td><td><code>{valor}</code></td></tr>
+</table>
+</div>
+
+<p>O componente é a opção mais pesada: arquivo próprio, importação, props. O snippet é a opção leve: mora no mesmo arquivo e usa as variáveis que já existem. A escolha prática é fácil: se o pedaço só faz sentido dentro daquele componente, snippet; se vai ser usado em outros lugares, componente.</p>
+
+<p>Vale entender por que a mensagem do erro é tão estranha. Quando você escreve <code>{cartao()}</code>, o Svelte pede ao motor que transforme o resultado da chamada em texto. O motor recebe uma função especial — a que sabe desenhar o snippet — e tenta tratar aquilo como um valor comum. A função não tem as peças que o motor espera de um texto ou de um nó, e a falha acontece lá dentro, no lugar onde ele tenta encaixar o resultado no documento. Daí a mensagem falar de <code>before</code>: é o nome da operação de encaixar um nó antes de outro. Nada disso é culpa sua, e nada disso você precisa decorar — basta reconhecer o sintoma e acrescentar o <code>@render</code>.</p>
+
+<hr>
+
+<h2>6. Experimente: falta um par de parênteses</h2>
+
+<p>A caixa abaixo não compila: faltam os parênteses na declaração. Sua missão é consertar para o pedido aparecer.</p>
+<div class="trysvelte" data-goal="out:Pedido de Ana">
+<p class="try-task"><strong>Missão:</strong> o compilador recusa o arquivo porque a declaração está sem <code>()</code>. Conserte a declaração do snippet para a tela mostrar o pedido.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+{@render cartao()}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao()}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+{@render cartao()}</pre>
+</div>
+
+<p>Enquanto falta o par de parênteses, a caixa mostra a mensagem do compilador em vez da tela: <code>Expected token (</code>, com a linha e a coluna do lugar exato. É uma das mensagens mais claras do Svelte, porque a correção é óbvia depois que você vê.</p>
+
+<hr>
+
+<h2>7. Onde o snippet enxerga</h2>
+
+<p>Snippet declarado no topo do arquivo enxerga tudo o que o componente enxerga. Snippet declarado <strong>dentro</strong> de um bloco enxerga só o que está ali dentro — e, mais importante, só existe ali dentro. Chamar de fora não funciona, e o erro só aparece na execução:</p>
+
+<pre class="file" data-file="src/App.svelte">&#123;#if true}
+  &#123;#snippet cartao()}
+    &lt;p&gt;oi&lt;/p&gt;
+  &#123;/snippet}
+&#123;/if}
+
+&#123;@render cartao()}</pre>
+
+<pre class="out">cartao is not defined</pre>
+
+<p>O compilador aceita o arquivo: para ele, o nome existe em algum lugar. Quem reclama é o motor, na hora de montar o componente, com a mesma mensagem que você veria se tivesse escrito uma variável inexistente. A lição prática: declare snippets no nível de cima do componente, onde todos os usos alcançam. Snippet dentro de bloco é útil apenas quando o uso está no mesmo bloco — por exemplo, um carimbo diferente para cada caminho de um <code>{:else}</code>.</p>
+
+<div class="warning">
+<strong>Nome repetido não é permitido</strong>
+<p>Snippet e variável dividem o mesmo espaço de nomes. Se você declarar <code>let cartao = …</code> no <code>&lt;script&gt;</code> e um <code>{#snippet cartao()}</code> no HTML, o compilador recusa com <code>`cartao` has already been declared</code>. Vale o mesmo entre dois snippets de mesmo nome.</p>
+</div>
+
+<hr>
+
+<h2>8. O parente antigo: <code>&lt;slot&gt;</code></h2>
+
+<p>Se você ler código Svelte de projetos mais velhos, vai encontrar <code>&lt;slot&gt;</code>. Ele era o jeito de deixar um espaço para o conteúdo que o componente pai mandasse, e ainda funciona:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;slot&gt;oi&lt;/slot&gt;</pre>
+<pre class="out">oi</pre>
+
+<p>O HTML gerado mostra o texto, então o exemplo "funciona". Mas o compilador avisa, e o aviso é este:</p>
+
+<div class="warning">
+<strong>Aviso real do compilador</strong>
+<p><code>Using `&lt;slot&gt;` to render parent content is deprecated. Use `{@render ...}` tags instead</code> — a palavra <code>deprecated</code> quer dizer "fora de moda, com substituto oficial". O substituto é justamente o par <code>{#snippet}</code> + <code>{@render}</code> desta aula.</p>
+</div>
+
+<p>A partir de agora, quando você precisar de um espaço para conteúdo vindo de fora, o caminho é snippet. Na aula de <code>children</code> você vai ver o caso completo, com o componente pai passando marcação para o filho. Aqui basta guardar a tradução: <code>&lt;slot&gt;</code> virou <code>{@render children()}</code>.</p>
+
+<hr>
+
+<h2>9. Experimente: a chamada sem arroba</h2>
+
+<p>A caixa abaixo chama o snippet como se fosse função. O componente nem monta. Sua missão é trocar a chamada pela forma certa.</p>
+<div class="trysvelte" data-goal="out:Pedido de Ana">
+<p class="try-task"><strong>Missão:</strong> <code>{cartao()}</code> quebra o componente. Use a marca de renderização para o carimbo aparecer na tela.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao()}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+&lt;p&gt;{cartao()}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao()}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+&lt;p&gt;{@render cartao()}&lt;/p&gt;</pre>
+</div>
+
+<p>O erro que você vê antes da correção é o mesmo da seção 5: <code>Cannot read properties of undefined (reading 'before')</code>. É a mensagem menos didática do Svelte, e agora você sabe traduzi-la: falta o <code>@render</code>.</p>
+
+<p>Note que a solução mantém o parágrafo em volta: <code>&lt;p&gt;{@render cartao()}&lt;/p&gt;</code>. O snippet entra dentro do parágrafo, como qualquer outro conteúdo. Se o snippet já tem um <code>&lt;p&gt;</code> dentro dele, você acaba com um parágrafo dentro de outro — HTML feio, mas que o navegador aceita.</p>
+
+<hr>
+
+<h2>10. Rodando na máquina da Ana</h2>
+
+<p>Com o carimbo no <code>src/App.svelte</code>, o servidor de desenvolvimento mostra o pedido e atualiza a cada arquivo salvo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O exercício bom aqui é carimbar duas vezes: copie a linha <code>{@render cartao()}</code> e cole embaixo. Os dois parágrafos aparecem, e os dois acompanham o mesmo <code>nome</code>. Depois, mude o carimbo (troque "Pedido de" por "Comanda de") e salve: as duas cópias mudam juntas. É a diferença entre um carimbo e duas cópias à mão.</p>
+
+<p>No build, snippet é a estrutura mais barata de todas as que você viu até agora:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CCR8-1kr.js  33.98 kB │ gzip: 13.08 kB
+✓ built in 1.44s</pre>
+
+<p><code>33.98 kB</code>, o menor arquivo deste nível. Não é mágica: o snippet é resolvido na compilação e vira uma função comum no JavaScript gerado. Não há motor de componente, não há observação de props, não há promessa. Só marcação reaproveitada.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas nascem do mesmo detalhe: snippet se parece com função, e pontuação de função é obrigatória.</p>
+<div class="cenario">
+<strong>Erro 1 — <code>{@render}</code> sem chamada</strong>
+<p>O <code>{@render}</code> só aceita uma <strong>chamada</strong>: nome e parênteses. Escrever só o nome não é uma chamada.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao()}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+{@render cartao}</pre>
+<pre class="out">Erro de compilação (linha 9, coluna 9): `{@render ...}` tags can only contain call expressions</pre>
+<p>A mensagem é literal: "as tags <code>{@render ...}</code> só podem conter expressões de chamada". A coluna 9 aponta o nome. Falta o par de parênteses depois dele — e, se o snippet tiver parâmetros, os valores dentro.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — snippet declarado sem parênteses</strong>
+<p>A declaração também é uma chamada em potencial: o nome vem seguido de parênteses, mesmo quando não há parâmetro.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+{@render cartao()}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 16): Expected token (</pre>
+<p>"Expected token (" quer dizer "eu esperava um parêntese aqui". A coluna 16 é o fim da linha do nome. Repare que a mensagem é curta e específica, o que é sorte: o erro é de digitação, não de lógica.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — nome já usado por uma variável</strong>
+<p>Snippet, variável e função do <code>&lt;script&gt;</code> vivem no mesmo espaço de nomes. Dois donos para o mesmo nome é ambíguo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cartao = $state('x');
+&lt;/script&gt;
+
+{#snippet cartao()}
+  &lt;p&gt;oi&lt;/p&gt;
+{/snippet}
+
+{@render cartao()}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 10): `cartao` has already been declared</pre>
+<p>A mensagem é a mesma do JavaScript para variável repetida. Para consertar, renomeie um dos dois: <code>cartao</code> para o snippet e <code>textoCartao</code> para a variável, por exemplo. Nome de carimbo bom descreve o que ele desenha.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>{#snippet nome()}</code></td><td>declara um snippet sem parâmetro</td></tr>
+<tr><td><code>{#snippet nome(a, b)}</code></td><td>declara com parâmetros (aula de snippets com parâmetros)</td></tr>
+<tr><td><code>{/snippet}</code></td><td>fecha a declaração</td></tr>
+<tr><td><code>{@render nome()}</code></td><td>desenha o snippet naquele ponto</td></tr>
+<tr><td><code>{@render nome('pão')}</code></td><td>desenha passando um argumento</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Use</th><th>Por quê</th></tr>
+<tr><td>Repetir por item de lista</td><td><code>{#each}</code></td><td>a repetição vem do dado</td></tr>
+<tr><td>Repetir o mesmo HTML em pontos diferentes</td><td><code>{#snippet}</code></td><td>o carimbo tem nome</td></tr>
+<tr><td>Uma tela reutilizável em outros arquivos</td><td>componente</td><td>snippet não sai do arquivo</td></tr>
+<tr><td>Receber marcação do pai</td><td><code>{@render children()}</code></td><td><code>&lt;slot&gt;</code> está fora de moda</td></tr>
+<tr><td>Guardar um valor calculado</td><td>função no <code>&lt;script&gt;</code></td><td>snippet devolve marcação</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td><code>{@render}</code> sem parênteses</td><td><code>`{@render ...}` tags can only contain call expressions</code></td></tr>
+<tr><td>Declaração sem <code>()</code></td><td><code>Expected token (</code></td></tr>
+<tr><td>Nome repetido</td><td><code>`cartao` has already been declared</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que aparece na tela num componente que declara um snippet e não chama <code>{@render}</code>?</p>
+<label><input type="radio" name="q1"> O conteúdo do snippet, uma vez</label>
+<label><input type="radio" name="q1"> O conteúdo do snippet, na posição da declaração</label>
+<label><input type="radio" name="q1"> Nada do snippet: declarar não desenha</label>
+<label><input type="radio" name="q1"> O compilador recusa o arquivo</label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Qual é a marca do uso, e não da declaração?</p>
+<label><input type="radio" name="q1"> <code>{#snippet nome()}</code></label>
+<label><input type="radio" name="q1"> <code>{@render nome()}</code></label>
+<label><input type="radio" name="q1"> <code>{/snippet}</code></label>
+<label><input type="radio" name="q1"> <code>{#if nome}</code></label>
+</div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. Um snippet declarado dentro de um <code>{#if}</code> e chamado fora dele…</p>
+<label><input type="radio" name="q1"> funciona, porque snippets são içados</label>
+<label><input type="radio" name="q1"> funciona, mas com um aviso no console</label>
+<label><input type="radio" name="q1"> só funciona se o <code>{#if}</code> não fechar</label>
+<label><input type="radio" name="q1"> falha na execução com <code>cartao is not defined</code></label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#snippet cartao()}<br>&nbsp;&nbsp;&lt;p&gt;Pedido de {nome}&lt;/p&gt;<br>{/snippet}<br><br><input data-answer="{@render cartao()}"><br><br>// carimbe o pedaço na tela</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>{#snippet nome()}</code> declara um pedaço de marcação com nome; <code>{@render nome()}</code> desenha.</li>
+  <li>Declarar não desenha: sem <code>{@render}</code>, o snippet não aparece.</li>
+  <li>Snippet é içado: pode ser usado antes da declaração, no mesmo nível do componente.</li>
+  <li>Os parênteses são obrigatórios na declaração e na chamada, mesmo sem parâmetros.</li>
+  <li>Snippet devolve marcação, não valor: usar <code>{nome()}</code> quebra o componente.</li>
+  <li>Snippet mora no arquivo; componente é arquivo. Precisa atravessar fronteira? Componente.</li>
+  <li>Snippet dentro de bloco só existe ali: chamar de fora dá <code>cartao is not defined</code>.</li>
+  <li>Snippet e variáveis dividem nomes: repetir dá <code>has already been declared</code>.</li>
+  <li><code>&lt;slot&gt;</code> ainda funciona, mas o compilador avisa que está fora de moda.</li>
+  <li>Os erros desta aula: <code>{@render}</code> sem chamada, declaração sem <code>()</code> e nome repetido.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

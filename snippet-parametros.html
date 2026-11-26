@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snippets com Parâmetros — o carimbo com espaço em branco | Guia Svelte</title>
+<meta name="description" content="Snippets com parâmetros no Svelte 5: declarar nomes, passar argumentos na ordem, valor padrão, snippet dentro de {#each} e os erros reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Snippets com parâmetros</span></h1>
+
+<p class="intro">O carimbo da Ana tem um espaço em branco no meio, onde ela escreve o nome do cliente com caneta. O carimbo é o mesmo para todo mundo; o que muda é o que ela preenche. Um snippet com parâmetros é exatamente isso: o desenho é fixo, e cada uso passa os valores que vão nos espaços em branco. Nesta aula você vai aprender a declarar esses espaços, a preenchê-los na chamada e a escolher valores padrão para quando ninguém preenche.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como declarar um snippet com um parâmetro e como passar o valor.</li>
+  <li>Onde o parâmetro existe e o que acontece quando ele tem o mesmo nome de uma variável de fora.</li>
+  <li>Como usar dois ou mais parâmetros, na ordem certa.</li>
+  <li>Que o argumento pode ser uma conta, um objeto ou uma expressão.</li>
+  <li>Como dar valor padrão a um parâmetro.</li>
+  <li>O jeito mais útil de todos: snippet dentro de <code>{#each}</code>.</li>
+  <li>O que quebra quando falta um argumento, com a mensagem real.</li>
+  <li>Por que parâmetros com <code>...</code> (rest) não são aceitos.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como o build do projeto da Ana mostra o custo de cada chamada.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o espaço em branco no carimbo</h2>
+
+<p>Na aula anterior, o snippet era um carimbo fechado: sempre o mesmo desenho, sempre o mesmo conteúdo. Isso resolve a repetição literal, mas não resolve a repetição <em>com variação</em>. O carimbo do cabeçalho é igual em todas as comandas; o nome do cliente muda em cada uma.</p>
+
+<p>Um <strong>parâmetro</strong> é um nome que o snippet recebe de fora, como uma gaveta vazia com etiqueta. Dentro do snippet, você usa o nome como usaria uma variável. Na chamada, você passa o valor, e ele entra na gaveta. O mesmo carimbo, chamado duas vezes com valores diferentes, desenha duas coisas diferentes.</p>
+
+<p>Isso aproxima o snippet de uma função, e a comparação ajuda — desde que você não esqueça a diferença principal: função devolve valor, snippet devolve marcação desenhada. A mecânica de "receber valores de fora" é a mesma; o que o Svelte faz com o resultado é outro. Você vai ver, mais adiante nesta aula, o que acontece se alguém tratar um snippet como função.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O carimbo com um espaço em branco</td><td><code>{#snippet linha(nome)}</code></td></tr>
+<tr><td>A etiqueta do espaço: "cliente"</td><td>o nome do parâmetro: <code>nome</code></td></tr>
+<tr><td>Escrever o nome com caneta</td><td><code>{@render linha('Bia')}</code></td></tr>
+<tr><td>Dois espaços, dois nomes</td><td><code>{#snippet linha(nome, preco)}</code></td></tr>
+<tr><td>Espaço que fica em branco quando não há valor</td><td>parâmetro sem argumento: vale <code>undefined</code></td></tr>
+<tr><td>A instrução "se não preencher, use NOVO"</td><td><code>texto = 'novo'</code> na declaração</td></tr>
+</table>
+</div>
+
+<p>Uma observação sobre nomes. O parâmetro tem valor só dentro do snippet, e o nome dele não precisa combinar com nada de fora. Você pode chamar de <code>nome</code>, <code>texto</code>, <code>x</code> — o que ajuda é escolher um nome que diga o que ele é. Em snippets que desenham uma linha de tabela, os nomes mais comuns são <code>item</code>, <code>rotulo</code>, <code>valor</code>.</p>
+
+<hr>
+
+<h2>2. Um parâmetro, um valor</h2>
+
+<p>A declaração ganha o nome dentro dos parênteses; a chamada ganha o valor no mesmo lugar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet cartao(nome)}
+  &lt;p&gt;Pedido de {nome}&lt;/p&gt;
+{/snippet}
+
+{@render cartao('Bia')}
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+
+<p>O compilador desenha o carimbo com o valor passado e deixa o resto do componente intacto:</p>
+<pre class="out">&lt;p&gt;Pedido de Bia&lt;/p&gt; &lt;p&gt;Ana&lt;/p&gt;</pre>
+
+<p>Dois pontos importantes nessa saída. O primeiro: o snippet desenhou <code>Bia</code>, o valor que veio de fora, e não <code>Ana</code>. O segundo: o parágrafo de fora continuou mostrando <code>Ana</code>. Ou seja, o parâmetro <strong>não altera</strong> a variável de fora; ele cria um nome novo, que vale só ali dentro, mesmo que tenha o mesmo nome.</p>
+
+<p>Esse comportamento se chama <strong>sombra</strong> ("shadowing", em inglês): o nome de dentro cobre o de fora enquanto o snippet desenha. Não é erro, é regra da linguagem, e é útil — mas pode confundir. Se você quer usar a variável de fora, não declare um parâmetro com o mesmo nome.</p>
+
+<h3>A anatomia do parâmetro</h3>
+<dl class="anatomy">
+  <dt>{#snippet cartao(nome)}</dt><dd>o <strong>nome do parâmetro</strong> fica entre parênteses. Um parâmetro, um nome; dois parâmetros, dois nomes separados por vírgula.</dd>
+  <dt>{nome}</dt><dd>o <strong>uso</strong> dentro do corpo. É uma variável comum: dá para mostrar, comparar, somar, chamar método.</dd>
+  <dt>{@render cartao('Bia')}</dt><dd>o <strong>argumento</strong>: o valor que preenche a gaveta naquela chamada. Texto entre aspas, número sem aspas.</dd>
+  <dt>cartao('Bia')</dt><dd>a <strong>ordem</strong> importa: o primeiro argumento vai para o primeiro parâmetro, o segundo para o segundo.</dd>
+</dl>
+
+<p>Note que a declaração não usa <code>let</code> nem <code>$state</code> dentro dos parênteses. O parâmetro é criado pelo próprio bloco, a cada chamada. Se o valor mudar de fora, a chamada seguinte desenha com o valor novo — mas o parâmetro em si não é um estado guardado.</p>
+
+<hr>
+
+<h2>3. Experimente: preencha o carimbo</h2>
+
+<p>A caixa abaixo tem o snippet pronto e a chamada vazia. Sua missão é passar o nome para a linha aparecer.</p>
+<div class="trysvelte" data-goal="out:pão">
+<p class="try-task"><strong>Missão:</strong> o snippet <code>linha</code> espera um nome, e a chamada está sem argumento — a tela fica vazia. Passe o texto <code>pão</code> na chamada.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet linha(nome)}
+  &lt;li&gt;{nome}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {@render linha()}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet linha(nome)}
+  &lt;li&gt;{nome}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {@render linha('pão')}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Antes da correção, o texto da tela é vazio: o parâmetro chegou como <code>undefined</code>, e o Svelte desenha <code>undefined</code> como nada. Repare que o componente <strong>não quebra</strong> — só fica sem conteúdo. Isso é uma diferença importante em relação ao caso em que o valor que falta é usado numa conta, que você vai ver na seção 7.</p>
+
+<hr>
+
+<h2>4. Dois ou mais parâmetros</h2>
+
+<p>Quando o carimbo tem mais de um espaço em branco, os nomes vão separados por vírgula, e a ordem é a mesma dos argumentos.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet linha(nome, preco)}
+  &lt;li&gt;{nome} — R$ {preco.toFixed(2)}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {@render linha('pão', 0.9)}
+  {@render linha('leite', 4.5)}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;pão — R$ 0.90&lt;/li&gt; &lt;li&gt;leite — R$ 4.50&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Cada chamada passa os seus valores, e cada desenho fica independente. Repare que o <code>toFixed(2)</code> está dentro do snippet: o parâmetro <code>preco</code> chega como número, e a formatação acontece na hora de desenhar. Se você passasse o preço já formatado (<code>'0,90'</code>), o <code>toFixed</code> quebraria, porque texto não tem esse método. Guarde a regra das aulas anteriores: <strong>calcule com número, formate na hora de mostrar</strong>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>Parâmetro 1</th><th>Parâmetro 2</th></tr>
+<tr><td><code>linha('pão', 0.9)</code></td><td><code>'pão'</code></td><td><code>0.9</code></td></tr>
+<tr><td><code>linha('leite', 4.5)</code></td><td><code>'leite'</code></td><td><code>4.5</code></td></tr>
+<tr><td><code>linha(0.9, 'pão')</code></td><td><code>0.9</code></td><td><code>'pão'</code> — trocado!</td></tr>
+<tr><td><code>linha('pão')</code></td><td><code>'pão'</code></td><td><code>undefined</code></td></tr>
+<tr><td><code>linha('pão', 0.9, 'extra')</code></td><td><code>'pão'</code></td><td><code>0.9</code> — o terceiro é ignorado</td></tr>
+</table>
+</div>
+
+<p>A terceira linha é o erro clássico de ordem: o componente compila, roda, e mostra um preço no lugar do nome. A quarta é o argumento que falta. A quinta é o argumento a mais, que o Svelte simplesmente ignora — sem aviso, sem erro. Nada disso é conferido na compilação: o snippet não declara tipos, e ninguém sabe quantos argumentos você vai passar em cada chamada.</p>
+
+<hr>
+
+<h2>5. Experimente: dois valores por linha</h2>
+
+<p>A caixa abaixo tem uma lista de objetos e uma chamada errada. Sua missão é passar o nome e o preço de cada pedido.</p>
+<div class="trysvelte" data-goal="out:pão — R$ 0.90 leite — R$ 4.50">
+<p class="try-task"><strong>Missão:</strong> a chamada passa o objeto inteiro para o parâmetro <code>nome</code>, e o <code>toFixed</code> quebra. Passe <code>pedido.nome</code> e <code>pedido.preco</code> na ordem certa.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { nome: 'pão', preco: 0.9 },
+    { nome: 'leite', preco: 4.5 }
+  ]);
+&lt;/script&gt;
+
+{#snippet linha(nome, preco)}
+  &lt;li&gt;{nome} — R$ {preco.toFixed(2)}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    {@render linha(pedido)}
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { nome: 'pão', preco: 0.9 },
+    { nome: 'leite', preco: 4.5 }
+  ]);
+&lt;/script&gt;
+
+{#snippet linha(nome, preco)}
+  &lt;li&gt;{nome} — R$ {preco.toFixed(2)}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    {@render linha(pedido.nome, pedido.preco)}
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Antes da correção o componente quebra, e a mensagem do navegador é <code>Cannot read properties of undefined (reading 'toFixed')</code>: o segundo parâmetro chegou vazio, e o <code>toFixed</code> tentou trabalhar com <code>undefined</code>. Diferente do caso do texto vazio, aqui o valor que falta é <em>usado numa conta</em>, e aí não há saída silenciosa.</p>
+
+<p>Esse é o padrão mais comum de snippet com parâmetros: um objeto por chamada, com as partes que o desenho precisa. Você vai ver na seção 6 a versão que passa o objeto inteiro.</p>
+
+<hr>
+
+<h2>6. O argumento pode ser qualquer coisa</h2>
+
+<p>Do lado da chamada, o argumento é uma expressão comum. Pode ser uma conta:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+{#snippet etiqueta(valor)}
+  &lt;p&gt;R$ {valor.toFixed(2)}&lt;/p&gt;
+{/snippet}
+
+{@render etiqueta(preco * 2)}</pre>
+<pre class="out">&lt;p&gt;R$ 1.80&lt;/p&gt;</pre>
+
+<p>Pode ser um objeto, com o parâmetro recebendo o objeto inteiro e o corpo acessando as partes:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { nome: 'pão', preco: 0.9 },
+    { nome: 'leite', preco: 4.5 }
+  ]);
+&lt;/script&gt;
+
+{#snippet linha(pedido)}
+  &lt;li&gt;{pedido.nome} — R$ {pedido.preco.toFixed(2)}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    {@render linha(pedido)}
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;pão — R$ 0.90&lt;/li&gt;&lt;li&gt;leite — R$ 4.50&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>E pode ser um objeto desmontado na própria declaração, com chaves no lugar do nome. Nesse caso, o parâmetro não é o objeto: são as partes dele, já separadas.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet linha({ nome, preco })}
+  &lt;p&gt;{nome} — {preco}&lt;/p&gt;
+{/snippet}
+
+{@render linha({ nome: 'pão', preco: 0.9 })}</pre>
+<pre class="out">&lt;p&gt;pão — 0.9&lt;/p&gt;</pre>
+
+<p>Três formas de passar a mesma informação, com custos diferentes. A forma com dois parâmetros deixa o desenho mais explícito ("aqui precisa de nome e preço"); a forma com um objeto deixa a chamada mais curta; a forma com chaves deixa o corpo mais curto. Não existe certa: existe a que deixa o código mais fácil de ler no seu caso.</p>
+
+<div class="tip">
+<strong>Escolha pelo que o carimbo precisa</strong>
+<p>Se o snippet desenha uma linha de tabela, dois parâmetros simples costumam ser melhores: quem chama vê na hora o que está passando. Se o snippet desenha um cartão inteiro, com seis informações, um objeto é melhor — a chamada fica <code>{@render cartao(pedido)}</code> em vez de seis argumentos em fila.</p>
+</div>
+
+<hr>
+
+<h2>7. Valor padrão</h2>
+
+<p>Um parâmetro pode trazer o valor que deve ser usado quando ninguém passa nada. A escrita é a mesma do JavaScript: sinal de igual e o valor, na declaração.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet selo(texto = 'novo')}
+  &lt;span&gt;{texto}&lt;/span&gt;
+{/snippet}
+
+&lt;p&gt;{@render selo()}&lt;/p&gt;
+&lt;p&gt;{@render selo('oferta')}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;&lt;span&gt;novo&lt;/span&gt;&lt;/p&gt; &lt;p&gt;&lt;span&gt;oferta&lt;/span&gt;&lt;/p&gt;</pre>
+
+<p>A primeira chamada veio sem argumento e usou <code>'novo'</code>; a segunda veio com <code>'oferta'</code> e usou o valor passado. O padrão é uma rede de segurança: ele evita que o carimbo saia com um buraco quando alguém esquece de passar o valor.</p>
+
+<p>Cuidado com uma armadilha: valor padrão só vale para <code>undefined</code>. Se a chamada passar <code>null</code>, o padrão não entra, e o corpo recebe <code>null</code>. E se o padrão for uma conta que usa outro parâmetro, a ordem importa — os parâmetros são preenchidos da esquerda para a direita.</p>
+
+<hr>
+
+<h2>8. Experimente: o selo que sai vazio</h2>
+
+<p>A caixa abaixo chama o snippet sem argumento e o selo aparece vazio. Sua missão é dar um valor padrão ao parâmetro.</p>
+<div class="trysvelte" data-goal="out:novo">
+<p class="try-task"><strong>Missão:</strong> a chamada não passa argumento e a tela fica sem texto. Dê ao parâmetro <code>texto</code> o valor padrão <code>'novo'</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet selo(texto)}
+  &lt;span&gt;{texto}&lt;/span&gt;
+{/snippet}
+
+&lt;p&gt;{@render selo()}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet selo(texto = 'novo')}
+  &lt;span&gt;{texto}&lt;/span&gt;
+{/snippet}
+
+&lt;p&gt;{@render selo()}&lt;/p&gt;</pre>
+</div>
+
+<p>O conserto é de um pedaço de linha, e o efeito é grande: o snippet passa a funcionar nas duas situações — com argumento e sem. Esse tipo de robustez é o que diferencia um carimbo de brinquedo de um carimbo de produção. Na padaria, é a diferença entre a comanda que sai com "cliente não informado" e a que sai com um espaço em branco.</p>
+
+<hr>
+
+<h2>9. O padrão mais útil: snippet dentro de <code>{#each}</code></h2>
+
+<p>Junte o carimbo com a lista e você tem a combinação que aparece em quase todo projeto: um snippet que desenha <em>um</em> item, chamado dentro de um <code>{#each}</code> que percorre todos.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+{#snippet linha(nome, i)}
+  &lt;li&gt;{i + 1}º — {nome}&lt;/li&gt;
+{/snippet}
+
+&lt;ol&gt;
+  {#each pedidos as pedido, i}
+    {@render linha(pedido, i)}
+  {/each}
+&lt;/ol&gt;</pre>
+<pre class="out">&lt;ol&gt;&lt;li&gt;1º — pão&lt;/li&gt;&lt;li&gt;2º — leite&lt;/li&gt;&lt;li&gt;3º — café&lt;/li&gt;&lt;/ol&gt;</pre>
+
+<p>Por que separar? Por dois motivos práticos. O primeiro é legibilidade: o HTML principal fica curto — "para cada pedido, carimbe a linha" — e o desenho da linha fica num lugar só, fácil de achar. O segundo é reúso: o mesmo carimbo pode ser chamado em outra lista, em outro ponto do arquivo, sem copiar marcação.</p>
+
+<p>Quando o item é um objeto, a chamada costuma passar um pedaço dele. E quando o snippet precisa da posição, o índice do <code>{#each}</code> entra como segundo argumento, como no exemplo. Note que o <code>i + 1</code> virou <code>{i + 1}</code> dentro do snippet: a conta saiu da chamada e foi para o desenho, o que deixa a chamada mais limpa.</p>
+
+<hr>
+
+<h2>10. Rodando na máquina da Ana</h2>
+
+<p>O componente desta aula é a comanda com a linha de pedido. No servidor de desenvolvimento, o carimbo é chamado duas vezes, uma por item:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Um exercício que mostra o valor dos parâmetros: acrescente um terceiro pedido no array e salve. Uma linha nova aparece, com os valores certos, e você não tocou no snippet. Depois, troque o <code>{pedido.nome}</code> da chamada por <code>{pedido}</code> e salve: o componente quebra com o erro do <code>toFixed</code>, e o servidor mostra a mensagem no terminal e no navegador.</p>
+
+<p>No build, cada chamada de snippet é resolvida na compilação:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CUbpIp9O.js  41.04 kB │ gzip: 15.79 kB
+✓ built in 2.32s</pre>
+
+<p><code>41.04 kB</code>, o maior build deste nível até agora. O tamanho vem da combinação: lista com chave, formatação de número e o motor do <code>{#each}</code>. Parâmetro de snippet, em si, não custa quase nada — o compilador transforma cada chamada numa função com os argumentos já amarrados.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas tratam da lista de parâmetros, que é curta e tem regras firmes.</p>
+<div class="cenario">
+<strong>Erro 1 — parâmetros com <code>...</code></strong>
+<p>Snippet não aceita parâmetros variáveis. O compilador é explícito e já sugere a saída: use um array.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet lista(...itens)}
+  &lt;p&gt;{itens.join(', ')}&lt;/p&gt;
+{/snippet}
+
+{@render lista('pão', 'leite', 'café')}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 16): Snippets do not support rest parameters; use an array instead</pre>
+<p>A mensagem é uma das melhores do Svelte: diz o que está errado e o que fazer. Na prática, você declara <code>{#snippet lista(itens)}</code> e chama <code>{@render lista(['pão', 'leite'])}</code>, percorrendo com <code>{#each}</code> dentro. O carimbo desenha uma lista, não recebe argumentos soltos.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — dois parâmetros com o mesmo nome</strong>
+<p>Cada parâmetro precisa de um nome próprio. Dois <code>a</code> na mesma lista não têm como ser distinguidos no corpo do snippet.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet linha(a, a)}
+  &lt;p&gt;{a}&lt;/p&gt;
+{/snippet}
+
+{@render linha(1, 2)}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 19): Argument name clash</pre>
+<p>"Argument name clash" é "os nomes dos argumentos se chocam". A coluna 19 aponta o segundo <code>a</code>. Renomeie um deles: <code>a</code> e <code>b</code>, ou nomes que digam o que são, como <code>nome</code> e <code>preco</code>.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — falta a vírgula entre parâmetros</strong>
+<p>Os parâmetros são separados por vírgula. Sem ela, o compilador encontra dois nomes colados e não sabe o que fazer.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#snippet linha(a b)}
+  &lt;p&gt;{a}{b}&lt;/p&gt;
+{/snippet}
+
+{@render linha(1, 2)}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 18): Unexpected token</pre>
+<p>"Unexpected token" é genérica, mas a coluna 18 aponta exatamente onde o compilador parou de entender: o segundo nome. É o tipo de erro que o editor de código costuma sublinhar antes de você salvar — vale ligar o destaque de sintaxe.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>{#snippet linha(nome)}</code></td><td>declara com um parâmetro</td></tr>
+<tr><td><code>{#snippet linha(nome, preco)}</code></td><td>declara com dois, na ordem</td></tr>
+<tr><td><code>{#snippet linha({ nome, preco })}</code></td><td>recebe as partes de um objeto</td></tr>
+<tr><td><code>{#snippet selo(texto = 'novo')}</code></td><td>com valor padrão</td></tr>
+<tr><td><code>{@render linha('pão', 0.9)}</code></td><td>chama com dois argumentos</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na chamada</th><th>O que o parâmetro recebe</th><th>O que acontece</th></tr>
+<tr><td>valor do tipo certo</td><td>o valor</td><td>desenha normal</td></tr>
+<tr><td>nada</td><td><code>undefined</code></td><td>vazio; quebra se for usado numa conta</td></tr>
+<tr><td><code>null</code></td><td><code>null</code></td><td>o valor padrão <strong>não</strong> entra</td></tr>
+<tr><td>argumento a mais</td><td>os primeiros</td><td>o extra é ignorado</td></tr>
+<tr><td>valores trocados de ordem</td><td>trocados</td><td>compila e mostra errado</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td><code>...</code> nos parâmetros</td><td><code>Snippets do not support rest parameters; use an array instead</code></td></tr>
+<tr><td>Nome repetido</td><td><code>Argument name clash</code></td></tr>
+<tr><td>Falta vírgula</td><td><code>Unexpected token</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o parâmetro recebe quando a chamada não passa argumento e não há valor padrão?</p>
+<label><input type="radio" name="q1"> Uma string vazia</label>
+<label><input type="radio" name="q1"> <code>undefined</code></label>
+<label><input type="radio" name="q1"> <code>0</code></label>
+<label><input type="radio" name="q1"> O valor da variável de mesmo nome no <code>&lt;script&gt;</code></label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. O snippet declara <code>{#snippet linha(nome, preco)}</code> e a chamada é <code>{@render linha(pedido)}</code>. O que acontece?</p>
+<label><input type="radio" name="q1"> O objeto é desmontado automaticamente nos dois parâmetros</label>
+<label><input type="radio" name="q1"> <code>nome</code> recebe o objeto e <code>preco</code> fica indefinido</label>
+<label><input type="radio" name="q1"> O compilador recusa a chamada</label>
+<label><input type="radio" name="q1"> <code>nome</code> e <code>preco</code> recebem o mesmo objeto</label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. Para que serve <code>texto = 'novo'</code> na declaração de um parâmetro?</p>
+<label><input type="radio" name="q1"> Para impedir que o parâmetro seja passado</label>
+<label><input type="radio" name="q1"> Para o parâmetro valer <code>'novo'</code> quando a chamada não passar nada</label>
+<label><input type="radio" name="q1"> Para o parâmetro valer <code>'novo'</code> sempre</label>
+<label><input type="radio" name="q1"> Para declarar uma variável de estado dentro do snippet</label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#snippet linha(<input data-answer="nome, preco">)}<br>&nbsp;&nbsp;&lt;li&gt;{nome} — R$ {preco.toFixed(2)}&lt;/li&gt;<br>{/snippet}<br><br>{@render linha('pão', 0.9)}<br><br>// dois parâmetros, na ordem que a chamada passa</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Parâmetro é uma gaveta com etiqueta: o snippet recebe valores de fora e os usa no corpo.</li>
+  <li>Declaração: <code>{#snippet linha(nome, preco)}</code>; chamada: <code>{@render linha('pão', 0.9)}</code>.</li>
+  <li>A ordem dos argumentos casa com a ordem dos parâmetros; trocar a ordem compila e mostra errado.</li>
+  <li>Argumento a mais é ignorado; argumento a menos vira <code>undefined</code>.</li>
+  <li>Parâmetro com o mesmo nome de uma variável de fora faz sombra: não altera a de fora.</li>
+  <li>O argumento pode ser conta, objeto ou objeto desmontado na declaração.</li>
+  <li>Valor padrão (<code>texto = 'novo'</code>) só vale quando o argumento é <code>undefined</code>, não <code>null</code>.</li>
+  <li>O uso mais comum: snippet de um item chamado dentro de <code>{#each}</code>.</li>
+  <li>Não existe <code>...</code> em parâmetros de snippet: passe um array.</li>
+  <li>Os erros desta aula: rest parameters, nome repetido e vírgula faltando.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

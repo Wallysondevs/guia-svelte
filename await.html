@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Esperar: {#await} — o bilhete de retirada | Guia Svelte</title>
+<meta name="description" content="O bloco {#await} do Svelte 5: espera, {:then} e {:catch}, as formas curtas, promessa recusada sem tratamento e os erros reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Esperar: {#await}</span></h1>
+
+<p class="intro">A Ana assa o pão em vinte minutos. Se um cliente pedir, ela não entrega o pão cru nem diz que não tem: ela escreve um bilhete de retirada e diz "volte em vinte minutos". O bilhete é a promessa de que algo vai chegar. O tempo passa, e podem acontecer duas coisas: o pão fica pronto ou o forno quebra. Um componente que busca dados vive a mesma situação, e o Svelte tem um bloco só para isso: <code>{#await}</code>, que mostra uma coisa enquanto espera, outra quando dá certo e outra quando dá errado.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma <strong>promessa</strong> e por que ela não entrega o valor na hora.</li>
+  <li>A escrever <code>{#await}</code> com os caminhos <code>{:then}</code> e <code>{:catch}</code>.</li>
+  <li>O que a tela mostra em cada um dos três momentos.</li>
+  <li>Que a saída do servidor mostra o estado "esperando", não o valor final.</li>
+  <li>As formas curtas <code>{#await p then v}</code> e <code>{#await p catch e}</code>.</li>
+  <li>O que acontece quando a promessa falha e não existe <code>{:catch}</code>.</li>
+  <li>Por que <code>erro.message</code> some quando a recusa vem com texto.</li>
+  <li>De onde vêm as promessas no dia a dia: <code>fetch</code>, temporizadores, banco.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Por que a caixa de exemplo precisa esperar antes de conferir a tela.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o bilhete de retirada</h2>
+
+<p>Quase tudo o que um computador faz com o mundo de fora demora: buscar dados na internet, ler um arquivo, consultar um banco. Se o programa ficasse parado esperando, a tela congelaria. A solução que o JavaScript adotou tem um nome estranho e uma ideia simples: em vez de entregar o valor, a função entrega um <strong>bilhete</strong>. Esse bilhete é a <em>promessa</em> — um objeto que promete um valor no futuro e avisa quando ele chega.</p>
+
+<p>O bilhete tem três destinos possíveis. Ele pode estar <strong>esperando</strong> (ninguém sabe ainda). Pode ser <strong>cumprido</strong>, e aí entrega um valor. Pode ser <strong>recusado</strong>, e aí entrega um motivo de falha. Um sistema bem feito trata os três: mostra que está buscando, mostra o resultado quando chega e mostra o problema quando falha.</p>
+
+<p>O bloco <code>{#await}</code> é exatamente esse tratamento, escrito na marcação. Você entrega a promessa, e o Svelte cuida de trocar o que está na tela quando o bilhete muda de estado. Nenhum <code>if</code> de carregando no <code>&lt;script&gt;</code>, nenhuma variável extra: a promessa é a fonte da verdade, e a tela segue.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O bilhete de retirada</td><td>a promessa: <code>fetch(...)</code>, <code>Promise.resolve(...)</code></td></tr>
+<tr><td>"Seu pão está assando"</td><td>o caminho de espera (antes do <code>{:then}</code>)</td></tr>
+<tr><td>"Pronto, aqui está"</td><td><code>{:then valor}</code></td></tr>
+<tr><td>"O forno quebrou"</td><td><code>{:catch erro}</code></td></tr>
+<tr><td>Perder o bilhete e não voltar</td><td>promessa recusada sem <code>{:catch}</code></td></tr>
+</table>
+</div>
+
+<p>Uma palavra sobre o nome: <code>await</code> vem do inglês "aguarde". Ele aparece também dentro do JavaScript moderno, com <code>await</code> em funções <code>async</code>. São coisas diferentes: no <code>&lt;script&gt;</code>, <code>await</code> pausa a função e entrega o valor; no bloco, ele desenha a espera. Não misture os dois na cabeça.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>{#await}</code></h2>
+
+<p>Comece com o bloco completo, que trata os três estados. A promessa aqui nasce já resolvida, para o exemplo caber numa linha:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedido = $state(Promise.resolve('pão quentinho'));
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;Assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;Pronto: {valor}&lt;/p&gt;
+{:catch erro}
+  &lt;p&gt;Deu ruim: {erro.message}&lt;/p&gt;
+{/await}</pre>
+
+<p>O compilador do servidor não espera promessa nenhuma: ele gera o HTML do estado "esperando", que é o que o leitor vê primeiro.</p>
+<pre class="out">&lt;p&gt;Assando…&lt;/p&gt;</pre>
+
+<p>Quando a promessa é cumprida, o Svelte troca o parágrafo. O texto da tela passa a ser o do caminho <code>{:then}</code>, e o valor resolvido chega na variável <code>valor</code>:</p>
+<pre class="out">Pronto: pão quentinho</pre>
+
+<p>Repare que a primeira saída é HTML e a segunda é texto de tela. São momentos diferentes do mesmo componente: a saída do compilador mostra o instante zero; o texto mostra o que o leitor vê depois que a promessa resolve. Um guia honesto precisa mostrar os dois, senão você fica com a impressão de que o Svelte não funciona — ou pior, de que o valor aparece no HTML inicial.</p>
+
+<h3>A anatomia do bloco</h3>
+<dl class="anatomy">
+  <dt>{#await pedido}</dt><dd>a <strong>abertura</strong> e a promessa. Tudo entre esta linha e <code>{:then}</code> é o que aparece <strong>enquanto</strong> ninguém sabe o resultado.</dd>
+  <dt>{:then valor}</dt><dd>o caminho do <strong>sucesso</strong>. O nome depois do <code>then</code> é a variável que recebe o valor resolvido — só existe aqui dentro.</dd>
+  <dt>{:catch erro}</dt><dd>o caminho da <strong>falha</strong>. O nome recebe o motivo da recusa, que costuma ser um objeto de erro com a propriedade <code>message</code>.</dd>
+  <dt>{/await}</dt><dd>o <strong>fechamento</strong>, um só para o bloco inteiro.</dd>
+</dl>
+
+<p>Nenhum dos três caminhos é obrigatório. Você pode ter só a espera e o sucesso, só a espera e a falha, ou os três. O compilador não reclama da falta de <code>{:catch}</code> — e é aí que mora uma armadilha que você vai ver na seção 6.</p>
+
+<hr>
+
+<h2>3. Os três estados, um por vez</h2>
+
+<p>Vale ver o bloco trocando de roupa. Com a mesma estrutura, mudando só a promessa, você vê os três estados na tela:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Promessa</th><th>O que aparece primeiro</th><th>O que aparece depois</th></tr>
+<tr><td><code>Promise.resolve('pão')</code></td><td>"Assando…"</td><td>"Pronto: pão"</td></tr>
+<tr><td><code>Promise.reject(new Error('forno apagado'))</code></td><td>"Assando…"</td><td>"Deu ruim: forno apagado"</td></tr>
+<tr><td><code>new Promise(() => {})</code></td><td>"Assando…"</td><td>nada: a promessa nunca resolve</td></tr>
+<tr><td>um valor comum, sem promessa</td><td>o valor, na hora</td><td>nada muda</td></tr>
+</table>
+</div>
+
+<p>A terceira linha é a promessa que nunca termina — útil para ver o estado de espera sem pressa. A quarta é uma surpresa boa: <code>{#await}</code> aceita um valor que não é promessa. Se você passar <code>'pão'</code>, o bloco mostra o caminho <code>{:then}</code> imediatamente, com o valor. Isso é útil quando a função que busca os dados pode devolver um resultado guardado em cache.</p>
+
+<p>O estado de espera não é um "carregando" genérico: é o que <strong>você</strong> escreveu. Um esqueleto cinza, três pontinhos, uma frase com personalidade da padaria — o conteúdo é seu, e é ele que decide se a espera parece rápida ou eterna.</p>
+
+<hr>
+
+<h2>4. Experimente: o resultado que não aparece</h2>
+
+<p>A caixa abaixo tem só o caminho de espera. Sua missão é fazer o pão aparecer quando a promessa for cumprida.</p>
+<div class="trysvelte" data-goal="depois:100;;out:Pronto: pão quentinho">
+<p class="try-task"><strong>Missão:</strong> a tela mostra "Assando…" e nada mais. Acrescente o caminho <code>{:then valor}</code> com o parágrafo <strong>Pronto: {valor}</strong>. A meta espera 100 ms antes de conferir.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedido = $state(Promise.resolve('pão quentinho'));
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;Assando…&lt;/p&gt;
+{/await}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedido = $state(Promise.resolve('pão quentinho'));
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;Assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;Pronto: {valor}&lt;/p&gt;
+{/await}</pre>
+</div>
+
+<p>O que acontece no código inicial é curioso: a promessa resolve em milissegundos, o bloco perde o estado de espera e, sem <code>{:then}</code>, a tela fica <strong>vazia</strong>. O texto "Assando…" sai e nada entra no lugar. Esse é o resultado real, medido na caixa: o texto final é uma string vazia.</p>
+
+<p>Guardar isso é importante: <code>{#await}</code> sem <code>{:then}</code> não é "esperar para sempre", é "esperar e depois não mostrar nada". Quem escreve o bloco quase sempre quer o <code>{:then}</code>.</p>
+
+<hr>
+
+<h2>5. As formas curtas</h2>
+
+<p>Quando você não quer mostrar nada durante a espera, existe uma forma de dizer isso na própria abertura. O <code>then</code> entra na linha do <code>{#await}</code>:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(Promise.resolve(42));
+&lt;/script&gt;
+
+{#await total then valor}
+  &lt;p&gt;Total: {valor}&lt;/p&gt;
+{/await}</pre>
+
+<p>Com essa forma, o estado de espera é vazio. A saída do compilador é literalmente nada, porque nada foi escrito para o momento da espera:</p>
+<pre class="out"></pre>
+
+<p>Depois que a promessa resolve, a tela mostra o valor:</p>
+<pre class="out">Total: 42</pre>
+
+<p>A forma curta do erro é irmã dela: <code>{#await busca catch motivo}</code>. Aqui só existe o caminho da falha — e ele aparece no instante em que a promessa é recusada, sem nenhuma mensagem de espera.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let busca = $state(Promise.reject('sem farinha'));
+&lt;/script&gt;
+
+{#await busca catch motivo}
+  &lt;p&gt;Motivo: {motivo}&lt;/p&gt;
+{/await}</pre>
+
+<p>Como não há conteúdo de espera, a saída do servidor para esse componente é vazia — tanto quanto a do exemplo anterior. É no navegador, quando a promessa é recusada, que a frase <code>Motivo: sem farinha</code> entra na tela. Você pode conferir isso na caixa da seção 8, que roda o mesmo caminho com a promessa recusada de propósito.</p>
+
+<p>As formas curtas existem porque o caso "não quero mostrar nada enquanto espero" é comum, e escrever um bloco vazio só para isso é ruído. A regra para escolher:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Use</th><th>Linhas a menos</th></tr>
+<tr><td>Espera, sucesso e falha</td><td><code>{#await p}…{:then v}…{:catch e}…{/await}</code></td><td>nenhuma: é a forma completa</td></tr>
+<tr><td>Espera e sucesso</td><td><code>{#await p}…{:then v}…{/await}</code></td><td>—</td></tr>
+<tr><td>Só o sucesso</td><td><code>{#await p then v}…{/await}</code></td><td>duas</td></tr>
+<tr><td>Só a falha</td><td><code>{#await p catch e}…{/await}</code></td><td>duas</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>6. Experimente: o forno quebrou</h2>
+
+<p>Agora a promessa é recusada de propósito. A caixa mostra a espera, mas não trata o erro. Sua missão é mostrar a mensagem de falha.</p>
+<div class="trysvelte" data-goal="depois:100;;out:Deu ruim: forno apagado">
+<p class="try-task"><strong>Missão:</strong> a busca falha com o erro <code>forno apagado</code> e nada aparece. Acrescente <code>{:catch erro}</code> com o parágrafo <strong>Deu ruim: {erro.message}</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let busca = $state(Promise.reject(new Error('forno apagado')));
+&lt;/script&gt;
+
+{#await busca}
+  &lt;p&gt;buscando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;{valor}&lt;/p&gt;
+{/await}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let busca = $state(Promise.reject(new Error('forno apagado')));
+&lt;/script&gt;
+
+{#await busca}
+  &lt;p&gt;buscando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;{valor}&lt;/p&gt;
+{:catch erro}
+  &lt;p&gt;Deu ruim: {erro.message}&lt;/p&gt;
+{/await}</pre>
+</div>
+
+<p>Antes da correção, a caixa nem mostra texto: a promessa é recusada, o bloco não tem para onde ir e o componente quebra. A mensagem que o avaliador devolve é o próprio motivo da recusa — <code>forno apagado</code> —, o que é uma pista valiosa: quando a tela fica em branco e o console mostra o motivo da promessa, falta o <code>{:catch}</code>.</p>
+
+<p>Com o caminho de falha no lugar, a tela mostra a frase que você escreveu. Repare no <code>erro.message</code>: é a parte do objeto de erro que contém a explicação legível. Todo <code>Error</code> tem essa propriedade, e é ela que vale mostrar para quem está usando o sistema.</p>
+
+<hr>
+
+<h2>7. Quando a recusa vem com texto</h2>
+
+<p>Nem toda promessa é recusada com um objeto de erro. Uma biblioteca pode recusar com um texto simples, e aí o seu <code>{:catch}</code> recebe uma string. O componente compila, roda, e mostra um buraco:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let busca = $state(Promise.reject('sem farinha'));
+&lt;/script&gt;
+
+{#await busca}
+  &lt;p&gt;buscando…&lt;/p&gt;
+{:catch motivo}
+  &lt;p&gt;Motivo: {motivo.message}&lt;/p&gt;
+{/await}</pre>
+
+<p>A promessa foi recusada com <code>'sem farinha'</code>, um texto. Texto não tem a propriedade <code>message</code>, então <code>{motivo.message}</code> vale <code>undefined</code> — e o Svelte desenha <code>undefined</code> como nada. A saída do servidor mostra o texto da espera (<code>buscando…</code>), porque ela não espera promessa nenhuma; no navegador, um instante depois, a tela fica com a frase <code>Motivo:</code> e mais nada depois dos dois-pontos. Esse "mais nada" é o defeito.</p>
+
+<p>Duas saídas para isso. A primeira: mostrar o valor direto, <code>{motivo}</code>, que funciona para texto e para o objeto de erro (o objeto vira <code>[object Object]</code>, feio mas visível). A segunda, mais robusta: normalizar na hora de capturar.</p>
+
+<pre class="file" data-file="src/App.svelte">&#123;#await busca}
+  &lt;p&gt;buscando…&lt;/p&gt;
+&#123;:catch motivo}
+  &lt;p&gt;Deu ruim: &#123;typeof motivo === 'string' ? motivo : motivo.message}&lt;/p&gt;
+&#123;/await}</pre>
+
+<p>Esse tipo de cuidado parece exagero até a primeira vez em que a tela mostra "Motivo:" vazio em produção. A regra é: nunca confie no formato do motivo da recusa; ele vem de fora.</p>
+
+<hr>
+
+<h2>8. Experimente: o motivo que não aparece</h2>
+
+<p>A caixa abaixo recebe a recusa como texto e mostra <code>Motivo:</code> vazio. Sua missão é mostrar o motivo.</p>
+<div class="trysvelte" data-goal="depois:100;;out:Motivo: sem farinha">
+<p class="try-task"><strong>Missão:</strong> a promessa é recusada com o texto <code>sem farinha</code>, que não tem <code>.message</code>. Faça a tela mostrar <strong>Motivo: sem farinha</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let busca = $state(Promise.reject('sem farinha'));
+&lt;/script&gt;
+
+{#await busca}
+  &lt;p&gt;buscando…&lt;/p&gt;
+{:catch motivo}
+  &lt;p&gt;Motivo: {motivo.message}&lt;/p&gt;
+{/await}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let busca = $state(Promise.reject('sem farinha'));
+&lt;/script&gt;
+
+{#await busca}
+  &lt;p&gt;buscando…&lt;/p&gt;
+{:catch motivo}
+  &lt;p&gt;Motivo: {motivo}&lt;/p&gt;
+{/await}</pre>
+</div>
+
+<p>Uma linha de diferença, e a informação aparece. Repare que a solução continua funcionando se a recusa for um <code>Error</code>: o objeto vira <code>[object Object]</code> na tela, feio, mas o componente não quebra. Já o contrário não é verdade: <code>{motivo.message}</code> num texto simplesmente não mostra nada.</p>
+
+<hr>
+
+<h2>9. De onde vêm as promessas</h2>
+
+<p>Nos exemplos desta aula, as promessas nascem prontas com <code>Promise.resolve</code> e <code>Promise.reject</code>, para o componente caber em vinte linhas. No projeto da Ana, elas vêm de três lugares:</p>
+
+<p><strong>Da internet.</strong> <code>fetch('/api/pedidos')</code> devolve uma promessa de resposta. É a origem mais comum e a que mais falha: sem rede, o <code>{:catch}</code> aparece.</p>
+
+<p><strong>De um temporizador.</strong> <code>new Promise((ok) =&gt; setTimeout(() =&gt; ok('pronto'), 2000))</code> devolve o texto depois de dois segundos. É útil para testar o estado de espera de verdade.</p>
+
+<p><strong>De um banco.</strong> Toda consulta moderna devolve promessa. A forma do bloco não muda: espera, sucesso, falha.</p>
+
+<p>Uma armadilha de projeto: se a promessa nasce dentro do bloco, ela é recriada a cada atualização. O lugar certo é no <code>&lt;script&gt;</code>, guardada numa variável, como nos exemplos. A promessa é o bilhete; o bloco só lê o bilhete.</p>
+
+<div class="warning">
+<strong>Por que a caixa espera 100 ms</strong>
+<p>O passo <code>depois:100</code> da meta existe porque a promessa resolve depois que o componente já está na tela. Sem a espera, a conferência leria o texto antes de a troca acontecer. No navegador da Ana o efeito é o mesmo: a tela nasce com "Assando…" e muda um instante depois. Se a sua promessa demora mais que isso, aumente a espera.</p>
+</div>
+
+<hr>
+
+<h2>10. Rodando na máquina da Ana</h2>
+
+<p>Com o bloco no <code>src/App.svelte</code>, o servidor de desenvolvimento mostra a espera e depois o resultado. Como a promessa resolve rápido, você vê um piscar:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Para ver a espera com calma, troque a promessa por uma que demora. <code>new Promise((ok) =&gt; setTimeout(() =&gt; ok('pão quentinho'), 2000))</code> mantém "Assando…" na tela por dois segundos, e aí você entende por que o texto da espera merece cuidado: é o que o leitor vê por mais tempo.</p>
+
+<p>O build de produção não muda de tamanho por causa do bloco, mas o motor de promessas entra no pacote:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-kEy2SG3h.js  39.24 kB │ gzip: 15.09 kB
+✓ built in 1.65s</pre>
+
+<p><code>39.24 kB</code>, contra <code>36.06 kB</code> da aula de <code>{#key}</code>. A diferença é o código que observa promessas e alterna os caminhos. Vale o preço: escrever esse controle à mão — três variáveis, dois <code>if</code> e um <code>catch</code> — dá mais linhas e mais chance de erro.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas são de estrutura do bloco: a promessa em si nunca é conferida na compilação, porque só existe em execução.</p>
+<div class="cenario">
+<strong>Erro 1 — <code>{#await}</code> sem promessa</strong>
+<p>O bloco precisa de uma expressão para aguardar. Sem ela, o compilador espera um espaço e encontra a chave de fechamento.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedido = $state(Promise.resolve(1));
+&lt;/script&gt;
+
+{#await}
+  &lt;p&gt;oi&lt;/p&gt;
+{/await}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 7): Expected whitespace</pre>
+<p>"Expected whitespace" aponta a coluna 7, exatamente o <code>}</code>. Escreva o que esperar: uma variável com a promessa, uma chamada de função que devolve promessa, ou até um valor comum.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — <code>{:then}</code> sem <code>{#await}</code></strong>
+<p>O <code>then</code> só existe dentro de um bloco de espera. Solto no HTML, ele não tem a que se referir.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedido = $state(Promise.resolve(1));
+&lt;/script&gt;
+
+{:then valor}
+  &lt;p&gt;{valor}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 1): {:...} block is invalid at this position (did you forget to close the preceding element or block?)</pre>
+<p>A mensagem fala em "posição inválida" e sugere fechamento esquecido. Aqui a causa é o bloco apagado: o <code>{#await}</code> saiu e o <code>{:then}</code> ficou. Envolva o trecho de novo, ou troque por <code>{#if}</code> se não há promessa nenhuma.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — bloco aberto e nunca fechado</strong>
+<p>O caso mais comum: o <code>{/await}</code> ficou para depois e nunca chegou.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedido = $state(Promise.resolve(1));
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;esperando&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>A linha apontada é a da abertura, coluna 0. Com três caminhos possíveis dentro do bloco, é fácil perder a conta: conte os pares e lembre que <code>{:then}</code> e <code>{:catch}</code> não fecham nada — só o <code>{/await}</code> fecha.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Mostra</th><th>Quando</th></tr>
+<tr><td><code>{#await p}…{/await}</code></td><td>só a espera</td><td>quase nunca sozinho</td></tr>
+<tr><td><code>{:then v}</code></td><td>o valor resolvido</td><td>promessa cumprida</td></tr>
+<tr><td><code>{:catch e}</code></td><td>o motivo da falha</td><td>promessa recusada</td></tr>
+<tr><td><code>{#await p then v}</code></td><td>só o valor, sem espera visível</td><td>quando a espera é instantânea</td></tr>
+<tr><td><code>{#await p catch e}</code></td><td>só a falha</td><td>quando o sucesso já está na tela</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que a tela mostra</th></tr>
+<tr><td>Promessa pendente</td><td>o conteúdo antes de <code>{:then}</code></td></tr>
+<tr><td>Promessa cumprida</td><td>o conteúdo de <code>{:then}</code>, com o valor</td></tr>
+<tr><td>Promessa recusada com <code>{:catch}</code></td><td>o conteúdo de <code>{:catch}</code>, com o motivo</td></tr>
+<tr><td>Promessa recusada sem <code>{:catch}</code></td><td>o componente quebra e a tela fica vazia</td></tr>
+<tr><td>Valor comum, sem promessa</td><td>o conteúdo de <code>{:then}</code>, na hora</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td>Sem expressão</td><td><code>Expected whitespace</code></td></tr>
+<tr><td><code>{:then}</code> sem bloco</td><td><code>{:...} block is invalid at this position</code></td></tr>
+<tr><td>Sem fechamento</td><td><code>Block was left open</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o caminho antes de <code>{:then}</code> mostra?</p>
+<label><input type="radio" name="q1"> O valor resolvido da promessa</label>
+<label><input type="radio" name="q1"> O que aparece enquanto a promessa está pendente</label>
+<label><input type="radio" name="q1"> O motivo da falha</label>
+<label><input type="radio" name="q1"> Nada: esse trecho é ignorado</label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que acontece se a promessa for recusada e não houver <code>{:catch}</code>?</p>
+<label><input type="radio" name="q1"> O Svelte mostra o objeto de erro na tela</label>
+<label><input type="radio" name="q1"> A tela fica no estado de espera para sempre</label>
+<label><input type="radio" name="q1"> O componente quebra e a tela fica vazia</label>
+<label><input type="radio" name="q1"> O compilador recusa o arquivo</label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">3. A promessa foi recusada com o texto <code>'sem farinha'</code> e o bloco usa <code>{motivo.message}</code>. O que aparece?</p>
+<label><input type="radio" name="q1"> <code>sem farinha</code></label>
+<label><input type="radio" name="q1"> <code>undefined</code> escrito na tela</label>
+<label><input type="radio" name="q1"> Nada: o texto some porque texto não tem <code>message</code></label>
+<label><input type="radio" name="q1"> O compilador recusa o arquivo</label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#await pedido}<br>&nbsp;&nbsp;&lt;p&gt;Assando…&lt;/p&gt;<br><input data-answer="{:then}"> valor<br>&nbsp;&nbsp;&lt;p&gt;Pronto: {valor}&lt;/p&gt;<br>{/await}<br><br>// o caminho que aparece quando a promessa é cumprida</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Promessa é um bilhete: entrega o valor depois, não na hora.</li>
+  <li><code>{#await}</code> tem três momentos: esperando, cumprida (<code>{:then}</code>) e recusada (<code>{:catch}</code>).</li>
+  <li>A saída do servidor mostra o estado de espera; o valor aparece depois, no navegador.</li>
+  <li>Sem <code>{:then}</code>, a espera termina e a tela fica vazia — não fica esperando.</li>
+  <li>Sem <code>{:catch}</code>, a promessa recusada quebra o componente.</li>
+  <li>Formas curtas: <code>{#await p then v}</code> e <code>{#await p catch e}</code> pulam a espera visível.</li>
+  <li><code>erro.message</code> só existe em objetos de erro; com texto, mostre o valor direto.</li>
+  <li>As promessas nascem no <code>&lt;script&gt;</code>; o bloco não deve criar promessa a cada renderização.</li>
+  <li>Os erros desta aula: sem expressão, <code>{:then}</code> sem bloco e bloco sem fechamento.</li>
+  <li>Nas caixas, <code>depois:100</code> dá tempo de a promessa resolver antes da conferência.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
