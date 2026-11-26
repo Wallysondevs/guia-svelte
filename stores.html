@@ -41,11 +41,11 @@
 
 <h2>1. A ideia: um quadro de avisos no fundo da padaria</h2>
 
-<p>Imagine que a Ana trocou as seis placas por um quadro grande no fundo da loja. Cada placa da parede deixou de ter um número escrito à mão: agora ela tem um <em>visor</em>, e o visor mostra o que está escrito no quadro. Quando o preço do pão sobe, a Ana escreve uma vez no quadro com um giz. Todas as placas que mostram aquele campo do quadro mudam no mesmo instante, sem ninguém passar de placa em placa.</p>
+<p>Imagine que a Ana trocou as seis placas por um quadro grande no fundo da loja. Cada placa agora tem um <em>visor</em>, e o visor mostra o que está escrito no quadro. Quando o preço do pão sobe, ela escreve uma vez no quadro com um giz, e todas as placas que mostram aquele campo mudam no mesmo instante.</p>
 
 <p>Essa é a ideia inteira de um store. Ele é um valor que mora <strong>fora</strong> do componente — num arquivo separado, normalmente — e os componentes não guardam uma cópia dele: eles <em>assinam</em> o quadro. Quem assina é avisado toda vez que alguém escreve. O componente que mostra o número se redesenha sozinho; o componente que escreve nem sabe quem está olhando.</p>
 
-<p>Por que não usar <code>$state</code> para tudo, então? Porque <code>$state</code> mora <strong>dentro</strong> de um componente. Se a placa da vitrine e o painel do caixa são componentes diferentes, um não enxerga o estado do outro: para o número chegar lá, alguém teria que passar o valor de pai para filho, prop por prop, por cada andar da árvore. O store resolve isso tirando o valor de dentro da árvore e colocando ao lado dela. É a diferença entre um caderno que fica na gaveta de um funcionário e o quadro na parede, que todos leem.</p>
+<p>Por que não usar <code>$state</code> para tudo, então? Porque <code>$state</code> mora <strong>dentro</strong> de um componente. Se a placa da vitrine e o painel do caixa são componentes diferentes, um não enxerga o estado do outro: o número só chegaria passando de pai para filho, prop por prop, por cada andar da árvore. O store tira o valor de dentro da árvore e o coloca ao lado dela — a diferença entre um caderno na gaveta de um funcionário e o quadro na parede, que todos leem.</p>
 
 <p>Repare no vocabulário, porque ele volta o guia inteiro: <em>store</em> é o quadro; <em>assinar</em> (<code>subscribe</code>) é pendurar um visor no quadro; <em>escrever</em> (<code>set</code>) é usar o giz; e o <strong>cifrão</strong> <code>$</code> é o atalho do Svelte para "mostre aqui o que está no quadro agora".</p>
 
@@ -100,7 +100,7 @@
 
 <div class="tip">
 <strong>Por que const e não let</strong>
-<p>Um erro comum de quem começa é escrever <code>let cliques = writable(0)</code> pensando que vai "trocar o valor". O valor não é trocado: ele é escrito <em>dentro</em> do store, com <code>set</code>. A caixinha continua a mesma a vida inteira. <code>let</code> aqui não dá erro, mas sugere uma troca que não existe — e trocar a caixinha no meio do caminho faz os componentes antigos continuarem olhando para a caixa velha.</p>
+<p>Um erro comum de quem começa é escrever <code>let cliques = writable(0)</code> pensando que vai "trocar o valor". O valor não é trocado: ele é escrito <em>dentro</em> do store, com <code>set</code>. A caixinha continua a mesma a vida inteira — <code>let</code> não dá erro, mas sugere uma troca que não existe.</p>
 </div>
 
 <hr>
@@ -129,7 +129,7 @@
 
 <pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt;</pre>
 
-<p><code>set</code> recebe o valor novo e pronto. <code>update</code> recebe uma <strong>função</strong> que transforma o valor velho no novo — e o Svelte passa o valor atual para ela. Usar <code>update</code> evita o bug clássico de ler um valor que já mudou: a conta é feita com o valor de dentro do store, no momento da escrita, não com o que estava na tela quando o clique começou.</p>
+<p><code>set</code> recebe o valor novo e pronto. <code>update</code> recebe uma <strong>função</strong> que transforma o valor velho no novo, com o Svelte passando o valor atual para ela. Usar <code>update</code> evita o bug clássico de ler um valor que já mudou.</p>
 
 <div class="table-wrap">
 <table class="ref">
@@ -181,7 +181,7 @@ export const cliques = writable(0);</pre>
 
 <pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;p&gt;Cliques: 0&lt;/p&gt;</pre>
 
-<p>Os dois parágrafos mostram o mesmo número porque leem o mesmo store. No projeto da Ana, esses dois parágrafos estão em arquivos diferentes — um em <code>Placar.svelte</code>, que aparece duas vezes — e a saída é idêntica, porque o que está no <code>&lt;script module&gt;</code> não é copiado junto com o componente. Esse bloco é o assunto de uma aula inteira mais adiante.</p>
+<p>Os dois parágrafos mostram o mesmo número porque leem o mesmo store, mesmo estando em arquivos diferentes — um deles em <code>Placar.svelte</code>, que aparece duas vezes. A saída é idêntica porque o que está no <code>&lt;script module&gt;</code> não é copiado junto com o componente.</p>
 
 <dl class="anatomy">
   <dt>export const cliques</dt><dd>o <code>export</code> é o que torna o store visível para outros arquivos. Sem ele, o módulo existe mas ninguém alcança o valor.</dd>
@@ -205,7 +205,7 @@ src/App.svelte:7:<button onclick={() => $cliques = $cliques + 1}>+1</button></pr
 
 <h2>6. O contrato: um <code>subscribe</code> que avisa</h2>
 
-<p>Aqui vai a parte que separa quem decora de quem entende. Um store não é uma classe mágica do Svelte: é <strong>um objeto com um método <code>subscribe</code></strong>. É só isso que o compilador exige para aceitar o cifrão. O <code>writable</code> que você importa é uma fábrica que monta esse objeto com três peças: o valor guardado, o conjunto de quem está inscrito, e os métodos para escrever e avisar.</p>
+<p>Aqui vai a parte que separa quem decora de quem entende. Um store não é uma classe mágica: é <strong>um objeto com um método <code>subscribe</code></strong>, e é só isso que o compilador exige. O <code>writable</code> é uma fábrica que monta esse objeto com três peças: o valor guardado, o conjunto de quem está inscrito e os métodos para escrever e avisar.</p>
 
 <p>Veja o mesmo store escrito à mão. Ele não importa nada e cumpre o contrato:</p>
 
@@ -376,7 +376,7 @@ src/App.svelte:7:<button onclick={() => $cliques = $cliques + 1}>+1</button></pr
 
 <pre class="out">&lt;p&gt;Abre às 06:00&lt;/p&gt; &lt;p&gt;fila vazia&lt;/p&gt;</pre>
 
-<p>O <code>readable</code> também aceita uma <strong>função de início</strong> como segundo argumento. Ela roda na primeira vez que alguém assina o store e devolve uma função de limpeza, que roda quando o último inscrito vai embora. É o lugar certo para um relógio, um <code>setInterval</code> ou uma conexão que só deve existir enquanto alguém está olhando. Os dois argumentos bastam: o valor inicial é o primeiro, e é ele que aparece antes de a função de início escrever outra coisa.</p>
+<p>O <code>readable</code> também aceita uma <strong>função de início</strong> como segundo argumento. Ela roda na primeira assinatura e devolve uma função de limpeza, chamada quando o último inscrito vai embora. É o lugar certo para um relógio, um <code>setInterval</code> ou uma conexão que só deve existir enquanto alguém olha. O primeiro argumento é o valor inicial.</p>
 
 <p>Existe ainda <code>readonly</code>, que embrulha um store existente e entrega só a parte de leitura: um componente recebe esse embrulho e não consegue escrever no valor original, mesmo que queira. A chamada a <code>set</code> num store <code>readonly</code> falha com <code>r.set is not a function</code> — a propriedade simplesmente não existe no objeto.</p>
 
@@ -440,7 +440,7 @@ get: 3</pre>
 
 <pre class="out">&lt;p&gt;2 pães e 1 bolo&lt;/p&gt;</pre>
 
-<p>Aqui mora a pegadinha mais cara desta aula. Quando o valor do store é uma lista, <strong>mexer na lista não avisa ninguém</strong>. O store só sabe que algo mudou quando <code>set</code> ou <code>update</code> é chamado; um <code>push</code> no array muda o array e deixa todos os visores mostrando a lista velha. A regra é: para mudar uma lista, monte uma lista nova.</p>
+<p>Aqui mora a pegadinha mais cara desta aula. Quando o valor do store é uma lista, <strong>mexer na lista não avisa ninguém</strong>: o store só sabe que algo mudou quando <code>set</code> ou <code>update</code> é chamado. Um <code>push</code> deixa todos os visores mostrando a lista velha — para mudar uma lista, monte uma lista nova.</p>
 
 <div class="trysvelte" data-goal="clique:button;;out:pão bolo adicionar">
 <p class="try-task"><strong>Missão:</strong> o botão usa <code>push</code> e a tela continua com um pão só. Faça a lista mostrar os dois itens — <code>pão</code> e <code>bolo</code> — avisando quem está inscrito.</p>
