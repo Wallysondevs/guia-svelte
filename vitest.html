@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testes com Vitest — a conferência que fica | Guia Svelte</title>
+<meta name="description" content="Como instalar o Vitest no projeto da Ana, escrever o primeiro teste com describe, it e expect, ler uma falha real e consertar até a barra ficar verde.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Testes com Vitest</span></h1>
+
+<p class="intro">Toda vez que a Ana mexia no cálculo do troco, precisava abrir a página, comprar um pão, digitar valores e conferir na mão. Quando o troco saiu errado num sábado cheio, ela decidiu escrever a conferência uma vez só, num arquivo, para o computador repetir em um segundo. Nesta aula ela instala o Vitest e escreve o primeiro teste de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um teste automático e por que ele vale mais que a conferência na mão.</li>
+  <li>Como instalar o Vitest no projeto da Ana com um comando.</li>
+  <li>As quatro palavras de todo teste: <code>describe</code>, <code>it</code>, <code>expect</code> e <code>toBe</code>.</li>
+  <li>Como rodar os testes e ler o resumo que o Vitest imprime.</li>
+  <li>Como ler uma falha de teste e o que é <code>AssertionError</code>.</li>
+  <li>O que a conta <code>0.3 - 0.1</code> revela sobre dinheiro no computador.</li>
+  <li>Os comparadores mais usados: <code>toBe</code>, <code>toEqual</code>, <code>toBeCloseTo</code>.</li>
+  <li>Como um teste protege o componente que mostra o troco.</li>
+  <li>Os três erros desta aula, com a saída real do Vitest.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a conferência que fica</h2>
+
+<p>Conferir na mão tem um defeito grave: não fica. Na segunda-feira ninguém lembra quais casos foram testados no sábado, e a mesma conferência é refeita do zero. Pior: quando o projeto cresce, ela deixa de ser feita — e o erro volta sem ninguém notar.</p>
+
+<p>Um teste automático é a mesma conferência escrita num arquivo. Ele diz “se eu pagar 10 e o preço for 7,50, o troco tem de ser 2,50”. O computador roda isso em milissegundos, todas as vezes, sem esquecer nenhum caso.</p>
+
+<p>O ganho maior não é pegar erro: é poder mudar. Com testes, a Ana pode reorganizar o cálculo do troco sem medo, porque a conferência avisa na hora se algo quebrou. Sem eles, cada mudança é uma aposta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No projeto</th></tr>
+<tr><td>Conferir o troco na calculadora, na hora</td><td>Conferir na página, à mão, uma vez</td></tr>
+<tr><td>A lista de conferências pregada no caixa</td><td>O arquivo <code>troco.test.js</code></td></tr>
+<tr><td>O caixa que confere sozinho, sempre igual</td><td><code>npx vitest run</code></td></tr>
+<tr><td>“Deu certo no sábado”</td><td>“Passou nos testes hoje”</td></tr>
+<tr><td>Anotar o valor esperado antes de contar</td><td><code>expect(resultado).toBe(esperado)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. O que um teste responde</h2>
+
+<p>Um teste é uma pergunta com resposta de sim ou não. Se a resposta for “não”, o Vitest mostra o que ele esperava e o que veio. Essa é a única coisa que um teste faz — e é o suficiente para mudar a rotina de trabalho.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Como vira teste</th></tr>
+<tr><td>o troco de 10 com preço 7,50 é 2,50?</td><td><code>expect(calcularTroco(10, 7.5)).toBe(2.5)</code></td></tr>
+<tr><td>e quando o valor é exato?</td><td><code>expect(calcularTroco(5, 5)).toBe(0)</code></td></tr>
+<tr><td>e quando falta dinheiro?</td><td><code>expect(calcularTroco(4, 7.5)).toBe(0)</code></td></tr>
+<tr><td>a função devolve número?</td><td><code>expect(typeof calcularTroco(10, 7.5)).toBe('number')</code></td></tr>
+</table>
+</div>
+
+<p>Repare que as perguntas são pequenas e concretas. “A função funciona?” não é uma pergunta de teste: não tem resposta sim ou não, e quando falha não diz onde. “O troco de 10 com preço 7,50 é 2,50?” diz tudo.</p>
+
+<hr>
+
+<h2>3. As quatro palavras de um teste</h2>
+
+<p>Todo teste no Vitest usa as mesmas quatro palavras. Elas aparecem nesta ordem: um grupo, um caso, uma expectativa e um comparador.</p>
+
+<pre class="file" data-file="src/lib/troco.test.js">import { describe, it, expect } from 'vitest';
+import { calcularTroco } from './troco.js';
+
+describe('calcularTroco', () =&gt; {
+  it('devolve a diferença entre o pago e o preço', () =&gt; {
+    expect(calcularTroco(10, 7.5)).toBe(2.5);
+  });
+});</pre>
+
+<dl class="anatomy">
+  <dt>import … from 'vitest'</dt><dd>traz as quatro ferramentas do pacote. Sem essa linha, <code>describe</code> não existe no arquivo.</dd>
+  <dt>describe('calcularTroco', …)</dt><dd>o <strong>grupo</strong>: um nome para o conjunto de casos. Serve para o resumo dizer onde falhou.</dd>
+  <dt>it('devolve a diferença…', …)</dt><dd>o <strong>caso</strong>: uma pergunta escrita em português, no presente. É o texto que aparece no relatório.</dd>
+  <dt>expect(…)</dt><dd>o valor que o código produziu, embrulhado para ser conferido.</dd>
+  <dt>.toBe(2.5)</dt><dd>o <strong>comparador</strong>: o valor esperado. Trocar o comparador muda o tipo de conferência.</dd>
+</dl>
+
+<p>A frase dentro de <code>it</code> não é decoração. É ela que aparece quando o teste falha, e é ela que a Ana vai ler seis meses depois sem lembrar do código. Escreva a frase como se estivesse explicando para outra pessoa: “devolve a diferença entre o pago e o preço” diz mais que “teste 1”.</p>
+
+<hr>
+
+<h2>4. Instalando o Vitest</h2>
+
+<p>O Vitest é uma dependência de desenvolvimento: ele não vai para o site publicado, só fica no projeto para rodar os testes. Por isso a instalação usa <code>-D</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm install -D vitest
+
+added 44 packages, and audited 101 packages in 6s
+
+19 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities</pre>
+
+<p>Quarenta e quatro pacotes instalados — o Vitest e as peças de que ele depende. Nada disso entra no <code>dist/</code>: o build de produção só pega o que o site importa. O <code>package.json</code> ganha uma linha em <code>devDependencies</code> e pronto.</p>
+
+<p>O comando pode ser rodado de dois jeitos. <code>npx vitest run</code> roda uma vez e devolve o resultado — é o que usamos aqui, porque queremos a resposta e não o modo de espera. Sem o <code>run</code>, o Vitest fica olhando os arquivos e roda de novo a cada salvamento, o que é ótimo no dia a dia e péssimo para copiar o resultado.</p>
+
+<hr>
+
+<h2>5. O primeiro teste: o módulo e o arquivo de teste</h2>
+
+<p>O Vitest testa funções, não telas. Por isso o primeiro alvo é o módulo que calcula o troco, sem componente nenhum:</p>
+
+<pre class="file" data-file="src/lib/troco.js">export function calcularTroco(pago, preco) {
+  return pago - preco;
+}</pre>
+
+<p>A palavra <code>export</code> é o que permite outro arquivo importar a função. Sem ela, o teste não a enxerga. O arquivo de teste fica ao lado, com a mesma raiz e a terminação <code>.test.js</code>:</p>
+
+<pre class="file" data-file="src/lib/troco.test.js">import { describe, it, expect } from 'vitest';
+import { calcularTroco } from './troco.js';
+
+describe('calcularTroco', () =&gt; {
+  it('devolve a diferença entre o pago e o preço', () =&gt; {
+    expect(calcularTroco(10, 7.5)).toBe(2.5);
+  });
+
+  it('devolve zero quando o valor é exato', () =&gt; {
+    expect(calcularTroco(5, 5)).toBe(0);
+  });
+});</pre>
+
+<p>A terminação <code>.test.js</code> não é enfeite: é por ela que o Vitest encontra os arquivos sozinho. Rodando na pasta do projeto, ele procura todos os arquivos com esse padrão e executa:</p>
+
+<pre class="term">ana@notebook:~/loja$ npx vitest run
+
+ ✓ src/lib/troco.test.js (2 tests) 7ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  17:24:30
+   Duration  357ms (transform 61%, import 25%, tests 8%, worker 5%)</pre>
+
+<p>Leia o resumo de baixo para cima. <strong>Test Files 1 passed</strong>: um arquivo, aprovado. <strong>Tests 2 passed</strong>: dois casos, aprovados. O sinal de certo antes do nome do arquivo (<code>✓</code>) é a barra verde no terminal. E a linha <code>Duration</code> mostra o total em milissegundos: 357 ms para conferir duas contas que, na mão, custariam bem mais.</p>
+
+<hr>
+
+<h2>6. Um teste que falha</h2>
+
+<p>Um teste que sempre passa não prova nada. A Ana escreveu um caso novo, sobre dinheiro quebrado em centavos, e o teste reprovou:</p>
+
+<pre class="file" data-file="src/lib/troco.test.js">import { describe, it, expect } from 'vitest';
+import { calcularTroco } from './troco.js';
+
+describe('calcularTroco', () =&gt; {
+  it('devolve a diferença entre o pago e o preço', () =&gt; {
+    expect(calcularTroco(10, 7.5)).toBe(2.5);
+  });
+
+  it('fecha a conta nos centavos', () =&gt; {
+    expect(calcularTroco(0.3, 0.1)).toBe(0.2);
+  });
+});</pre>
+
+<pre class="term">ana@notebook:~/loja$ npx vitest run
+
+ ❯ src/lib/troco.test.js (2 tests | 1 failed) 12ms
+   ❯ calcularTroco (2)
+     ✓ devolve a diferença entre o pago e o preço 3ms
+     × fecha a conta nos centavos 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/troco.test.js &gt; calcularTroco &gt; fecha a conta nos centavos
+AssertionError: expected 0.19999999999999998 to be 0.2 // Object.is equality
+
+- Expected
++ Received
+
+- 0.2
++ 0.19999999999999998
+
+ ❯ src/lib/troco.test.js:10:37
+      8|
+      9|   it('fecha a conta nos centavos', () => {
+     10|     expect(calcularTroco(0.3, 0.1)).toBe(0.2);
+       |                                     ^
+     11|   });
+     12| });
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)</pre>
+
+<p>É muita informação de uma vez, mas cada pedaço tem um trabalho. Primeiro o resumo: dois casos, um falhou. Depois o bloco <code>Failed Tests</code>, com o caminho completo até o caso que falhou. Depois a frase do erro, e por último o trecho do arquivo com o acento circunflexo embaixo da comparação.</p>
+
+<dl class="anatomy">
+  <dt>× fecha a conta nos centavos</dt><dd>o caso reprovado, com o nome que a Ana escreveu no <code>it</code>. O <code>✓</code> e o <code>×</code> são a barra verde e a barra vermelha.</dd>
+  <dt>AssertionError</dt><dd>o tipo do erro: “a expectativa não bateu”. Não é erro de sintaxe nem de importação: o código rodou e o valor foi diferente.</dd>
+  <dt>expected 0.19999999999999998 to be 0.2</dt><dd>o valor que veio e o valor esperado, lado a lado.</dd>
+  <dt>- Expected / + Received</dt><dd>o mesmo par em forma de diferença: o que menos entrou, o que mais entrou.</dd>
+  <dt>❯ src/lib/troco.test.js:10:37</dt><dd>arquivo, linha 10, coluna 37: onde está a comparação que falhou.</dd>
+</dl>
+
+<p>Note o valor recebido: <code>0.19999999999999998</code>. Não é bug do Vitest nem do Svelte. O computador guarda números decimais em binário, e algumas frações não têm representação exata — <code>0.3 - 0.1</code> sobra com um resto minúsculo. Para dinheiro, isso é inaceitável: a tela mostraria centavos errados.</p>
+
+<div class="tip">
+<strong>Teste que nunca falhou não vale nada</strong>
+<p>Depois de escrever um teste, mude o código de propósito para ver o teste reprovar. Se ele continuar verde, o teste não está medindo o que você pensa. Essa conferência de si mesmo se chama “ver o teste falhar”.</p>
+</div>
+
+<hr>
+
+<h2>7. O conserto até a barra verde</h2>
+
+<p>Consertar é arredondar para centavos dentro da função. Multiplicar por 100, arredondar e dividir de volta resolve o resto binário:</p>
+
+<pre class="file" data-file="src/lib/troco.js">export function calcularTroco(pago, preco) {
+  return Math.round((pago - preco) * 100) / 100;
+}</pre>
+
+<pre class="term">ana@notebook:~/loja$ npx vitest run
+
+ ✓ src/lib/troco.test.js (2 tests) 6ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  17:24:48
+   Duration  587ms (transform 44%, import 35%, worker 11%, tests 10%)</pre>
+
+<p>Duas linhas de mudança, dois testes verdes. Repare no que o teste fez por ela: a correção podia ter quebrado o caso do troco exato, e não quebrou — porque o Vitest conferiu os dois na mesma execução. É essa rede que permite mexer sem medo.</p>
+
+<div class="trysvelte" data-goal="out:R$ 0.20">
+<p class="try-task"><strong>Missão:</strong> a conta do troco carrega o resto binário: o valor aparece como <code>0.19999999999999998</code>. Arredonde para centavos, como o teste da Ana exige, e mostre só <code>R$ 0.20</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pago = $state(0.3);
+  let preco = $state(0.1);
+  let troco = $derived(pago - preco);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {troco.toFixed(2)} - {troco}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pago = $state(0.3);
+  let preco = $state(0.1);
+  let troco = $derived(Math.round((pago - preco) * 100) / 100);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {troco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>toFixed(2)</code> esconde o problema na tela, mas não o resolve no valor: o número continua com o resto. Arredondar na função, como a solução faz, conserta o dado — e aí qualquer lugar que use o valor está certo, com ou sem formatação.</p>
+
+<hr>
+
+<h2>8. Os comparadores do <code>expect</code></h2>
+
+<p>O comparador é a parte final: <code>.toBe(2.5)</code>. Cada um faz um tipo de pergunta diferente, e escolher o errado gera teste que passa quando deveria falhar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comparador</th><th>Pergunta que faz</th><th>Exemplo</th></tr>
+<tr><td><code>toBe</code></td><td>é exatamente este valor? (número, texto, verdadeiro/falso)</td><td><code>expect(calcularTroco(5, 5)).toBe(0)</code></td></tr>
+<tr><td><code>toBeCloseTo</code></td><td>é quase este valor, com tolerância?</td><td><code>expect(0.3 - 0.1).toBeCloseTo(0.2)</code></td></tr>
+<tr><td><code>toEqual</code></td><td>tem o mesmo conteúdo? (objetos e listas)</td><td><code>expect(item).toEqual({ id: 1, nome: 'Pão' })</code></td></tr>
+<tr><td><code>toBeGreaterThan</code></td><td>é maior que este número?</td><td><code>expect(troco).toBeGreaterThan(0)</code></td></tr>
+<tr><td><code>toContain</code></td><td>contém este pedaço? (texto ou lista)</td><td><code>expect(texto).toContain('R$')</code></td></tr>
+</table>
+</div>
+
+<p><code>toBeCloseTo</code> existe justamente por causa do resto binário: ele compara com uma margem de erro. Usar <code>toBeCloseTo(0.2)</code> faria o teste passar sem consertar a função — o que seria pior, porque esconderia o problema do dinheiro. Comparador não é enfeite: cada escolha diz o que você considera certo.</p>
+
+<div class="trysvelte" data-goal="out:3 de 3 verificações passaram">
+<p class="try-task"><strong>Missão:</strong> a tela é um teste em miniatura: três casos, cada um com o valor esperado. Só um passa, porque a função não arredonda e devolve troco negativo. Conserte <code>calcularTroco</code> para os três passarem.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function calcularTroco(pago, preco) {
+    return pago - preco;
+  }
+
+  let casos = $state([
+    { pago: 10, preco: 7.5, esperado: 2.5 },
+    { pago: 0.3, preco: 0.1, esperado: 0.2 },
+    { pago: 4, preco: 7.5, esperado: 0 }
+  ]);
+
+  let certos = $derived(casos.filter((c) =&gt; calcularTroco(c.pago, c.preco) === c.esperado).length);
+&lt;/script&gt;
+
+&lt;p&gt;{certos} de {casos.length} verificações passaram&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function calcularTroco(pago, preco) {
+    return Math.max(0, Math.round((pago - preco) * 100) / 100);
+  }
+
+  let casos = $state([
+    { pago: 10, preco: 7.5, esperado: 2.5 },
+    { pago: 0.3, preco: 0.1, esperado: 0.2 },
+    { pago: 4, preco: 7.5, esperado: 0 }
+  ]);
+
+  let certos = $derived(casos.filter((c) =&gt; calcularTroco(c.pago, c.preco) === c.esperado).length);
+&lt;/script&gt;
+
+&lt;p&gt;{certos} de {casos.length} verificações passaram&lt;/p&gt;</pre>
+</div>
+
+<p>Essa caixa é o Vitest em versão pequena: uma lista de casos com valor esperado e uma contagem de quantos bateram. A diferença é que o Vitest mostra qual caso falhou e com que valores; a caixa mostra só o total. Nos dois, o trabalho é o mesmo: escrever o caso certo antes de consertar.</p>
+
+<hr>
+
+<h2>9. O teste do troco negativo</h2>
+
+<p>O terceiro caso da lista acima tem uma decisão de negócio dentro: quando falta dinheiro, o troco é zero, não negativo. Essa regra não estava escrita em lugar nenhum — estava só na cabeça da Ana. Um teste é onde ela fica escrita.</p>
+
+<div class="trysvelte" data-goal="out:Troco: R$ 0.00">
+<p class="try-task"><strong>Missão:</strong> quem paga 4 por um sonho de 7,50 não tem troco a receber, e a tela mostra <code>-3.50</code>. Faça a função devolver zero quando falta dinheiro.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function calcularTroco(pago, preco) {
+    return pago - preco;
+  }
+
+  let pago = $state(4);
+  let preco = $state(7.5);
+  let troco = $derived(calcularTroco(pago, preco));
+&lt;/script&gt;
+
+&lt;p&gt;Troco: R$ {troco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function calcularTroco(pago, preco) {
+    return Math.max(0, pago - preco);
+  }
+
+  let pago = $state(4);
+  let preco = $state(7.5);
+  let troco = $derived(calcularTroco(pago, preco));
+&lt;/script&gt;
+
+&lt;p&gt;Troco: R$ {troco.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p><code>Math.max(0, valor)</code> devolve o maior entre zero e o valor — ou seja, nunca deixa passar número negativo. É mais curto que um <code>if</code> e não tem caminho alternativo para esquecer.</p>
+
+<hr>
+
+<h2>10. Teste não substitui olhar a tela</h2>
+
+<p>O teste do módulo confere a conta. Ele não confere que o componente mostra o valor com duas casas, nem que o botão está no lugar. Isso é assunto da próxima aula, mas vale ver a diferença com um componente simples:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pago = $state(10);
+  let preco = $state(7.5);
+  let troco = $derived(Math.round((pago - preco) * 100) / 100);
+&lt;/script&gt;
+
+&lt;p&gt;Troco: R$ {troco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Troco: R$ 2.50&lt;/p&gt;</pre>
+
+<p>O módulo podia estar perfeito e a tela mostrar <code>R$ 2.5</code> por falta de <code>toFixed</code>. Testes de módulo cuidam da conta; testes de componente cuidam da tela. Um projeto saudável tem os dois, e a ordem natural é começar pelo módulo — é mais fácil, mais rápido e pega a maior parte dos erros.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três saídas abaixo vieram das execuções reais desta aula. Repare que todas apontam arquivo e linha, e que o resumo final sempre repete a contagem.</p>
+
+<div class="cenario">
+<strong>Erro 1 — a expectativa não bateu</strong>
+<p>O caso mais comum: o código rodou, o valor veio diferente do esperado. O Vitest mostra a diferença lado a lado.</p>
+<pre class="term"> FAIL  src/lib/troco.test.js &gt; calcularTroco &gt; fecha a conta nos centavos
+AssertionError: expected 0.19999999999999998 to be 0.2 // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)</pre>
+<p>Leia o <code>expected … to be …</code> como “veio isso, eu esperava aquilo”. A correção pode ser no código (arredondar) ou na expectativa (se ela estava errada) — mas nunca no comparador, a não ser que você saiba exatamente por que.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — arquivo importado não existe</strong>
+<p>Um erro de digitação no caminho do import impede o arquivo de teste de carregar. Nenhum caso roda, e o resumo diz “no tests”.</p>
+<pre class="term"> ❯ src/lib/troco.test.js (0 test)
+
+ FAIL  src/lib/troco.test.js [ src/lib/troco.test.js ]
+Error: Cannot find module './trocos.js'
+
+ Test Files  1 failed (1)
+      Tests  no tests</pre>
+<p>O <code>0 test</code> ao lado do nome do arquivo é o sinal: o problema aconteceu antes de qualquer caso. Confira o caminho e a extensão — <code>'./troco.js'</code>, com <code>s</code> no singular.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — sintaxe inválida no arquivo de teste</strong>
+<p>Um parêntese a menos e o Vitest nem consegue analisar o arquivo. A mensagem fala de “invalid JS syntax” e aponta a linha 1, porque é ali que a análise começa.</p>
+<pre class="term"> FAIL  src/lib/troco.test.js [ src/lib/troco.test.js ]
+Error: Failed to parse source for import analysis because the content contains invalid JS syntax.
+  Plugin: vite:import-analysis
+  File: src/lib/troco.test.js:1:0</pre>
+<p>“Falha ao analisar o arquivo para a análise de imports porque o conteúdo tem sintaxe JavaScript inválida”. A linha 1 é o começo do arquivo, não o erro: procure o parêntese sem par, geralmente na chamada do <code>expect</code>.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Escreva</th></tr>
+<tr><td>instalar o Vitest</td><td><code>npm install -D vitest</code></td></tr>
+<tr><td>rodar uma vez e ver o resultado</td><td><code>npx vitest run</code></td></tr>
+<tr><td>rodar olhando os arquivos</td><td><code>npx vitest</code></td></tr>
+<tr><td>agrupar casos</td><td><code>describe('nome', () =&gt; { … })</code></td></tr>
+<tr><td>escrever um caso</td><td><code>it('frase no presente', () =&gt; { … })</code></td></tr>
+<tr><td>conferir um valor</td><td><code>expect(valor).toBe(esperado)</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sinal na saída</th><th>Significa</th></tr>
+<tr><td><code>✓</code> antes do arquivo</td><td>todos os casos passaram</td></tr>
+<tr><td><code>×</code> antes do caso</td><td>este caso falhou</td></tr>
+<tr><td><code>(0 test)</code></td><td>o arquivo não carregou; o erro está no import ou na sintaxe</td></tr>
+<tr><td><code>AssertionError</code></td><td>o valor veio diferente do esperado</td></tr>
+<tr><td><code>Tests 2 passed (2)</code></td><td>dois casos, dois aprovados</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Para que serve o <code>describe</code> num arquivo de teste?</p>
+<label><input type="radio" name="q1"> para rodar o teste mais rápido</label>
+<label><input type="radio" name="q1"> para agrupar casos sob um nome, que aparece no relatório</label>
+<label><input type="radio" name="q1"> para instalar as dependências do teste</label>
+<label><input type="radio" name="q1"> para importar a função testada</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O teste falhou com <code>expected 0.19999999999999998 to be 0.2</code>. O que fazer?</p>
+<label><input type="radio" name="q1"> trocar <code>toBe</code> por <code>toEqual</code></label>
+<label><input type="radio" name="q1"> apagar o caso, porque dinheiro não tem centavos</label>
+<label><input type="radio" name="q1"> arredondar o resultado dentro da função, para centavos</label>
+<label><input type="radio" name="q1"> rodar o teste de novo até passar</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O resumo diz <code>Tests no tests</code> e o arquivo aparece com <code>0 test</code>. Qual é a causa provável?</p>
+<label><input type="radio" name="q1"> o arquivo de teste não carregou: import errado ou sintaxe inválida</label>
+<label><input type="radio" name="q1"> os testes passaram, mas o relatório está incompleto</label>
+<label><input type="radio" name="q1"> o Vitest não foi instalado</label>
+<label><input type="radio" name="q1"> a função testada devolveu zero</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { describe, it, expect } from 'vitest';<br>import { calcularTroco } from './troco.js';<br><br>describe('calcularTroco', () =&gt; {<br>&nbsp;&nbsp;it('fecha a conta nos centavos', () =&gt; {<br>&nbsp;&nbsp;&nbsp;&nbsp;<input data-answer="expect(calcularTroco(0.3, 0.1)).toBe(0.2)">;<br>&nbsp;&nbsp;});<br>});</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Teste automático é a conferência escrita uma vez, que o computador repete sempre.</li>
+  <li><code>npm install -D vitest</code> instala só para desenvolvimento; nada vai para o <code>dist/</code>.</li>
+  <li><code>npx vitest run</code> roda uma vez; <code>npx vitest</code> fica olhando os arquivos.</li>
+  <li>Todo teste tem <code>describe</code> (grupo), <code>it</code> (caso), <code>expect</code> (valor) e um comparador.</li>
+  <li>O arquivo de teste termina em <code>.test.js</code> e fica ao lado do módulo.</li>
+  <li><code>AssertionError</code> quer dizer “o valor veio diferente do esperado”, não erro de sintaxe.</li>
+  <li><code>0.3 - 0.1</code> dá <code>0.19999999999999998</code>: arredonde com <code>Math.round(… * 100) / 100</code>.</li>
+  <li><code>toBe</code> compara valor exato; <code>toBeCloseTo</code> aceita margem; <code>toEqual</code> compara conteúdo.</li>
+  <li>Teste de módulo cuida da conta; teste de componente cuida da tela.</li>
+  <li>Veja o teste falhar de propósito antes de confiar nele.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

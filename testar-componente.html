@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testando um Componente — a tela também tem teste | Guia Svelte</title>
+<meta name="description" content="Testar componente Svelte com Vitest e Testing Library: render, screen, fireEvent, o erro lifecycle_function_unavailable e o DOM falso (jsdom) configurado.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Testando um Componente</span></h1>
+
+<p class="intro">O teste do troco da Ana estava verde, e o preço na tela aparecia sem a segunda casa: <code>R$ 2.5</code>. A conta certa não garante a tela certa. Nesta aula ela escreve um teste que abre o componente num navegador de mentira, procura o texto na tela e clica no botão — e descobre no caminho por que o primeiro teste quebrou com uma mensagem sobre servidor.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre testar um módulo e testar uma tela.</li>
+  <li>Para que serve o <code>jsdom</code>: um DOM de mentira para o teste.</li>
+  <li>As três peças do teste de componente: <code>render</code>, <code>screen</code> e <code>fireEvent</code>.</li>
+  <li>Como procurar elementos por texto e por papel (<code>getByText</code>, <code>getByRole</code>).</li>
+  <li>Por que o teste quebra com <code>lifecycle_function_unavailable</code> e como consertar.</li>
+  <li>O que a condição <code>browser</code> faz no <code>vite.config.js</code>.</li>
+  <li>Como simular um clique com <code>fireEvent</code> e conferir o texto novo.</li>
+  <li>O que <code>document is not defined</code> diz sobre o ambiente do teste.</li>
+  <li>Os três erros desta aula, com a saída real do Vitest.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a tela também tem regra</h2>
+
+<p>Um teste de módulo pergunta: “a conta está certa?”. Um teste de componente pergunta: “o que a pessoa vê está certo?”. São perguntas diferentes, e a Ana precisou das duas na mesma tarde.</p>
+
+<p>A regra da tela pode ser simples e mesmo assim quebrar: o preço tem duas casas, o botão está escrito “Cliques:” e não “Clique:”, o título é um <code>h2</code> e não um <code>strong</code>. Nada disso aparece no teste da função, porque a função nem sabe que existe tela.</p>
+
+<p>Testar componente é mais trabalhoso que testar função: precisa de um DOM (a árvore de elementos) e de um jeito de procurar coisas nele. Em troca, você ganha a certeza de que a peça que a pessoa usa realmente mostra o que devia.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No teste de componente</th></tr>
+<tr><td>Conferir a conta do troco no papel</td><td>Testar o módulo <code>troco.js</code></td></tr>
+<tr><td>Conferir a placa pendurada na parede</td><td>Testar o componente <code>Cartao.svelte</code></td></tr>
+<tr><td>Uma parede de mentira para pendurar a placa</td><td><code>jsdom</code>, o DOM de mentira</td></tr>
+<tr><td>Procurar a placa pelo texto escrito nela</td><td><code>screen.getByText('Sonho')</code></td></tr>
+<tr><td>Empurrar o botão para ver se acende</td><td><code>fireEvent.click(botao)</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. Teste de módulo × teste de componente</h2>
+
+<p>As duas coisas convivem no mesmo projeto e rodam com o mesmo comando. A diferença está no que cada arquivo importa e no que ele confere:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th>Teste de módulo</th><th>Teste de componente</th></tr>
+<tr><td>O que importa</td><td>uma função <code>.js</code></td><td>um componente <code>.svelte</code></td></tr>
+<tr><td>Precisa de DOM?</td><td>não</td><td>sim (jsdom)</td></tr>
+<tr><td>Como confere</td><td><code>expect(valor).toBe(…)</code></td><td><code>screen.getByText(…)</code> e <code>fireEvent</code></td></tr>
+<tr><td>Velocidade</td><td>milissegundos</td><td>algumas centenas de milissegundos</td></tr>
+<tr><td>Pega erro de</td><td>conta, formato, regra de negócio</td><td>texto na tela, elemento faltando, clique sem efeito</td></tr>
+</table>
+</div>
+
+<p>Como o teste de componente é mais lento, a ordem natural é escrever primeiro os de módulo e reservar os de componente para o que só a tela pode provar: o texto que aparece, o elemento que existe, a interação que muda algo.</p>
+
+<hr>
+
+<h2>3. As três peças: <code>render</code>, <code>screen</code> e <code>fireEvent</code></h2>
+
+<p>Todo teste de componente usa as mesmas três ferramentas, vindas da Testing Library. Elas fazem o serviço de abrir, procurar e agir.</p>
+
+<dl class="anatomy">
+  <dt>render(Cartao, { … })</dt><dd>monta o componente num DOM de teste, passando as propriedades do segundo argumento. É o equivalente a abrir a página.</dd>
+  <dt>screen</dt><dd>a “tela” do teste: um atalho para procurar elementos no que foi montado. Sempre se procura em <code>screen</code>, nunca no documento inteiro.</dd>
+  <dt>getByText('Sonho')</dt><dd>procura um elemento cujo texto seja exatamente aquele. Se não achar, o teste falha e mostra o DOM que existia.</dd>
+  <dt>getByRole('button')</dt><dd>procura pelo papel do elemento na página, e não pelo texto. Um <code>&lt;button&gt;</code> tem o papel <em>button</em>; um <code>&lt;div&gt;</code> não tem.</dd>
+  <dt>fireEvent.click(botao)</dt><dd>dispara o evento de clique no elemento, como se a pessoa tivesse clicado. Depois dele, a tela deve ter mudado.</dd>
+</dl>
+
+<p>A escolha entre <code>getByText</code> e <code>getByRole</code> não é estilo. Procurar por texto prende o teste à redação (“Sonho”); procurar por papel prende o teste à estrutura (existe um botão). Um teste que procura papel costuma durar mais, porque a redação muda com o marketing e o papel, não.</p>
+
+<hr>
+
+<h2>4. O componente a testar</h2>
+
+<p>O alvo é o cartão de produto que a Ana usa na vitrine. Ele recebe duas propriedades e desenha um artigo com título e preço:</p>
+
+<pre class="file" data-file="src/lib/Cartao.svelte">&lt;script&gt;
+  let { titulo = 'Pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{titulo}&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;</pre>
+
+<pre class="out">&lt;article&gt;&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;&lt;/article&gt;</pre>
+
+<p>Esse é o HTML que o componente produz. Um teste de componente faz a mesma pergunta, mas pelo caminho da tela: “depois de montar com <code>titulo: 'Sonho'</code> e <code>preco: 2.5</code>, existe na tela um elemento escrito <code>Sonho</code> e outro escrito <code>R$ 2.50</code>?”.</p>
+
+<p>O segundo componente é ainda menor, e serve para testar interação. Ele tem um botão que conta cliques:</p>
+
+<pre class="file" data-file="src/lib/Contador.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;Cliques: 0&lt;/button&gt;</pre>
+
+<hr>
+
+<h2>5. Instalando o ambiente</h2>
+
+<p>O Vitest sozinho não sabe o que é um botão: ele roda em Node, onde não existe <code>document</code>. Faltam duas peças — um DOM de mentira e a biblioteca que sabe procurar elementos nele:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm install -D vitest jsdom @testing-library/svelte
+
+added 44 packages, and audited 101 packages in 6s
+
+19 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities</pre>
+
+<p><code>jsdom</code> é o DOM de mentira: um objeto em memória com a mesma forma do navegador, sem tela. <code>@testing-library/svelte</code> é a ponte entre o componente Svelte e esse DOM — é de onde vêm <code>render</code>, <code>screen</code> e <code>fireEvent</code>.</p>
+
+<p>Nada disso vai para o site publicado: são dependências de desenvolvimento, como o próprio Vitest.</p>
+
+<hr>
+
+<h2>6. O primeiro teste e a surpresa do servidor</h2>
+
+<p>Com o ambiente instalado, o teste parece simples: montar o componente e procurar dois textos.</p>
+
+<pre class="file" data-file="src/lib/Cartao.test.js">import { render, screen } from '@testing-library/svelte';
+import { describe, it, expect } from 'vitest';
+import Cartao from './Cartao.svelte';
+
+describe('Cartao', () =&gt; {
+  it('mostra o título e o preço com duas casas', () =&gt; {
+    render(Cartao, { titulo: 'Sonho', preco: 2.5 });
+    expect(screen.getByText('Sonho')).toBeTruthy();
+    expect(screen.getByText('R$ 2.50')).toBeTruthy();
+  });
+});</pre>
+
+<p>Rodando, o teste falha — mas não pelo motivo que a Ana esperava:</p>
+
+<pre class="term"> ❯ src/lib/Cartao.test.js (1 test | 1 failed) 16ms
+   ❯ Cartao (1)
+     × mostra o título e o preço com duas casas 13ms
+
+ FAIL  src/lib/Cartao.test.js &gt; Cartao &gt; mostra o título e o preço com duas casas
+Svelte error: lifecycle_function_unavailable
+`mount(...)` is not available on the server
+https://svelte.dev/e/lifecycle_function_unavailable</pre>
+
+<p>Leia a segunda linha: “<code>mount(...)</code> não está disponível no servidor”. O teste está rodando em Node, e o Node, para o pacote do Svelte, se apresenta como servidor — igual ao que acontece quando o SvelteKit desenha uma página antes de mandar para o navegador. No servidor não existe DOM, então não há o que montar.</p>
+
+<dl class="anatomy">
+  <dt>Svelte error: lifecycle_function_unavailable</dt><dd>o código do erro. Ele não é do seu componente: é do Svelte avisando que a função chamada não existe naquele ambiente.</dd>
+  <dt>`mount(...)` is not available on the server</dt><dd>a explicação em uma linha: a função de montar não existe no servidor.</dd>
+  <dt>https://svelte.dev/e/lifecycle_function_unavailable</dt><dd>o endereço da documentação do erro. O Svelte imprime o link em toda mensagem, porque as mensagens são curtas.</dd>
+</dl>
+
+<p>A causa é a forma como o Node resolve importações: por padrão, ele pega a versão de servidor do pacote <code>svelte</code>. Existe uma condição chamada <code>browser</code> que diz “neste teste, use a versão de navegador”. É isso que a configuração abaixo faz.</p>
+
+<hr>
+
+<h2>7. O conserto no <code>vite.config.js</code></h2>
+
+<p>Duas linhas resolvem: uma diz ao Vitest para usar o DOM de mentira, a outra pede a versão de navegador do Svelte quando o Vitest está rodando.</p>
+
+<pre class="file" data-file="vite.config.js">import { defineConfig } from 'vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+
+export default defineConfig({
+  plugins: [svelte()],
+  resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
+  test: {
+    environment: 'jsdom'
+  }
+});</pre>
+
+<dl class="anatomy">
+  <dt>plugins: [svelte()]</dt><dd>o plugin que já existia: ensina o Vite a ler arquivos <code>.svelte</code>. Sem ele, o teste nem entende o componente.</dd>
+  <dt>process.env.VITEST ? … : undefined</dt><dd>um condicional: se a variável <code>VITEST</code> existe (ou seja, quem está rodando é o Vitest), use o objeto; se não, nada. O build normal continua igual.</dd>
+  <dt>conditions: ['browser']</dt><dd>a condição que faz o pacote <code>svelte</code> entregar a versão de navegador, com <code>mount</code> disponível.</dd>
+  <dt>test: { environment: 'jsdom' }</dt><dd>diz ao Vitest para criar o DOM de mentira em cada arquivo de teste. É o que faz <code>document</code> existir.</dd>
+</dl>
+
+<p>Com a configuração no lugar, o mesmo teste passa. O resumo mostra só o essencial:</p>
+
+<pre class="term"> ✓ src/lib/Cartao.test.js (1 test) 92ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  17:25:43
+   Duration  3.90s (transform 53%, environment 31%, import 13%, tests 2%)</pre>
+
+<p>Repare no tempo: <strong>3,90 s</strong>, contra os 357 ms do teste de módulo da aula anterior. A diferença vem do ambiente: criar um DOM de mentira custa caro. É por isso que se testa o máximo possível no módulo, onde não há DOM.</p>
+
+<hr>
+
+<h2>8. Testando o clique</h2>
+
+<p>Interação se testa em três passos: montar, achar o elemento, agir. Depois do clique, o texto na tela precisa ter mudado.</p>
+
+<pre class="file" data-file="src/lib/Cartao.test.js">import { render, screen, fireEvent } from '@testing-library/svelte';
+import { describe, it, expect } from 'vitest';
+import Cartao from './Cartao.svelte';
+import Contador from './Contador.svelte';
+
+describe('Contador', () =&gt; {
+  it('soma um a cada clique', async () =&gt; {
+    render(Contador);
+    const botao = screen.getByRole('button');
+    await fireEvent.click(botao);
+    await fireEvent.click(botao);
+    expect(botao.textContent).toContain('Cliques: 2');
+  });
+});</pre>
+
+<p>O teste inteiro passa, e o resumo conta os dois arquivos e os quatro casos:</p>
+
+<pre class="term"> ✓ src/lib/Cartao.test.js (2 tests) 140ms
+ ✓ src/lib/troco.test.js (2 tests) 5ms
+
+ Test Files  2 passed (2)
+      Tests  4 passed (4)
+   Start at  17:26:27
+   Duration  5.21s (environment 70%, transform 20%, import 7%, tests 3%)</pre>
+
+<p>Duas coisas merecem atenção nesse resultado. A primeira: <code>getByRole('button')</code> encontrou o botão sem procurar por texto — é o jeito resistente a mudança de redação. A segunda: o relatório avisa que o ambiente consumiu 70% do tempo, com uma dica de configuração. Não é erro; é informação de quem mediu.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o teste procura o elemento com <code>getByRole('button')</code>, e o componente usa um <code>div</code> com <code>onclick</code>. Troque pela tag que o teste consegue achar — e que também funciona com teclado.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;div onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/div&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<p>O erro do código inicial, ao rodar a caixa, é <code>não achei o elemento "button" para clicar</code> — a mesma coisa que a Testing Library diria com outras palavras. Um <code>div</code> não tem papel de botão: para o teste, ele não existe como botão. E para quem navega com teclado, também não.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três saídas abaixo vieram de execuções reais nesta versão. As duas primeiras param o teste antes de qualquer verificação; a terceira é a mais comum de todas.</p>
+
+<div class="cenario">
+<strong>Erro 1 — montar sem a versão de navegador</strong>
+<p>O teste roda, mas o <code>render</code> chama uma função que não existe no ambiente de servidor escolhido pelo Node.</p>
+<pre class="term">Svelte error: lifecycle_function_unavailable
+`mount(...)` is not available on the server
+https://svelte.dev/e/lifecycle_function_unavailable</pre>
+<p>O conserto é a condição <code>browser</code> no <code>vite.config.js</code>. Note que o erro fala de <code>mount</code>, uma função que você nem chamou: quem chama é o <code>render</code> da Testing Library.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — montar sem DOM</strong>
+<p>Se a configuração tem a condição de navegador mas esquece o <code>environment: 'jsdom'</code>, o JSX do teste funciona e o <code>document</code> não existe.</p>
+<pre class="term">ReferenceError: document is not defined
+ ❯ setup node_modules/@testing-library/svelte-core/src/setup.js:68:56</pre>
+<p>“<code>document</code> não está definido”. O teste está rodando em Node puro, onde não existe árvore de elementos. A linha apontada é da biblioteca, não do seu teste — a causa está na configuração, e é ali que se conserta.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — o texto não existe na tela</strong>
+<p>O componente montou, o texto é outro, e a Testing Library mostra o DOM inteiro para você ver o que havia.</p>
+<pre class="term">TestingLibraryElementError: Unable to find an element with the text: R$ 2.5. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+&lt;body&gt;
+  &lt;div&gt;
+    &lt;article&gt;
+      &lt;h2&gt;
+        Sonho
+      &lt;/h2&gt;
+      &lt;p&gt;
+        R$ 2.50
+      &lt;/p&gt;
+    &lt;/article&gt;
+  &lt;/div&gt;
+&lt;/body&gt;</pre>
+<p>“Não consigo achar um elemento com o texto: R$ 2.5”. O DOM impresso logo abaixo mostra a resposta: o texto real é <code>R$ 2.50</code>. A expectativa estava errada, não o componente — e a mensagem economizou uma sessão de depuração.</p>
+</div>
+
+<hr>
+
+<h2>10. O preço formatado também é regra</h2>
+
+<p>Voltando ao problema que abriu a aula: a conta do troco estava certa e a tela mostrava <code>R$ 2.5</code>. Um teste de componente pega isso porque compara texto, não número.</p>
+
+<div class="trysvelte" data-goal="out:Sonho R$ 2.50">
+<p class="try-task"><strong>Missão:</strong> um teste que procura <code>R$ 2.50</code> na tela falha, porque o componente mostra o número cru. Formate o preço com duas casas.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(2.5);
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;Sonho&lt;/h2&gt;
+  &lt;p&gt;R$ {preco}&lt;/p&gt;
+&lt;/article&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(2.5);
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;Sonho&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;</pre>
+</div>
+
+<p>A regra “dinheiro tem duas casas” não pertence à conta: pertence à apresentação. Por isso ela se testa na tela. Se a mesma formatação aparece em cinco componentes, vale extrair uma peça — como o <code>PrecoLinha</code> da aula de componentes pequenos — e testar essa peça uma vez.</p>
+
+<div class="trysvelte" data-goal="out:Sonho R$ 2.50 Pão francês R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> o teste usa <code>screen.getAllByRole('article')</code> e espera dois cartões. O componente desenha só o primeiro produto. Repita o cartão para cada item da lista.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Sonho', preco: 2.5 },
+    { nome: 'Pão francês', preco: 0.9 }
+  ]);
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{produtos[0].nome}&lt;/h2&gt;
+  &lt;p&gt;R$ {produtos[0].preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Sonho', preco: 2.5 },
+    { nome: 'Pão francês', preco: 0.9 }
+  ]);
+&lt;/script&gt;
+
+{#each produtos as produto}
+  &lt;article&gt;
+    &lt;h2&gt;{produto.nome}&lt;/h2&gt;
+    &lt;p&gt;R$ {produto.preco.toFixed(2)}&lt;/p&gt;
+  &lt;/article&gt;
+{/each}</pre>
+</div>
+
+<p>Quando o componente passa a desenhar a lista, um teste que procura <code>getByRole('article')</code> começa a falhar com “found multiple elements”: existem dois artigos, e o <code>getBy…</code> espera um só. A troca é usar <code>getAllByRole('article')</code> e conferir o tamanho da lista — o assunto da seção de referência.</p>
+
+<hr>
+
+<h2>11. O que não vale a pena testar</h2>
+
+<p>Teste também custa: cada caso é código para escrever, ler e manter. Um teste que confere detalhe interno quebra a cada refatoração sem que nada tenha ficado errado — e a equipe aprende a ignorar a barra vermelha. Três coisas costumam não valer o esforço:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Não vale testar</th><th>Por quê</th></tr>
+<tr><td>que o Svelte desenha <code>{titulo}</code></td><td>é o framework fazendo o trabalho dele; o teste não acrescenta nada</td></tr>
+<tr><td>nome de classe CSS interno</td><td>muda com o visual; quebra o teste sem quebrar a tela</td></tr>
+<tr><td>a mesma conta que o teste de módulo já confere</td><td>duplica o caso e dobra o tempo de manutenção</td></tr>
+<tr><td>texto exato de mensagem de biblioteca</td><td>muda quando a biblioteca atualiza; confira o comportamento</td></tr>
+</table>
+</div>
+
+<p>O critério é o mesmo da divisão de componentes: teste o que a pessoa percebe. “Aparece o preço com duas casas”, “o botão conta”, “a lista mostra os dois produtos” são regras do ponto de vista de quem usa. “O segundo <code>div</code> tem a classe <code>cartao</code>” é detalhe de quem escreveu — e detalhe de quem escreveu muda toda semana.</p>
+
+<p>Também vale resistir à tentação de testar tudo. Um projeto com cinco testes que provam as regras importantes pega mais erro real que cinquenta testes de detalhe, porque os cinco são lidos e mantidos. A conta que a Ana aprendeu a fazer é simples: se o teste não descreve uma regra que ela explicaria para o padeiro, provavelmente não precisa existir.</p>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Procurar por</th><th>Use quando</th><th>Devolve</th></tr>
+<tr><td><code>getByText('Sonho')</code></td><td>o texto exato importa</td><td>um elemento; falha se houver zero ou mais de um</td></tr>
+<tr><td><code>getByRole('button')</code></td><td>o papel do elemento importa</td><td>um elemento; falha se não for um botão de verdade</td></tr>
+<tr><td><code>getByRole('heading')</code></td><td>títulos (<code>h1</code>…<code>h6</code>)</td><td>um título</td></tr>
+<tr><td><code>getAllByRole('article')</code></td><td>vários iguais</td><td>uma lista; confira <code>.length</code></td></tr>
+<tr><td><code>queryByText('…')</code></td><td>quando o esperado é NÃO existir</td><td><code>null</code> em vez de erro</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>De onde vem</th><th>Para que serve</th></tr>
+<tr><td><code>render</code></td><td><code>@testing-library/svelte</code></td><td>monta o componente no DOM de teste</td></tr>
+<tr><td><code>screen</code></td><td><code>@testing-library/svelte</code></td><td>procura elementos no que foi montado</td></tr>
+<tr><td><code>fireEvent</code></td><td><code>@testing-library/svelte</code></td><td>dispara clique, digitação, mudança</td></tr>
+<tr><td><code>jsdom</code></td><td>pacote instalado</td><td>o DOM de mentira, sem tela</td></tr>
+<tr><td><code>environment: 'jsdom'</code></td><td><code>vite.config.js</code></td><td>liga o DOM em cada arquivo de teste</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O teste falhou com <code>lifecycle_function_unavailable</code>. O que fazer?</p>
+<label><input type="radio" name="q1"> trocar o <code>render</code> por <code>mount</code></label>
+<label><input type="radio" name="q1"> apagar o teste, porque não dá para testar componente</label>
+<label><input type="radio" name="q1"> pedir a versão de navegador do Svelte com a condição <code>browser</code> na configuração</label>
+<label><input type="radio" name="q1"> instalar o <code>jsdom</code> de novo</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Por que <code>getByRole('button')</code> costuma durar mais que <code>getByText('Cliques: 0')</code>?</p>
+<label><input type="radio" name="q1"> porque é mais rápido de executar</label>
+<label><input type="radio" name="q1"> porque depende da estrutura (é um botão), não da redação do texto</label>
+<label><input type="radio" name="q1"> porque o texto nunca muda numa página</label>
+<label><input type="radio" name="q1"> porque só funciona com <code>fireEvent</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que quer dizer <code>ReferenceError: document is not defined</code> num teste de componente?</p>
+<label><input type="radio" name="q1"> o ambiente do teste é Node puro, sem DOM: falta <code>environment: 'jsdom'</code></label>
+<label><input type="radio" name="q1"> o componente tem um erro de digitação no HTML</label>
+<label><input type="radio" name="q1"> o <code>fireEvent</code> foi chamado antes do <code>render</code></label>
+<label><input type="radio" name="q1"> o Vitest não foi instalado</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { render, screen } from '@testing-library/svelte';<br>import Cartao from './Cartao.svelte';<br><br>render(Cartao, { titulo: 'Sonho', preco: 2.5 });<br>expect(<input data-answer="screen.getByText('R$ 2.50')">).toBeTruthy();</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Teste de módulo confere a conta; teste de componente confere a tela.</li>
+  <li>O componente precisa de DOM: <code>jsdom</code> é o DOM de mentira usado no teste.</li>
+  <li><code>render</code> monta, <code>screen</code> procura, <code>fireEvent</code> age.</li>
+  <li><code>getByText</code> procura pelo texto exato; <code>getByRole</code> pelo papel do elemento.</li>
+  <li><code>getAllByRole</code> devolve lista e serve para vários elementos iguais.</li>
+  <li><code>lifecycle_function_unavailable</code> quer dizer que o Svelte entregou a versão de servidor.</li>
+  <li>A condição <code>browser</code> no <code>vite.config.js</code> resolve isso, e só quando o Vitest roda.</li>
+  <li><code>environment: 'jsdom'</code> cria o <code>document</code>; sem ele, <code>document is not defined</code>.</li>
+  <li>Quando o texto não é achado, a mensagem imprime o DOM real — leia antes de mexer no componente.</li>
+  <li>Teste de componente é mais lento que o de módulo: use-o no que só a tela prova.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

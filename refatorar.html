@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refatorando — trocar o encanamento sem trocar a água | Guia Svelte</title>
+<meta name="description" content="Refatorar um componente Svelte sem mudar a tela: antes e depois com a mesma saída, grep para achar repetição, passos pequenos e testes como rede de proteção.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Refatorando</span></h1>
+
+<p class="intro">A Ana precisou acrescentar desconto na vitrine e desistiu no meio: o arquivo tinha três cópias da mesma conta, cada uma escrita de um jeito. Ela sabia que daria para organizar, mas tinha medo de quebrar o que já funcionava. Nesta aula ela aprende o combinado que torna a mudança segura: o código muda, a tela não.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é refatorar e o que <em>não</em> é refatorar.</li>
+  <li>O contrato de toda refatoração: a saída na tela tem de ficar igual.</li>
+  <li>Como comparar o antes e o depois com a saída real do compilador.</li>
+  <li>Como achar repetição no projeto com <code>grep -rn</code>.</li>
+  <li>Por que mudar uma coisa por vez evita perder o fio.</li>
+  <li>Como os testes funcionam como rede de proteção.</li>
+  <li>Quando extrair peça e quando extrair função.</li>
+  <li>O que fazer quando a saída muda sem você querer.</li>
+  <li>Os três erros desta aula, com a mensagem real de cada um.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: trocar o encanamento sem trocar a água</h2>
+
+<p>Refatorar é mudar a forma do código mantendo o comportamento. O encanamento da padaria pode ser refeito com tubos melhores, mas a água que sai da torneira tem de continuar sendo a mesma água. Se a água muda, não foi refatoração: foi conserto ou foi bug novo.</p>
+
+<p>Essa definição não é preciosismo. É o que permite dividir o trabalho em duas partes que não se atrapalham: primeiro você conserta o comportamento (a tela volta a mostrar o certo), depois você organiza o código (a tela continua mostrando o certo). Fazer as duas ao mesmo tempo é o motivo número um de “eu só mexi numa coisinha e quebrou tudo”.</p>
+
+<p>O ganho de refatorar aparece devagar: menos linhas repetidas, nomes melhores, uma conta em um lugar só. O ganho seguinte é o que importa: quando o desconto chegar, ele vai ser uma linha numa função, não uma caçada a três cópias.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Trocar os tubos, mantendo a água</td><td>Mudar o código, mantendo a tela</td></tr>
+<tr><td>Provar a água antes e depois</td><td>Comparar a saída antes e depois</td></tr>
+<tr><td>Fechar o registro antes de mexer</td><td>Rodar os testes antes de mexer</td></tr>
+<tr><td>Um tubo por vez</td><td>Uma mudança por vez</td></tr>
+<tr><td>Anotar a pressão antes</td><td>Guardar a saída numa aba ao lado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. O contrato: a saída tem de ser a mesma</h2>
+
+<p>Como se sabe que a tela não mudou? Comparando o HTML gerado pelo componente antes e depois. O compilador do Svelte transforma o componente em HTML; se os dois HTML são iguais, o comportamento visível é o mesmo.</p>
+
+<p>É por isso que esta aula mostra duas versões do mesmo componente. A primeira é a que a Ana tinha; a segunda, a que ela escreveu depois. O HTML das duas aparece lado a lado — e é idêntico de propósito.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Muda na refatoração</th><th>Não pode mudar</th></tr>
+<tr><td>nomes de variáveis e funções internas</td><td>o HTML gerado</td></tr>
+<tr><td>quantas funções existem</td><td>o texto que aparece na tela</td></tr>
+<tr><td>onde a conta é feita</td><td>o resultado da conta</td></tr>
+<tr><td>ordem dos blocos dentro do script</td><td>a ordem dos elementos na página</td></tr>
+</table>
+</div>
+
+<p>Vale saber reconhecer o que <em>não</em> é refatoração. Acrescentar um recurso novo não é refatorar, mesmo que o código fique mais bonito. Reescrever o arquivo do zero com outra biblioteca também não é: muda comportamento, muda dependência, muda risco. E renomear variáveis sem conferir a saída é só mudança de texto com fé — a fé não substitui a comparação.</p>
+
+<hr>
+
+<h2>3. Antes: tudo misturado num arquivo</h2>
+
+<p>Esta é a vitrine da Ana antes da limpeza. Ela mostra a lista de preços, formata cada um dentro do laço e guarda o total numa variável separada, digitada à mão:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5, 4]);
+  let total = $state(7.4);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each precos as preco}
+    &lt;li&gt;R$ {preco.toFixed(2)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;R$ 0.90&lt;/li&gt;&lt;li&gt;R$ 2.50&lt;/li&gt;&lt;li&gt;R$ 4.00&lt;/li&gt;&lt;/ul&gt; &lt;p&gt;Total: R$ 7.40&lt;/p&gt;</pre>
+
+<p>Funciona. O problema não está na tela de hoje: está no que vai acontecer amanhã. Se um preço mudar, <code>total</code> continua <code>7.4</code> e ninguém percebe — o número está certo por coincidência. E a formatação <code>toFixed(2)</code> aparece duas vezes, em lugares diferentes, cada uma com sua chance de errar.</p>
+
+<dl class="anatomy">
+  <dt>let total = $state(7.4)</dt><dd>o total guardado à mão. É um segundo lugar onde a mesma informação mora — e ele não acompanha a lista.</dd>
+  <dt>{#each precos as preco}</dt><dd>o laço que monta a lista. A linha de dentro é onde a formatação se repete.</dd>
+  <dt>{preco.toFixed(2)}</dt><dd>a primeira cópia da formatação de dinheiro.</dd>
+  <dt>{total.toFixed(2)}</dt><dd>a segunda cópia. Duas cópias é o começo da divergência: basta mudar uma.</dd>
+</dl>
+
+<hr>
+
+<h2>4. Depois: mesmo HTML, código organizado</h2>
+
+<p>Agora a versão refatorada. Três mudanças: o total passou a ser derivado da lista, a linha da lista virou um snippet com nome, e a formatação existe em um lugar só (dentro do snippet).</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5, 4]);
+  let total = $derived(precos.reduce((soma, p) =&gt; soma + p, 0));
+&lt;/script&gt;
+
+{#snippet linha(valor)}
+  &lt;li&gt;R$ {valor.toFixed(2)}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {#each precos as preco}
+    {@render linha(preco)}
+  {/each}
+&lt;/ul&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;R$ 0.90&lt;/li&gt;&lt;li&gt;R$ 2.50&lt;/li&gt;&lt;li&gt;R$ 4.00&lt;/li&gt;&lt;/ul&gt; &lt;p&gt;Total: R$ 7.40&lt;/p&gt;</pre>
+
+<p>Compare com a saída da seção anterior, linha por linha. É o mesmo HTML, com as mesmas tags, na mesma ordem, com os mesmos textos. A diferença está toda na forma: o total agora se calcula, a linha tem nome e a formatação mora num lugar.</p>
+
+<p>O ganho aparece na próxima mudança. Quando o desconto chegar, ele entra na função que calcula o total, e a tela não precisa saber. Quando a padaria quiser três casas decimais, muda-se o snippet e todos os itens acompanham. Cada informação tem um endereço.</p>
+
+<div class="tip">
+<strong>Guarde a saída antes de mexer</strong>
+<p>Antes de refatorar, copie o HTML que o componente gera. Depois da mudança, gere de novo e compare. Se for igual, você pode seguir; se for diferente, descobriu na hora — e não daqui a três dias, quando o cliente reclamar.</p>
+</div>
+
+<hr>
+
+<h2>5. Onde está a repetição: <code>grep -rn</code></h2>
+
+<p>Antes de decidir o que juntar, é preciso ver a repetição inteira. O <code>grep</code> com <code>-r</code> percorre uma pasta e com <code>-n</code> mostra o número da linha:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "toFixed" src
+src/lib/formato.js:2:  return 'R$ ' + valor.toFixed(2);
+src/lib/Cartao.svelte:7:  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+src/lib/PrecoLinha.svelte:5:&lt;span&gt;R$ {valor.toFixed(2)}&lt;/span&gt;
+src/App.svelte:9:    &lt;li&gt;R$ {preco.toFixed(2)}&lt;/li&gt;
+src/App.svelte:13:&lt;p&gt;Menor preço: R$ {precos[0].toFixed(2)}&lt;/p&gt;</pre>
+
+<p>Cinco lugares formatando dinheiro do mesmo jeito. Três deles já usam peças próprias (<code>formato.js</code>, <code>Cartao.svelte</code>, <code>PrecoLinha.svelte</code>), e dois ainda repetem a conta no meio do HTML. Essa lista é o mapa da refatoração: os dois últimos são os candidatos.</p>
+
+<dl class="anatomy">
+  <dt>grep</dt><dd>procura texto dentro de arquivos. É o mesmo comando da aula de depuração, agora usado para achar repetição em vez de bug.</dd>
+  <dt>-r</dt><dd>recursivo: entra nas subpastas. Sem ele, só o arquivo indicado é lido.</dd>
+  <dt>-n</dt><dd>mostra o número da linha, para você abrir direto no ponto.</dd>
+  <dt>"toFixed"</dt><dd>o padrão procurado. Entre aspas por causa dos parênteses, que o terminal interpretaria.</dd>
+  <dt>src</dt><dd>a pasta onde procurar. O padrão vale para todos os arquivos dentro dela.</dd>
+</dl>
+
+<p>Repare que três dos cinco resultados já estão em módulos separados. Isso é sinal de que a refatoração anterior funcionou: o que era repetição virou peça com nome. Refatorar costuma ser assim — cada rodada deixa menos coisas soltas para a próxima.</p>
+
+<hr>
+
+<h2>6. Uma mudança por vez</h2>
+
+<p>O maior risco da refatoração não é errar: é errar e não saber qual mudança causou. Por isso a regra é uma mudança por vez, com a saída conferida entre elas.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Rodada</th><th>Mudança</th><th>O que conferir</th></tr>
+<tr><td>1</td><td>trocar o total fixo por <code>$derived</code></td><td>o HTML continua igual e o total acompanha</td></tr>
+<tr><td>2</td><td>extrair a linha para um <code>{#snippet}</code></td><td>a lista continua com três itens</td></tr>
+<tr><td>3</td><td>renomear <code>preco</code> para <code>valor</code> dentro do snippet</td><td>nada muda na tela</td></tr>
+<tr><td>4</td><td>mover a formatação para um módulo</td><td>os mesmos <code>R$ 0.90</code> na tela</td></tr>
+</table>
+</div>
+
+<p>Existe uma regra prática para saber quando parar: a refatoração termina quando a próxima mudança ficar fácil de explicar. Se você ainda não saberia dizer onde entra o desconto, ainda falta uma rodada. Se já sabe — “entra na função que calcula o total” —, pode parar e escrever o recurso.</p>
+
+<p>Quatro rodadas pequenas parecem mais lentas que uma grande. Na prática são mais rápidas: quando algo quebra, você sabe exatamente o que foi, e desfazer é apertar um atalho. A rodada grande esconde quatro mudanças num só erro.</p>
+
+<p>Uma ajuda prática do editor: desfazer. Cada rodada deve terminar num estado que você aceitaria publicar. Se a rodada seguinte der errado, o atalho de desfazer devolve o estado anterior inteiro, e você não precisa lembrar o que mudou. Trabalhar com o arquivo sempre “quase certo” é o que transforma refatoração em aposta.</p>
+
+<p>Vale também resistir à tentação de aproveitar para “arrumar o nome daquela variável” no meio de um conserto de bug. Conserto e organização são dois trabalhos: um muda a água, o outro muda o tubo. Misturar os dois deixa a água turva.</p>
+
+<hr>
+
+<h2>7. A rede de proteção: os testes</h2>
+
+<p>Se o projeto tem testes, eles são a conferência automática da refatoração. A Ana roda antes de mexer e depois de cada rodada:</p>
+
+<pre class="term">ana@notebook:~/loja$ npx vitest run
+
+ ✓ src/lib/Cartao.test.js (2 tests) 140ms
+ ✓ src/lib/troco.test.js (2 tests) 5ms
+
+ Test Files  2 passed (2)
+      Tests  4 passed (4)
+   Start at  17:26:27
+   Duration  5.21s (environment 70%, transform 20%, import 7%, tests 3%)</pre>
+
+<p>Quatro casos verdes antes, quatro verdes depois: a refatoração não mudou comportamento nenhum. Se um deles ficasse vermelho, o problema estaria na última rodada — e a mensagem diria qual caso e qual valor.</p>
+
+<p>Se um teste falhar depois de uma rodada, a pergunta não é “como faço o teste passar”: é “o que foi que eu mudei”. O teste está dizendo que o comportamento saiu do combinado — e numa refatoração, quem saiu do combinado foi o código novo.</p>
+
+<p>Sem testes, a rede de proteção é o HTML guardado da seção 2. Funciona, mas exige disciplina: alguém precisa lembrar de copiar a saída antes de cada rodada. Teste é a mesma disciplina com preguiça embutida — ele não esquece.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Adicionar Total: R$ 7.40">
+<p class="try-task"><strong>Missão:</strong> o <code>$effect</code> copia só o primeiro preço para o total, e a tela fica presa em <code>R$ 0.90</code>. Troque o efeito por um <code>$derived</code> que soma a lista inteira.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $state(0);
+
+  $effect(() =&gt; {
+    total = precos[0];
+  });
+
+  function adicionar() {
+    precos = [...precos, 4];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar&lt;/button&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5]);
+  let total = $derived(precos.reduce((soma, p) =&gt; soma + p, 0));
+
+  function adicionar() {
+    precos = [...precos, 4];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar&lt;/button&gt;
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare no que a mudança fez: menos linhas, nenhum estado duplicado e um cálculo que acompanha a lista. A saída na tela muda — de errada para certa —, então essa rodada é conserto, não refatoração. Consertar primeiro, organizar depois: é a ordem que evita misturar as duas coisas.</p>
+
+<hr>
+
+<h2>8. Extrair peça ou extrair função?</h2>
+
+<p>Quando a repetição aparece, existem dois destinos: uma função no script ou um componente novo. A escolha depende do que se repete:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que se repete</th><th>Vai para</th><th>Por quê</th></tr>
+<tr><td>uma conta ou formatação</td><td>função no <code>&lt;script&gt;</code> ou módulo <code>.js</code></td><td>não desenha nada; não precisa de componente</td></tr>
+<tr><td>um trecho de HTML com dados próprios</td><td><code>{#snippet}</code> no mesmo arquivo</td><td>só vale ali dentro; não precisa de arquivo novo</td></tr>
+<tr><td>um pedaço de tela usado em vários lugares</td><td>componente <code>.svelte</code></td><td>tem identidade e contrato de propriedades</td></tr>
+</table>
+</div>
+
+<p>A ordem é do mais barato para o mais caro. Função custa uma linha e não muda o HTML. Snippet custa um parágrafo e também não muda o HTML. Componente custa um arquivo, uma importação e um contrato de propriedades — só vale quando a peça cruza a fronteira do arquivo.</p>
+
+<div class="trysvelte" data-goal="out:Sonho R$ 2.50 Pão francês R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> o mesmo cartão está escrito duas vezes, e a segunda cópia esqueceu o <code>toFixed</code> — o preço saiu <code>R$ 0.9</code>. Refatore as duas cópias num <code>{#each}</code>, para não sobrar formatação solta.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Sonho', preco: 2.5 },
+    { nome: 'Pão francês', preco: 0.9 }
+  ]);
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;{produtos[0].nome}&lt;/h2&gt;
+  &lt;p&gt;R$ {produtos[0].preco.toFixed(2)}&lt;/p&gt;
+&lt;/article&gt;
+&lt;article&gt;
+  &lt;h2&gt;{produtos[1].nome}&lt;/h2&gt;
+  &lt;p&gt;R$ {produtos[1].preco}&lt;/p&gt;
+&lt;/article&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { nome: 'Sonho', preco: 2.5 },
+    { nome: 'Pão francês', preco: 0.9 }
+  ]);
+&lt;/script&gt;
+
+{#each produtos as produto}
+  &lt;article&gt;
+    &lt;h2&gt;{produto.nome}&lt;/h2&gt;
+    &lt;p&gt;R$ {produto.preco.toFixed(2)}&lt;/p&gt;
+  &lt;/article&gt;
+{/each}</pre>
+</div>
+
+<p>A cópia esquecida é o argumento inteiro a favor de refatorar. Duas cópias do mesmo HTML não são o dobro de trabalho: são o dobro de chances de uma delas ficar para trás. Com uma cópia só, o <code>toFixed</code> está em um lugar, e é o único que pode errar.</p>
+
+<div class="trysvelte" data-goal="out:0.9 é barato 2.5 é barato 6 é caro">
+<p class="try-task"><strong>Missão:</strong> a mesma regra de “caro ou barato” está escrita três vezes, e a terceira tem o sinal trocado: o preço 6 aparece como barato. Extraia a regra para uma função e use a mesma nos três itens.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5, 6]);
+&lt;/script&gt;
+
+&lt;p&gt;{precos[0]} é {precos[0] &gt; 5 ? 'caro' : 'barato'}&lt;/p&gt;
+&lt;p&gt;{precos[1]} é {precos[1] &gt; 5 ? 'caro' : 'barato'}&lt;/p&gt;
+&lt;p&gt;{precos[2]} é {precos[2] &lt; 5 ? 'caro' : 'barato'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let precos = $state([0.9, 2.5, 6]);
+
+  function classificar(preco) {
+    return preco &gt; 5 ? 'caro' : 'barato';
+  }
+&lt;/script&gt;
+
+{#each precos as preco}
+  &lt;p&gt;{preco} é {classificar(preco)}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p>Três expressões iguais, uma delas com o sinal trocado: o clássico. Depois da refatoração, a regra tem nome (<code>classificar</code>), um lugar só e a possibilidade de ser testada sozinha. Quem ler o HTML nem precisa saber onde está o limite de 5.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas são consequência de mover código — o efeito colateral mais comum da refatoração.</p>
+
+<div class="cenario">
+<strong>Erro 1 — o mesmo nome em dois lugares do script</strong>
+<p>Ao juntar dois trechos, a Ana trouxe junto a declaração do total que já existia. Duas declarações do mesmo nome param a compilação.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+  let total = $derived(2 + 2);
+&lt;/script&gt;
+
+&lt;p&gt;{total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 6): Identifier 'total' has already been declared</pre>
+<p>A linha apontada é a segunda declaração, e a coluna 6 é onde o nome começa. Ao mover código, confira se a variável já não existe no destino — é o tropeço número um de quem cola trechos.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — a tag que ficou aberta</strong>
+<p>O trecho de HTML foi movido, mas o fechamento do <code>&lt;article&gt;</code> ficou para trás. O compilador avisa qual tag começou e não terminou.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(2.5);
+&lt;/script&gt;
+
+&lt;article&gt;
+  &lt;h2&gt;Sonho&lt;/h2&gt;
+  &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): `&lt;article&gt;` was left open</pre>
+<p>“<code>&lt;article&gt;</code> ficou aberto”. A linha 5 é a da tag de abertura, e o compilador chegou ao fim do arquivo sem achar o fechamento. Ao mover HTML, mova o par inteiro: abrir e fechar juntos.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — renomear com hífen</strong>
+<p>Na ânsia de deixar o nome mais legível, a Ana escreveu <code>valor-total</code>. O hífen não é permitido dentro de nome de variável: ele é o sinal de subtração.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let valor-total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{valor-total}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 11): Unexpected token</pre>
+<p>A mensagem não diz “tire o hífen”, e é justo aí que a aula de leitura de erro ajuda: a coluna 11 aponta o caractere exato, e o caractere é o hífen. Sem olhar a coluna, a tentação é reescrever a linha inteira — e trazer outro erro junto.</p>
+
+<p>“Token inesperado”, na coluna 11: exatamente o hífen. Renomear para melhorar a leitura é bom; usar hífen em nome de variável não. O padrão é camelCase: <code>valorTotal</code>.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que fazer</th></tr>
+<tr><td>conta repetida em dois lugares</td><td>extrair função com nome</td></tr>
+<tr><td>mesmo HTML repetido no arquivo</td><td>extrair <code>{#snippet}</code> + <code>{@render}</code></td></tr>
+<tr><td>trecho de tela usado em outra página</td><td>extrair componente <code>.svelte</code></td></tr>
+<tr><td>valor que pode ser calculado</td><td>trocar <code>$state</code> + <code>$effect</code> por <code>$derived</code></td></tr>
+<tr><td>antes de começar</td><td>guardar o HTML gerado e rodar os testes</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>Causa na refatoração</th></tr>
+<tr><td><code>Identifier 'x' has already been declared</code></td><td>declaração trazida em dobro ao mover código</td></tr>
+<tr><td><code>`&lt;article&gt;` was left open</code></td><td>tag de abertura movida sem o fechamento</td></tr>
+<tr><td><code>Unexpected token</code></td><td>nome com hífen, espaço ou número no começo</td></tr>
+<tr><td><code>Could not resolve …</code></td><td>arquivo movido sem atualizar o <code>import</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que define uma refatoração bem-feita?</p>
+<label><input type="radio" name="q1"> o código ficou menor</label>
+<label><input type="radio" name="q1"> a saída na tela ficou igual e o código ficou mais fácil de ler</label>
+<label><input type="radio" name="q1"> todos os arquivos agora usam <code>$derived</code></label>
+<label><input type="radio" name="q1"> o build ficou mais rápido</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual é a primeira coisa a fazer antes de refatorar um componente?</p>
+<label><input type="radio" name="q1"> apagar os comentários antigos</label>
+<label><input type="radio" name="q1"> renomear as variáveis para nomes melhores</label>
+<label><input type="radio" name="q1"> guardar a saída atual e rodar os testes</label>
+<label><input type="radio" name="q1"> dividir o arquivo em três</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Um trecho de HTML com dados próprios se repete duas vezes no mesmo arquivo. O destino natural é…</p>
+<label><input type="radio" name="q1"> um <code>{#snippet}</code> no mesmo arquivo</label>
+<label><input type="radio" name="q1"> um componente novo em <code>src/lib</code></label>
+<label><input type="radio" name="q1"> uma função no <code>&lt;script&gt;</code></label>
+<label><input type="radio" name="q1"> um arquivo <code>.js</code> com a função de formatação</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let precos = $state([0.9, 2.5, 4]);<br>let total = <input data-answer="$derived(precos.reduce((soma, p) => soma + p, 0))">;<br><br>// o total não pode ser digitado à mão: ele vem da lista</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Refatorar é mudar a forma mantendo o comportamento: a água continua a mesma.</li>
+  <li>O contrato se confere comparando o HTML gerado antes e depois.</li>
+  <li>Duas cópias da mesma expressão são duas chances de divergir.</li>
+  <li><code>grep -rn</code> mostra todos os lugares onde o padrão aparece, com a linha.</li>
+  <li>Uma mudança por vez, com a saída conferida entre elas.</li>
+  <li>Os testes são a rede de proteção que não esquece de rodar.</li>
+  <li>Função para conta, <code>{#snippet}</code> para HTML local, componente para peça reaproveitável.</li>
+  <li>Total calculado é <code>$derived</code>, nunca um segundo <code>$state</code> digitado à mão.</li>
+  <li>Mover código traz junto os erros clássicos: nome repetido, tag aberta, hífen em variável.</li>
+  <li>Conserte primeiro, organize depois — nunca as duas coisas na mesma rodada.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
