@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Funções Handler — a receita que atende a campainha | Guia Svelte</title>
+<meta name="description" content="Funções handler no Svelte 5: como escrever uma função com nome, receber o evento e passar a função para o onclick em vez de chamá-la, com erros reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Funções Handler</span></h1>
+
+<p class="intro">A Ana escreve as receitas da padaria num caderno, com nome e passo a passo: "pão de queijo — misturar, modelar, assar". Quando alguém pede, ela não recita a receita de memória no meio do balcão; ela abre o caderno e segue. Na aula passada, o que rodava no clique era uma conta solta dentro do atributo. Agora a Ana vai dar <strong>nome</strong> ao que acontece no clique, guardar num lugar só e chamar pelo nome quando precisar. Esse pedaço de código com nome é a <strong>função handler</strong>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como declarar uma função com nome dentro do <code>&lt;script&gt;</code>.</li>
+  <li>Como ligar essa função ao <code>onclick</code> sem chamá-la na hora errada.</li>
+  <li>Por que <code>onclick={somar}</code> e <code>onclick={somar()}</code> não são a mesma coisa.</li>
+  <li>Como passar um valor para o handler usando uma seta no meio.</li>
+  <li>Como o handler recebe o objeto do evento e lê <code>evento.target.value</code>.</li>
+  <li>Quando vale a pena uma função nomeada e quando a seta curta resolve.</li>
+  <li>O que o compilador gera para uma função que ninguém chama no arquivo.</li>
+  <li>Os três erros reais desta aula e o que cada mensagem quer dizer.</li>
+  <li>Como testar uma função no terminal, sem abrir o navegador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a receita no caderno</h2>
+
+<p>Existem duas maneiras de ensinar alguém a fazer pão de queijo. A primeira é ficar ao lado e ir falando cada passo na hora, do começo ao fim, toda vez que alguém pede. A segunda é escrever a receita uma vez, dar um nome a ela e dizer "quando alguém pedir, faça a receita de pão de queijo". A segunda maneira tem três vantagens óbvias: você pode repetir sem se cansar, pode corrigir em um lugar só e pode mandar outra pessoa executar.</p>
+
+<p>Uma função é a receita escrita. Ela tem nome, tem passos e pode receber ingredientes — os <strong>parâmetros</strong>. Quando o navegador avisa que o botão foi clicado, ele chama a função pelo nome. A função faz o trabalho e devolve o controle. Quem escreveu o HTML não precisa saber o que tem dentro; só precisa saber o nome.</p>
+
+<p>No Svelte, o handler é uma função JavaScript comum, declarada no bloco <code>&lt;script&gt;</code> do componente. Ela pode ler e escrever qualquer variável criada com <code>$state</code> naquele mesmo componente. Não existe API especial, não existe <code>this</code> mágico, não existe registro de eventos: é uma função de JavaScript, e o atributo <code>onclick</code> só guarda a referência para ela.</p>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O nome da receita: "pão de queijo"</td><td>O nome da função: <code>somar</code></td></tr>
+<tr><td>Os ingredientes que variam</td><td>Os parâmetros: <code>function somar(valor)</code></td></tr>
+<tr><td>O caderno aberto na página certa</td><td><code>onclick={somar}</code></td></tr>
+<tr><td>Executar a receita agora</td><td><code>onclick={somar()}</code> — quase sempre errado</td></tr>
+<tr><td>Anotar o resultado no quadro</td><td><code>total = total + valor</code></td></tr>
+<tr><td>Uma receita que serve para dois pratos</td><td>Uma função usada por dois botões</td></tr>
+</table>
+</div>
+
+<p>Repare que a diferença entre a quarta e a quinta linha é um par de parênteses. Essa diferença é a fonte do erro mais comum de quem está começando, e ela tem uma seção inteira nesta aula, a de número 8. Antes de chegar lá, você precisa ver a função funcionando do jeito certo.</p>
+
+<h2>3. A primeira função com nome</h2>
+
+<p>O componente começa igual ao da aula passada: um estado, um parágrafo que mostra o valor e um botão. A novidade é que o botão não carrega a conta; ele carrega o <strong>nome</strong> de uma função declarada acima.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+
+  function somar() {
+    total = total + 1;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;</pre>
+
+<p>O HTML que sai do compilador é este. O botão chega ao navegador sem atributo nenhum, como sempre; a ligação com a função acontece depois, no navegador.</p>
+
+<pre class="out">&lt;p&gt;Total: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>function</dt><dd>a palavra que declara uma função. Tudo o que está entre as chaves pertence a ela e só roda quando alguém chama.</dd>
+  <dt>somar</dt><dd>o nome. Escolha verbos no infinitivo: <code>somar</code>, <code>zerar</code>, <code>enviar</code>, <code>conferir</code>. Nome de função diz o que ela faz, não como.</dd>
+  <dt>()</dt><dd>a lista de parâmetros, vazia aqui. Os parênteses fazem parte do nome quando você chama: <code>somar()</code>.</dd>
+  <dt>{ … }</dt><dd>o corpo: as instruções que rodam em ordem, de cima para baixo.</dd>
+  <dt>onclick={somar}</dt><dd>sem parênteses. Você está entregando a função, não o resultado dela. O navegador guarda essa referência e chama quando o clique acontecer.</dd>
+</dl>
+
+<p>Uma função declarada assim pode ser usada antes de ser declarada no arquivo, porque o JavaScript iça as declarações de função para o topo do bloco. Na prática, ninguém escreve o botão antes do script, mas o conhecimento evita sustos quando você mover código de lugar.</p>
+
+<h2>4. O que o compilador fez com a sua função</h2>
+
+<p>Se você pedir só o texto da tela, o compilador devolve o que o olho vê. Note que o <code>+1</code> do botão também é texto visível: ele é o rótulo do botão.</p>
+
+<pre class="out">Total: 0 +1</pre>
+
+<p>A função <code>somar</code> não aparece nesse texto porque função não é conteúdo de tela. Ela existe no JavaScript do componente e só produz efeito quando é chamada. Esse é um bom momento para lembrar a divisão de trabalho: o HTML descreve o que está na tela; o script descreve o que pode acontecer; o navegador junta os dois.</p>
+
+<p>O comando de build mostra o peso desse componente no projeto da Ana. Ele é o mesmo de sempre, e o número de módulos continua 111 — o que muda é o tamanho do arquivo final, que cresce um pouco a cada função e a cada atributo.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-VVryW8ge.js  35.89 kB │ gzip: 13.83 kB
+✓ built in 1.13s</pre>
+
+<p>Trinta e cinco kilobytes é menos do que uma foto tirada com o celular. O Svelte é um dos frameworks que menos entregam JavaScript para o navegador, e isso importa numa padaria com internet ruim: menos bytes, menos espera.</p>
+
+<p>Enquanto o build roda, quem está desenvolvendo usa o servidor de desenvolvimento, que recompila cada arquivo salvo e recarrega a página. O endereço é sempre o mesmo, <code>http://localhost:5173/</code>, e o número de módulos aparece a cada mudança. Se você quiser ver esse servidor funcionando na máquina da Ana, a aula <a href="primeiro-componente.html">Seu Primeiro Componente</a> mostra a sessão completa, linha por linha.</p>
+
+<p>Um detalhe que economiza tempo: o build não verifica se o seu handler faz sentido. Ele só compila. Um botão ligado à função errada passa no build sem uma palavra e falha só quando alguém clica. Por isso testar no navegador, com o dedo no mouse, continua sendo parte do trabalho.</p>
+
+<h2>5. Por que separar o handler</h2>
+
+<p>Você poderia continuar escrevendo <code>onclick={() =&gt; total++}</code> para sempre. Para um botão, funciona. Quando a padaria cresce, a diferença aparece: a mesma regra passa a valer para três botões, e você precisa mudar a regra em um lugar só.</p>
+
+<p>Uma função nomeada resolve isso porque o nome é uma referência. Três botões apontando para <code>somar</code> continuam apontando para a mesma receita; mudar o corpo da função muda os três de uma vez. Com a seta escrita em cada botão, você tem três cópias da regra e três lugares para corrigir.</p>
+
+<p>Tem também o custo de leitura. Um atributo com cinco linhas de conta no meio do HTML esconde a estrutura da tela. O nome <code>somar</code> diz o que acontece sem obrigar quem lê a decifrar a conta. O HTML volta a ser uma lista de elementos, e o comportamento fica no script, onde é fácil de achar.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;outre:^Cliques: 2">
+<p class="try-task"><strong>Missão:</strong> o botão não conta nada. Escreva uma função chamada <code>contar</code> que some 1 e ligue o botão nela, para que dois cliques mostrem <code>Cliques: 2</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+
+  function contar() {
+    cliques = cliques + 1;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={contar}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<p>O botão da solução não tem parênteses depois de <code>contar</code>. Isso é intencional e vale conferir no seu código antes de clicar em Verificar: se você escrever <code>onclick={contar()}</code>, a função roda uma vez quando o componente aparece e o clique fica sem função nenhuma.</p>
+
+<h2>6. Função com parâmetro</h2>
+
+<p>Nem toda receita é igual para todo pedido. Uma função pode receber um valor entre os parênteses e usar esse valor no corpo. O nome dado ao valor é livre; o que importa é a posição.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+
+  function somar(valor) {
+    total = total + valor;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; somar(5)}&gt;Total: {total}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;Total: 0&lt;/button&gt;</pre>
+
+<p>Aqui aparece uma seta de novo, mas com outro papel. <code>() =&gt; somar(5)</code> é uma função sem parâmetros que, quando chamada, chama <code>somar(5)</code>. A seta existe porque o atributo precisa de uma função, e <code>somar(5)</code> sozinho é o resultado de uma chamada — um número. A seta embrulha a chamada para o momento certo.</p>
+
+<p>Para ver a diferença entre a função e o resultado dela, dá para usar o terminal. O comando abaixo declara uma função e imprime duas coisas: o nome da função e o que ela devolve quando recebe 4.</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "function somar(n) { return n + 1 } console.log(somar); console.log(somar(4))"
+[Function: somar]
+5</pre>
+
+<p>O <code>[Function: somar]</code> é a própria função impressa. O <code>5</code> é o valor que ela devolve. São coisas de tipos diferentes: uma pode ser guardada para depois, a outra é um número que já aconteceu. Todo o mistério dos parênteses está aí.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;outre:^Total: 10">
+<p class="try-task"><strong>Missão:</strong> a função <code>somar</code> já recebe um valor, mas o botão passa 1. Faça cada clique valer 5, sem mexer na função, para que dois cliques mostrem <code>Total: 10</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let total = $state(0);
+
+  function somar(n) {
+    total = total + n;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; somar(1)}&gt;Total: {total}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let total = $state(0);
+
+  function somar(n) {
+    total = total + n;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; somar(5)}&gt;Total: {total}&lt;/button&gt;</pre>
+</div>
+
+<p>A função não mudou uma linha. Mudou só o argumento que o botão entrega. É essa separação que permite a mesma função servir para o botão de +5 e para o botão de +10, cada um passando o seu valor.</p>
+
+<h2>7. O handler recebe o evento</h2>
+
+<p>Quando o navegador chama a função, ele passa um argumento que você não pediu explicitamente: o objeto do evento. Se a sua função declarar um parâmetro, ele recebe esse objeto. É assim que se chega ao texto digitado, à tecla pressionada e ao formulário que está sendo enviado.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let digitado = $state('');
+
+  function guardar(evento) {
+    digitado = evento.target.value;
+  }
+&lt;/script&gt;
+
+&lt;input oninput={guardar}&gt;
+&lt;p&gt;Guardado: {digitado}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input/&gt; &lt;p&gt;Guardado: &lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>function guardar(evento)</dt><dd>o parâmetro tem o nome que você quiser. <code>evento</code> é legível; <code>e</code> é curto; os dois funcionam.</dd>
+  <dt>oninput={guardar}</dt><dd>o atributo aponta para a função, sem chamá-la. O navegador chama com o evento como primeiro argumento.</dd>
+  <dt>evento.target</dt><dd>o elemento que disparou o evento. Num <code>input</code>, é o campo.</dd>
+  <dt>evento.target.value</dt><dd>o texto atual do campo. Muda a cada tecla e chega como string.</dd>
+</dl>
+
+<p>Existe uma diferença de comportamento entre <code>oninput</code> e <code>onchange</code> que confunde. <code>oninput</code> dispara a cada alteração, até quando a pessoa apaga uma letra. <code>onchange</code> dispara quando o campo perde o foco, e só se o valor mudou desde a última vez. Para mostrar algo em tempo real, use <code>oninput</code>; para conferir um valor quando a pessoa termina de digitar, <code>onchange</code> evita trabalho repetido.</p>
+
+<p>Também é possível parar o comportamento padrão do navegador dentro do handler. Um link que não deve navegar, um formulário que não deve recarregar a página: em todos os casos a função recebe o evento e chama <code>evento.preventDefault()</code>. A aula de formulários mostra isso em detalhe, porque é lá que o problema aparece de verdade.</p>
+
+<h2>8. Passar a função × chamar a função</h2>
+
+<p>Esta é a seção que salva o seu fim de semana. Os dois atributos abaixo parecem iguais e fazem coisas diferentes:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você escreve</th><th>O que o navegador recebe</th><th>O que acontece no clique</th></tr>
+<tr><td><code>onclick={somar}</code></td><td>a função</td><td>chama a função uma vez</td></tr>
+<tr><td><code>onclick={() =&gt; somar(5)}</code></td><td>uma função nova que chama a outra</td><td>chama <code>somar(5)</code> uma vez</td></tr>
+<tr><td><code>onclick={somar()}</code></td><td>o resultado da chamada, já calculado</td><td>tenta usar um número como função e quebra</td></tr>
+</table>
+</div>
+
+<p>Para ver o terceiro caso quebrando de verdade, o componente abaixo chama a função dentro do atributo. O HTML que o servidor manda é inofensivo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+
+  function somar() {
+    return total + 5;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar()}&gt;Total: {total}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;Total: 0&lt;/button&gt;</pre>
+
+<p>No navegador, clicar nesse botão soma 5 ao total e, no mesmo instante, escreve uma mensagem de erro no console. A mensagem é esta, copiada do navegador:</p>
+
+<pre class="out">$.get(...)?.apply is not a function</pre>
+
+<p>Traduzindo: o Svelte guardou o resultado de <code>somar()</code>, que é o número 5, e tentou chamar esse número como se fosse uma função. O trecho <code>apply</code> é o jeito interno de chamar funções; o que importa para você é o fim da frase: <strong>não é uma função</strong>. A correção é tirar os parênteses do atributo.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Total: 5">
+<p class="try-task"><strong>Missão:</strong> o botão chama a função dentro do atributo: cada clique soma e estoura um erro no console. Faça o clique somar 5 sem erro nenhum, mostrando <code>Total: 5</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let total = $state(0);
+
+  function somar() {
+    return total + 5;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar()}&gt;Total: {total}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let total = $state(0);
+
+  function somar() {
+    total = total + 5;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;Total: {total}&lt;/button&gt;</pre>
+</div>
+
+<p>A solução resolve dois problemas de uma vez. Ela tira os parênteses do atributo, entregando a função em vez do resultado. E ela faz a função <em>mudar</em> o estado em vez de devolver uma conta nova, que é o que handlers fazem: efeito, não cálculo. Função que devolve valor serve para calcular; função que muda estado serve para reagir a evento.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — tentar mudar uma constante</strong>
+<p>Um handler que escreve numa variável declarada com <code>const</code> não compila. O valor não pode ser trocado depois da criação, e o compilador sabe disso.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const total = $state(0);
+
+  function somar() {
+    total = total + 1;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;Total: {total}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 4): Cannot assign to constant</pre>
+<p>"Cannot assign to constant" quer dizer "não posso atribuir a uma constante". Troque <code>const</code> por <code>let</code>. A runa <code>$state</code> funciona nas duas, mas só a variável <code>let</code> aceita um valor novo depois.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — duas funções com o mesmo nome</strong>
+<p>Nome de função é único no bloco. Duas declarações iguais fazem o compilador parar na segunda.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+
+  function somar() {
+    total = total + 1;
+  }
+
+  function somar() {
+    total = total + 2;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;Total: {total}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 11): Identifier 'somar' has already been declared</pre>
+<p>A linha apontada é a segunda declaração, não a primeira. A mensagem repete o nome que está sobrando. Corrija renomeando uma das duas ou apagando a que não é usada — o computador não tem como adivinhar qual você quis manter.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — parêntese que não fecha</strong>
+<p>Dentro de uma seta, cada parêntese que abre precisa fechar. O compilador espera o fecha-chaves da expressão até o fim do arquivo e reclama no ponto onde desistiu.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; total++&gt;Total: {total}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 36): Expected token }</pre>
+<p>"Expected token }" significa "eu esperava uma chave de fechamento aqui". A posição aponta para o fim da linha, onde o compilador percebeu a falta. A dica prática: feche o par antes de escrever o conteúdo, e conte os pares quando a mensagem aparecer.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando usar</th></tr>
+<tr><td><code>onclick={somar}</code></td><td>a função não precisa de argumento nenhum</td></tr>
+<tr><td><code>onclick={() =&gt; somar(5)}</code></td><td>a função precisa de um valor fixo</td></tr>
+<tr><td><code>onclick={(e) =&gt; guardar(e)}</code></td><td>você quer o evento e um valor extra</td></tr>
+<tr><td><code>oninput={guardar}</code></td><td>o handler só precisa do evento</td></tr>
+<tr><td><code>onclick={somar()}</code></td><td>nunca, para handler: entrega o resultado, não a função</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Dentro do handler</th><th>Para que serve</th></tr>
+<tr><td><code>evento.preventDefault()</code></td><td>impede o comportamento padrão (link, envio de formulário)</td></tr>
+<tr><td><code>evento.stopPropagation()</code></td><td>impede que o evento suba para os elementos pais</td></tr>
+<tr><td><code>evento.target.value</code></td><td>o texto do campo que disparou o evento</td></tr>
+<tr><td><code>evento.key</code></td><td>a tecla pressionada, em eventos de teclado</td></tr>
+<tr><td><code>evento.target.checked</code></td><td>se a caixa de seleção está marcada</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Terminal</th><th>O que mostra</th></tr>
+<tr><td><code>node -e "console.log(somar)"</code></td><td><code>[Function: somar]</code> — a função em si</td></tr>
+<tr><td><code>node -e "console.log(somar(4))"</code></td><td>o valor devolvido pela chamada</td></tr>
+<tr><td><code>npm run build</code></td><td>o peso do projeto compilado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="1"><p class="mc-q">1. Qual atributo entrega a função ao navegador, em vez do resultado dela?</p>
+<label><input type="radio" name="q1"> <code>onclick={somar}</code></label>
+<label><input type="radio" name="q1"> <code>onclick={somar()}</code></label>
+<label><input type="radio" name="q1"> <code>onclick="somar"</code></label>
+<label><input type="radio" name="q1"> <code>onclick=somar()</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que o primeiro parâmetro de uma função handler recebe?</p>
+<label><input type="radio" name="q1"> o nome do botão</label>
+<label><input type="radio" name="q1"> o estado do componente</label>
+<label><input type="radio" name="q1"> o objeto do evento, com <code>target</code> e outros dados</label>
+<label><input type="radio" name="q1"> o número de cliques anteriores</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. Por que uma função nomeada é melhor do que repetir a conta em cada botão?</p>
+<label><input type="radio" name="q1"> porque o Svelte proíbe setas no atributo</label>
+<label><input type="radio" name="q1"> porque a função roda mais rápido</label>
+<label><input type="radio" name="q1"> porque o HTML fica com menos tags</label>
+<label><input type="radio" name="q1"> porque a regra fica em um lugar só e vale para todos os botões</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">function somar(valor) {<br>&nbsp;&nbsp;total = total + valor;<br>}<br><br>&lt;button <input data-answer="onclick={() => somar(5)}|onclick={() =&gt; somar(5)}">&gt;Total: {total}&lt;/button&gt;<br><br>// cada clique soma cinco</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Handler é uma função que responde a um evento; ela vive no <code>&lt;script&gt;</code> do componente.</li>
+  <li><code>function somar() { … }</code> declara; <code>onclick={somar}</code> entrega; o navegador chama.</li>
+  <li><code>onclick={somar()}</code> chama na hora errada e entrega um valor no lugar de uma função.</li>
+  <li>Para passar um argumento, embrulhe a chamada: <code>onclick={() =&gt; somar(5)}</code>.</li>
+  <li>O primeiro parâmetro do handler é o objeto do evento; <code>evento.target.value</code> lê o campo.</li>
+  <li><code>oninput</code> dispara a cada tecla; <code>onchange</code> só quando o campo perde o foco.</li>
+  <li><code>evento.preventDefault()</code> cancela o comportamento padrão do navegador.</li>
+  <li>Função nomeada deixa a regra em um lugar só e o HTML mais fácil de ler.</li>
+  <li>Erros desta aula: mudar constante, repetir nome de função e esquecer um parêntese.</li>
+  <li>No terminal, <code>console.log(somar)</code> mostra a função; <code>console.log(somar(4))</code> mostra o resultado.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

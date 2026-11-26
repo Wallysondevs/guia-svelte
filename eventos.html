@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>onclick e Outros Eventos — quando a tela responde | Guia Svelte</title>
+<meta name="description" content="Aula de eventos no Svelte 5: onclick, oninput, o objeto do evento, e.target.value e o que o servidor manda para o navegador, com saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">onclick e Outros Eventos</span></h1>
+
+<p class="intro">A Ana tem uma padaria e uma campainha na porta. Quando a campainha toca, alguém levanta e atende — não é preciso ninguém vigiando o tempo todo. A tela de um programa funciona do mesmo jeito: existem coisas que <em>acontecem</em> (um clique, uma letra digitada, o formulário enviado) e existe o que o seu código deve <em>fazer</em> quando elas acontecem. Esta aula ensina a ligar as duas pontas no Svelte 5, com a saída de verdade do compilador em cada passo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um evento e por que ele é a porta de entrada do seu código.</li>
+  <li>Como ligar um clique a uma mudança de estado com <code>onclick</code>.</li>
+  <li>Por que o <code>onclick</code> não aparece no HTML que o servidor manda.</li>
+  <li>Como o evento chega com informação dentro: <code>e.target.value</code>.</li>
+  <li>A diferença entre <code>oninput</code>, <code>onchange</code> e <code>onsubmit</code>.</li>
+  <li>Como usar um mesmo estado com vários botões.</li>
+  <li>Os eventos mais comuns e o que cada um dispara.</li>
+  <li>Os três erros reais desta aula, com a mensagem copiada do compilador.</li>
+  <li>O que o compilador avisa quando você põe clique em elemento errado.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a campainha e quem atende</h2>
+
+<p>Na padaria da Ana existem duas coisas separadas: a campainha, que só faz barulho, e a pessoa que levanta para atender. A campainha não sabe quem vai atender nem o que vai ser feito. Ela apenas avisa que <em>algo aconteceu</em>. Quem decide o que fazer é a pessoa — e a decisão pode mudar de acordo com o horário, com o cliente, com o que tem no balcão.</p>
+
+<p>Programar interface é organizar esse mesmo par. De um lado ficam os <strong>eventos</strong>: clique, digitação, envio de formulário, tecla pressionada, mouse passando por cima. Do outro ficam as <strong>funções</strong> que você escreve para responder. O Svelte não decide nada por você: ele só garante que, quando o evento acontecer, a sua função seja chamada com a informação certa na mão.</p>
+
+<p>O vocabulário importa. <em>Evento</em> é o fato que acontece no navegador. <em>Handler</em> (atendedor) é a função que responde ao evento. <em>Estado</em> é o valor guardado que muda por causa da resposta. Nesta aula você vai ver os três juntos pela primeira vez, sempre na mesma ordem: alguém clica, a função roda, o estado muda, a tela se redesenha.</p>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<p>A tabela abaixo traduz a padaria para o arquivo <code>.svelte</code>. Repare que cada linha do mundo real tem um pedaço de código do outro lado, e nenhuma linha é decorativa: todas aparecem em algum componente desta aula.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A campainha toca</td><td>O evento <code>click</code> acontece no botão</td></tr>
+<tr><td>Alguém levanta para atender</td><td><code>onclick={…}</code> chama uma função</td></tr>
+<tr><td>O atendente anota o pedido</td><td>A função muda uma variável <code>$state</code></td></tr>
+<tr><td>O quadro de pedidos é atualizado</td><td>O HTML que usa a variável se redesenha</td></tr>
+<tr><td>Um cliente novo chega</td><td>Outro evento, com outra função</td></tr>
+<tr><td>A campainha quebrada não avisa ninguém</td><td>Um botão sem <code>onclick</code> não faz nada</td></tr>
+</table>
+</div>
+
+<p>Existe uma diferença importante entre a campainha e o evento do navegador: o evento carrega um pacote de informações. Quando a campainha toca, você não sabe quem é. Quando uma tecla é digitada, o navegador entrega à sua função um objeto com o elemento que recebeu a tecla, o texto digitado e a tecla específica. Esse objeto é o assunto da seção 6, e é o que transforma um botão bobo em um campo de formulário de verdade.</p>
+
+<h2>3. O primeiro <code>onclick</code></h2>
+
+<p>Comece pelo menor exemplo possível: um botão que conta pedidos. O estado nasce em zero, e cada clique soma um. O arquivo inteiro cabe em cinco linhas.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; total++}&gt;Pedidos: {total}&lt;/button&gt;</pre>
+
+<p>O compilador transforma esse arquivo no HTML abaixo. Leia com calma: o número aparece, o texto aparece, e o atributo <code>onclick</code> não aparece em lugar nenhum.</p>
+
+<pre class="out">&lt;button&gt;Pedidos: 0&lt;/button&gt;</pre>
+
+<p>O que você escreveu como <code>onclick</code> virou código JavaScript que roda no navegador, não marcação. Faz sentido: no servidor não existe clique, não existe mouse e não existe pessoa. O servidor só sabe montar a primeira versão da tela. Quem escuta o clique é o navegador, depois que o componente chega lá.</p>
+
+<h3>A anatomia do atributo</h3>
+
+<dl class="anatomy">
+  <dt>onclick</dt><dd>o nome do evento. Sempre começa com <code>on</code> e continua com o nome do evento em minúsculas: <code>oninput</code>, <code>onsubmit</code>, <code>onkeydown</code>. Não existe <code>onClick</code> com C maiúsculo — o nome é o do evento, colado na palavra <code>on</code>.</dd>
+  <dt>{…}</dt><dd>o valor do atributo é uma <strong>expressão JavaScript</strong>, não um texto entre aspas. É por isso que a caixa de erro reclama quando você escreve <code>onclick="total++"</code>.</dd>
+  <dt>() =&gt; total++</dt><dd>uma <strong>função</strong> sem parâmetros. A seta <code>=&gt;</code> separa o que entra (nada) do que acontece (somar um).</dd>
+  <dt>total++</dt><dd>o atalho para <code>total = total + 1</code>. Só funciona porque <code>total</code> foi criada com <code>$state</code>: é ela que avisa a tela.</dd>
+  <dt>Pedidos: {total}</dt><dd>o lugar onde o valor aparece. O Svelte liga este buraco ao estado e redesenha só este texto quando o número muda.</dd>
+</dl>
+
+<p>Uma dúvida comum de quem começa: por que a função não pode ser <code>total++</code> direto, sem a seta? Porque o valor do atributo precisa ser uma função que o navegador chama <em>na hora do clique</em>. <code>total++</code> é uma conta que aconteceria imediatamente, uma única vez, quando o componente fosse montado. A seta embrulha a conta em uma função que fica guardada para depois.</p>
+
+<h2>4. O que o navegador recebe</h2>
+
+<p>Se você pedir ao compilador só o texto que aparece na tela, ele devolve uma linha. É esta a diferença entre o que o arquivo diz e o que a pessoa vê.</p>
+
+<pre class="out">Pedidos: 0</pre>
+
+<p>O HTML e o texto contam a mesma história por dois ângulos. No HTML você vê as tags e confirma que o atributo de evento sumiu. No texto você vê o que o olho humano lê: o rótulo e o número, sem tag nenhuma. Nas aulas seguintes, quando o assunto for marcação, vou mostrar o HTML; quando for comportamento, o texto.</p>
+
+<p>Para conferir isso no projeto da Ana, o comando é o de sempre. Ele compila todos os arquivos e mostra o peso do resultado:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CNv1IjM2.js  35.93 kB │ gzip: 13.85 kB
+✓ built in 904ms</pre>
+
+<p>Repare na linha <code>✓ 111 modules transformed</code>. Cada módulo é um arquivo que o Vite precisou processar: o seu <code>App.svelte</code>, o motor do Svelte, os pedaços do próprio framework. O seu componente é uma gota nesse número, e o arquivo final tem o tamanho de uma foto pequena. A linha <code>gzip</code> mostra quanto disso viaja de verdade pela internet.</p>
+
+<h2>5. A caixa de areia: faça o botão contar</h2>
+
+<p>Antes de seguir, um teste de mão na massa. O componente abaixo tem o estado e o texto, mas o botão não tem evento nenhum. A missão é fazer o primeiro clique levar o contador a 1.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o botão mostra o contador e não faz nada. Ligue um <code>onclick</code> para que cada clique some 1 — e o primeiro clique mostre <code>Cliques: 1</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<p>A caixa compila o seu código com o compilador de verdade do Svelte 5 e monta o resultado num espaço isolado. Se você errar a sintaxe, a mensagem que aparece é a mesma que o projeto da Ana mostraria no terminal — não é um aviso inventado pelo guia.</p>
+
+<h2>6. O evento traz informação dentro</h2>
+
+<p>Um clique não tem conteúdo, mas uma digitação tem. Quando o evento é <code>input</code>, o navegador entrega à sua função um objeto com o elemento que disparou o evento. O caminho para chegar ao texto digitado é <code>e.target.value</code>: <code>e</code> é o evento, <code>target</code> é o elemento, <code>value</code> é o que está escrito dentro dele.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let texto = $state('');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (texto = e.target.value)}&gt;
+&lt;p&gt;Você digitou: {texto}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input/&gt; &lt;p&gt;Você digitou: &lt;/p&gt;</pre>
+
+<p>O <code>&lt;input/&gt;</code> com a barra no fim é o HTML vazio que o compilador gera para um campo sem valor inicial. O parágrafo aparece com o rótulo e nada depois dos dois-pontos, porque o estado começou como texto vazio. No navegador, cada tecla dispara <code>input</code> e o parágrafo é reescrito na hora.</p>
+
+<dl class="anatomy">
+  <dt>oninput</dt><dd>dispara a cada alteração do campo, tecla por tecla. É o evento certo para acompanhar o que a pessoa escreve em tempo real.</dd>
+  <dt>e</dt><dd>o nome que você escolhe para receber o objeto do evento. Pode ser <code>evento</code>, <code>ev</code>, <code>e</code> — o nome é seu, o primeiro parâmetro é que importa.</dd>
+  <dt>e.target</dt><dd>o elemento que recebeu o evento. Num <code>input</code>, é o próprio campo.</dd>
+  <dt>e.target.value</dt><dd>o texto que está dentro do campo, sempre como <em>string</em> — mesmo que a pessoa digite só números.</dd>
+</dl>
+
+<p>Esse último ponto morde muita gente. Se o campo é de quantidade e a Ana digita <code>7</code>, o valor que chega é o texto <code>"7"</code>, não o número <code>7</code>. Somar <code>"7" + 1</code> dá <code>"71"</code>, porque o JavaScript cola texto em vez de somar. Na aula de <code>bind:value</code> você vai ver como pedir um número de verdade; por enquanto, guarde a regra: o que vem de campo de texto é texto.</p>
+
+<h2>7. Outros eventos que você já usa sem saber</h2>
+
+<p>Todo mundo já preencheu um formulário na internet, e cada etapa daquela experiência é um evento diferente. A tabela abaixo é o mapa dos mais comuns no dia a dia de quem faz tela.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Atributo</th><th>Quando dispara</th><th>Uso típico na padaria</th></tr>
+<tr><td><code>onclick</code></td><td>clique do mouse ou toque na tela</td><td>botão de somar pedido</td></tr>
+<tr><td><code>oninput</code></td><td>a cada alteração do campo</td><td>mostrar o total enquanto digita</td></tr>
+<tr><td><code>onchange</code></td><td>quando o campo perde o foco depois de mudar</td><td>conferir o preço ao sair do campo</td></tr>
+<tr><td><code>onsubmit</code></td><td>envio do formulário</td><td>fechar a encomenda</td></tr>
+<tr><td><code>onkeydown</code></td><td>tecla pressionada</td><td>Enter para adicionar item</td></tr>
+<tr><td><code>onfocus</code> / <code>onblur</code></td><td>campo ganha / perde o foco</td><td>destacar o campo ativo</td></tr>
+<tr><td><code>onmouseenter</code></td><td>o mouse entra no elemento</td><td>mostrar detalhe do produto</td></tr>
+<tr><td><code>ondblclick</code></td><td>dois cliques rápidos</td><td>editar um item da lista</td></tr>
+<tr><td><code>onscroll</code></td><td>a página ou a caixa rola</td><td>carregar mais pedidos</td></tr>
+</table>
+</div>
+
+<p>Os nomes são os do HTML, em minúsculas. Quem vem de tutoriais antigos escreve <code>on:click</code>, com dois-pontos. Isso ainda compila nesta versão, mas o compilador avisa que está fora de moda — e o guia inteiro usa a forma nova, sem dois-pontos. A seção 9 mostra a mensagem exata desse aviso.</p>
+
+<p>Para brincar com texto e evento sem abrir o navegador, dá para usar o próprio Node no terminal. O comando abaixo não tem nada de Svelte: ele só mostra que uma <em>string</em> sabe se transformar em maiúsculas.</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log('ana'.toUpperCase())"
+ANA</pre>
+
+<p>Esse <code>toUpperCase()</code> volta na caixa a seguir. A ideia é a mesma do <code>oninput</code>: o campo guarda o texto, e o parágrafo mostra o texto transformado.</p>
+
+<div class="trysvelte" data-goal="digitar:input=pao;;outre:^Maiúsculas: PAO">
+<p class="try-task"><strong>Missão:</strong> o parágrafo precisa mostrar o que a Ana digita, em maiúsculas, sem alterar o texto guardado. Escreva <code>pao</code> no campo e faça aparecer <code>Maiúsculas: PAO</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let texto = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Maiúsculas: &lt;/p&gt;
+&lt;input&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let texto = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Maiúsculas: {texto.toUpperCase()}&lt;/p&gt;
+&lt;input oninput={(e) =&gt; (texto = e.target.value)}&gt;</pre>
+</div>
+
+<p>A solução tem duas metades. O <code>oninput</code> guarda no estado o que foi digitado; o <code>{texto.toUpperCase()}</code> mostra a versão maiúscula. O valor guardado continua sendo <code>pao</code>, com minúsculas: quem mudou foi só a forma de exibir. Guardar um dado e formatar na hora de mostrar são decisões separadas, e essa separação vai se repetir em toda aula daqui para frente.</p>
+
+<h2>8. Um estado, vários botões</h2>
+
+<p>Um estado pode ser mudado por mais de um botão. Cada botão tem o seu próprio evento, e todos escrevem na mesma variável. O componente abaixo tem um botão que soma e outro que volta ao zero.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;
+&lt;button onclick={() =&gt; total++}&gt;+1&lt;/button&gt;
+&lt;button onclick={() =&gt; (total = 0)}&gt;zerar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt;</pre>
+
+<p>O HTML mostra dois botões sem nenhum evento, lado a lado, e o total em zero. O que amarra os três pedaços é o estado: os dois botões escrevem em <code>total</code>, e o parágrafo lê. Quando um botão muda o valor, o parágrafo é atualizado; o outro botão não precisa saber de nada. É a mesma lógica da campainha: cada botão avisa, e quem escuta é a tela.</p>
+
+<p>Repare nos parênteses em volta de <code>total = 0</code>. A seta aceita uma expressão depois dela, e uma atribuição é uma expressão válida — os parênteses só deixam isso explícito para quem lê. Sem eles o código também funciona, mas fica mais difícil de enxergar onde a seta termina. Escolha um estilo e mantenha na página inteira: consistência vale mais do que esperteza.</p>
+
+<div class="trysvelte" data-goal="clique:#mais;;clique:#mais;;clique:#menos;;outre:^Total: 1">
+<p class="try-task"><strong>Missão:</strong> dois botões, nenhum evento. Faça <code>+1</code> somar e <code>-1</code> subtrair, de modo que dois cliques em <code>+1</code> e um em <code>-1</code> deixem <code>Total: 1</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;
+&lt;button id="mais"&gt;+1&lt;/button&gt;
+&lt;button id="menos"&gt;-1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;
+&lt;button id="mais" onclick={() =&gt; total++}&gt;+1&lt;/button&gt;
+&lt;button id="menos" onclick={() =&gt; total--}&gt;-1&lt;/button&gt;</pre>
+</div>
+
+<p>O <code>total--</code> é o irmão de <code>total++</code>: subtrai um. Os dois só existem porque o valor é um número. Se o estado fosse texto, <code>++</code> viraria uma tentativa de somar letra com número e o resultado seria <code>NaN</code>, a sigla de "not a number".</p>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas acontecem no mesmo lugar: o valor do atributo de evento. Vale a pena reconhecer as três de longe.</p>
+
+<div class="cenario">
+<strong>Erro 1 — evento escrito como texto</strong>
+<p>Aspas transformam o valor em string. O compilador do Svelte 5 exige uma expressão JavaScript e recusa o texto.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick="total++"&gt;Pedidos: {total}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 8): Event attribute must be a JavaScript expression, not a string</pre>
+<p>A tradução é direta: "o atributo de evento precisa ser uma expressão JavaScript, não uma string". Tire as aspas e embrulhe a conta em uma função. O número da coluna aponta exatamente onde estão as aspas.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — chaves vazias</strong>
+<p>As chaves precisam ter algo dentro. Um evento sem expressão não tem o que executar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={}&gt;Pedidos: {total}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 17): Unexpected token</pre>
+<p>"Unexpected token" quer dizer "achei um pedaço de código que não podia estar aqui". A linha e a coluna levam ao ponto exato: o fecha-chaves logo depois da abertura. Coloque uma função ali, mesmo que seja uma função vazia.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — dois cliques no mesmo elemento</strong>
+<p>Cada atributo só pode aparecer uma vez. Dois <code>onclick</code> no mesmo botão deixam o compilador sem saber qual vale.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; total++} onclick={() =&gt; total--}&gt;Pedidos: {total}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 32): Attributes need to be unique</pre>
+<p>A saída é juntar as duas ações em uma função só, ou separar em dois botões. "Attributes need to be unique" aparece para qualquer atributo repetido, não só para eventos — vale para <code>class</code>, <code>id</code> e <code>value</code> também.</p>
+</div>
+
+<div class="warning">
+<strong>Clique em elemento que não é botão</strong>
+<p>Um <code>&lt;div onclick={…}&gt;</code> compila, mas o compilador avisa duas vezes: <code>a11y_click_events_have_key_events</code> ("elemento visível que não é interativo, com evento de clique, precisa de um tratador de teclado") e <code>a11y_no_static_element_interactions</code> ("<code>&lt;div&gt;</code> com clique precisa de um papel ARIA"). O aviso não impede o programa de rodar; ele aponta que quem usa teclado não consegue acionar aquele elemento. Use <code>&lt;button&gt;</code> e o problema desaparece.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<p>Três tabelas para consultar depois, quando a memória falhar. A primeira é do que existe nesta aula; a segunda, das armadilhas; a terceira, do que o terminal mostrou.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você escreve</th><th>O que acontece</th></tr>
+<tr><td><code>onclick={() =&gt; total++}</code></td><td>soma um a cada clique</td></tr>
+<tr><td><code>onclick={somar}</code></td><td>chama a função <code>somar</code> no clique</td></tr>
+<tr><td><code>oninput={(e) =&gt; texto = e.target.value}</code></td><td>guarda o que foi digitado a cada tecla</td></tr>
+<tr><td><code>onchange={conferir}</code></td><td>chama <code>conferir</code> quando o campo perde o foco</td></tr>
+<tr><td><code>onkeydown={(e) =&gt; e.key === 'Enter' &amp;&amp; adicionar()}</code></td><td>adiciona quando a tecla é Enter</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>O botão não faz nada</td><td>falta <code>onclick</code>, ou a função não muda estado</td></tr>
+<tr><td>A tela não atualiza, mas o valor muda</td><td>a variável não foi criada com <code>$state</code></td></tr>
+<tr><td><code>"7" + 1</code> virou <code>"71"</code></td><td>o valor do campo é texto; converta com <code>Number(…)</code></td></tr>
+<tr><td>O evento dispara duas vezes</td><td>dois atributos iguais, ou um handler chamado dentro de outro</td></tr>
+<tr><td>Funciona no navegador e não no HTML do servidor</td><td>eventos só existem no navegador; o servidor entrega a tela parada</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Comando</th><th>Para que serve</th></tr>
+<tr><td><code>npm run build</code></td><td>compila o projeto e mostra o peso final</td></tr>
+<tr><td><code>node -e "console.log(…)"</code></td><td>roda uma linha de JavaScript sem criar arquivo</td></tr>
+<tr><td><code>npm run dev</code></td><td>sobe o servidor que recarrega a página a cada salvamento</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o atributo <code>onclick</code> espera receber?</p>
+<label><input type="radio" name="q1"> um texto entre aspas com o código a rodar</label>
+<label><input type="radio" name="q1"> uma função que o navegador chama no clique</label>
+<label><input type="radio" name="q1"> o nome do evento, sem nada depois</label>
+<label><input type="radio" name="q1"> o número de cliques permitidos</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que o HTML gerado no servidor não tem o <code>onclick</code>?</p>
+<label><input type="radio" name="q1"> porque o Svelte apaga eventos por segurança</label>
+<label><input type="radio" name="q1"> porque o navegador remove o atributo ao carregar</label>
+<label><input type="radio" name="q1"> porque no servidor não existe clique: evento é coisa do navegador</label>
+<label><input type="radio" name="q1"> porque o atributo só funciona com <code>on:click</code></label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. Num <code>&lt;input oninput={(e) =&gt; texto = e.target.value}&gt;</code>, o que é <code>e.target.value</code>?</p>
+<label><input type="radio" name="q1"> o nome do evento</label>
+<label><input type="radio" name="q1"> a função que responde ao evento</label>
+<label><input type="radio" name="q1"> o estado do componente</label>
+<label><input type="radio" name="q1"> o texto que está dentro do campo, sempre como string</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let total = $state(0);<br>&lt;button <input data-answer="onclick={() => total++}|onclick={() =&gt; total++}">&gt;Total: {total}&lt;/button&gt;<br><br>// cada clique soma um ao contador</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Evento é o fato que acontece no navegador; handler é a função que responde a ele.</li>
+  <li><code>onclick={…}</code> recebe uma <strong>função</strong>, não uma conta solta e não um texto entre aspas.</li>
+  <li>A seta <code>=&gt;</code> embrulha a ação para ser executada no momento do evento.</li>
+  <li>O servidor entrega o HTML sem os atributos de evento; quem escuta o clique é o navegador.</li>
+  <li><code>total++</code> é <code>total = total + 1</code>; <code>total--</code> subtrai um.</li>
+  <li><code>oninput</code> dispara a cada tecla e entrega <code>e.target.value</code>, sempre como string.</li>
+  <li><code>onchange</code> só dispara quando o campo perde o foco; <code>onsubmit</code> é do formulário.</li>
+  <li>Vários botões podem escrever no mesmo estado; a tela lê o estado e se atualiza sozinha.</li>
+  <li>Erros desta aula: evento com aspas, chaves vazias e atributo repetido — os três com mensagem do compilador.</li>
+  <li>Clique em <code>&lt;div&gt;</code> compila, mas rende aviso de acessibilidade; prefira <code>&lt;button&gt;</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

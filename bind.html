@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bind: — a rua de mão dupla entre a tela e o estado | Guia Svelte</title>
+<meta name="description" content="O que é bind: no Svelte 5, como o bind:value liga campo e estado nos dois sentidos, o que ele faz por baixo e quando o atalho esconde problema, com saída real.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">bind:</span></h1>
+
+<p class="intro">A Ana anota os pedidos num caderno com duas folhas carbonadas: o que ela escreve na primeira aparece na segunda sem ninguém copiar nada. Se ela corrige um preço na segunda folha, a correção também vale para a primeira. É uma rua de mão dupla, e é exatamente isso que o <code>bind:</code> faz entre um campo da tela e uma variável do componente. Nesta aula você vai ver a rua funcionando, o que existe embaixo dela e o preço que se paga por usá-la sem pensar.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que significa ligação em duas vias e por que ela existe.</li>
+  <li>Como escrever <code>bind:value={nome}</code> e o que muda em relação a <code>value={nome}</code>.</li>
+  <li>O HTML que o servidor manda quando existe um <code>bind</code> no campo.</li>
+  <li>O equivalente ao <code>bind</code> escrito à mão com <code>value</code> e <code>oninput</code>.</li>
+  <li>Quais bindings existem para cada tipo de elemento.</li>
+  <li>Como dois campos podem escrever no mesmo estado.</li>
+  <li>A forma curta <code>bind:value</code> e por que ela quase nunca é usada.</li>
+  <li>O custo escondido de uma ligação que ninguém vê no HTML.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: as duas folhas carbonadas</h2>
+
+<p>Papel carbonado funciona assim: você escreve na folha de cima e a pressão do lápis copia o texto para a folha de baixo. Não existe mágica, existe contato. Na programação de tela, o campo e a variável são as duas folhas, e o <code>bind</code> é o carbono entre elas. Digitar no campo escreve na variável; mudar a variável pela lógica do programa reescreve o campo.</p>
+
+<p>Sem essa ligação, você tem duas direções separadas. A ida, da variável para a tela, já existe em qualquer atributo: <code>value={nome}</code> mostra o valor. A volta, da tela para a variável, precisa de um evento: <code>oninput</code> lê o campo e grava na variável. O <code>bind</code> junta as duas pontas em uma palavra e assume o trabalho de manter as duas folhas iguais.</p>
+
+<p>Vale entender o nome. A palavra vem do inglês <em>bind</em>, "amarrar". O que está amarrado é o valor da variável e o valor do elemento. Quando um dos dois muda, a corda puxa o outro. Nada é copiado por magia: o compilador gera o código que lê o campo no evento certo e escreve no estado; a diferença é que você não precisa escrever esse código.</p>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Escrever na folha de cima</td><td>Digitar no campo</td></tr>
+<tr><td>A cópia que aparece na folha de baixo</td><td>A variável <code>$state</code> recebendo o texto</td></tr>
+<tr><td>Corrigir a folha de baixo</td><td>Mudar a variável no script</td></tr>
+<tr><td>A correção aparecer na folha de cima</td><td>O campo ser reescrito sozinho</td></tr>
+<tr><td>O papel carbono entre as duas</td><td><code>bind:value={nome}</code></td></tr>
+<tr><td>Duas folhas sem carbono</td><td><code>value={nome}</code> sem <code>oninput</code></td></tr>
+</table>
+</div>
+
+<p>Repare na última linha: é perfeitamente possível ter o valor na tela e nunca receber o que a pessoa digita. O campo mostra o texto inicial e ignora o resto. Muita gente passa por isso achando que o problema é o navegador, quando o que falta é a segunda direção.</p>
+
+<h2>3. O primeiro <code>bind:value</code></h2>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value={nome}&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+
+<p>Duas coisas acontecem ao mesmo tempo. O campo começa com o texto <code>Ana</code>, porque a variável começa assim. E cada tecla digitada atualiza a variável, porque o <code>bind</code> escuta o evento de entrada do campo. O parágrafo, que lê a mesma variável, acompanha cada letra.</p>
+
+<pre class="out">&lt;input value="Ana"/&gt; &lt;p&gt;Olá, Ana&lt;/p&gt;</pre>
+
+<p>Esse HTML tem uma diferença em relação aos exemplos da aula de eventos: o atributo <code>value</code> aparece com o valor inicial. Faz sentido — o servidor precisa mandar o campo já preenchido para a pessoa ver o texto antes de qualquer JavaScript rodar. O que não aparece é o evento: o <code>bind</code> também vira código de navegador, não marcação.</p>
+
+<h3>A anatomia do binding</h3>
+
+<dl class="anatomy">
+  <dt>bind:</dt><dd>o prefixo que diz "ligue este elemento a uma variável". Depois dos dois-pontos vem o <strong>nome do binding</strong>, que depende do tipo de elemento: <code>value</code>, <code>checked</code>, <code>group</code>, <code>this</code>.</dd>
+  <dt>value</dt><dd>o binding do conteúdo de campos de texto, números, áreas de texto e listas de opção. É o mais usado de todos.</dd>
+  <dt>{nome}</dt><dd>a variável do estado. Precisa ter sido criada com <code>$state</code> (ou vir de <code>$props</code>); uma variável comum não avisa a tela.</dd>
+  <dt>&lt;input …&gt;</dt><dd>o elemento amarrado. O binding não é universal: cada nome só vale em certos elementos, e o compilador reclama quando você erra o par.</dd>
+  <dt>oninput embutido</dt><dd>o que o compilador gera por baixo. Você economiza o evento e o código que lê o campo.</dd>
+</dl>
+
+<h2>4. A saída real: o servidor manda o valor</h2>
+
+<p>Vale olhar só o texto da tela para confirmar que o valor inicial chega ao navegador. Nada de JavaScript foi executado ainda: isto é o que o servidor entrega.</p>
+
+<pre class="out">Olá, Ana</pre>
+
+<p>Quando a página chega no navegador, o Svelte assume e liga o campo à variável. A partir daí, cada tecla muda o estado e o parágrafo. O texto que você vê na tela depois de digitar não é o mesmo que o servidor mandou — e é por isso que testar só o HTML do servidor não conta a história toda.</p>
+
+<p>O build do projeto da Ana mostra o peso dessa ligação. O arquivo cresce em relação à aula anterior porque o código do binding entra no pacote:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-B229pQKK.js  40.92 kB │ gzip: 15.72 kB
+✓ built in 1.75s</pre>
+
+<p>Quarenta kilobytes e meio, quase cinco a mais do que o componente de eventos. Esse crescimento é o preço do conforto: o Svelte precisa carregar o código que lê o campo, compara valores e decide quando reescrever o elemento. É pouco, mas não é zero, e vale saber que existe.</p>
+
+<p>Para conferir o resultado do build sem depender do servidor de desenvolvimento, a Ana usa o comando de pré-visualização. Ele serve a pasta <code>dist/</code> por http, no mesmo esquema do site publicado:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+&gt; loja@0.0.1 preview
+&gt; vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O endereço <code>4173</code> é diferente do <code>5173</code> do servidor de desenvolvimento, e isso confunde no começo. O primeiro serve os arquivos já compilados, do jeito que vão para o ar; o segundo compila a cada salvamento. Os dois abrem no navegador, mas só o segundo recarrega quando você mexe no arquivo. Para testar o <code>bind</code>, os dois servem, porque a ligação é feita pelo JavaScript que chega junto com a página.</p>
+
+<h2>5. O que o bind faz por baixo</h2>
+
+<p>Para entender o atalho, escreva o caminho longo. O campo recebe o valor atual e escuta cada alteração; quando a alteração chega, o texto do campo é copiado para o estado.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+
+  function guardar(evento) {
+    nome = evento.target.value;
+  }
+&lt;/script&gt;
+
+&lt;input value={nome} oninput={guardar}&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value="Ana"/&gt; &lt;p&gt;Olá, Ana&lt;/p&gt;</pre>
+
+<p>O HTML é idêntico ao do <code>bind</code>. Isso não é coincidência: o compilador gera exatamente esse tipo de código, só que sem você escrever. A diferença está no arquivo, não na tela. O caminho longo tem quatro linhas a mais e um nome de função a manter; o atalho tem uma palavra.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você escreve</th><th>O compilador entende</th><th>Linhas no arquivo</th></tr>
+<tr><td><code>bind:value={nome}</code></td><td>lê o campo no evento e escreve no estado</td><td>1</td></tr>
+<tr><td><code>value={nome} oninput={guardar}</code></td><td>o mesmo, com função sua</td><td>5</td></tr>
+<tr><td><code>value={nome}</code></td><td>só escreve na tela; nunca lê</td><td>1</td></tr>
+<tr><td><code>oninput={guardar}</code></td><td>só lê o campo; a tela não acompanha o estado</td><td>5</td></tr>
+</table>
+</div>
+
+<p>A terceira linha é a mais traiçoeira. O campo mostra o valor, a pessoa digita, e nada acontece no estado. O sintoma é "o campo não está ligado", mas o código parece certo. Se você quer as duas direções, use <code>bind</code> ou escreva as duas pontas.</p>
+
+<div class="trysvelte" data-goal="digitar:input=leite;;outre:^5 letras">
+<p class="try-task"><strong>Missão:</strong> o contador de letras está travado em zero. Faça ele mostrar o tamanho do texto que está no campo: digitando <code>leite</code>, deve aparecer <code>5 letras</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let texto = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;0 letras&lt;/p&gt;
+&lt;input bind:value={texto}&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let texto = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;{texto.length} letras&lt;/p&gt;
+&lt;input bind:value={texto}&gt;</pre>
+</div>
+
+<p>O binding já estava certo nos dois casos; o que faltava era o parágrafo ler o estado. Isso ilustra uma divisão que vale para o guia inteiro: o <code>bind</code> cuida de manter o valor atualizado, e a expressão dentro das chaves cuida de mostrar o valor do jeito que você quer. São duas responsabilidades, e misturar as duas é a origem de metade dos bugs de formulário.</p>
+
+<h2>6. Duas caixas, um estado</h2>
+
+<p>Como o <code>bind</code> é uma ligação e não uma cópia, dois campos podem apontar para a mesma variável. Digitar em um reescreve o outro, porque não existem dois valores: existe um valor com dois lugares mostrando.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value={nome}&gt;
+&lt;input bind:value={nome}&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value="Ana"/&gt; &lt;input value="Ana"/&gt; &lt;p&gt;Olá, Ana&lt;/p&gt;</pre>
+
+<p>O perigo mora aqui. Com dois campos ligados ao mesmo estado, não existe "o valor do primeiro" e "o valor do segundo": existe um valor só, e os dois campos são janelas para ele. Se a regra de negócio precisa de dois valores independentes, você precisa de duas variáveis. Se precisa de um valor com dois lugares de edição, um <code>bind</code> em cada campo resolve.</p>
+
+<div class="trysvelte" data-goal="digitar:input=Ana;;outre:^Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o campo mostra o nome, mas digitar não muda o parágrafo. Faça o parágrafo acompanhar o que a pessoa escreve, de modo que digitar <code>Ana</code> mostre <code>Olá, Ana</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;input value={nome}&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;input bind:value={nome}&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+</div>
+
+<p>Se você tentar resolver com <code>oninput</code> em vez de <code>bind</code>, também funciona: são duas formas de dizer a mesma coisa. O guia usa <code>bind</code> quando a ligação é direta, sem regra no meio, e usa o evento quando precisa decidir algo antes de gravar. A aula de <em>Quando Não Usar bind</em> é toda sobre essa escolha.</p>
+
+<h2>7. A forma curta e os bindings que existem</h2>
+
+<p>Quando a variável tem o mesmo nome do binding, o Svelte aceita a forma curta. Em vez de <code>bind:value={value}</code>, você escreve só <code>bind:value</code>. O detalhe é que a variável precisa se chamar <code>value</code> — um nome genérico que costuma atrapalhar a leitura do código.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let value = $state('Ana');
+&lt;/script&gt;
+
+&lt;input bind:value&gt;
+&lt;p&gt;Olá, {value}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value="Ana"/&gt; &lt;p&gt;Olá, Ana&lt;/p&gt;</pre>
+
+<p>O HTML é o mesmo de sempre. A forma curta economiza onze caracteres e custa clareza: quem lê <code>bind:value</code> não sabe de qual variável se trata sem procurar no script. Em código de verdade, a forma longa com um nome descritivo (<code>nome</code>, <code>quantidade</code>, <code>email</code>) é a escolha padrão. A curta aparece em exemplos pequenos e em nomes que já são óbvios.</p>
+
+<p>Cada tipo de elemento tem o seu binding. A tabela abaixo é o mapa; os próximos três capítulos abrem cada linha com calma.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Elemento</th><th>Binding</th><th>O que a variável recebe</th></tr>
+<tr><td><code>&lt;input&gt;</code> de texto</td><td><code>bind:value</code></td><td>o texto digitado, string</td></tr>
+<tr><td><code>&lt;input type="number"&gt;</code></td><td><code>bind:value</code></td><td>número, ou <code>null</code> se estiver vazio</td></tr>
+<tr><td><code>&lt;textarea&gt;</code></td><td><code>bind:value</code></td><td>o texto, string</td></tr>
+<tr><td><code>&lt;input type="checkbox"&gt;</code></td><td><code>bind:checked</code></td><td><code>true</code> ou <code>false</code></td></tr>
+<tr><td>vários <code>checkbox</code> ou <code>radio</code></td><td><code>bind:group</code></td><td>lista de marcados, ou o valor do escolhido</td></tr>
+<tr><td><code>&lt;select&gt;</code></td><td><code>bind:value</code></td><td>o valor da opção escolhida</td></tr>
+<tr><td>qualquer elemento</td><td><code>bind:this</code></td><td>o próprio elemento do DOM</td></tr>
+<tr><td><code>&lt;input type="file"&gt;</code></td><td><code>bind:files</code></td><td>a lista de arquivos escolhidos</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="digitar:#primeiro=ana;;outre:^Segundo: ana">
+<p class="try-task"><strong>Missão:</strong> as duas caixas guardam valores diferentes. Faça as duas mostrarem o mesmo nome: digitando <code>ana</code> na primeira, o parágrafo deve dizer <code>Segundo: ana</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let primeiro = $state('');
+  let segundo = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Segundo: {segundo}&lt;/p&gt;
+&lt;input id="primeiro" bind:value={primeiro}&gt;
+&lt;input id="segundo" bind:value={segundo}&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let primeiro = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Segundo: {primeiro}&lt;/p&gt;
+&lt;input id="primeiro" bind:value={primeiro}&gt;
+&lt;input id="segundo" bind:value={primeiro}&gt;</pre>
+</div>
+
+<p>A solução apaga a segunda variável. Duas variáveis ligadas a dois campos não se conversam sozinhas; o que faz as duas caixas andarem juntas é apontarem para o mesmo lugar. Se você quisesse valores independentes e sincronizados, precisaria de uma função que copiasse de um para o outro — e aí já não é <code>bind</code>, é regra de negócio.</p>
+
+<h2>8. O preço do bind</h2>
+
+<p>O <code>bind</code> é conforto, e conforto tem custo. O primeiro custo é de leitura: o HTML mostra <code>bind:value={nome}</code> e não mostra o que acontece a cada tecla. Quem lê o arquivo precisa saber o que o binding faz por baixo. Em um formulário de dez campos, isso significa dez lugares onde a tela escreve no estado sem que o código diga isso em palavras.</p>
+
+<p>O segundo custo é de controle. Quando o valor precisa ser validado, formatado ou convertido antes de entrar no estado, o <code>bind</code> puro não serve: ele grava o que a pessoa digitou, sem passar por nenhuma decisão sua. Nessas horas, o caminho longo (<code>value</code> mais <code>oninput</code>) permite decidir antes de gravar, e o <code>bind</code> volta a ser útil depois que a decisão está tomada.</p>
+
+<p>O terceiro custo é de dependência. Um <code>bind</code> cria uma ligação que só existe enquanto os dois lados estão vivos. Se o elemento sai da tela, a variável continua com o último valor; se a variável muda para um valor que o campo não aceita, o campo mostra o que der. Nada disso é erro, mas é comportamento que você precisa conhecer para não se surpreender.</p>
+
+<div class="tip">
+<strong>Regra prática</strong>
+<p>Use <code>bind:value</code> quando a ligação é direta e o valor pode ser gravado como veio. Use <code>value</code> mais <code>oninput</code> quando existe uma regra entre a digitação e o estado — converter para número, cortar caracteres, recusar letras. O critério é simples: se você precisa <em>decidir</em>, não use o atalho.</p>
+</div>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — binding em elemento que não aceita</strong>
+<p>Cada nome de binding vale em certos elementos. <code>bind:value</code> é de campo, não de caixa de texto genérica.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let texto = $state('');
+&lt;/script&gt;
+
+&lt;div bind:value={texto}&gt;oi&lt;/div&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 5): `bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</pre>
+<p>A mensagem lista os três elementos que aceitam esse binding. Um <code>&lt;div&gt;</code> não tem valor editável; para mostrar texto, use <code>{texto}</code> dentro dele. Quando o erro aparece, a pergunta útil é: "este elemento tem um valor que muda por dentro?".</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — ligar a uma conta em vez de a uma variável</strong>
+<p>O lado direito do <code>bind</code> precisa ser um lugar onde se pode gravar: uma variável ou uma propriedade de objeto.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let a = $state(1);
+  let b = $state(2);
+&lt;/script&gt;
+
+&lt;input bind:value={a + b}&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 7): Can only bind to an Identifier or MemberExpression or a `{get, set}` pair</pre>
+<p>"Identifier" é um nome de variável; "MemberExpression" é um caminho como <code>obj.campo</code>. <code>a + b</code> é uma conta, um valor sem endereço — não há onde gravar o que a pessoa digitar. Crie uma variável para receber o texto e calcule a partir dela.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — binding em constante</strong>
+<p>O <code>bind</code> escreve na variável. Se ela é constante, não há o que escrever.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const nome = 'Ana';
+&lt;/script&gt;
+
+&lt;input bind:value={nome}&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 7): Cannot bind to constant</pre>
+<p>A troca de <code>const</code> por <code>let</code> resolve. E lembre que o estado precisa da runa: <code>let nome = $state('Ana')</code>. Sem <code>$state</code>, o binding compila mas a tela não acompanha — o compilador chega a avisar com <code>non_reactive_update</code> quando percebe a variável sendo atualizada sem ser reativa.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Direção</th><th>Quando usar</th></tr>
+<tr><td><code>value={nome}</code></td><td>estado → tela</td><td>o campo é só leitura</td></tr>
+<tr><td><code>oninput={guardar}</code></td><td>tela → estado</td><td>você decide o que fazer com o texto</td></tr>
+<tr><td><code>bind:value={nome}</code></td><td>as duas</td><td>ligação direta, sem regra no meio</td></tr>
+<tr><td><code>bind:value</code></td><td>as duas</td><td>só quando a variável se chama <code>value</code></td></tr>
+<tr><td><code>bind:checked={ok}</code></td><td>as duas</td><td>caixa de seleção</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>Digito e o parágrafo não muda</td><td>falta <code>bind</code>, ou o estado foi criado sem <code>$state</code></td></tr>
+<tr><td>O campo volta ao valor antigo</td><td>a variável é <code>const</code> ou o valor é recalculado a cada render</td></tr>
+<tr><td>Duas caixas se atrapalham</td><td>as duas estão ligadas à mesma variável</td></tr>
+<tr><td>O número virou texto</td><td>campo sem <code>type="number"</code> entrega string</td></tr>
+<tr><td>O valor chega como <code>null</code></td><td>campo numérico vazio</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Terminal</th><th>O que mostra</th></tr>
+<tr><td><code>node -e "console.log(typeof 7, typeof '7')"</code></td><td><code>number string</code></td></tr>
+<tr><td><code>npm run build</code></td><td>o peso do projeto com o binding incluído</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual é a diferença entre <code>value={nome}</code> e <code>bind:value={nome}</code>?</p>
+<label><input type="radio" name="q1"> nenhuma: os dois fazem a mesma coisa</label>
+<label><input type="radio" name="q1"> o primeiro só escreve na tela; o segundo escreve e lê</label>
+<label><input type="radio" name="q1"> o primeiro é mais rápido</label>
+<label><input type="radio" name="q1"> o segundo só funciona com números</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que o servidor manda no HTML de um campo com <code>bind:value={nome}</code>?</p>
+<label><input type="radio" name="q1"> um atributo <code>bind:value</code></label>
+<label><input type="radio" name="q1"> nada: o campo vai vazio</label>
+<label><input type="radio" name="q1"> o atributo <code>value</code> com o valor atual da variável</label>
+<label><input type="radio" name="q1"> um <code>oninput</code> escrito à mão</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que <code>bind:value={a + b}</code> não compila?</p>
+<label><input type="radio" name="q1"> porque uma conta não tem endereço para receber o valor digitado</label>
+<label><input type="radio" name="q1"> porque <code>bind</code> não aceita números</label>
+<label><input type="radio" name="q1"> porque o campo precisa de um <code>id</code></label>
+<label><input type="radio" name="q1"> porque faltou <code>$state</code> em <code>a</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let nome = $state('Ana');<br><br>&lt;input <input data-answer="bind:value={nome}">&gt;<br>&lt;p&gt;Olá, {nome}&lt;/p&gt;<br><br>// digitar no campo atualiza o parágrafo</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>bind:</code> amarra o valor de um elemento a uma variável do estado nos dois sentidos.</li>
+  <li><code>bind:value={nome}</code> mostra o valor e grava cada alteração na variável.</li>
+  <li><code>value={nome}</code> sozinho só mostra; a pessoa digita e o estado não recebe nada.</li>
+  <li>Por baixo, o <code>bind</code> é um <code>oninput</code> que lê o campo e grava no estado.</li>
+  <li>O servidor manda o atributo <code>value</code> preenchido e nenhum evento.</li>
+  <li>Cada elemento tem o seu binding: <code>value</code>, <code>checked</code>, <code>group</code>, <code>this</code>, <code>files</code>.</li>
+  <li>Dois campos ligados à mesma variável são duas janelas para um valor só.</li>
+  <li>A forma curta <code>bind:value</code> exige uma variável chamada <code>value</code>; prefira o nome explícito.</li>
+  <li>Erros desta aula: binding em elemento errado, binding em conta e binding em constante.</li>
+  <li>Quando existe regra entre digitar e gravar, use <code>oninput</code> e decida antes de gravar.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
