@@ -109,6 +109,19 @@ async function testarPagina(pg, url, nomePag, esperado) {
       };
     });
     if (!info.marca) problemas.push("a barra superior não foi montada (assets/site.js não rodou)");
+
+    // tag escrita como exemplo na prosa, sem escape, abre um elemento de verdade e engole
+    // o resto da aula (aconteceu com `<button>`): o sintoma é um elemento inline com bloco dentro
+    const engolidos = await pg.evaluate(() => {
+      const achados = [];
+      document.querySelectorAll(".content p, .content button, .content span, .content h2, .content h3, .content a, .content li").forEach((e) => {
+        if (e.closest("pre")) return;
+        const dentro = e.querySelector("p, h2, h3, div, ul, ol, pre, table, section");
+        if (dentro) achados.push(e.tagName.toLowerCase() + " engolindo <" + dentro.tagName.toLowerCase() + ">");
+      });
+      return achados.slice(0, 3);
+    });
+    engolidos.forEach((e) => problemas.push("tag sem escape na prosa: " + e));
     if (info.menu !== esperado) problemas.push("menu com " + info.menu + " links (a NIVEIS tem " + esperado + ")");
 
     let rodadas = 0, verificadas = 0, comMeta = 0;
