@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lista Vazia: o {:else} do {#each} | Guia Svelte</title>
+<meta name="description" content="Como tratar lista vazia no Svelte 5: o {:else} dentro do {#each}, a alternativa com {#if lista.length === 0} e três estados na mesma tela.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Lista vazia: o {:else} do {#each}</span></h1>
+
+<p class="intro">Toda manhã a Ana abre o caderno de pedidos e, algumas vezes, ele está em branco. Uma tela que mostra uma lista vazia sem explicar nada deixa o cliente na dúvida: "será que a página quebrou?", "será que ninguém pediu nada?", "será que eu esqueci de clicar em algo?". A lista em branco <em>é</em> uma resposta, só que muda: falta a frase. Nesta aula você vai aprender a dizer "nenhum pedido hoje" quando a lista está vazia, sem escrever dois componentes e sem duplicar HTML.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma lista vazia e por que ela não é um erro.</li>
+  <li>A escrever <code>{:else}</code> dentro do bloco <code>{#each}</code>.</li>
+  <li>O que aparece na tela quando a lista tem itens e quando não tem.</li>
+  <li>Como é uma lista vazia <strong>sem</strong> mensagem, e por que ela confunde.</li>
+  <li>A diferença entre o <code>{:else}</code> do <code>{#each}</code> e um <code>{#if lista.length === 0}</code>.</li>
+  <li>Como mostrar vários elementos na mensagem de lista vazia.</li>
+  <li>Como juntar três estados: carregando, vazio e cheio.</li>
+  <li>O que acontece quando a lista é <code>undefined</code> ou <code>null</code>.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Por que chave duplicada e lista vazia são problemas diferentes.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o silêncio também fala</h2>
+
+<p>Quando você abre a geladeira e não há nada, a geladeira não está quebrada: ela está vazia, e você entende isso na hora porque vê as prateleiras. Numa tela, o vazio não tem prateleiras. Uma <code>&lt;ul&gt;</code> sem itens é uma caixa invisível, e o leitor não sabe se ela está vazia ou se ainda não carregou.</p>
+
+<p>Por isso toda lista de verdade tem duas mensagens: uma para o caso de ter itens e outra para o caso de não ter. A segunda é curta e específica: "Nenhum pedido hoje", "Você ainda não tem favoritos", "Nada encontrado com esse nome". Ela não é enfeite — é o que evita que o leitor clique no botão de recarregar.</p>
+
+<p>No Svelte, essa mensagem mora dentro do próprio bloco <code>{#each}</code>, com a palavra <code>{:else}</code> que você já viu na aula de condicionais. A ideia é a mesma: um caminho para quando o principal não acontece. A diferença é que aqui o "principal" é repetir o HTML por item, e o "senão" é o que fazer quando não há nenhum item para repetir.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>O caderno com pedidos</td><td>array com itens: o bloco repete</td></tr>
+<tr><td>O caderno em branco</td><td>array vazio: o bloco não repete nada</td></tr>
+<tr><td>A placa "sem pedidos hoje"</td><td>o caminho <code>{:else}</code> do bloco</td></tr>
+<tr><td>Folha em branco sem placa</td><td><code>{#each}</code> sem <code>{:else}</code>: tela vazia</td></tr>
+<tr><td>"Ainda estou buscando o caderno"</td><td>um <code>{#if}</code> de carregando por fora</td></tr>
+</table>
+</div>
+
+<p>Repare que a mensagem de lista vazia <strong>não</strong> é um item da lista. Ela não entra no array, não passa pelo bloco de repetição e não tem índice. É um caminho alternativo do bloco, e o Svelte garante que só um dos dois aparece: ou os itens, ou a mensagem.</p>
+
+<hr>
+
+<h2>2. O <code>{:else}</code> do <code>{#each}</code></h2>
+
+<p>A escrita é a mesma da aula de condicionais: dois-pontos, a palavra, e o HTML que você quer mostrar naquele caso. A posição é entre o modelo e o fechamento do bloco.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;Nenhum pedido hoje.&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;Nenhum pedido hoje.&lt;/li&gt;&lt;/ul&gt;</pre>
+<pre class="out">Nenhum pedido hoje.</pre>
+
+<p>Com a lista vazia, o bloco não repete o <code>&lt;li&gt;{pedido}&lt;/li&gt;</code> nenhuma vez e mostra o conteúdo do <code>{:else}</code>. Agora a mesma estrutura com dois pedidos:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;Nenhum pedido hoje.&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;li&gt;leite&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Os dois itens aparecem e a mensagem some. Isso é o que separa o <code>{:else}</code> do <code>{#each}</code> de um texto fixo embaixo da lista: ele aparece <em>só</em> quando não há item nenhum. Se a lista tiver um item que seja, a mensagem não entra no HTML.</p>
+
+<h3>A anatomia do bloco completo</h3>
+<dl class="anatomy">
+  <dt>{#each pedidos as pedido}</dt><dd>a <strong>repetição</strong>, igual à da aula anterior. É o caminho principal.</dd>
+  <dt><li>{pedido}</li></dt><dd>o <strong>modelo</strong> da linha. Só é usado quando há itens.</dd>
+  <dt>{:else}</dt><dd>o <strong>caminho da lista vazia</strong>. Não aceita condição: é o "senão" puro.</dd>
+  <dt><li>Nenhum pedido hoje.</li></dt><dd>a <strong>mensagem</strong>. Pode ser um <code>&lt;li&gt;</code>, um <code>&lt;p&gt;</code> ou vários elementos.</dd>
+  <dt>{/each}</dt><dd>o <strong>fechamento</strong>, um só para o bloco inteiro.</dd>
+</dl>
+
+<p>Um detalhe de estrutura: no exemplo, a mensagem é um <code>&lt;li&gt;</code> dentro do <code>&lt;ul&gt;</code>. Isso mantém o HTML válido — uma lista com um item só, que por acaso é uma frase. Se você preferir um parágrafo fora da lista, ponha o <code>{:else}</code> com um <code>&lt;p&gt;</code> e aceite que ele fica dentro do <code>&lt;ul&gt;</code>; ou use a estrutura com <code>{#if}</code> da seção 5, que deixa a mensagem totalmente fora.</p>
+
+<hr>
+
+<h2>3. Experimente: a mensagem que falta</h2>
+
+<p>A caixa abaixo tem a lista vazia e nenhuma explicação. Sua missão é acrescentar a mensagem.</p>
+<div class="trysvelte" data-goal="out:Nenhum pedido hoje.">
+<p class="try-task"><strong>Missão:</strong> a lista está vazia e a tela não diz nada. Acrescente um <code>{:else}</code> no bloco que mostre <strong>Nenhum pedido hoje.</strong></p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;Nenhum pedido hoje.&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Depois da correção, o texto da tela é uma frase só. Antes, era vazio — e é isso que a caixa Verificar mostra: o texto esperado não estava lá. Vale testar também o caminho contrário: troque <code>$state([])</code> por <code>$state(['pão'])</code> na solução e clique em Rodar. A mensagem some e o item aparece, provando que os dois caminhos são exclusivos.</p>
+
+<hr>
+
+<h2>4. Como é uma lista vazia sem mensagem</h2>
+
+<p>Vale ver o problema de perto, porque ele é comum em projetos de verdade. Sem o <code>{:else}</code>, a lista vazia produz uma <code>&lt;ul&gt;</code> sem filhos e mais nada:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;p&gt;Pedidos de hoje:&lt;/p&gt;
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;p&gt;Total: {pedidos.length}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;Pedidos de hoje:&lt;/p&gt; &lt;ul&gt;&lt;/ul&gt; &lt;p&gt;Total: 0&lt;/p&gt;</pre>
+<pre class="out">Pedidos de hoje: Total: 0</pre>
+
+<p>O HTML tem a lista, só não tem itens. Na tela, o leitor vê o título e o total zero, sem nenhuma frase que explique. Para quem conhece o sistema, "Total: 0" basta; para quem está usando pela primeira vez, não.</p>
+
+<p>Repare também no <code>Total: 0</code>: o <code>length</code> de um array vazio é <code>0</code>, e isso é um valor perfeitamente normal. <code>0</code> é falso numa condição, mas aqui ele é só um número sendo mostrado. Não confunda "número zero" com "nada": o compilador não faz essa confusão, e você também não precisa.</p>
+
+<div class="tip">
+<strong>Lista vazia não é erro</strong>
+<p>O bloco <code>{#each}</code> com array vazio é válido e não gera aviso. O que quebra é outra coisa: usar um valor que não é percorrível. <code>undefined</code> e <code>null</code> são tratados como lista vazia; um número simplesmente não repete nada. Só dá para saber a diferença testando com o compilador na mão, como fizemos aqui.</p>
+</div>
+
+<hr>
+
+<h2>5. A mensagem com vários elementos</h2>
+
+<p>Como o <code>{:else}</code> do <code>{#if}</code>, o do <code>{#each}</code> protege um bloco inteiro. Você pode mostrar duas linhas, um ícone e um link, tudo junto.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;Nenhum pedido hoje.&lt;/li&gt;
+    &lt;li&gt;O caderno está em branco.&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;Nenhum pedido hoje.&lt;/li&gt; &lt;li&gt;O caderno está em branco.&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>As duas linhas aparecem juntas porque pertencem ao mesmo caminho. Isso abre espaço para mensagens melhores: uma frase principal, uma dica e, se o caso pedir, um botão de ação ("criar o primeiro pedido"). Tudo o que estiver entre <code>{:else}</code> e <code>{/each}</code> faz parte da mensagem.</p>
+
+<hr>
+
+<h2>6. Experimente: o caderno com um pedido</h2>
+
+<p>Agora o contrário. A caixa abaixo mostra a mensagem de lista vazia, e a missão é fazer aparecer um item no lugar dela.</p>
+<div class="trysvelte" data-goal="out:pão">
+<p class="try-task"><strong>Missão:</strong> a lista está vazia e mostra "Nenhum pedido hoje." Comece a lista com um pedido — <code>pão</code> — e deixe a mensagem sair da tela.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;Nenhum pedido hoje.&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;Nenhum pedido hoje.&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Esse exercício parece bobo, e é justamente por isso que ele ensina: a mensagem não é controlada por uma variável separada. Ela é consequência do tamanho da lista. Quem decide qual caminho aparece é o motor do Svelte, olhando se há item ou não.</p>
+
+<p>Isso significa que você não precisa (nem deve) manter um <code>let temPedidos = $state(false)</code> atualizado à mão. Duas fontes de verdade — a lista e a bandeirinha — saem de sincronia no primeiro erro. A lista já sabe se está vazia.</p>
+
+<hr>
+
+<h2>7. Duas formas de dizer a mesma coisa</h2>
+
+<p>Existe outro jeito de mostrar a mensagem: perguntar o tamanho da lista com <code>{#if}</code> e pôr o <code>{#each}</code> dentro do caminho "tem itens".</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+{#if pedidos.length === 0}
+  &lt;p&gt;Nenhum pedido hoje.&lt;/p&gt;
+{:else}
+  &lt;ul&gt;
+    {#each pedidos as pedido}
+      &lt;li&gt;{pedido}&lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}</pre>
+<pre class="out">&lt;p&gt;Nenhum pedido hoje.&lt;/p&gt;</pre>
+
+<p>O resultado na tela é o mesmo do <code>{:else}</code> do <code>{#each}</code>. A diferença está na estrutura do HTML gerado e no que você precisa escrever.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Critério</th><th><code>{:else}</code> no <code>{#each}</code></th><th><code>{#if length === 0}</code></th></tr>
+<tr><td>Linhas de código</td><td>menos: o bloco já existe</td><td>mais: um bloco dentro do outro</td></tr>
+<tr><td>Mensagem fora do <code>&lt;ul&gt;</code></td><td>não (fica dentro)</td><td>sim, se você quiser</td></tr>
+<tr><td>Trocar de elemento em volta</td><td>não dá: o <code>&lt;ul&gt;</code> é fixo</td><td>dá: cada caminho tem o seu HTML</td></tr>
+<tr><td>Uso com "carregando"</td><td>precisa de um <code>{#if}</code> por fora igual</td><td>encaixa direto na cadeia</td></tr>
+<tr><td>Clareza para quem lê</td><td>alta: a mensagem mora na lista</td><td>alta: a condição está explícita</td></tr>
+</table>
+</div>
+
+<p>A regra prática: se a mensagem é um item da própria lista (um <code>&lt;li&gt;</code> dizendo "nada aqui"), use o <code>{:else}</code> do <code>{#each}</code>. Se a mensagem muda a estrutura da página — troca a lista por um cartaz, por um botão, por um formulário —, use o <code>{#if}</code> por fora e ponha o <code>{#each}</code> no caminho dos itens.</p>
+
+<hr>
+
+<h2>8. Três estados: carregando, vazio e cheio</h2>
+
+<p>Em aplicações de verdade, a lista começa vazia porque os dados ainda não chegaram. Mostrar "Nenhum pedido hoje" nesse instante é mentira: ninguém sabe ainda se há pedidos. O desenho correto tem três estados, e o Svelte escreve os três com dois blocos aninhados.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+  let carregando = $state(true);
+&lt;/script&gt;
+
+{#if carregando}
+  &lt;p&gt;Carregando os pedidos…&lt;/p&gt;
+{:else}
+  {#each pedidos as pedido}
+    &lt;p&gt;{pedido}&lt;/p&gt;
+  {:else}
+    &lt;p&gt;Nenhum pedido hoje.&lt;/p&gt;
+  {/each}
+{/if}</pre>
+<pre class="out">&lt;p&gt;Carregando os pedidos…&lt;/p&gt;</pre>
+
+<p>Com <code>carregando</code> em <code>true</code>, a tela mostra só a primeira frase — o <code>{:else}</code> nem é avaliado. Quando a busca termina e você troca o valor para <code>false</code>, aí sim o <code>{#each}</code> decide entre os itens e a mensagem de vazio. Três estados, dois blocos, nenhuma variável extra de controle.</p>
+
+<p>A ordem importa: o "carregando" fica por fora, porque ele é uma fase da página, não um caso da lista. A mensagem de vazio fica por dentro, colada no <code>{#each}</code>, porque ela fala da lista. Cada bloco cuida de uma pergunta, e o leitor do código entende a hierarquia só pela indentação.</p>
+
+<div class="warning">
+<strong>Cuidado com o "pisca" da mensagem</strong>
+<p>Se você mostrar a lista antes de os dados chegarem, o leitor vê "Nenhum pedido hoje" por meio segundo e depois os pedidos aparecem. Esse pisca é pior do que esperar. Comece com <code>carregando</code> em <code>true</code> e só troque quando os dados estiverem na mão — na aula de <code>{#await}</code> você vai ver uma forma de fazer isso com promessas.</p>
+</div>
+
+<hr>
+
+<h2>9. Experimente: os três estados</h2>
+
+<p>A caixa abaixo mostra a mensagem de lista vazia, mas os dados ainda estão carregando. Sua missão é mostrar a frase de carregamento nesse primeiro momento.</p>
+<div class="trysvelte" data-goal="out:Carregando os pedidos…">
+<p class="try-task"><strong>Missão:</strong> enquanto <code>carregando</code> for <code>true</code>, a tela deve mostrar <strong>Carregando os pedidos…</strong> em vez da mensagem de lista vazia.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+  let carregando = $state(true);
+&lt;/script&gt;
+
+{#each pedidos as pedido}
+  &lt;p&gt;{pedido}&lt;/p&gt;
+{:else}
+  &lt;p&gt;Nenhum pedido hoje.&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+  let carregando = $state(true);
+&lt;/script&gt;
+
+{#if carregando}
+  &lt;p&gt;Carregando os pedidos…&lt;/p&gt;
+{:else}
+  {#each pedidos as pedido}
+    &lt;p&gt;{pedido}&lt;/p&gt;
+  {:else}
+    &lt;p&gt;Nenhum pedido hoje.&lt;/p&gt;
+  {/each}
+{/if}</pre>
+</div>
+
+<p>A solução embrulha o <code>{#each}</code> num <code>{#if}</code>. Note a indentação: o bloco de dentro ganhou dois espaços, porque agora está dentro de outro. Isso não é enfeite: é o que permite a você (e a quem ler depois) saber qual <code>{:else}</code> pertence a qual bloco. São dois <code>{:else}</code> na mesma tela, e nenhum deles se confunde com o outro.</p>
+
+<hr>
+
+<h2>10. Rodando na máquina da Ana</h2>
+
+<p>Para ver a mensagem na prática, o componente desta aula começa com <code>$state([])</code>. O servidor de desenvolvimento mostra a lista vazia com a frase:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Com a página aberta, troque <code>$state([])</code> por <code>$state(['pão'])</code> e salve. A frase some, o item aparece. Volte para <code>[]</code> e salve de novo: a frase volta. É o ciclo mais barato que existe para entender o bloco — duas linhas de diferença, dois estados bem diferentes.</p>
+
+<p>No build de produção, a diferença de tamanho em relação à aula anterior é insignificante:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 2.73s</pre>
+
+<p><code>40.94 kB</code> na aula de índice, <code>40.96 kB</code> aqui. A mensagem de lista vazia é um punhado de HTML, e o motor já sabe alternar entre os dois caminhos. Não existe custo escondido em tratar o caso vazio: existe custo em <em>não</em> tratar, que é o leitor desistir da tela.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Duas tratam de uma confusão comum: o <code>{:else}</code> do <code>{#each}</code> não é uma cadeia de condições.</p>
+<div class="cenario">
+<strong>Erro 1 — <code>{:else if}</code> dentro de <code>{#each}</code></strong>
+<p>O <code>{:else}</code> do <code>{#each}</code> não aceita condição. O bloco já sabe quando usar o caminho alternativo: quando a lista está vazia.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else if pedidos.length === 0}
+    &lt;li&gt;vazio&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 9): Expected token }</pre>
+<p>"Expected token }" aponta a coluna 9, onde começa o <code>if</code>. Se você precisa de mais de um caso para a lista — vazia, com erro, filtrada —, use um <code>{#if}</code> por fora e deixe o <code>{#each}</code> cuidar só do desenho.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — dois <code>{:else}</code> no mesmo bloco</strong>
+<p>Cada bloco tem no máximo um caminho alternativo. Dois "senão" não têm significado, nem no <code>{#if}</code> nem no <code>{#each}</code>.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;vazio&lt;/li&gt;
+  {:else}
+    &lt;li&gt;outra vez&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 10, coluna 3): {:else} cannot appear more than once within a block</pre>
+<p>A mensagem é a mesma que aparece no bloco de condicionais, o que ajuda a memorizar: um <code>{:else}</code> por bloco. Se a intenção era "lista vazia" e "lista com erro", são duas perguntas: a segunda vira um <code>{#if}</code> por fora.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — <code>{:then}</code> no lugar de <code>{:else}</code></strong>
+<p>A palavra <code>then</code> existe em Svelte, mas pertence ao bloco de promessas (<code>{#await}</code>). No <code>{#each}</code>, o caminho alternativo é <code>{:else}</code>.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:then vazio}
+    &lt;li&gt;vazio&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 3): Expected token {:else}</pre>
+<p>A mensagem é curta e literal: o único caminho alternativo que o <code>{#each}</code> conhece é <code>{:else}</code>, e é isso que o compilador cobra. A coluna 3 aponta o <code>then</code>. A palavra <code>then</code> existe em Svelte, mas pertence ao bloco de promessas <code>{#await}</code> — cada bloco tem o seu vocabulário de continuação.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Lista</th><th>O que o bloco faz</th><th>Com <code>{:else}</code></th></tr>
+<tr><td><code>[]</code></td><td>não repete nada</td><td>mostra a mensagem</td></tr>
+<tr><td><code>['pão']</code></td><td>repete uma vez</td><td>não mostra a mensagem</td></tr>
+<tr><td><code>['pão', 'leite']</code></td><td>repete duas vezes</td><td>não mostra a mensagem</td></tr>
+<tr><td><code>undefined</code></td><td>não repete nada</td><td>mostra a mensagem</td></tr>
+<tr><td><code>null</code></td><td>não repete nada</td><td>mostra a mensagem</td></tr>
+<tr><td><code>'pão'</code> (texto)</td><td>repete por caractere</td><td>não mostra a mensagem</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Use</th><th>Onde a mensagem fica</th></tr>
+<tr><td>Um <code>&lt;li&gt;</code> dizendo que não há itens</td><td><code>{:else}</code> no <code>{#each}</code></td><td>dentro do <code>&lt;ul&gt;</code></td></tr>
+<tr><td>Trocar a lista por um cartaz</td><td><code>{#if lista.length === 0}</code></td><td>fora do <code>&lt;ul&gt;</code></td></tr>
+<tr><td>Carregando, vazio e cheio</td><td><code>{#if}</code> por fora + <code>{:else}</code> no <code>{#each}</code></td><td>nos dois níveis</td></tr>
+<tr><td>Só o total, sem mensagem</td><td><code>{lista.length}</code></td><td>fora do bloco</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td><code>{:else if}</code> no <code>{#each}</code></td><td><code>Expected token }</code></td></tr>
+<tr><td>Dois <code>{:else}</code> no mesmo bloco</td><td><code>{:else} cannot appear more than once within a block</code></td></tr>
+<tr><td><code>{:then}</code> no <code>{#each}</code></td><td><code>Expected token {:else}</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o <code>{:else}</code> dentro de um <code>{#each}</code> mostra?</p>
+<label><input type="radio" name="q1"> O último item da lista</label>
+<label><input type="radio" name="q1"> O conteúdo alternativo quando a lista está vazia</label>
+<label><input type="radio" name="q1"> Uma mensagem de erro quando um item falha</label>
+<label><input type="radio" name="q1"> O mesmo que o <code>{:else}</code> do <code>{#if}</code>, com condição</label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que aparece na tela para <code>{#each ['pão'] as p}{p}{:else}nada{/each}</code>?</p>
+<label><input type="radio" name="q1"> <code>nada</code></label>
+<label><input type="radio" name="q1"> <code>pão</code> e <code>nada</code></label>
+<label><input type="radio" name="q1"> Só <code>pão</code></label>
+<label><input type="radio" name="q1"> O compilador recusa: <code>{:else}</code> exige lista vazia</label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. Qual a vantagem do <code>{#if lista.length === 0}</code> sobre o <code>{:else}</code> do <code>{#each}</code>?</p>
+<label><input type="radio" name="q1"> É mais rápido quando a lista é grande</label>
+<label><input type="radio" name="q1"> Permite trocar o elemento em volta da lista, não só o conteúdo</label>
+<label><input type="radio" name="q1"> Funciona com <code>undefined</code> e o <code>{:else}</code> não</label>
+<label><input type="radio" name="q1"> Dispensa o <code>{#each}</code></label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#each pedidos as pedido}<br>&nbsp;&nbsp;&lt;li&gt;{pedido}&lt;/li&gt;<br><input data-answer="{:else}"><br>&nbsp;&nbsp;&lt;li&gt;Nenhum pedido hoje.&lt;/li&gt;<br>{/each}<br><br>// mostre a mensagem quando o array estiver vazio</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Lista vazia não é erro: é um caso que a tela precisa explicar.</li>
+  <li><code>{:else}</code> dentro do <code>{#each}</code> mostra o conteúdo alternativo quando não há item.</li>
+  <li>Com pelo menos um item, a mensagem não entra no HTML.</li>
+  <li>O <code>{:else}</code> do <code>{#each}</code> não aceita condição — é "senão" puro.</li>
+  <li>A mensagem pode ter vários elementos, todos entre <code>{:else}</code> e <code>{/each}</code>.</li>
+  <li>Para trocar a estrutura da página, use <code>{#if lista.length === 0}</code> por fora.</li>
+  <li>Três estados (carregando, vazio, cheio) se escrevem com <code>{#if}</code> por fora e <code>{:else}</code> no <code>{#each}</code>.</li>
+  <li><code>undefined</code> e <code>null</code> se comportam como lista vazia; número não repete nada.</li>
+  <li>Não invente uma bandeirinha de "tem itens": o tamanho da lista já responde.</li>
+  <li>Os erros desta aula: <code>{:else if}</code> no <code>{#each}</code>, dois <code>{:else}</code> e <code>{:then}</code> trocado.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

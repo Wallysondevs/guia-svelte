@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recriar do zero: {#key} — trocar a folha, não apagar o giz | Guia Svelte</title>
+<meta name="description" content="O bloco {#key} do Svelte 5: quando recriar em vez de atualizar, o que se perde, a etiqueta como expressão e os três erros reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Recriar do zero: {#key}</span></h1>
+
+<p class="intro">A Ana tem um quadro de avisos na parede da padaria. Ela escreve "aberto" com giz e, quando precisa mudar, apaga com um pano úmido. Um dia descobriu um jeito mais rápido: arrancar a folha e pôr outra. As duas coisas funcionam, mas não são iguais — apagar o giz preserva a moldura, os percevejos e a marca que o tempo deixou no papel; trocar a folha devolve tudo novo, inclusive o que estava preso embaixo. Nesta aula você vai conhecer o bloco que troca a folha: <code>{#key}</code>. Ele não atualiza o conteúdo, ele <strong>recria</strong> o conteúdo quando um valor muda.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que significa <strong>recriar</strong> um pedaço da tela, em oposição a atualizar.</li>
+  <li>A escrever <code>{#key expressão}…{/key}</code> e ver a saída real.</li>
+  <li>O que sobrevive e o que se perde quando o bloco é recriado.</li>
+  <li>Como usar o bloco para fechar um painel que o navegador controla.</li>
+  <li>Que a expressão pode ser uma conta, não só uma variável.</li>
+  <li>Por que a posição do <code>{#key}</code> decide se o efeito acontece.</li>
+  <li>Os três usos clássicos: animação, formulário e componente filho.</li>
+  <li>O custo de recriar: nós novos, foco perdido, animação reiniciada.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Quando é melhor <code>$state</code> e quando é melhor <code>{#key}</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: trocar a folha em vez de apagar</h2>
+
+<p>Quando um valor muda, o Svelte normalmente <strong>atualiza</strong> o que está na tela: ele mantém os elementos que já existem e troca só o texto, a classe, o atributo. É o que você viu nas aulas de condicionais e de listas — o <code>&lt;li&gt;</code> não nasce de novo quando o item muda de nome, ele só recebe o texto novo.</p>
+
+<p>Existe uma situação em que atualizar atrapalha: quando o elemento tem uma vida própria que o Svelte não controla. Um painel que o leitor abriu, um campo que ele está preenchendo, uma animação que já rodou, um componente que guarda estado interno. Nesses casos, atualizar mantém junto o que você queria jogar fora. O que você quer é destruir o pedaço e criá-lo de novo, do zero.</p>
+
+<p>É isso que o bloco <code>{#key}</code> faz. Você diz "enquanto este valor for o mesmo, mantenha o conteúdo; quando ele mudar, jogue tudo fora e comece de novo". O nome vem de "chave": o valor funciona como a etiqueta da folha. Se a etiqueta é a mesma, a folha é a mesma; se a etiqueta muda, é outra folha.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Apagar o giz e escrever de novo</td><td>atualizar o texto (o que o Svelte faz sempre)</td></tr>
+<tr><td>Arrancar a folha e pôr outra</td><td><code>{#key}</code> quando o valor muda</td></tr>
+<tr><td>A etiqueta colada na folha</td><td>a expressão do <code>{#key}</code></td></tr>
+<tr><td>A moldura que fica na parede</td><td>o que está <strong>fora</strong> do bloco</td></tr>
+<tr><td>O que estava preso embaixo da folha</td><td>o estado do navegador que se perde ao recriar</td></tr>
+</table>
+</div>
+
+<p>Uma consequência importante: o <code>{#key}</code> não serve para "forçar a atualização". Ele serve para o contrário, para jogar fora. Se a tela não está acompanhando um valor, o problema é reatividade — <code>$state</code>, <code>$derived</code> —, não falta de <code>{#key}</code>. Guardar essa distinção evita um dos erros mais comuns de quem está começando.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>{#key}</code></h2>
+
+<p>O bloco recebe uma expressão entre chaves, e tudo o que estiver entre <code>{#key}</code> e <code>{/key}</code> pertence a ele.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produto = $state('pão');
+&lt;/script&gt;
+
+{#key produto}
+  &lt;p&gt;Você está vendo: {produto}&lt;/p&gt;
+{/key}</pre>
+
+<p>Com o produto valendo <code>'pão'</code>, o compilador gera o parágrafo normalmente:</p>
+<pre class="out">&lt;p&gt;Você está vendo: pão&lt;/p&gt;</pre>
+
+<p>Estático assim, ninguém vê diferença: o HTML é igual ao de um parágrafo sem bloco. A diferença aparece no comportamento, quando o valor muda. Se o produto virar <code>'leite'</code>, duas coisas acontecem na mesma atualização: o bloco é descartado e o parágrafo é criado do zero, com o texto novo. O resultado na tela é o mesmo; o caminho é diferente.</p>
+
+<h3>A anatomia do bloco</h3>
+<dl class="anatomy">
+  <dt>{#key produto}</dt><dd>a <strong>abertura</strong> e a <strong>etiqueta</strong>. O valor é comparado com o da renderização anterior: mudou, recria.</dd>
+  <dt>produto</dt><dd>a expressão pode ser uma variável, uma conta, uma chamada de função. O que importa é que o resultado seja comparável.</dd>
+  <dt><p>Você está vendo…</p></dt><dd>o <strong>conteúdo recriável</strong>. Pode ter uma tag ou vinte; tudo é destruído e criado junto.</dd>
+  <dt>{/key}</dt><dd>o <strong>fechamento</strong>. O que estiver depois dele não é afetado.</dd>
+</dl>
+
+<p>O bloco tem um custo que os outros não têm: ele destrói e cria de verdade. Um <code>{#if}</code> também cria e destrói, mas só quando a condição muda de verdadeiro para falso. O <code>{#key}</code> faz isso a cada mudança de valor, mesmo que o conteúdo seja idêntico. Por isso ele é uma ferramenta de exceção, não um enfeite para pôr em volta de tudo.</p>
+
+<div class="tip">
+<strong>Não confunda com a chave do <code>{#each}</code></strong>
+<p>O <code>{#each}</code> tem uma chave entre parênteses — <code>(item.id)</code> — que serve para <em>reaproveitar</em> linhas. O <code>{#key}</code> faz o oposto: joga fora e recria. As duas palavras são iguais, os objetivos são contrários.</p>
+</div>
+
+<hr>
+
+<h2>3. O que sobrevive e o que se perde</h2>
+
+<p>Para usar o bloco com segurança, você precisa saber o que ele leva embora. A regra é simples e vale a pena decorar: <strong>o que está dentro é recriado; o que está fora não é</strong>. As variáveis do <code>&lt;script&gt;</code> estão fora, então sobrevivem sempre.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Coisa</th><th>Sobrevive à recriação?</th><th>Por quê</th></tr>
+<tr><td>Variável criada com <code>$state</code> no <code>&lt;script&gt;</code></td><td>sim</td><td>vive no componente, não no bloco</td></tr>
+<tr><td>Texto digitado num campo controlado por <code>$state</code></td><td>sim</td><td>o valor está na variável</td></tr>
+<tr><td>Painel <code>&lt;details&gt;</code> aberto</td><td>não</td><td>o aberto é estado do navegador, não do Svelte</td></tr>
+<tr><td>Foco do teclado num campo</td><td>não</td><td>o nó antigo deixa de existir</td></tr>
+<tr><td>Rolagem de uma caixa com <code>overflow</code></td><td>não</td><td>o nó novo nasce no topo</td></tr>
+<tr><td>Animação CSS já executada</td><td>não</td><td>o nó novo começa a animação do começo</td></tr>
+<tr><td>Estado interno de um componente filho</td><td>não</td><td>o filho é desmontado e montado de novo</td></tr>
+</table>
+</div>
+
+<p>As três primeiras linhas explicam por que o bloco é útil; as quatro últimas, por que ele é perigoso. Se o painel estava aberto e fecha sozinho, o leitor perde o lugar; se o campo perde o foco, quem está digitando se assusta. Use o <code>{#key}</code> quando perder essas coisas for exatamente o que você quer.</p>
+
+<hr>
+
+<h2>4. Experimente: feche o painel</h2>
+
+<p>A caixa abaixo tem um painel que o navegador abre e fecha sozinho (o elemento <code>&lt;details&gt;</code> do HTML) e um botão que muda uma versão. Sua missão é fazer o painel <strong>fechar</strong> quando o botão for clicado.</p>
+<div class="trysvelte" data-goal="clique:summary;;outre:Abrimos às 6h;;clique:button;;out:Horário recriar">
+<p class="try-task"><strong>Missão:</strong> abra o painel e clique em <strong>recriar</strong>. Ele continua aberto, porque o Svelte só atualiza o texto. Envolva o painel num <code>{#key versao}</code> para ele ser criado de novo — e voltar fechado.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let versao = $state(0);
+&lt;/script&gt;
+
+&lt;details&gt;
+  &lt;summary&gt;Horário&lt;/summary&gt;
+  &lt;p&gt;Abrimos às 6h.&lt;/p&gt;
+&lt;/details&gt;
+&lt;button onclick={() =&gt; versao++}&gt;recriar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let versao = $state(0);
+&lt;/script&gt;
+
+{#key versao}
+  &lt;details&gt;
+    &lt;summary&gt;Horário&lt;/summary&gt;
+    &lt;p&gt;Abrimos às 6h.&lt;/p&gt;
+  &lt;/details&gt;
+{/key}
+&lt;button onclick={() =&gt; versao++}&gt;recriar&lt;/button&gt;</pre>
+</div>
+
+<p>A meta desta caixa observa três coisas: o clique no <code>summary</code> (que abre o painel), o texto "Abrimos às 6h." na tela e, depois do clique no botão, a tela sem esse texto. É uma forma indireta de ver a recriação: o texto só sai porque o <code>&lt;details&gt;</code> deixou de existir e nasceu outro, fechado.</p>
+
+<p>Note que o botão ficou <strong>fora</strong> do bloco. Se ele estivesse dentro, também seria recriado — e o clique que dispara a mudança destruiria o próprio botão no meio do caminho. Regra prática: o gatilho fica fora; o que ele recria fica dentro.</p>
+
+<hr>
+
+<h2>5. A etiqueta pode ser uma conta</h2>
+
+<p>A expressão do <code>{#key}</code> não precisa ser uma variável solta. Qualquer coisa que resulte num valor serve, inclusive o tamanho de uma lista:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+{#key pedidos.length}
+  &lt;p&gt;Você tem {pedidos.length} pedidos.&lt;/p&gt;
+{/key}</pre>
+<pre class="out">&lt;p&gt;Você tem 2 pedidos.&lt;/p&gt;</pre>
+
+<p>Aqui o bloco é recriado quando o <strong>número</strong> de pedidos muda — e não quando o nome de um pedido muda. Se a Ana trocar "leite" por "café", a lista continua com dois itens, a etiqueta continua <code>2</code> e o bloco não é tocado: o texto é atualizado normalmente. Se ela acrescentar um pedido, a etiqueta vira <code>3</code> e o parágrafo nasce de novo.</p>
+
+<p>Esse é o pulo do gato: a etiqueta é uma <em>condição de recriação</em>, e você escolhe qual. Etiqueta na lista inteira recria a cada mudança; etiqueta no tamanho recria só quando o tamanho muda; etiqueta numa versão recria quando você mandar. A escolha é sua, e ela é o que separa um componente previsível de um componente que pisca sem motivo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Etiqueta</th><th>Recria quando…</th><th>Bom para</th></tr>
+<tr><td><code>{#key versao}</code></td><td>você incrementa <code>versao</code></td><td>botão "limpar" ou "recomeçar"</td></tr>
+<tr><td><code>{#key produto}</code></td><td>o produto selecionado muda</td><td>painel de detalhes de um item</td></tr>
+<tr><td><code>{#key pedidos.length}</code></td><td>entra ou sai item</td><td>contadores e resumos</td></tr>
+<tr><td><code>{#key caminho}</code></td><td>o endereço da página muda</td><td>trocar de tela sem herdar rolagem</td></tr>
+<tr><td><code>{#key Date.now()}</code></td><td>a cada renderização</td><td>quase nunca: é recriar sem parar</td></tr>
+</table>
+</div>
+
+<p>A última linha é uma armadilha de verdade. Uma etiqueta que muda sozinha a cada renderização transforma o bloco numa fábrica de nós novos: o navegador trabalha sem parar e o leitor vê a tela piscar. Etiqueta boa é etiqueta estável, que muda quando <em>você</em> decide.</p>
+
+<hr>
+
+<h2>6. Experimente: trocar de produto</h2>
+
+<p>A caixa abaixo troca o produto, mas o painel de detalhes continua aberto com o conteúdo antigo na tela. Sua missão é fazer o painel ser recriado quando o produto mudar.</p>
+<div class="trysvelte" data-goal="clique:summary;;outre:Feito hoje;;clique:button;;out:trocar o produto Detalhes do leite">
+<p class="try-task"><strong>Missão:</strong> abra o painel e troque o produto. O painel devia fechar, mostrando só o título novo. Troque a etiqueta fixa <code>{#key 'fixo'}</code> pela variável do produto.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let produto = $state('pão');
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (produto = produto === 'pão' ? 'leite' : 'pão')}&gt;trocar o produto&lt;/button&gt;
+
+{#key 'fixo'}
+  &lt;details&gt;
+    &lt;summary&gt;Detalhes do {produto}&lt;/summary&gt;
+    &lt;p&gt;Feito hoje de madrugada.&lt;/p&gt;
+  &lt;/details&gt;
+{/key}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let produto = $state('pão');
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (produto = produto === 'pão' ? 'leite' : 'pão')}&gt;trocar o produto&lt;/button&gt;
+
+{#key produto}
+  &lt;details&gt;
+    &lt;summary&gt;Detalhes do {produto}&lt;/summary&gt;
+    &lt;p&gt;Feito hoje de madrugada.&lt;/p&gt;
+  &lt;/details&gt;
+{/key}</pre>
+</div>
+
+<p>A etiqueta <code>'fixo'</code> é um texto que nunca muda. Enquanto ela não muda, o bloco nunca é recriado, e o <code>summary</code> apenas troca de texto — o painel continua aberto. Trocando por <code>produto</code>, a etiqueta muda junto com a seleção e o bloco inteiro nasce de novo, fechado.</p>
+
+<p>Repare que o <code>{produto}</code> dentro do <code>summary</code> funciona nos dois casos. Atualizar texto o Svelte sempre sabe fazer; o que a etiqueta decide é se o <em>nó</em> é o mesmo ou outro. São duas perguntas diferentes, e é por isso que esse bloco confunde tanta gente no começo.</p>
+
+<hr>
+
+<h2>7. Onde o bloco fica importa</h2>
+
+<p>O <code>{#key}</code> recria o que está <strong>dentro</strong> dele. Se você envolver só uma parte, só aquela parte é recriada — e o resto do elemento continua vivo, com o estado do navegador intacto.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let versao = $state(0);
+&lt;/script&gt;
+
+&lt;details&gt;
+  &lt;summary&gt;Horário&lt;/summary&gt;
+  {#key versao}
+    &lt;p&gt;Abrimos às 6h.&lt;/p&gt;
+  {/key}
+&lt;/details&gt;
+&lt;button onclick={() =&gt; versao++}&gt;recriar&lt;/button&gt;</pre>
+<pre class="out">&lt;details&gt;&lt;summary&gt;Horário&lt;/summary&gt; &lt;p&gt;Abrimos às 6h.&lt;/p&gt;&lt;/details&gt; &lt;button&gt;recriar&lt;/button&gt;</pre>
+
+<p>Nesse arranjo, o <code>{#key}</code> está dentro do <code>&lt;details&gt;</code> e protege apenas o parágrafo. Quando a versão muda, o parágrafo é recriado, mas o <code>&lt;details&gt;</code> é o mesmo nó de antes — e continua aberto. Nenhum erro aparece: o componente compila e roda. O efeito simplesmente não acontece, porque a recriação foi na folha em vez de ser na moldura.</p>
+
+<p>Ao lado, a versão que funciona:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let versao = $state(0);
+&lt;/script&gt;
+
+{#key versao}
+  &lt;details&gt;
+    &lt;summary&gt;Horário&lt;/summary&gt;
+    &lt;p&gt;Abrimos às 6h.&lt;/p&gt;
+  &lt;/details&gt;
+{/key}
+&lt;button onclick={() =&gt; versao++}&gt;recriar&lt;/button&gt;</pre>
+<pre class="out">&lt;details&gt;&lt;summary&gt;Horário&lt;/summary&gt; &lt;p&gt;Abrimos às 6h.&lt;/p&gt;&lt;/details&gt; &lt;button&gt;recriar&lt;/button&gt;</pre>
+
+<p>O HTML gerado é o mesmo nos dois casos — e é por isso que essa diferença passa batido em revisão de código. A diferença não está na marcação, está no que o motor faz quando o valor muda. Sempre que o efeito do <code>{#key}</code> "não funcionar", a primeira coisa a conferir é se o bloco envolve o nó certo.</p>
+
+<hr>
+
+<h2>8. Experimente: conserte o lugar do bloco</h2>
+
+<p>A caixa abaixo tem o <code>{#key}</code> no lugar errado: ele protege só o parágrafo. Sua missão é fazer o painel fechar quando o botão for clicado.</p>
+<div class="trysvelte" data-goal="clique:summary;;outre:Abrimos às 6h;;clique:button;;out:Horário recriar">
+<p class="try-task"><strong>Missão:</strong> abra o painel e clique em recriar. Ele continua aberto porque o <code>{#key}</code> está dentro do <code>&lt;details&gt;</code>. Mova o bloco para envolver o painel inteiro.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let versao = $state(0);
+&lt;/script&gt;
+
+&lt;details&gt;
+  &lt;summary&gt;Horário&lt;/summary&gt;
+  {#key versao}
+    &lt;p&gt;Abrimos às 6h.&lt;/p&gt;
+  {/key}
+&lt;/details&gt;
+&lt;button onclick={() =&gt; versao++}&gt;recriar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let versao = $state(0);
+&lt;/script&gt;
+
+{#key versao}
+  &lt;details&gt;
+    &lt;summary&gt;Horário&lt;/summary&gt;
+    &lt;p&gt;Abrimos às 6h.&lt;/p&gt;
+  &lt;/details&gt;
+{/key}
+&lt;button onclick={() =&gt; versao++}&gt;recriar&lt;/button&gt;</pre>
+</div>
+
+<p>O conserto é mover duas linhas: o <code>{#key versao}</code> sobe para antes do <code>&lt;details&gt;</code> e o <code>{/key}</code> desce para depois do <code>&lt;/details&gt;</code>. A indentação muda junto, o que é um bom sinal de que o bloco agora envolve o que você queria.</p>
+
+<hr>
+
+<h2>9. Os três usos clássicos</h2>
+
+<p>Existem três situações em que o <code>{#key}</code> ganha o pão de cada dia. Todas têm a mesma forma: um nó com vida própria precisa nascer de novo.</p>
+
+<p><strong>Animação.</strong> Uma animação CSS roda uma vez, quando o elemento aparece. Se você quiser que ela rode de novo no mesmo elemento — a cada resposta errada, por exemplo —, não há como reiniciar sem recriar o nó. Etiqueta na tentativa e o elemento nasce animado de novo.</p>
+
+<p><strong>Formulário.</strong> Um formulário com estado interno (um componente filho, um editor, um seletor de arquivos) não se limpa por fora. Mudar a etiqueta para uma versão nova desmonta e monta o formulário, que volta ao estado inicial — muito mais simples do que escrever dez linhas zerando campo por campo.</p>
+
+<p><strong>Troca de tela.</strong> Quando o endereço muda e você quer que a nova tela comece do topo, sem herdar a rolagem nem o estado da anterior, a etiqueta é o endereço. Isso aparece no Nível 3, com SvelteKit, e é a base do comportamento de navegação.</p>
+
+<div class="warning">
+<strong>O que o <code>{#key}</code> não resolve</strong>
+<p>Se a tela não está acompanhando uma mudança, o <code>{#key}</code> não é a resposta: o problema é o valor não ser reativo. Confira se a variável nasceu com <code>$state</code> e se você está <em>atribuindo</em> um valor novo, não chamando um método que ninguém escuta. Recriar um bloco esconde o sintoma por um instante e volta a falhar no próximo clique.</p>
+</div>
+
+<hr>
+
+<h2>10. Rodando na máquina da Ana</h2>
+
+<p>O componente desta aula é o do painel: um <code>&lt;details&gt;</code> e um botão. No servidor de desenvolvimento, abra o painel no navegador e clique em recriar para ver o comportamento:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Depois, tire o <code>{#key versao}</code> e o <code>{/key}</code> e salve. Abra o painel de novo e clique: ele não fecha mais. Esse teste de cinco segundos mostra a diferença entre atualizar e recriar de um jeito que nenhuma explicação substitui.</p>
+
+<p>No build, o bloco custa quase nada — o trabalho todo acontece na hora do clique:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DnCLpmJe.js  36.06 kB │ gzip: 13.82 kB
+✓ built in 1.99s</pre>
+
+<p><code>36.06 kB</code>, praticamente o mesmo tamanho do build da aula de condicionais (<code>36.03 kB</code>). O <code>{#key}</code> não carrega código pesado; ele reaproveita as funções de desmontar e montar que o Svelte já tem. O custo é de execução: cada recriação descarta nós do DOM e cria outros.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas são de estrutura: o bloco é simples, e o compilador cobra o básico.</p>
+<div class="cenario">
+<strong>Erro 1 — <code>{#key}</code> sem expressão</strong>
+<p>O bloco precisa de um valor para comparar. Sem ele, o compilador espera um espaço e encontra a chave de fechamento.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produto = $state('pão');
+&lt;/script&gt;
+
+{#key}
+  &lt;p&gt;{produto}&lt;/p&gt;
+{/key}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 5): Expected whitespace</pre>
+<p>"Expected whitespace" aponta a coluna 5, exatamente o <code>}</code>. Se você quer recriar a cada mudança de uma variável, escreva o nome dela: <code>{#key versao}</code>. Se não tem ideia de qual valor usar, provavelmente o bloco não é o que você precisa.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — bloco aberto e nunca fechado</strong>
+<p>O caso mais comum: o <code>{/key}</code> ficou para depois e nunca chegou.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produto = $state('pão');
+&lt;/script&gt;
+
+{#key produto}
+  &lt;p&gt;{produto}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>A linha apontada é a da abertura. Repare que ela é a <strong>mesma</strong> mensagem que aparece para um <code>{#if}</code> esquecido: o compilador só sabe que um bloco ficou aberto, não qual. Vá até a linha indicada e procure o fechamento correspondente.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — fechado com o nome de outro bloco</strong>
+<p>Cada abertura tem um fechamento com o mesmo nome. Fechar um <code>{#key}</code> com <code>{/each}</code> é recusado na hora.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produto = $state('pão');
+&lt;/script&gt;
+
+{#key produto}
+  &lt;p&gt;{produto}&lt;/p&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 2): Expected token key</pre>
+<p>"Expected token key" quer dizer "eu esperava a palavra key depois da barra". O compilador conhece o bloco que está aberto e cobra o nome certo — uma boa notícia, porque o erro aparece na linha do fechamento, não no fim do arquivo.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>{#key valor}</code></td><td>abre o bloco; recria o conteúdo quando <code>valor</code> muda</td></tr>
+<tr><td><code>{/key}</code></td><td>fecha o bloco</td></tr>
+<tr><td><code>{#key lista.length}</code></td><td>recria quando o tamanho da lista muda</td></tr>
+<tr><td><code>{#key produto}</code></td><td>recria quando a seleção muda</td></tr>
+<tr><td><code>{#key versao}</code></td><td>recria quando você incrementa a versão</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Use</th><th>Por quê</th></tr>
+<tr><td>Trocar um texto</td><td><code>{valor}</code></td><td>atualizar basta</td></tr>
+<tr><td>Mostrar ou esconder</td><td><code>{#if}</code></td><td>o nó nasce e morre com a condição</td></tr>
+<tr><td>Repetir por item</td><td><code>{#each}</code></td><td>um modelo, vários nós</td></tr>
+<tr><td>Zerar um nó com vida própria</td><td><code>{#key}</code></td><td>só recriar apaga o estado do navegador</td></tr>
+<tr><td>Reaproveitar linhas de uma lista</td><td><code>(item.id)</code> no <code>{#each}</code></td><td>o oposto do <code>{#key}</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td>Sem expressão</td><td><code>Expected whitespace</code></td></tr>
+<tr><td>Sem fechamento</td><td><code>Block was left open</code></td></tr>
+<tr><td>Fechado com outro nome</td><td><code>Expected token key</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o <code>{#key}</code> faz quando o valor da etiqueta muda?</p>
+<label><input type="radio" name="q1"> Atualiza o texto do bloco, mantendo os elementos</label>
+<label><input type="radio" name="q1"> Destrói o conteúdo do bloco e cria de novo</label>
+<label><input type="radio" name="q1"> Esconde o bloco até o valor voltar</label>
+<label><input type="radio" name="q1"> Impede que o valor mude</label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <strong>não</strong> sobrevive quando um bloco <code>{#key}</code> é recriado?</p>
+<label><input type="radio" name="q1"> Uma variável <code>$state</code> declarada no <code>&lt;script&gt;</code></label>
+<label><input type="radio" name="q1"> Um elemento que está fora do bloco</label>
+<label><input type="radio" name="q1"> O painel <code>&lt;details&gt;</code> aberto dentro do bloco</label>
+<label><input type="radio" name="q1"> O texto de um parágrafo que está fora do bloco</label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">3. Quando o <code>{#key}</code> é a ferramenta errada?</p>
+<label><input type="radio" name="q1"> Para reiniciar uma animação CSS</label>
+<label><input type="radio" name="q1"> Para limpar um formulário que guarda estado interno</label>
+<label><input type="radio" name="q1"> Para fazer a tela acompanhar uma variável que não é reativa</label>
+<label><input type="radio" name="q1"> Para fechar um painel controlado pelo navegador</label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#key <input data-answer="versao">}<br>&nbsp;&nbsp;&lt;details&gt;<br>&nbsp;&nbsp;&nbsp;&nbsp;&lt;summary&gt;Horário&lt;/summary&gt;<br>&nbsp;&nbsp;&nbsp;&nbsp;&lt;p&gt;Abrimos às 6h.&lt;/p&gt;<br>&nbsp;&nbsp;&lt;/details&gt;<br>{/key}<br><br>// o painel é recriado quando a variável versao muda</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>{#key expressão}</code> recria o conteúdo do bloco quando a expressão muda de valor.</li>
+  <li>Atualizar mantém os nós; recriar destrói e cria — são coisas diferentes.</li>
+  <li>O que está dentro do bloco se perde: foco, painel aberto, rolagem, animação, estado de filho.</li>
+  <li>O que está fora do bloco sobrevive, inclusive as variáveis <code>$state</code> do <code>&lt;script&gt;</code>.</li>
+  <li>A etiqueta pode ser qualquer expressão: uma variável, <code>lista.length</code>, uma conta.</li>
+  <li>Etiqueta que muda sozinha (como <code>Date.now()</code>) gera recriação sem parar.</li>
+  <li>O bloco precisa envolver o nó certo: recriar a folha não troca a moldura.</li>
+  <li>O gatilho (o botão) fica fora do bloco; o que ele recria fica dentro.</li>
+  <li>Os erros desta aula: sem expressão, sem fechamento e fechamento com outro nome.</li>
+  <li>Para "a tela não acompanha", o problema é reatividade, não falta de <code>{#key}</code>.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

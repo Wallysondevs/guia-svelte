@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Índice e Chave: {#each lista as item, i} | Guia Svelte</title>
+<meta name="description" content="Índice e chave no {#each} do Svelte 5: contar a partir de zero, numerar na tela, escolher (item.id), chave duplicada e os erros reais de sintaxe.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Índice e chave do {#each}</span></h1>
+
+<p class="intro">A Ana tem um caderno de pedidos e, ao lado de cada linha, escreve um número: 1, 2, 3. Esse número é a <strong>posição</strong> da linha no caderno, e ele muda quando uma folha é arrancada. O pedido em si tem outro número, o do recibo, que nunca muda. O bloco <code>{#each}</code> oferece as duas coisas: um <strong>índice</strong>, que é a posição do item na lista naquele momento, e uma <strong>chave</strong>, que é a identidade que você escolhe para o item. Nesta aula você vai aprender a usar os dois — e a saber quando cada um resolve o problema.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como receber a posição de cada item com <code>as item, i</code>.</li>
+  <li>Por que o índice começa em <code>0</code> e como mostrar a partir de <code>1</code>.</li>
+  <li>A usar o índice para filtrar, numerar e marcar o último item.</li>
+  <li>O que é a chave de um <code>{#each}</code> e como se escreve <code>(item.id)</code>.</li>
+  <li>Quando a chave muda o comportamento da lista e quando não muda nada.</li>
+  <li>O que acontece com chave duplicada e com chave que não existe.</li>
+  <li>A combinar índice e chave no mesmo bloco.</li>
+  <li>Os três erros de sintaxe desta aula, com a mensagem do compilador.</li>
+  <li>O que o build do projeto da Ana mostra quando o índice entra.</li>
+  <li>Como escolher a chave certa para uma lista de pedidos.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: posição não é identidade</h2>
+
+<p>Existem duas perguntas diferentes que você pode fazer sobre um item de uma lista. A primeira: "em que posição ele está agora?". A segunda: "qual é a identidade dele, independente de onde esteja?". Parecem a mesma coisa enquanto a lista não muda. Deixam de ser no instante em que alguém remove um item do começo.</p>
+
+<p>No caderno da Ana, a linha 2 vira linha 1 quando a primeira é riscada. O pedido, porém, continua sendo o pedido do recibo 47. Se a tela usa a posição para tudo, ela vai confundir um pedido com outro assim que a lista mexer. Se a tela conhece a identidade, ela move a linha 47 para cima sem trocar o conteúdo dela.</p>
+
+<p>O Svelte dá nomes às duas coisas. O <strong>índice</strong> é a posição, um número que vai de zero até o tamanho da lista menos um, e muda a cada volta do bloco. A <strong>chave</strong> é uma expressão que você escreve entre parênteses depois do item, e serve para o Svelte reconhecer "este item é o mesmo de antes". Com a chave, ele reaproveita a linha que já existia em vez de criar outra.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No caderno da Ana</th><th>No componente</th></tr>
+<tr><td>A posição da linha: 1ª, 2ª, 3ª</td><td>o índice <code>i</code>, contando de <code>0</code></td></tr>
+<tr><td>O número do recibo, que não muda</td><td>a chave: <code>(pedido.id)</code></td></tr>
+<tr><td>Riscar a primeira linha e renumerar</td><td>o índice muda, a chave não</td></tr>
+<tr><td>"Esta é a última linha da página"</td><td><code>{#if i === lista.length - 1}</code></td></tr>
+<tr><td>"Este é o mesmo pedido de antes"</td><td>a chave que o Svelte compara</td></tr>
+</table>
+</div>
+
+<p>Uma coisa importante antes de continuar: índice e chave são opcionais. A aula anterior mostrou o <code>{#each}</code> só com o item, e isso resolve a maioria dos casos. Você acrescenta o índice quando precisa do número na tela ou de uma decisão baseada na posição, e acrescenta a chave quando a lista é mexida com frequência e as linhas têm identidade própria.</p>
+
+<hr>
+
+<h2>2. O índice: <code>as pedido, i</code></h2>
+
+<p>O índice vem depois de uma vírgula, no mesmo lugar onde você dá nome ao item.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;ol&gt;
+  {#each pedidos as pedido, i}
+    &lt;li&gt;{i} — {pedido}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+
+<p>O compilador gera um <code>&lt;li&gt;</code> por item, e o número dentro de cada um é a posição:</p>
+<pre class="out">&lt;ol&gt;&lt;li&gt;0 — pão&lt;/li&gt;&lt;li&gt;1 — leite&lt;/li&gt;&lt;li&gt;2 — café&lt;/li&gt;&lt;/ol&gt;</pre>
+<pre class="out">0 — pão 1 — leite 2 — café</pre>
+
+<h3>A anatomia da linha de abertura</h3>
+<dl class="anatomy">
+  <dt>{#each pedidos</dt><dd>a <strong>lista</strong> que será percorrida. Tem de ser algo que o JavaScript consiga percorrer: array, texto, conjunto.</dd>
+  <dt>as pedido</dt><dd>o <strong>item</strong>: um nome novo, que vale um elemento por vez.</dd>
+  <dt>, i</dt><dd>o <strong>índice</strong>: outro nome novo, que vale a posição daquela volta. <code>i</code> é só uma convenção; pode ser <code>indice</code>, <code>posicao</code>, o que você quiser.</dd>
+  <dt>}</dt><dd>fecha a abertura. A ordem importa: primeiro o item, depois a vírgula, depois o índice.</dd>
+</dl>
+
+<p>O índice não é uma cópia da lista nem um contador que você precisa cuidar. É um valor que o bloco calcula a cada volta e entrega pronto. Dentro do bloco, <code>pedido</code> e <code>i</code> valem para aquela repetição; fora dele, nenhum dos dois existe.</p>
+
+<div class="tip">
+<strong>Nomeie pelo que é</strong>
+<p>Uma letra só, <code>i</code>, é o padrão da comunidade e funciona bem quando o bloco tem quatro linhas. Se o bloco crescer, troque por <code>posicao</code> ou <code>indice</code>: quem lê o código depois de você agradece.</p>
+</div>
+
+<hr>
+
+<h2>3. Experimente: contar de um em um</h2>
+
+<p>A caixa abaixo mostra a posição de cada pedido começando em <code>0</code>. Sua missão é fazer a lista parecer a do caderno da Ana: <code>1º</code>, <code>2º</code>, <code>3º</code>.</p>
+<div class="trysvelte" data-goal="out:1º — pão 2º — leite 3º — café">
+<p class="try-task"><strong>Missão:</strong> o índice começa em zero, então a lista mostra <code>0º</code>, <code>1º</code>, <code>2º</code>. Faça a contagem começar em <strong>1</strong>, mantendo o traço e o nome do pedido.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;ol&gt;
+  {#each pedidos as pedido, i}
+    &lt;li&gt;{i}º — {pedido}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;ol&gt;
+  {#each pedidos as pedido, i}
+    &lt;li&gt;{i + 1}º — {pedido}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+</div>
+
+<p>O <code>{i + 1}</code> é uma conta normal dentro das chaves, como o <code>toFixed</code> das aulas anteriores. O valor guardado no índice não muda: ele continua sendo <code>0</code> na primeira volta. O que muda é o que aparece na tela. Essa separação — guardar de um jeito, mostrar de outro — vale para toda a programação, e volta sempre que a Ana precisa mostrar dinheiro ou data.</p>
+
+<hr>
+
+<h2>4. Por que o índice começa em zero</h2>
+
+<p>Essa é a pergunta que todo mundo faz na primeira lista. A resposta curta: porque o JavaScript conta assim, e o Svelte não esconde a regra. A resposta longa envolve a história das linguagens e o jeito como a memória do computador é endereçada — assunto para outro dia.</p>
+
+<p>Na prática, você precisa lembrar de três coisas. A primeira: o primeiro item tem índice <code>0</code>. A segunda: o último tem índice <code>lista.length - 1</code>, porque <code>length</code> é o tamanho (três itens) e o último índice é dois. A terceira: para mostrar na tela, some um.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido, i}
+    &lt;li&gt;{pedido}{#if i === pedidos.length - 1} (último){/if}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;li&gt;leite&lt;/li&gt;&lt;li&gt;café(último)&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O último item ganhou a marca "(último)" porque a condição <code>i === pedidos.length - 1</code> só é verdadeira na última volta. Repare que colou no texto, sem espaço: o bloco <code>{#if}</code> está encostado no <code>{pedido}</code> dentro do <code>&lt;li&gt;</code>. Se você quiser espaço, escreva o espaço.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Lista</th><th>Índices</th><th>Último índice</th></tr>
+<tr><td><code>['pão']</code></td><td>0</td><td><code>0</code> (ou <code>length - 1</code>)</td></tr>
+<tr><td><code>['pão', 'leite']</code></td><td>0, 1</td><td><code>1</code></td></tr>
+<tr><td><code>['pão', 'leite', 'café']</code></td><td>0, 1, 2</td><td><code>2</code></td></tr>
+<tr><td><code>[]</code> (vazia)</td><td>nenhum</td><td><code>-1</code>: o bloco não roda</td></tr>
+</table>
+</div>
+
+<p>A última linha explica um erro comum: numa lista vazia, o bloco não executa nenhuma volta, então não existe índice <code>0</code>. O <code>-1</code> aparece só se você calcular <code>length - 1</code> fora do bloco. Lista vazia é assunto da próxima aula, mas já vale saber que ela não cria um item "vazio".</p>
+
+<hr>
+
+<h2>5. Experimente: só as posições pares</h2>
+
+<p>O índice serve também para decidir. Na caixa abaixo, os três pedidos aparecem. Sua missão é mostrar <strong>só</strong> os que estão nas posições pares (0 e 2), usando o índice.</p>
+<div class="trysvelte" data-goal="out:pão café">
+<p class="try-task"><strong>Missão:</strong> mostre apenas os pedidos das posições pares. Use o índice dentro de um <code>{#if}</code>: a conta é <code>i % 2 === 0</code> (o resto da divisão por 2 é zero).</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido, i}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido, i}
+    {#if i % 2 === 0}
+      &lt;li&gt;{pedido}&lt;/li&gt;
+    {/if}
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>O operador <code>%</code> devolve o <strong>resto</strong> de uma divisão: <code>4 % 2</code> é <code>0</code>, <code>5 % 2</code> é <code>1</code>. Por isso <code>i % 2 === 0</code> é a forma padrão de dizer "posição par". Com isso, o bloco de dentro é avaliado três vezes e só duas produzem um <code>&lt;li&gt;</code>.</p>
+
+<p>Deu certo, mas repare no custo: o <code>{#if}</code> roda em todas as voltas, mesmo nas que não mostram nada. Para três itens é irrelevante; para dez mil, o ideal é filtrar a lista antes, com <code>pedidos.filter(...)</code>, e deixar o <code>{#each}</code> só desenhar. Guarde a ideia: <strong>filtre o dado quando a lista é grande, filtre na marcação quando a regra é visual</strong>.</p>
+
+<hr>
+
+<h2>6. A chave: <code>(produto.id)</code></h2>
+
+<p>Agora a segunda informação. A chave vai entre parênteses, depois do índice (se houver), e diz qual valor identifica cada item:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 1, nome: 'pão' },
+    { id: 2, nome: 'leite' }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as produto (produto.id)}
+    &lt;li&gt;{produto.id}: {produto.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;1: pão&lt;/li&gt;&lt;li&gt;2: leite&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Na tela, nada muda: a chave não aparece, não vira atributo, não entra no HTML. Ela é uma instrução para o motor do Svelte, não uma informação para o leitor. O que ela faz é permitir que o motor <strong>reconheça</strong> um item quando a lista é reordenada, filtrada ou acrescentada.</p>
+
+<h3>A anatomia da chave</h3>
+<dl class="anatomy">
+  <dt>(produto.id)</dt><dd>a <strong>chave</strong>: uma expressão que devolve um valor único por item. Parênteses, não chaves.</dd>
+  <dt>produto.id</dt><dd>a identidade escolhida por você. Precisa ser única na lista e estável: o mesmo item tem de devolver o mesmo valor sempre.</dd>
+  <dt>(produto)</dt><dd>também é aceito: aí a identidade é o próprio objeto, comparado por referência. Funciona, mas é frágil quando você recria os objetos.</dd>
+  <dt>(i)</dt><dd>o índice como chave. Compila, mas é o oposto do que a chave serve para fazer — a posição muda quando a lista muda.</dd>
+</dl>
+
+<p>Sem chave, o Svelte atualiza a lista comparando posições: o primeiro item da lista nova ocupa o primeiro lugar, o segundo ocupa o segundo, e assim por diante. Com chave, ele compara identidades: procura o item de chave <code>7</code> onde ele estiver, reaproveita a linha que já existia e move o nó no lugar.</p>
+
+<p>Por que isso importa? Porque cada <code>&lt;li&gt;</code> pode ter uma vida própria: um campo de texto com o que o cliente digitou, uma animação em andamento, uma imagem carregando. Sem chave, mover um item de posição significa recriar a linha e perder o que estava dentro. Com chave, a linha viaja inteira.</p>
+
+<hr>
+
+<h2>7. Índice e chave juntos</h2>
+
+<p>As duas informações convivem, nesta ordem: item, índice, chave.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 7, nome: 'pão' },
+    { id: 9, nome: 'leite' }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as produto, i (produto.id)}
+    &lt;li&gt;{i + 1}. {produto.nome} (id {produto.id})&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;1. pão (id 7)&lt;/li&gt;&lt;li&gt;2. leite (id 9)&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Este é o formato completo do bloco. Se você trocar a ordem — chave antes do índice —, o compilador reclama, porque a posição dos pedaços é fixa. Vale decorar a sequência como uma frase: "para cada item <strong>como</strong> nome <strong>,</strong> posição <strong>(</strong>identidade<strong>)</strong>".</p>
+
+<p>Agora veja o caso em que a chave faz diferença. O botão remove o primeiro pedido da lista, e a chave é o próprio texto do pedido:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (pedidos = pedidos.slice(1))}&gt;entregar o primeiro&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido, i (pedido)}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;button&gt;entregar o primeiro&lt;/button&gt; &lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;li&gt;leite&lt;/li&gt;&lt;li&gt;café&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Depois de um clique, a lista vira <code>['leite', 'café']</code>. Sem chave, o Svelte reaproveitaria o primeiro <code>&lt;li&gt;</code> para escrever "leite" e o segundo para escrever "café", apagando o terceiro. Com a chave <code>(pedido)</code>, ele reconhece "leite" e "café" como os mesmos de antes e só remove o nó do "pão". O resultado visível é o mesmo nos dois casos; o que muda é o que acontece dentro de cada linha.</p>
+
+<div class="warning">
+<strong>Chave duplicada e chave que falta</strong>
+<p>A chave precisa ser única. Se dois itens devolverem o mesmo valor, o motor do Svelte acusa no console uma mensagem que começa com <code>Keyed each block has duplicate key</code> e informa os dois índices em conflito. Se a chave não existir no objeto — <code>(produto.codigo)</code> num item que só tem <code>id</code> —, todos os itens devolvem <code>undefined</code> e o efeito é o mesmo de uma chave duplicada. Confira o nome do campo.</p>
+</div>
+
+<hr>
+
+<h2>8. Experimente: conserte a chave</h2>
+
+<p>A caixa abaixo tem uma chave escrita pela metade. O compilador recusa o arquivo, então nem a lista aparece. Sua missão é fechar a chave para a tela mostrar os dois produtos com o seu id.</p>
+<div class="trysvelte" data-goal="outre:^1: pão 2: leite">
+<p class="try-task"><strong>Missão:</strong> falta um parêntese na chave do <code>{#each}</code>. Conserte a pontuação para o componente compilar e mostrar <strong>1: pão</strong> e <strong>2: leite</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 1, nome: 'pão' },
+    { id: 2, nome: 'leite' }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as produto (produto.id}
+    &lt;li&gt;{produto.id}: {produto.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let produtos = $state([
+    { id: 1, nome: 'pão' },
+    { id: 2, nome: 'leite' }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as produto (produto.id)}
+    &lt;li&gt;{produto.id}: {produto.nome}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Enquanto a chave está aberta, o componente não roda: você vê a mensagem do compilador no lugar da tela. Repare que a mensagem aponta a coluna exata do problema — o fim da linha, onde o <code>)</code> deveria estar. Consertar pontuação em bloco é sempre a mesma tarefa: conte os pares de parênteses e de chaves.</p>
+
+<hr>
+
+<h2>9. Como escolher a chave</h2>
+
+<p>Chave boa tem três propriedades: é única, é estável e existe em todos os itens. Vamos ver as opções comuns para a lista de pedidos da Ana.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chave</th><th>Única?</th><th>Estável?</th><th>Quando usar</th></tr>
+<tr><td><code>(pedido.id)</code></td><td>sim, se o banco garante</td><td>sim</td><td>o caso normal, com dados que vêm de um cadastro</td></tr>
+<tr><td><code>(pedido.nome)</code></td><td>só se não houver nome repetido</td><td>sim, até alguém renomear</td><td>listas de textos sem repetição</td></tr>
+<tr><td><code>(pedido)</code></td><td>sim, pelo objeto</td><td>não, se você recria o objeto a cada mudança</td><td>listas que nunca são recriadas</td></tr>
+<tr><td><code>(i)</code></td><td>sim, por definição</td><td>não: a posição muda</td><td>quase nunca; é o mesmo que não ter chave</td></tr>
+<tr><td>sem chave</td><td>não se aplica</td><td>não se aplica</td><td>listas que só crescem no fim ou que nunca guardam estado</td></tr>
+</table>
+</div>
+
+<p>Se você não tem um identificador, dá para criar um na hora de montar a lista. Um contador que nunca repete, guardado fora do array, resolve:</p>
+
+<pre class="file" data-file="src/lista.js">let proximo = 3;
+
+function novoPedido(nome) {
+  return { id: proximo++, nome };
+}</pre>
+
+<p>O detalhe que importa: o id nasce junto com o item e não muda depois. Se você calcular o id na hora de desenhar — com o índice, por exemplo —, ele muda junto com a posição e a chave perde o sentido. Chave é identidade, e identidade não se recalcula.</p>
+
+<hr>
+
+<h2>10. Rodando na máquina da Ana</h2>
+
+<p>Com o bloco numerado no <code>src/App.svelte</code>, o servidor de desenvolvimento mostra a lista e atualiza a cada arquivo salvo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Um exercício bom para esse servidor: acrescente um quarto pedido no array e salve. A numeração se ajusta sozinha, porque o índice é calculado a cada renderização. Apague o primeiro item com <code>pedidos = pedidos.slice(1)</code> e salve de novo: os números continuam de 1 a 3, agora com outros pedidos.</p>
+
+<p>O build desta aula fica praticamente do tamanho do build anterior — o índice não acrescenta quase nada ao arquivo final:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BX3V8NXS.js  40.94 kB │ gzip: 15.75 kB
+✓ built in 2.38s</pre>
+
+<p>Compare com o build da aula de <code>{#each}</code>: <code>40.92 kB</code> contra <code>40.94 kB</code>. Duzentos bytes de diferença para uma lista numerada. Já a chave não muda o tamanho de forma perceptível: ela não gera código de desenho, gera código de comparação. O que ela economiza não é download, é trabalho do navegador quando a lista muda.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. Todas são de pontuação: o bloco aceita exatamente um item, um índice e uma chave, e nada além disso.</p>
+<div class="cenario">
+<strong>Erro 1 — dois índices</strong>
+<p>O bloco aceita <strong>um</strong> índice. Escrever <code>as item, i, j</code> parece razoável e não é: depois da vírgula vem a posição, e depois dela só pode vir a chave entre parênteses.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let lista = $state([1, 2]);
+&lt;/script&gt;
+
+{#each lista as item, i, j}
+  &lt;p&gt;{item}&lt;/p&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 23): Expected token }</pre>
+<p>"Expected token }" quer dizer "eu esperava fechar a abertura aqui". A coluna 23 é o <code>j</code>. Se você precisa de duas informações por item, elas vêm de dentro do item (um objeto com duas partes), não de dois nomes no bloco.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — chave sem parêntese de fechamento</strong>
+<p>A chave é sempre um par de parênteses. Abrir e não fechar deixa o compilador esperando o resto da expressão.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let lista = $state([1, 2]);
+&lt;/script&gt;
+
+{#each lista as item (item}
+  &lt;p&gt;{item}&lt;/p&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 26): Expected token )</pre>
+<p>A mensagem aponta a coluna 26, que é o <code>}</code> da abertura do bloco — o lugar onde o <code>)</code> deveria estar. É um erro fácil de ver quando o arquivo tem poucas linhas e difícil quando a chave é comprida; nesse caso, quebre a expressão em uma variável.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — vírgula sobrando antes da chave</strong>
+<p>Depois da vírgula vem um nome de índice. Sem nome, a vírgula ficou pendurada e o compilador não sabe o que criar ali.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let lista = $state([1, 2]);
+&lt;/script&gt;
+
+{#each lista as item, (item)}
+  &lt;p&gt;{item}&lt;/p&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 22): Expected an identifier</pre>
+<p>"Expected an identifier" é "eu esperava um nome". Se você quer <strong>só</strong> a chave, escreva <code>{#each lista as item (item.id)}</code>, sem vírgula nenhuma. A vírgula só existe para separar o item do índice.</p>
+</div>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que você recebe</th></tr>
+<tr><td><code>{#each lista as item}</code></td><td>só o item</td></tr>
+<tr><td><code>{#each lista as item, i}</code></td><td>o item e a posição, começando em <code>0</code></td></tr>
+<tr><td><code>{#each lista as item (item.id)}</code></td><td>o item e a identidade para o motor</td></tr>
+<tr><td><code>{#each lista as item, i (item.id)}</code></td><td>as três coisas, nesta ordem</td></tr>
+<tr><td><code>{#each lista as item, indice}</code></td><td>o mesmo, com um nome mais claro</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Escreva</th><th>Resultado</th></tr>
+<tr><td>numerar a partir de 1</td><td><code>{i + 1}</code></td><td>1, 2, 3</td></tr>
+<tr><td>marcar o último</td><td><code>{#if i === lista.length - 1}</code></td><td>marca só na última volta</td></tr>
+<tr><td>só posições pares</td><td><code>{#if i % 2 === 0}</code></td><td>0, 2, 4…</td></tr>
+<tr><td>saber quantos itens há</td><td><code>{lista.length}</code></td><td>o total, fora do bloco</td></tr>
+<tr><td>uma linha por item, com vida própria</td><td><code>(item.id)</code></td><td>o motor reaproveita as linhas</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td>Dois índices</td><td><code>Expected token }</code></td></tr>
+<tr><td>Chave sem fechar</td><td><code>Expected token )</code></td></tr>
+<tr><td>Vírgula sem índice</td><td><code>Expected an identifier</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual é o índice do primeiro item de um <code>{#each}</code>?</p>
+<label><input type="radio" name="q1"> <code>1</code>, como no caderno da Ana</label>
+<label><input type="radio" name="q1"> <code>0</code></label>
+<label><input type="radio" name="q1"> <code>length - 1</code></label>
+<label><input type="radio" name="q1"> Depende do tamanho da lista</label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Para que serve a chave <code>(item.id)</code>?</p>
+<label><input type="radio" name="q1"> Para mostrar o id na tela</label>
+<label><input type="radio" name="q1"> Para dizer ao motor qual item é qual quando a lista muda</label>
+<label><input type="radio" name="q1"> Para ordenar a lista automaticamente</label>
+<label><input type="radio" name="q1"> Para impedir que o item seja removido</label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">3. O que acontece se dois itens tiverem a mesma chave?</p>
+<label><input type="radio" name="q1"> O compilador recusa o arquivo</label>
+<label><input type="radio" name="q1"> A lista mostra um item só</label>
+<label><input type="radio" name="q1"> O motor do Svelte acusa chave duplicada no console</label>
+<label><input type="radio" name="q1"> Nada: a chave é ignorada</label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#each pedidos <input data-answer="as"> pedido, i}<br>&nbsp;&nbsp;&lt;li&gt;{i + 1}º — {pedido}&lt;/li&gt;<br>{/each}<br><br>// mostre a posição de cada pedido, começando em 1</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O índice vem depois da vírgula: <code>{#each lista as item, i}</code>.</li>
+  <li>O índice começa em <code>0</code>; para mostrar a partir de <code>1</code>, use <code>{i + 1}</code>.</li>
+  <li><code>lista.length - 1</code> é o índice do último item; <code>i % 2 === 0</code> seleciona posições pares.</li>
+  <li>A chave fica entre parênteses, depois do item e do índice: <code>{#each lista as item (item.id)}</code>.</li>
+  <li>A chave não aparece na tela: é uma instrução para o motor reconhecer itens.</li>
+  <li>A chave precisa ser única e estável; <code>(i)</code> compila, mas muda junto com a posição.</li>
+  <li>Chave duplicada não é erro de compilação: o motor acusa no console em desenvolvimento.</li>
+  <li>Sem chave, o motor compara posições e recria linhas quando a lista muda.</li>
+  <li>Os erros desta aula: dois índices, chave sem parêntese e vírgula sem nome.</li>
+  <li>Filtre o dado antes quando a lista é grande; use o índice quando a regra é visual.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
