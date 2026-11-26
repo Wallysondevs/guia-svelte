@@ -254,14 +254,14 @@ dist/assets/index-VVryW8ge.js  35.89 kB │ gzip: 13.83 kB
 
 <pre class="out">&lt;button&gt;Total: 0&lt;/button&gt;</pre>
 
-<p>No navegador, clicar nesse botão soma 5 ao total e, no mesmo instante, escreve uma mensagem de erro no console. A mensagem é esta, copiada do navegador:</p>
+<p>No navegador, clicar nesse botão não muda o total e escreve uma mensagem de erro no console. A mensagem é esta, copiada do navegador:</p>
 
 <pre class="out">$.get(...)?.apply is not a function</pre>
 
 <p>Traduzindo: o Svelte guardou o resultado de <code>somar()</code>, que é o número 5, e tentou chamar esse número como se fosse uma função. O trecho <code>apply</code> é o jeito interno de chamar funções; o que importa para você é o fim da frase: <strong>não é uma função</strong>. A correção é tirar os parênteses do atributo.</p>
 
 <div class="trysvelte" data-goal="clique:button;;outre:^Total: 5">
-<p class="try-task"><strong>Missão:</strong> o botão chama a função dentro do atributo: cada clique soma e estoura um erro no console. Faça o clique somar 5 sem erro nenhum, mostrando <code>Total: 5</code>.</p>
+<p class="try-task"><strong>Missão:</strong> o botão chama a função dentro do atributo: cada clique estoura um erro no console e o total não sai de zero. Faça o clique somar 5 sem erro nenhum, mostrando <code>Total: 5</code>.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
   let total = $state(0);
 

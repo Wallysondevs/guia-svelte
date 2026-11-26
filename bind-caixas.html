@@ -247,7 +247,7 @@
 &lt;input type="radio" id="cartao" value="cartao" bind:group={pagamento}&gt;</pre>
 </div>
 
-<p>Repare que os dois rádios apontam para a mesma variável. É isso que os torna um grupo: não o <code>name</code> do HTML, mas o binding compartilhado. O navegador também agrupa rádios pelo atributo <code>name</code>; o Svelte usa a variável. Quando você usa <code>bind:group</code>, o compilador cuida do <code>name</code> sozinho — por isso os exemplos acima funcionam sem ele.</p>
+<p>Repare que os dois rádios apontam para a mesma variável. É isso que os torna um grupo: não o <code>name</code> do HTML, mas o binding compartilhado. O navegador também agrupa rádios pelo atributo <code>name</code>, mas o Svelte não depende disso: ele mantém a marcação de cada rádio a partir do valor da variável. Por isso os exemplos acima funcionam sem <code>name</code> — e por isso dois rádios ligados a variáveis diferentes podem ficar marcados ao mesmo tempo, mesmo com o mesmo <code>name</code>.</p>
 
 <h2>8. O que o servidor manda em cada caso</h2>
 
