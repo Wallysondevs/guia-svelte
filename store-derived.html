@@ -96,70 +96,26 @@
 <p>O detalhe que vale ouro: <code>derived</code> devolve um objeto com <strong>só</strong> o <code>subscribe</code>. Ele não tem <code>set</code> nem <code>update</code>, porque escrever nele não faria sentido — na próxima mudança da fonte, o valor seria recalculado e a sua escrita sumiria. Isso não é uma limitação, é o que garante que o número esteja sempre certo.</p>
 
 <div class="trysvelte" data-goal="out:Pães: 7 · caixas: 1">
-<p class="try-task"><strong>Missão:</strong> a fábrica de derivados esqueceu de aplicar a regra — <code>caixas</code> mostra <code>7</code> em vez de <code>1</code>. Faça a conta passar pela função <code>fn</code>.</p>
+<p class="try-task"><strong>Missão:</strong> a regra devolve sempre <code>7</code>, então <code>caixas</code> mostra <code>7</code> em vez de <code>1</code>. Faça a conta sair do valor que vem da fonte: 7 pães são 1 caixa de 6.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  function derivar(origem, fn) {
-    return {
-      subscribe(cb) {
-        return origem.subscribe(cb);
-      }
-    };
-  }
+  import { writable, derived } from 'svelte/store';
 
-  function caixa(inicial) {
-    let valor = inicial;
-    const inscritos = new Set();
-    return {
-      subscribe(fn) {
-        fn(valor);
-        inscritos.add(fn);
-        return () =&gt; inscritos.delete(fn);
-      },
-      set(novo) {
-        valor = novo;
-        inscritos.forEach((fn) =&gt; fn(valor));
-      }
-    };
-  }
-
-  const paes = caixa(7);
-  const caixas = derivar(paes, (n) =&gt; Math.floor(n / 6));
+  const paes = writable(7);
+  const caixas = derived(paes, () =&gt; 7);
 &lt;/script&gt;
 
 &lt;p&gt;Pães: {$paes} · caixas: {$caixas}&lt;/p&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  function derivar(origem, fn) {
-    return {
-      subscribe(cb) {
-        return origem.subscribe((v) =&gt; cb(fn(v)));
-      }
-    };
-  }
+  import { writable, derived } from 'svelte/store';
 
-  function caixa(inicial) {
-    let valor = inicial;
-    const inscritos = new Set();
-    return {
-      subscribe(fn) {
-        fn(valor);
-        inscritos.add(fn);
-        return () =&gt; inscritos.delete(fn);
-      },
-      set(novo) {
-        valor = novo;
-        inscritos.forEach((fn) =&gt; fn(valor));
-      }
-    };
-  }
-
-  const paes = caixa(7);
-  const caixas = derivar(paes, (n) =&gt; Math.floor(n / 6));
+  const paes = writable(7);
+  const caixas = derived(paes, (n) =&gt; Math.floor(n / 6));
 &lt;/script&gt;
 
 &lt;p&gt;Pães: {$paes} · caixas: {$caixas}&lt;/p&gt;</pre>
 </div>
 
-<p>Como nas outras caixas do guia, o <code>svelte/store</code> não é importável aqui: cada caixa compila um componente só, sem módulos extras. O <code>caixa()</code> do exemplo é o <code>writable</code> escrito à mão, e <code>derivar()</code> é o <code>derived</code> escrito à mão. A solução mostra o coração do <code>derived</code>: assinar a fonte e entregar <code>fn(valor)</code> para quem está olhando.</p>
+<p>A caixa importa o <code>derived</code> de verdade, do mesmo <code>svelte/store</code> que o projeto da Ana usa. E ela deixa ver o que a regra recebe: o valor da fonte. Com <code>() =&gt; 7</code> a função ignora o store e repete um número; com <code>(n) =&gt; Math.floor(n / 6)</code> ela transforma os sete pães em uma caixa.</p>
 
 <hr>
 
@@ -212,102 +168,33 @@
   <dt>$pao * 0.9 + $bolo * 12</dt><dd>a conta. Os valores dentro dos colchetes são valores comuns; o cifrão aqui é só parte do nome que você escolheu.</dd>
 </dl>
 
-<p>Errar a desestruturação é fácil: <code>derived([pao, bolo], ($pao, $bolo) =&gt; …)</code> compila sem reclamar, mas o primeiro parâmetro recebe a <strong>lista inteira</strong> e o segundo recebe o <code>set</code>. A conta vira <code>NaN</code> e a tela mostra lixo. Quando um derivado de várias fontes der número errado, o primeiro lugar para olhar é a forma dos parâmetros.</p>
+<p>Errar o formato do parâmetro é fácil, e o sintoma muda com o erro. <code>(valores) =&gt; valores * 0.9</code> recebe a <strong>lista inteira</strong> e a conta vira <code>NaN</code> — é o que a caixa abaixo mostra. Já <code>($pao, $bolo) =&gt; …</code> tem dois parâmetros, e dois parâmetros são a assinatura da regra <strong>assíncrona</strong>: o segundo recebe o <code>set</code>, o valor devolvido é ignorado e o derivado nunca entrega nada. Quando um derivado de várias fontes der número errado, o primeiro lugar para olhar é a forma dos parâmetros.</p>
 
 <div class="trysvelte" data-goal="clique:button;;out:Total: R$ 25.80 mais um bolo">
-<p class="try-task"><strong>Missão:</strong> o total só enxerga os pães e mostra <code>NaN</code> depois de um bolo a mais. Faça a conta receber <strong>os dois</strong> valores e o clique mostrar <code>Total: R$ 25.80</code>.</p>
+<p class="try-task"><strong>Missão:</strong> a regra recebe a lista inteira de valores e o total vira <code>NaN</code>. Dê nome às duas posições da lista para a conta usar pão e bolo, e o clique deve mostrar <code>Total: R$ 25.80</code>.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  function derivarDois(a, b, fn) {
-    return {
-      subscribe(cb) {
-        let va = 0;
-        let vb = 0;
-        const paraA = a.subscribe((v) =&gt; {
-          va = v;
-          cb(fn(va));
-        });
-        const paraB = b.subscribe((v) =&gt; {
-          vb = v;
-        });
-        return () =&gt; {
-          paraA();
-          paraB();
-        };
-      }
-    };
-  }
+  import { writable, derived } from 'svelte/store';
 
-  function caixa(inicial) {
-    let valor = inicial;
-    const inscritos = new Set();
-    return {
-      subscribe(fn) {
-        fn(valor);
-        inscritos.add(fn);
-        return () =&gt; inscritos.delete(fn);
-      },
-      set(novo) {
-        valor = novo;
-        inscritos.forEach((fn) =&gt; fn(valor));
-      }
-    };
-  }
-
-  const pao = caixa(2);
-  const bolo = caixa(1);
-  const total = derivarDois(pao, bolo, (paes, bolos) =&gt; paes * 0.9 + bolos * 12);
+  const pao = writable(2);
+  const bolo = writable(1);
+  const total = derived([pao, bolo], (valores) =&gt; valores * 0.9 + 12);
 &lt;/script&gt;
 
 &lt;p&gt;Total: R$ {$total.toFixed(2)}&lt;/p&gt;
-&lt;button onclick={() =&gt; bolo.set($bolo + 1)}&gt;mais um bolo&lt;/button&gt;</pre>
+&lt;button onclick={() =&gt; $bolo += 1}&gt;mais um bolo&lt;/button&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  function derivarDois(a, b, fn) {
-    return {
-      subscribe(cb) {
-        let va = 0;
-        let vb = 0;
-        const paraA = a.subscribe((v) =&gt; {
-          va = v;
-          cb(fn(va, vb));
-        });
-        const paraB = b.subscribe((v) =&gt; {
-          vb = v;
-          cb(fn(va, vb));
-        });
-        return () =&gt; {
-          paraA();
-          paraB();
-        };
-      }
-    };
-  }
+  import { writable, derived } from 'svelte/store';
 
-  function caixa(inicial) {
-    let valor = inicial;
-    const inscritos = new Set();
-    return {
-      subscribe(fn) {
-        fn(valor);
-        inscritos.add(fn);
-        return () =&gt; inscritos.delete(fn);
-      },
-      set(novo) {
-        valor = novo;
-        inscritos.forEach((fn) =&gt; fn(valor));
-      }
-    };
-  }
-
-  const pao = caixa(2);
-  const bolo = caixa(1);
-  const total = derivarDois(pao, bolo, (paes, bolos) =&gt; paes * 0.9 + bolos * 12);
+  const pao = writable(2);
+  const bolo = writable(1);
+  const total = derived([pao, bolo], ([p, b]) =&gt; p * 0.9 + b * 12);
 &lt;/script&gt;
 
 &lt;p&gt;Total: R$ {$total.toFixed(2)}&lt;/p&gt;
-&lt;button onclick={() =&gt; bolo.set($bolo + 1)}&gt;mais um bolo&lt;/button&gt;</pre>
+&lt;button onclick={() =&gt; $bolo += 1}&gt;mais um bolo&lt;/button&gt;</pre>
 </div>
 
-<p>A solução guarda o último valor de cada fonte e recalcula quando qualquer uma avisa. É por isso que o <code>derived</code> de verdade recebe uma lista: ele precisa manter um valor por fonte, e a regra só roda quando todos já têm valor. Antes de o segundo store entregar o primeiro valor, a conta não roda — e é disso que o terceiro argumento desta aula trata.</p>
+<p>A diferença entre o código inicial e a solução está no formato do parâmetro: <code>(valores) =&gt;</code> recebe a lista inteira e tenta multiplicar uma lista por um número; <code>([p, b]) =&gt;</code> dá nome a cada posição. Por dentro, o <code>derived</code> assina as duas fontes, guarda o último valor de cada uma e só roda a regra quando todas já entregaram o primeiro valor.</p>
 
 <hr>
 
@@ -425,25 +312,11 @@ export const total = derived([paes, bolos], ([$paes, $bolos]) => $paes * 0.9 + $
 <p>O uso certo de <code>get</code> é dentro de funções, onde você quer o valor do momento e não uma assinatura. O botão da Ana soma um ao valor que está no store naquele instante, mesmo que outro componente tenha mudado o valor no meio do caminho:</p>
 
 <div class="trysvelte" data-goal="clique:button;;clique:button;;out:Cliques: 2 +1">
-<p class="try-task"><strong>Missão:</strong> cada clique escreve <code>1</code> no store, então dois cliques mostram <code>1</code>. Use a leitura do valor atual (<code>ler</code>) para o segundo clique mostrar <code>Cliques: 2</code>.</p>
+<p class="try-task"><strong>Missão:</strong> cada clique escreve <code>1</code> no store, então dois cliques mostram <code>Cliques: 1</code>. Leia o valor de agora com <code>get</code> para o segundo clique mostrar <code>Cliques: 2</code>.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  function caixa(inicial) {
-    let valor = inicial;
-    const inscritos = new Set();
-    return {
-      subscribe(fn) {
-        fn(valor);
-        inscritos.add(fn);
-        return () =&gt; inscritos.delete(fn);
-      },
-      set(novo) {
-        valor = novo;
-        inscritos.forEach((fn) =&gt; fn(valor));
-      }
-    };
-  }
+  import { writable } from 'svelte/store';
 
-  const cliques = caixa(0);
+  const cliques = writable(0);
 
   function somar() {
     cliques.set(1);
@@ -453,35 +326,12 @@ export const total = derived([paes, bolos], ([$paes, $bolos]) => $paes * 0.9 + $
 &lt;p&gt;Cliques: {$cliques}&lt;/p&gt;
 &lt;button onclick={somar}&gt;+1&lt;/button&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  function caixa(inicial) {
-    let valor = inicial;
-    const inscritos = new Set();
-    return {
-      subscribe(fn) {
-        fn(valor);
-        inscritos.add(fn);
-        return () =&gt; inscritos.delete(fn);
-      },
-      set(novo) {
-        valor = novo;
-        inscritos.forEach((fn) =&gt; fn(valor));
-      }
-    };
-  }
+  import { writable, get } from 'svelte/store';
 
-  function ler(store) {
-    let valor;
-    const parar = store.subscribe((v) =&gt; {
-      valor = v;
-    });
-    parar();
-    return valor;
-  }
-
-  const cliques = caixa(0);
+  const cliques = writable(0);
 
   function somar() {
-    cliques.set(ler(cliques) + 1);
+    cliques.set(get(cliques) + 1);
   }
 &lt;/script&gt;
 
@@ -489,7 +339,7 @@ export const total = derived([paes, bolos], ([$paes, $bolos]) => $paes * 0.9 + $
 &lt;button onclick={somar}&gt;+1&lt;/button&gt;</pre>
 </div>
 
-<p>O <code>ler</code> da solução é o <code>get</code> com outro nome: assina, guarda o valor que chega, cancela a assinatura e devolve. São quatro linhas que você não escreve quando importa <code>get</code> de <code>svelte/store</code>.</p>
+<p><code>get(cliques)</code> é esse mesmo assinar-e-cancelar, pronto na biblioteca: ele devolve o valor de agora e não deixa ninguém inscrito. A solução troca <code>set(1)</code> por <code>set(get(cliques) + 1)</code> — e a tela sobe 1, 2, 3 a cada clique.</p>
 
 <p>E aqui está a prova de que o módulo funciona fora do componente, no terminal, sem navegador nenhum:</p>
 
