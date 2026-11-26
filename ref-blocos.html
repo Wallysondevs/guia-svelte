@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blocos Lógicos — {#if}, {#each}, {#await}, {#key} e snippets | Guia Svelte</title>
+<meta name="description" content="Referência dos blocos do Svelte 5: {#if}, {:else if}, {#each} com índice e chave, {#await}, {#key}, {#snippet} com {@render}, {@const} e {@debug}, com saídas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Blocos Lógicos</span></h1>
+
+<p class="intro">A Ana tem um caderno de pedidos com páginas de três tipos: a página do "se", a página da lista e a página da espera. Na página do "se", ela escreve o que fazer quando o cliente quer entrega e o que fazer quando quer retirar. Na lista, ela repete a mesma linha para cada pão. Na espera, ela anota o que mostrar enquanto o fornecedor não responde. No Svelte, essas três páginas têm nome: <code>{#if}</code>, <code>{#each}</code> e <code>{#await}</code>. Os <strong>blocos lógicos</strong> são isso — pedaços de HTML que só aparecem em certas condições, ou que se repetem.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como um bloco abre com <code>{#nome}</code> e fecha com <code>{/nome}</code>.</li>
+  <li><code>{#if}</code>, <code>{:else if}</code> e <code>{:else}</code> para escolher o que aparece.</li>
+  <li><code>{#each}</code> para repetir, com índice e com chave de identidade.</li>
+  <li>O <code>{:else}</code> do each, que resolve a lista vazia.</li>
+  <li><code>{#await}</code> com <code>{:then}</code> e <code>{:catch}</code> para o que ainda não chegou.</li>
+  <li><code>{#key}</code> para jogar um pedaço fora e desenhar de novo.</li>
+  <li><code>{#snippet}</code> e <code>{@render}</code> no lugar do antigo slot.</li>
+  <li>Os três arrobas: <code>{@const}</code>, <code>{@html}</code> e <code>{@debug}</code>.</li>
+  <li>As mensagens reais quando um bloco fica aberto, trocado ou fora de lugar.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: chave com cerquilha abre, chave com barra fecha</h2>
+
+<p>Uma expressão dentro de chaves devolve um valor. Um bloco dentro de chaves <em>decide</em> o que aparece. A diferença está em dois sinais: <code>#</code> na abertura e <code>/</code> no fechamento. Entre um e outro fica o HTML que pertence ao bloco.</p>
+
+<pre class="file" data-file="src/Status.svelte">&lt;script&gt;
+  let aberta = $state(true);
+&lt;/script&gt;
+
+{#if aberta}
+  &lt;p&gt;Aberta agora&lt;/p&gt;
+{:else}
+  &lt;p&gt;Fechada&lt;/p&gt;
+{/if}</pre>
+
+<pre class="out">&lt;p&gt;Aberta agora&lt;/p&gt;</pre>
+
+<p>O compilador escolheu o primeiro caminho porque <code>aberta</code> vale <code>true</code>, e o segundo parágrafo não existe no HTML gerado. Não é uma questão de esconder com CSS: o conteúdo que não foi escolhido simplesmente não é criado. Isso economiza memória e evita que um leitor de tela anuncie um texto que ninguém deveria ver.</p>
+
+<dl class="anatomy">
+  <dt>{#if aberta}</dt><dd>a <strong>abertura</strong>: cerquilha, nome do bloco e a condição. A condição é qualquer expressão que resulte em verdadeiro ou falso.</dd>
+  <dt>{:else}</dt><dd>a <strong>alternativa</strong>: dois-pontos, nome da seção. Não fecha o bloco, só muda de caminho.</dd>
+  <dt>{/if}</dt><dd>o <strong>fechamento</strong>: barra e o mesmo nome da abertura. É obrigatório e sempre igual ao nome que abriu.</dd>
+  <dt>&lt;p&gt;…&lt;/p&gt;</dt><dd>o <strong>conteúdo</strong> do bloco. Pode ter quantas tags quiser, inclusive outros blocos dentro.</dd>
+</dl>
+
+<p>A regra de ouro: cada <code>{#nome}</code> pede um <code>{/nome}</code>. O compilador conta esses pares e reclama quando sobra ou falta um. Como os blocos podem estar aninhados, a dica prática é a mesma da matemática: feche sempre o último que abriu, como parênteses.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Bloco</th><th>Abre com</th><th>Seções do meio</th><th>Fecha com</th></tr>
+<tr><td>condição</td><td><code>{#if cond}</code></td><td><code>{:else if cond}</code>, <code>{:else}</code></td><td><code>{/if}</code></td></tr>
+<tr><td>repetição</td><td><code>{#each lista as item}</code></td><td><code>{:else}</code></td><td><code>{/each}</code></td></tr>
+<tr><td>espera</td><td><code>{#await promessa}</code></td><td><code>{:then valor}</code>, <code>{:catch erro}</code></td><td><code>{/await}</code></td></tr>
+<tr><td>identidade</td><td><code>{#key valor}</code></td><td>—</td><td><code>{/key}</code></td></tr>
+<tr><td>trecho</td><td><code>{#snippet nome(args)}</code></td><td>—</td><td><code>{/snippet}</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. <code>{#if}</code>: a decisão que cria ou não cria</h2>
+
+<p>O <code>{#if}</code> é o bloco mais usado e o mais fácil de ler em voz alta: "se isto for verdade, mostre aquilo". A padaria da Ana usa para o aviso de forno: se a fornada está pronta, aparece o aviso; se não, não aparece nada.</p>
+
+<pre class="file" data-file="src/Aviso.svelte">&lt;script&gt;
+  let pronta = $state(true);
+&lt;/script&gt;
+
+{#if pronta}
+  &lt;p&gt;Pão quentinho saindo do forno.&lt;/p&gt;
+{/if}</pre>
+
+<pre class="out">&lt;p&gt;Pão quentinho saindo do forno.&lt;/p&gt;</pre>
+
+<p>Sem o <code>{:else}</code>, o bloco tem um caminho só: quando a condição é falsa, nada é desenhado. Esse "nada" é diferente de uma string vazia. Uma string vazia ainda ocupa um parágrafo na página; o bloco falso não ocupa lugar nenhum.</p>
+
+<p>Condições podem ser comparações (<code>hora &lt; 12</code>), chamadas de método (<code>lista.length &gt; 0</code>), negações (<code>!aberta</code>) ou qualquer combinação com <code>&amp;&amp;</code> e <code>||</code>. O que não pode é escrever um comando dentro da chave: <code>{#if let x = 1}</code> não existe, porque a condição é uma pergunta, não uma instrução.</p>
+
+<div class="trysvelte" data-goal="out:Fechada">
+<p class="try-task"><strong>Missão:</strong> a variável diz que a padaria está fechada, mas a placa continua anunciando <code>Aberta agora</code>. Use <code>{#if}</code> e <code>{:else}</code> para a tela mostrar <code>Fechada</code>.</p>
+<pre class="script" data-file="Status.svelte">&lt;script&gt;
+  let aberta = $state(false);
+&lt;/script&gt;
+
+&lt;p&gt;Aberta agora&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Status.svelte">&lt;script&gt;
+  let aberta = $state(false);
+&lt;/script&gt;
+
+{#if aberta}
+  &lt;p&gt;Aberta agora&lt;/p&gt;
+{:else}
+  &lt;p&gt;Fechada&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Repare que a solução não mudou o valor de <code>aberta</code>: mudou o que a tela faz com ele. Esse é o padrão de quase todo bug de condicional — o dado está certo e a decisão está no lugar errado.</p>
+
+<hr>
+
+<h2>3. <code>{:else if}</code>: a escada de decisões</h2>
+
+<p>Quando existe mais de dois caminhos, você encadeia <code>{:else if}</code>. A Ana usa para o turno: madrugada, manhã, tarde, noite. O compilador testa de cima para baixo e para na primeira condição verdadeira.</p>
+
+<pre class="file" data-file="src/Turno.svelte">&lt;script&gt;
+  let hora = $state(7);
+&lt;/script&gt;
+
+{#if hora &lt; 6}
+  &lt;p&gt;madrugada&lt;/p&gt;
+{:else if hora &lt; 12}
+  &lt;p&gt;manhã&lt;/p&gt;
+{:else if hora &lt; 18}
+  &lt;p&gt;tarde&lt;/p&gt;
+{:else}
+  &lt;p&gt;noite&lt;/p&gt;
+{/if}</pre>
+
+<pre class="out">&lt;p&gt;manhã&lt;/p&gt;</pre>
+
+<p>A ordem importa mais do que parece. Se a primeira condição fosse <code>hora &lt; 18</code>, o resultado para 7h seria <code>tarde</code>, porque o primeiro teste já teria passado. Escadas de condição funcionam como uma fila de perguntas: a primeira resposta "sim" decide.</p>
+
+<p>O <code>{:else}</code> final é opcional. Sem ele, uma hora que não casa com nenhuma condição não desenha nada — o que às vezes é exatamente o que você quer (não mostrar aviso para um valor inesperado) e às vezes esconde um bug (um valor fora da faixa some da tela sem avisar).</p>
+
+<div class="tip">
+<strong>Leia como uma tabela</strong>
+<p>Antes de escrever a escada, desenhe a tabela de casos no papel: hora, condição, texto. Se duas linhas da tabela puderem ser verdadeiras ao mesmo tempo, a ordem decide — e é aí que nasce o bug de "apareceu o texto errado".</p>
+</div>
+
+<hr>
+
+<h2>4. <code>{#each}</code>: repetir sem copiar e colar</h2>
+
+<p>A lista de pedidos é o coração da padaria. Escrever um <code>&lt;li&gt;</code> para cada pedido funciona até o dia em que chegam trinta. O <code>{#each}</code> repete um pedaço de HTML para cada item de uma lista:</p>
+
+<pre class="file" data-file="src/Pedidos.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { id: 1, nome: 'pão', qtd: 2 },
+    { id: 2, nome: 'leite', qtd: 1 }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido, i (pedido.id)}
+    &lt;li&gt;{i + 1}. {pedido.nome} × {pedido.qtd}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;1. pão × 2&lt;/li&gt;&lt;li&gt;2. leite × 1&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Três informações aparecem depois do <code>as</code>: o <strong>item</strong> (<code>pedido</code>), o <strong>índice</strong> (<code>i</code>, começando em zero) e a <strong>chave</strong> entre parênteses (<code>pedido.id</code>). As duas últimas são opcionais e cada uma resolve um problema diferente.</p>
+
+<dl class="anatomy">
+  <dt>as pedido</dt><dd>o <strong>nome do item</strong> dentro do bloco. É o que você usa em <code>{pedido.nome}</code>. Pode ser qualquer nome válido de variável.</dd>
+  <dt>, i</dt><dd>o <strong>índice</strong>, opcional, começando em <code>0</code>. Por isso a linha mostra <code>{i + 1}</code>: humanos contam a partir de um.</dd>
+  <dt>(pedido.id)</dt><dd>a <strong>chave</strong>, opcional. Diz ao compilador qual item é qual quando a lista é reordenada ou filtrada.</dd>
+</dl>
+
+<p>O índice é útil para numerar e para saber a posição; a chave é útil para o compilador reaproveitar os elementos certos quando a lista muda. Sem chave, ele usa a posição; com chave, ele usa a identidade. Numa lista que só cresce no fim, dá no mesmo. Numa lista que é ordenada, filtrada ou que ganha item no começo, a diferença aparece: sem chave, o Svelte pode reaproveitar o elemento errado e levar junto o estado de um campo de texto, por exemplo.</p>
+
+<div class="trysvelte" data-goal="out:1. pão 2. leite">
+<p class="try-task"><strong>Missão:</strong> a lista mostra os itens sem número. Use o índice do <code>{#each}</code> para a tela virar <code>1. pão 2. leite</code>.</p>
+<pre class="script" data-file="Lista.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;ol&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+<pre class="solucao" data-file="Lista.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;ol&gt;
+  {#each pedidos as pedido, i}
+    &lt;li&gt;{i + 1}. {pedido}&lt;/li&gt;
+  {/each}
+&lt;/ol&gt;</pre>
+</div>
+
+<hr>
+
+<h2>5. A lista vazia e o <code>{:else}</code> do each</h2>
+
+<p>Uma lista vazia não desenha nada — nem a moldura, nem uma mensagem. Para o cliente, a tela simplesmente fica em branco, e ele não sabe se a padaria não tem pedidos ou se a página quebrou. O <code>{#each}</code> aceita um <code>{:else}</code> que só aparece quando a lista está vazia:</p>
+
+<pre class="file" data-file="src/Vazio.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;Nenhum pedido ainda.&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Nenhum pedido ainda.&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O <code>{:else}</code> aqui não é o mesmo do <code>{#if}</code> por acidente: é a mesma palavra para a mesma ideia — "o caminho que sobra". Só que no each o caminho que sobra é "nenhum item".</p>
+
+<div class="trysvelte" data-goal="out:Nenhum pedido ainda.">
+<p class="try-task"><strong>Missão:</strong> o caderno está vazio e a tela também. Faça aparecer <code>Nenhum pedido ainda.</code> quando a lista não tiver itens — sem inventar um pedido.</p>
+<pre class="script" data-file="Vazio.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="Vazio.svelte">&lt;script&gt;
+  let pedidos = $state([]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {:else}
+    &lt;li&gt;Nenhum pedido ainda.&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Serve para</th><th>Quando a lista está vazia</th></tr>
+<tr><td><code>{#each l as x}</code></td><td>repetir</td><td>nada aparece</td></tr>
+<tr><td><code>{#each l as x, i}</code></td><td>repetir com posição</td><td>nada aparece</td></tr>
+<tr><td><code>{#each l as x (x.id)}</code></td><td>repetir mantendo identidade</td><td>nada aparece</td></tr>
+<tr><td><code>{#each l as x} … {:else} … {/each}</code></td><td>repetir com aviso de vazio</td><td>o aviso aparece</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>6. <code>{#await}</code>: o que mostrar enquanto não chega</h2>
+
+<p>Buscar dados demora. O <code>{#await}</code> organiza os três estados de uma promessa — esperando, deu certo, deu errado — em um bloco só. A padaria usa para o pedido do fornecedor:</p>
+
+<pre class="file" data-file="src/Espera.svelte">&lt;script&gt;
+  let pedido = $state(Promise.resolve('pão quentinho'));
+&lt;/script&gt;
+
+{#await pedido}
+  &lt;p&gt;assando…&lt;/p&gt;
+{:then valor}
+  &lt;p&gt;Pronto: {valor}&lt;/p&gt;
+{:catch erro}
+  &lt;p&gt;Deu errado: {erro.message}&lt;/p&gt;
+{/await}</pre>
+
+<pre class="out">&lt;p&gt;assando…&lt;/p&gt;</pre>
+
+<p>A saída mostra o primeiro caminho porque, no servidor, a promessa ainda não tinha resolvido no instante do desenho. No navegador, o <code>assando…</code> aparece por um instante e é substituído por <code>Pronto: pão quentinho</code> quando a promessa resolve. Esse é o comportamento correto: o HTML chega com o estado de espera e o navegador troca depois.</p>
+
+<p>Existe uma forma curta para quando você só quer o valor: <code>{#await pedido then valor} … {/await}</code> pula o estado de espera. E o <code>{:catch}</code> recebe o erro, que costuma ter <code>.message</code>. Sem o <code>{:catch}</code>, um erro na promessa some silenciosamente — e o cliente fica olhando um "assando…" eterno.</p>
+
+<hr>
+
+<h2>7. <code>{#key}</code>: jogar fora e desenhar de novo</h2>
+
+<p>Às vezes você quer que o compilador <strong>destrua</strong> um pedaço e crie outro, em vez de atualizar o que está lá. Isso acontece quando o conteúdo tem estado próprio — um campo com texto digitado, um componente com posição interna. O <code>{#key}</code> faz isso: quando o valor muda, tudo que está dentro é descartado e recriado.</p>
+
+<pre class="file" data-file="src/Chave.svelte">&lt;script&gt;
+  let produto = $state('pão');
+&lt;/script&gt;
+
+{#key produto}
+  &lt;p&gt;{produto}&lt;/p&gt;
+{/key}</pre>
+
+<pre class="out">&lt;p&gt;pão&lt;/p&gt;</pre>
+
+<p>Com texto simples, o resultado é o mesmo de não ter o bloco. A diferença aparece com componentes dentro: ao trocar <code>produto</code> de <code>pão</code> para <code>leite</code>, um componente que guarda o preço digitado seria recriado do zero, perdendo o que estava escrito. É exatamente o que você quer quando o formulário é de outro produto, e exatamente o que você não quer quando é o mesmo formulário.</p>
+
+<p>O custo é esse: recriar é mais caro do que atualizar. Use <code>{#key}</code> quando a identidade do conteúdo mudou de verdade, não para "forçar" uma atualização que não está acontecendo por outro motivo.</p>
+
+<hr>
+
+<h2>8. <code>{#snippet}</code> e <code>{@render}</code>: o trecho com nome</h2>
+
+<p>Um pedaço de HTML que se repete em vários lugares pode ganhar nome. No Svelte 5, o nome disso é <strong>snippet</strong> (trecho), e ele substitui o antigo <code>&lt;slot&gt;</code>. Você declara uma vez e renderiza quantas vezes quiser, com argumentos diferentes:</p>
+
+<pre class="file" data-file="src/Linha.svelte">{#snippet linha(item, preco)}
+  &lt;li&gt;{item}: R$ {preco.toFixed(2)}&lt;/li&gt;
+{/snippet}
+
+&lt;ul&gt;
+  {@render linha('pão', 0.9)}
+  {@render linha('leite', 4.5)}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;pão: R$ 0.90&lt;/li&gt; &lt;li&gt;leite: R$ 4.50&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O trecho não desenha nada sozinho: ele só aparece onde você chama <code>{@render}</code>. Os argumentos são passados como numa função comum, e o trecho pode ler variáveis de fora do bloco, do mesmo jeito que o resto do componente.</p>
+
+<p>Existe também o trecho especial <code>children</code>, que é o que permite um componente receber conteúdo de quem o usa. O pai escreve o HTML entre as tags e o filho renderiza com <code>{@render children()}</code>. É a substituição direta de <code>&lt;slot /&gt;</code> do Svelte 4, e a aula de composição mostra o caso completo.</p>
+
+<div class="warning">
+<strong>Snippet não é componente</strong>
+<p>Componente tem arquivo próprio e ciclo de vida; snippet mora dentro de um componente e serve para reaproveitar marcação. Se o pedaço precisa de estado complexo, de <code>$effect</code> ou de ser usado em outro arquivo, faça um componente.</p>
+</div>
+
+<hr>
+
+<h2>9. Os três arrobas: <code>{@const}</code>, <code>{@html}</code> e <code>{@debug}</code></h2>
+
+<p>Além das chaves de expressão e dos blocos, existem três diretivas que começam com arroba. Elas não abrem bloco: são instruções de uma linha.</p>
+
+<p><code>{@const}</code> declara uma constante local dentro de um bloco, útil quando a mesma conta aparece várias vezes no mesmo trecho:</p>
+
+<pre class="file" data-file="src/Desconto.svelte">&lt;script&gt;
+  let precos = $state([0.9, 1.2]);
+&lt;/script&gt;
+
+{#each precos as preco}
+  {@const comDesconto = preco * 0.9}
+  &lt;p&gt;{comDesconto.toFixed(2)}&lt;/p&gt;
+{/each}</pre>
+
+<pre class="out">&lt;p&gt;0.81&lt;/p&gt;&lt;p&gt;1.08&lt;/p&gt;</pre>
+
+<p>O <code>{@const}</code> precisa ser filho direto de um bloco: dentro de um <code>{#each}</code>, de um <code>{#if}</code>, de um <code>{:then}</code>. Solto no meio do HTML, ele não compila. E o nome vale só ali dentro — fora do bloco, <code>comDesconto</code> não existe.</p>
+
+<p><code>{@html}</code> você já viu na aula de sintaxe: injeta marcação de verdade, sem escapar. E <code>{@debug}</code> é uma pausa de investigação — ele mostra os valores no console quando aquelas variáveis mudam e, no servidor, imprime o objeto uma vez:</p>
+
+<pre class="file" data-file="src/Debug.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{@debug nome}
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana&lt;/p&gt;</pre>
+
+<p>Na saída do terminal, antes do HTML, aparece <code>{ nome: 'Ana' }</code>. No navegador, com o painel aberto, o <code>{@debug}</code> interrompe a execução como um ponto de parada e mostra a pilha de chamadas. É a ferramenta para o caso "não faço ideia de por que este valor está errado aqui". O <code>{@debug}</code> não desenha nada, então pode ficar no arquivo sem quebrar o layout — mas convém apagar antes de publicar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Diretiva</th><th>O que faz</th><th>Onde pode ficar</th></tr>
+<tr><td><code>{@const x = expr}</code></td><td>cria uma constante local</td><td>filho direto de um bloco</td></tr>
+<tr><td><code>{@html texto}</code></td><td>injeta HTML sem escapar</td><td>em qualquer lugar do HTML</td></tr>
+<tr><td><code>{@render trecho(args)}</code></td><td>desenha um snippet</td><td>em qualquer lugar do HTML</td></tr>
+<tr><td><code>{@debug x}</code></td><td>mostra o valor no console</td><td>em qualquer lugar do HTML</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As quatro mensagens abaixo saíram do compilador desta versão. Todas apontam linha e coluna, e todas têm tradução literal curta.</p>
+
+<div class="cenario">
+<strong>Erro 1 — bloco fechado com o nome errado</strong>
+<p>Um <code>{#each}</code> fechado com <code>{/if}</code>. O compilador está esperando o fechamento do each e encontra outro nome.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+{#each pedidos as pedido}
+  &lt;p&gt;{pedido}&lt;/p&gt;
+{/if}</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 2): Expected token each</pre>
+<p>"Expected token each" quer dizer "esperava o token each". A linha apontada é a do fechamento errado, o que facilita: troque <code>{/if}</code> por <code>{/each}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — condição que não existe</strong>
+<p><code>{#if}</code> sem expressão. O compilador espera um espaço e uma condição depois do nome do bloco.</p>
+<pre class="file" data-file="src/App.svelte">{#if}
+  &lt;p&gt;oi&lt;/p&gt;
+{/if}</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 4): Expected whitespace</pre>
+<p>A tradução é "esperava um espaço" — o sinal de que falta a expressão. Escreva <code>{#if aberta}</code> ou, se a ideia era sempre mostrar, apague o bloco.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>{@render}</code> de um trecho que não existe</strong>
+<p>Este compila: o erro aparece na hora de desenhar, com o nome que você escreveu.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {@render linha('pão')}
+&lt;/ul&gt;</pre>
+<pre class="out">linha is not defined</pre>
+<p>"linha is not defined" quer dizer que nenhum snippet com esse nome foi declarado. Declare o <code>{#snippet linha(item)}</code> antes de chamar, ou confira a grafia.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 4 — <code>{@const}</code> fora de bloco</strong>
+<p>A diretiva precisa de um bloco para morar. Solta no HTML, ela é recusada com a lista dos lugares permitidos.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão']);
+&lt;/script&gt;
+
+&lt;p&gt;{@const total = 2}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 3): `{@const}` must be the immediate child of `{#snippet}`, `{#if}`, `{:else if}`, `{:else}`, `{#each}`, `{:then}`, `{:catch}`, `&lt;svelte:fragment&gt;`, `&lt;svelte:boundary&gt;` or `&lt;Component&gt;`</pre>
+<p>A mensagem é comprida e útil: lista todos os pais aceitos. "Immediate child" quer dizer filho direto — não adianta estar dentro do bloco se houver outra tag entre os dois.</p>
+</div>
+
+<p>Há ainda um erro de posição que confunde muito, porque a mensagem fala de fechar o bloco anterior:</p>
+
+<pre class="out">Erro de compilação (linha 1, coluna 1): {:...} block is invalid at this position (did you forget to close the preceding element or block?)</pre>
+
+<p>Ele aparece quando você escreve <code>{:then}</code>, <code>{:catch}</code> ou <code>{:else}</code> sem o bloco que os aceita. "Did you forget to close the preceding element or block?" é literalmente "esqueceu de fechar o elemento ou bloco anterior?".</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>Para consulta, o resumo dos blocos com a forma exata e o resultado. A segunda tabela é a dos erros que você vai encontrar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo mínimo</th><th>Resultado</th></tr>
+<tr><td>condição</td><td><code>{#if aberta} &lt;p&gt;aberta&lt;/p&gt; {/if}</code></td><td>o parágrafo ou nada</td></tr>
+<tr><td>alternativa</td><td><code>{:else}</code></td><td>o outro caminho</td></tr>
+<tr><td>escada</td><td><code>{:else if hora &lt; 12}</code></td><td>a primeira condição verdadeira</td></tr>
+<tr><td>repetição</td><td><code>{#each lista as item}</code></td><td>um bloco por item</td></tr>
+<tr><td>posição</td><td><code>{#each lista as item, i}</code></td><td><code>i</code> começa em 0</td></tr>
+<tr><td>identidade</td><td><code>{#each lista as item (item.id)}</code></td><td>reaproveita pelo id</td></tr>
+<tr><td>vazio</td><td><code>{:else}</code> dentro do each</td><td>aparece quando a lista está vazia</td></tr>
+<tr><td>espera</td><td><code>{#await p} … {:then v} … {:catch e} … {/await}</code></td><td>três estados da promessa</td></tr>
+<tr><td>recriar</td><td><code>{#key produto} … {/key}</code></td><td>descarta e desenha de novo</td></tr>
+<tr><td>trecho</td><td><code>{#snippet nome(a)} … {/snippet}</code></td><td>marcação com nome</td></tr>
+<tr><td>trecho na tela</td><td><code>{@render nome(1)}</code></td><td>o trecho desenhado</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que aconteceu</th><th>Conserto</th></tr>
+<tr><td><code>Expected token each</code></td><td>fechamento com nome diferente</td><td>use <code>{/each}</code></td></tr>
+<tr><td><code>Expected whitespace</code></td><td>falta a condição ou o valor</td><td>escreva <code>{#if cond}</code></td></tr>
+<tr><td><code>Block was left open</code></td><td>faltou o fechamento</td><td>conte os pares</td></tr>
+<tr><td><code>linha is not defined</code></td><td>snippet não declarado</td><td>declare o <code>{#snippet}</code></td></tr>
+<tr><td><code>`{@const}` must be the immediate child of …</code></td><td>a diretiva está fora de bloco</td><td>mova para dentro do bloco</td></tr>
+<tr><td><code>{:...} block is invalid at this position</code></td><td>seção sem bloco pai</td><td>confira o <code>{#await}</code> ou <code>{#if}</code> acima</td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Com o servidor no ar, cada bloco novo aparece no navegador assim que o arquivo é salvo. Se o bloco estiver errado, o erro toma o lugar da página com a mesma linha e coluna que o compilador mostraria no terminal.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+&gt; loja@0.0.1 preview
+&gt; vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O <code>preview</code> serve a pasta <code>dist/</code> — o resultado do <code>npm run build</code>. É aqui que você confere o bloco <code>{#await}</code> de verdade: no servidor de desenvolvimento a promessa pode resolver rápido demais para você ver o "assando…".</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Bloco abre com <code>{#nome}</code>, pode ter seções <code>{:nome}</code> e fecha com <code>{/nome}</code> — sempre com o mesmo nome.</li>
+  <li><code>{#if}</code> cria ou não cria o conteúdo; não é CSS escondendo.</li>
+  <li><code>{:else if}</code> forma uma escada: a primeira condição verdadeira decide, e a ordem importa.</li>
+  <li><code>{#each lista as item}</code> repete; <code>, i</code> dá o índice a partir de zero; <code>(item.id)</code> dá identidade ao item.</li>
+  <li>O <code>{:else}</code> do each resolve a lista vazia com uma mensagem honesta.</li>
+  <li><code>{#await}</code> mostra espera, sucesso e erro; no servidor a saída costuma ser o estado de espera.</li>
+  <li><code>{#key}</code> destrói e recria o conteúdo quando o valor muda — caro, e necessário quando a identidade muda.</li>
+  <li><code>{#snippet}</code> com <code>{@render}</code> substitui o <code>&lt;slot&gt;</code> do Svelte 4.</li>
+  <li><code>{@const}</code> só é filho direto de bloco; <code>{@html}</code> injeta marcação; <code>{@debug}</code> mostra no console.</li>
+  <li>Erro de bloco vem com linha e coluna, e a mensagem costuma dizer exatamente qual token faltou.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

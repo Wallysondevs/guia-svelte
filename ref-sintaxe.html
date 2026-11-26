@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sintaxe do .svelte — tudo o que pode aparecer num arquivo | Guia Svelte</title>
+<meta name="description" content="Referência da sintaxe de um arquivo .svelte: os três blocos, as chaves, atributos, eventos, diretivas, comentários e o CSS escopado, com saídas reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Sintaxe do .svelte</span></h1>
+
+<p class="intro">A Ana guarda as receitas da padaria num caderno de capa dura. Cada receita tem três partes: os ingredientes, o modo de preparo e as anotações de apresentação ("assar em forno alto", "servir quente"). Um arquivo <code>.svelte</code> é o mesmo caderno, com as mesmas três partes e uma regra só: o que está escrito vale para aquele componente e para mais ninguém. Esta página é a folha de consulta da Ana: tudo o que pode aparecer dentro do arquivo, na ordem em que aparece, com a saída que o compilador realmente devolve.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>As três camadas de um arquivo <code>.svelte</code> e o que vai em cada uma.</li>
+  <li>Onde as chaves <code>{ }</code> podem entrar — e o que não pode ficar dentro delas.</li>
+  <li>As quatro formas de escrever um atributo: fixo, entre chaves, booleano e espalhado.</li>
+  <li>Como os eventos mudaram de cara no Svelte 5: <code>onclick</code> no lugar de <code>on:click</code>.</li>
+  <li>O que é comentário de HTML e o que é comentário de JavaScript.</li>
+  <li>As diretivas <code>bind:</code>, <code>class:</code>, <code>style:</code> e <code>use:</code> em uma tabela.</li>
+  <li>A diferença entre <code>{texto}</code> e <code>{@html texto}</code>, com a saída dos dois.</li>
+  <li>Por que o CSS ganha um selo <code>svelte-xxxxx</code> e o que isso protege.</li>
+  <li>Os erros de sintaxe mais comuns, com a mensagem copiada do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: três camadas, uma responsabilidade cada</h2>
+
+<p>Quem começa a programar tende a misturar tudo num lugar só: o texto da tela, a conta do preço e a cor da letra. Funciona no começo e vira um problema no mês seguinte, quando a Ana quer mudar o preço do pão e precisa caçar o número no meio da marcação. O arquivo <code>.svelte</code> evita isso separando o que é <strong>dado</strong>, o que é <strong>tela</strong> e o que é <strong>aparência</strong>.</p>
+
+<p>Pense de novo no caderno de receitas. Os ingredientes ficam no alto, numa lista curta. O modo de preparo vem embaixo, em passos. As anotações de forno e de apresentação ficam na margem. Ninguém escreve "duas xícaras de farinha" no meio do passo 4: a lista de ingredientes é o lugar disso. No componente, a lista de ingredientes é o bloco <code>&lt;script&gt;</code>, os passos são o HTML e as anotações de margem são o bloco <code>&lt;style&gt;</code>.</p>
+
+<p>A sintaxe existe para o compilador saber onde cada camada começa e termina. Fora dos blocos, tudo é HTML — e o HTML tem regras que você provavelmente já conhece: tag que abre, tag que fecha, atributo entre aspas. Dentro das chaves, tudo é JavaScript. Essa divisão é a única coisa que você precisa decorar; o resto se consulta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No caderno da Ana</th><th>No arquivo <code>.svelte</code></th><th>O que o compilador faz</th></tr>
+<tr><td>Lista de ingredientes</td><td>bloco <code>&lt;script&gt;</code></td><td>lê, calcula e guarda os valores</td></tr>
+<tr><td>Modo de preparo</td><td>o HTML do arquivo</td><td>transforma em marcação que o navegador entende</td></tr>
+<tr><td>Anotação de forno e de apresentação</td><td>bloco <code>&lt;style&gt;</code></td><td>renomeia os seletores e gera o CSS do componente</td></tr>
+<tr><td>Uma receita só para o pão doce</td><td>um arquivo <code>PaoDoce.svelte</code></td><td>compila cada arquivo separadamente</td></tr>
+<tr><td>"Serve 8 porções" escrito a lápis</td><td><code>let porcoes = $state(8)</code></td><td>liga o valor ao lugar onde ele aparece</td></tr>
+</table>
+</div>
+
+<p>Repare na última linha: o valor não está escrito na tela, ele está guardado com um nome. Toda a sintaxe do Svelte gira em volta dessa ideia — dar nomes às coisas e dizer onde elas aparecem. O resto desta página é o catálogo desses lugares.</p>
+
+<hr>
+
+<h2>2. O esqueleto: HTML puro já é um componente</h2>
+
+<p>O menor componente possível não tem script nem estilo. É só marcação, como uma página antiga. O compilador aceita, porque o único bloco obrigatório é o HTML:</p>
+
+<pre class="file" data-file="src/Saudacao.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;p&gt;Pão francês: R$ 0,90&lt;/p&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Padaria da Ana&lt;/h1&gt; &lt;p&gt;Pão francês: R$ 0,90&lt;/p&gt;</pre>
+
+<p>O que sai é quase idêntico ao que entrou, e isso é intencional: sem valor dinâmico, não há trabalho a fazer. O compilador só removeu a quebra de linha entre as duas tags e juntou tudo numa linha. Se você abrir o arquivo gerado verá uma função que cria essas tags uma vez e as pendura na página — mas esse é assunto de outra aula.</p>
+
+<p>Nome do arquivo também é sintaxe. Componentes começam com letra maiúscula: <code>Saudacao.svelte</code>, <code>PaoDoce.svelte</code>, <code>ListaDePedidos.svelte</code>. A maiúscula não é estilo, é como o compilador distingue uma tag sua de uma tag do HTML. Escrever <code>&lt;saudacao /&gt;</code> faz o navegador criar um elemento desconhecido, sem conteúdo e sem aviso; escrever <code>&lt;Saudacao /&gt;</code> monta o seu componente.</p>
+
+<div class="tip">
+<strong>Um arquivo, um componente</strong>
+<p>O nome do arquivo é o nome do componente. Se o arquivo é <code>Cartao.svelte</code>, a tag é <code>&lt;Cartao /&gt;</code> — nem mais, nem menos. Renomear o arquivo sem renomear quem o usa é uma das causas mais comuns de "não achei o componente".</p>
+</div>
+
+<p>Uma consequência prática: você pode ter <code>src/Saudacao.svelte</code> e <code>src/Cartao.svelte</code> no mesmo projeto, cada um com seu HTML, seu script e seu estilo. Nada de um vaza para o outro. É a mesma lógica de ter receitas separadas no caderno: mexer na receita do pão doce não altera a do pão francês.</p>
+
+<hr>
+
+<h2>3. As chaves: o buraco por onde o JavaScript entra</h2>
+
+<p>Tudo o que não é HTML fica entre chaves. Um par de chaves no meio do texto significa "calcule isto e escreva o resultado aqui". O conteúdo pode ser um nome, uma conta, uma chamada de método, uma decisão curta:</p>
+
+<pre class="file" data-file="src/Etiqueta.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let quantidade = $state(3);
+&lt;/script&gt;
+
+&lt;p&gt;{quantidade} pães = R$ {(preco * quantidade).toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;3 pães = R$ 2.70&lt;/p&gt;</pre>
+
+<p>O compilador calculou <code>0.9 * 3</code>, chamou <code>toFixed(2)</code> no resultado e escreveu <code>2.70</code>. Note que a expressão tem parênteses em volta da conta: sem eles, o ponto do <code>toFixed</code> grudaria no <code>3</code> e a conta seria outra. Parênteses dentro de chaves são só parênteses de JavaScript, valem a regra de sempre.</p>
+
+<dl class="anatomy">
+  <dt>{quantidade}</dt><dd>uma <strong>variável</strong> mostrada como texto. O valor vem do <code>let quantidade = $state(3)</code>.</dd>
+  <dt>{(preco * quantidade).toFixed(2)}</dt><dd>uma <strong>expressão</strong>: primeiro a conta entre parênteses, depois o método que formata o número com duas casas.</dd>
+  <dt>R$</dt><dd>texto comum, fora das chaves. O cifrão não tem significado especial aqui: é só um caractere.</dd>
+  <dt>pães =</dt><dd>mais texto comum. O compilador não traduz nem corrige o que está fora das chaves.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="out:ANA">
+<p class="try-task"><strong>Missão:</strong> a tela mostra <code>ana</code> em minúsculas. Use um método de texto dentro das chaves para a placa mostrar <code>ANA</code> — sem trocar o valor guardado.</p>
+<pre class="script" data-file="Etiqueta.svelte">&lt;script&gt;
+  let nome = $state('ana');
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Etiqueta.svelte">&lt;script&gt;
+  let nome = $state('ana');
+&lt;/script&gt;
+
+&lt;p&gt;{nome.toUpperCase()}&lt;/p&gt;</pre>
+</div>
+
+<p>Uma chave por expressão. Não dá para abrir uma chave e escrever um <code>if</code>, um <code>for</code> ou um <code>let</code> dentro: esses são <em>comandos</em>, e as chaves esperam um <em>valor</em>. Para decidir ou repetir existe a sintaxe de bloco, com <code>{#if}</code> e <code>{#each}</code>, que tem aula própria. A regra prática: se a resposta da pergunta "isto vira um valor?" for sim, cabe nas chaves.</p>
+
+<p>Também não se escreve chave dentro de comentário de HTML esperando que ela seja avaliada. Comentário é comentário; o compilador ignora o conteúdo, inclusive as chaves.</p>
+
+<hr>
+
+<h2>4. Atributos: do fixo ao dinâmico</h2>
+
+<p>Atributo é o que fica dentro da tag, antes do <code>&gt;</code>: <code>title</code>, <code>href</code>, <code>disabled</code>. No Svelte ele pode ser fixo (texto entre aspas) ou dinâmico (chaves). A diferença parece pequena e muda tudo: o fixo é escrito uma vez, o dinâmico acompanha o valor.</p>
+
+<pre class="file" data-file="src/Botao.svelte">&lt;script&gt;
+  let desabilitado = $state(true);
+  let etiqueta = $state('Salvar pedido');
+&lt;/script&gt;
+
+&lt;button disabled={desabilitado} title={etiqueta}&gt;{etiqueta}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button disabled="" title="Salvar pedido"&gt;Salvar pedido&lt;/button&gt;</pre>
+
+<p>Dois detalhes que o HTML sozinho não explica. Primeiro: <code>disabled=""</code> aparece vazio no HTML gerado. Atributo booleano funciona por presença: se está lá, o botão está desabilitado; se não está, não está. Enquanto o valor for <code>true</code>, o compilador mantém o atributo. Quando virar <code>false</code>, ele tira o atributo inteiro.</p>
+
+<p>Segundo: o mesmo nome de variável aparece duas vezes, uma como atributo e outra como conteúdo. Isso é normal e desejável. O <code>title</code> é o texto que aparece ao passar o mouse; o conteúdo é o que está escrito no botão. Os dois vêm de <code>etiqueta</code>, então mudar a variável muda os dois de uma vez.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Quando usar</th></tr>
+<tr><td>fixo</td><td><code>type="button"</code></td><td>valor que nunca muda naquele lugar</td></tr>
+<tr><td>dinâmico</td><td><code>title={etiqueta}</code></td><td>valor que vem de uma variável ou conta</td></tr>
+<tr><td>booleano</td><td><code>disabled={desabilitado}</code></td><td>presença ou ausência do atributo</td></tr>
+<tr><td>espalhado</td><td><code>{...attrs}</code></td><td>quando os atributos já estão num objeto</td></tr>
+<tr><td>classe condicional</td><td><code>class:negrito={grande}</code></td><td>liga e desliga uma classe pelo valor</td></tr>
+</table>
+</div>
+
+<p>O espalhamento merece um exemplo, porque é o jeito mais curto de repassar um monte de atributos de uma vez. Ele pega cada chave do objeto e vira um atributo:</p>
+
+<pre class="file" data-file="src/Salvar.svelte">&lt;script&gt;
+  let attrs = $state({ type: 'button', disabled: true, title: 'Salvar pedido' });
+&lt;/script&gt;
+
+&lt;button {...attrs}&gt;Salvar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button type="button" disabled="" title="Salvar pedido"&gt;Salvar&lt;/button&gt;</pre>
+
+<p>Os três pontos antes do nome são a sintaxe de espalhamento do JavaScript, a mesma dos objetos e das listas. O compilador não copia atributo por atributo no seu código: ele repassa o objeto e deixa o navegador aplicar. Isso é ótimo para repassar opções de um botão para outro componente, e perigoso quando o objeto vem de fora sem controle — um atributo inesperado pode aparecer na tela.</p>
+
+<div class="warning">
+<strong>Aspas e chaves não se misturam</strong>
+<p><code>title="etiqueta"</code> escreve a palavra <em>etiqueta</em> na tela. <code>title={etiqueta}</code> escreve o valor da variável. A confusão entre os dois é o erro número um de quem está começando, e o compilador não reclama: para ele, as duas formas são válidas.</p>
+</div>
+
+<hr>
+
+<h2>5. Eventos: <code>onclick</code> e os vizinhos</h2>
+
+<p>No Svelte 5, evento é atributo como qualquer outro, com o nome do evento em minúsculas depois de <code>on</code>. O valor tem de ser uma função — algo que o navegador possa chamar quando o evento acontecer:</p>
+
+<pre class="file" data-file="src/Contador.svelte">&lt;script&gt;
+  let cliques = $state(0);
+
+  function somar() {
+    cliques = cliques + 1;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={somar}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;Cliques: 0&lt;/button&gt;</pre>
+
+<p>O HTML gerado não mostra o evento, e isso confunde na primeira leitura. O compilador não escreve <code>onclick="..."</code> no arquivo final: ele guarda a função e a liga ao elemento quando monta a página. Você vê o resultado do trabalho (o botão), não o mecanismo.</p>
+
+<dl class="anatomy">
+  <dt>onclick</dt><dd>o <strong>nome do evento</strong>, tudo em minúsculas e sem dois-pontos. O antigo <code>on:click</code> do Svelte 4 ainda compila, mas o compilador avisa que está fora de moda.</dd>
+  <dt>{somar}</dt><dd>o <strong>valor</strong>: uma função já declarada. Sem parênteses, porque você não quer chamar agora — quer entregar a função para o navegador chamar depois.</dd>
+  <dt>{() =&gt; cliques++}</dt><dd>a mesma coisa em uma linha, uma <strong>função anônima</strong>. Útil quando a ação é curta.</dd>
+  <dt>cliques = cliques + 1</dt><dd>a <strong>mudança de estado</strong>. Só variáveis criadas com <code>$state</code> avisam a tela.</dd>
+</dl>
+
+<p>Os nomes seguem o padrão do navegador, sem tradução: <code>oninput</code> a cada tecla digitada, <code>onchange</code> quando o campo perde o foco, <code>onsubmit</code> no envio de um formulário, <code>onkeydown</code> na tecla pressionada, <code>onmouseenter</code> quando o mouse entra no elemento. Se você souber o nome do evento em JavaScript, sabe o nome do atributo: é o mesmo, com <code>on</code> na frente.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Atributo</th><th>Dispara quando</th><th>Valor típico</th></tr>
+<tr><td><code>onclick</code></td><td>o elemento é clicado</td><td><code>{() =&gt; n++}</code></td></tr>
+<tr><td><code>oninput</code></td><td>o conteúdo de um campo muda</td><td><code>{(e) =&gt; texto = e.target.value}</code></td></tr>
+<tr><td><code>onsubmit</code></td><td>o formulário é enviado</td><td><code>{(e) =&gt; { e.preventDefault(); salvar(); }}</code></td></tr>
+<tr><td><code>onkeydown</code></td><td>uma tecla é pressionada</td><td><code>{(e) =&gt; e.key === 'Enter' &amp;&amp; salvar()}</code></td></tr>
+<tr><td><code>onchange</code></td><td>o campo muda e perde o foco</td><td><code>{validar}</code></td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o contador começa em 5 e o botão não soma. Faça o texto virar <code>Cliques: 1</code> depois de <strong>um</strong> clique — começando do zero.</p>
+<pre class="script" data-file="Contador.svelte">&lt;script&gt;
+  let cliques = $state(5);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (cliques = cliques + 0)}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="Contador.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (cliques = cliques + 1)}&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<p>Depois de rodar, clique no botão e veja o número subir. O valor não está escrito no HTML: ele é lido da variável a cada desenho. É essa ligação que faz o contador funcionar.</p>
+
+<hr>
+
+<h2>6. Os três blocos e os dois tipos de comentário</h2>
+
+<p>Um componente pode ter um <code>&lt;script&gt;</code> no topo, HTML no meio e um <code>&lt;style&gt;</code> no fim. Só o HTML é obrigatório. A ordem importa para quem lê, não para o compilador, mas o guia usa sempre esta porque é a que o projeto da Ana segue.</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let titulo = $state('Pão francês');
+&lt;/script&gt;
+
+&lt;h2&gt;{titulo}&lt;/h2&gt;
+&lt;p&gt;Assado às 5h.&lt;/p&gt;
+
+&lt;style&gt;
+  h2 {
+    color: #2e7d32;
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;h2 class="svelte-11u2pyd"&gt;Pão francês&lt;/h2&gt; &lt;p&gt;Assado às 5h.&lt;/p&gt;</pre>
+
+<p>Repare que só o <code>h2</code> ganhou o selo da classe. O seletor do CSS era <code>h2</code>, então só as tags que casam com ele recebem o selo; o <code>p</code> ficou sem, porque nenhuma regra o alcança. A seção 9 volta a esse ponto.</p>
+
+<p>Comentário tem duas sintaxes e elas não são intercambiáveis. <code>&lt;!-- assim --&gt;</code> é comentário de HTML: fica no arquivo, mas não chega ao navegador. Dentro do <code>&lt;script&gt;</code>, <code>// assim</code> e <code>/* assim */</code> são comentários de JavaScript, lidos pelo compilador e jogados fora. O que não existe é comentário de Svelte com chaves: <code>{/* texto */}</code> dentro do HTML é lido como expressão e vira erro.</p>
+
+<pre class="file" data-file="src/Comentado.svelte">&lt;!-- esta linha não chega ao navegador --&gt;
+&lt;script&gt;
+  // comentário de JavaScript
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;Padaria&lt;/h1&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Padaria&lt;/h1&gt;</pre>
+
+<p>O comentário de HTML desapareceu do resultado porque o compilador não precisa dele. Isso é bom para o tamanho da página e ruim para quem esperava "esconder" uma senha num comentário: comentário não é lugar de segredo, nem de código desativado que você pretende reativar depois.</p>
+
+<hr>
+
+<h2>7. Diretivas: um dois-pontos que muda o comportamento</h2>
+
+<p>Diretiva é um atributo com <code>:</code> no nome, e cada uma liga um recurso do Svelte a um elemento. São poucas, e a tabela abaixo é a lista completa do que aparece no dia a dia:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Diretiva</th><th>Exemplo</th><th>O que faz</th></tr>
+<tr><td><code>bind:value</code></td><td><code>&lt;input bind:value={nome} /&gt;</code></td><td>mantém campo e variável iguais nos dois sentidos</td></tr>
+<tr><td><code>bind:checked</code></td><td><code>&lt;input type="checkbox" bind:checked={pago} /&gt;</code></td><td>liga a marcação do checkbox a um booleano</td></tr>
+<tr><td><code>bind:this</code></td><td><code>&lt;canvas bind:this={tela} /&gt;</code></td><td>guarda o elemento na variável para mexer nele</td></tr>
+<tr><td><code>class:</code></td><td><code>class:negrito={grande}</code></td><td>liga uma classe quando o valor é verdadeiro</td></tr>
+<tr><td><code>style:</code></td><td><code>style:color={cor}</code></td><td>aplica uma propriedade de estilo</td></tr>
+<tr><td><code>use:</code></td><td><code>use:clicarFora</code></td><td>roda uma função quando o elemento é montado</td></tr>
+<tr><td><code>transition:</code></td><td><code>transition:fly</code></td><td>anima a entrada e a saída do elemento</td></tr>
+</table>
+</div>
+
+<p>As duas mais usadas no começo são <code>bind:value</code> e <code>class:</code>. A primeira dispensa o <code>oninput</code> manual; a segunda troca o cálculo de nomes de classe por um booleano:</p>
+
+<pre class="file" data-file="src/Preferencia.svelte">&lt;script&gt;
+  let cor = $state('#2e7d32');
+  let grande = $state(true);
+&lt;/script&gt;
+
+&lt;p style:color={cor} class:negrito={grande}&gt;Pão quentinho&lt;/p&gt;
+
+&lt;style&gt;
+  .negrito { font-weight: bold; }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;p class="svelte-10pdsnf negrito" style="color: #2e7d32;"&gt;Pão quentinho&lt;/p&gt;</pre>
+
+<p>O resultado tem duas classes: o selo que o compilador colocou para o estilo escopado e a classe <code>negrito</code> que veio da diretiva. As duas convivem no mesmo atributo, na ordem em que o compilador as escreveu. Quando <code>grande</code> virar <code>false</code>, a classe sai e o texto perde o negrito sem que ninguém mexa no CSS.</p>
+
+<p>Diretiva não é atalho mágico: é sintaxe que o compilador traduz para código comum. <code>class:negrito={grande}</code> vira uma instrução que adiciona ou remove a classe quando o valor muda. Saber disso ajuda quando algo não funciona — o problema está no valor, não na diretiva.</p>
+
+<hr>
+
+<h2>8. Texto ou HTML: <code>{texto}</code> e <code>{@html texto}</code></h2>
+
+<p>Quando a Ana digita o nome de um produto, esse texto pode conter qualquer caractere, inclusive os que o HTML usa para marcar tags. Se o componente tratasse esse texto como marcação, alguém poderia digitar <code>&lt;b&gt;</code> e mudar a página inteira. Por isso o padrão é o seguro: chaves tratam o valor como <strong>texto</strong>.</p>
+
+<pre class="file" data-file="src/Recado.svelte">&lt;script&gt;
+  let texto = $state('&lt;b&gt;pão quentinho&lt;/b&gt;');
+&lt;/script&gt;
+
+&lt;p&gt;{texto}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;&amp;lt;b&gt;pão quentinho&amp;lt;/b&gt;&lt;/p&gt;</pre>
+
+<p>As tags aparecem escritas na tela, porque o compilador trocou cada sinal de menor por <code>&amp;lt;</code> — a entidade que o navegador desenha como o caractere <code>&lt;</code>, sem abrir tag nenhuma. O navegador lê essas entidades como texto e desenha os caracteres, sem criar negrito nenhum. Essa é a proteção contra o que se chama de injeção de HTML.</p>
+
+<p>Quando o HTML é de confiança, existe a forma explícita:</p>
+
+<pre class="file" data-file="src/RecadoHtml.svelte">&lt;script&gt;
+  let texto = $state('&lt;b&gt;pão quentinho&lt;/b&gt;');
+&lt;/script&gt;
+
+&lt;p&gt;{@html texto}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;&lt;b&gt;pão quentinho&lt;/b&gt;&lt;/p&gt;</pre>
+
+<p>Agora as tags viraram tags de verdade e o pão ficou em negrito. <code>{@html …}</code> diz ao compilador "não escape isto, coloque cru na página". É uma porta aberta: use só com texto que você mesmo gerou, nunca com o que veio digitado por outra pessoa sem passar por uma biblioteca de limpeza.</p>
+
+<div class="warning">
+<strong>Três sinais que pedem escape</strong>
+<p>Dentro de um arquivo <code>.svelte</code> você escreve <code>&lt;</code> normalmente, porque o arquivo é HTML. O escape só é necessário nas páginas deste guia, que mostram código dentro de <code>&lt;pre&gt;</code>. No componente, quem precisa de cuidado é o texto que vem de fora: nome digitado, comentário de cliente, resultado de uma busca.</p>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Caractere</th><th>Como escrever na página do guia</th><th>Por quê</th></tr>
+<tr><td><code>&lt;</code></td><td><code>&amp;lt;</code></td><td>senão o navegador começa uma tag</td></tr>
+<tr><td><code>&gt;</code></td><td><code>&amp;gt;</code></td><td>fecha a tag que o navegador abriu</td></tr>
+<tr><td><code>&amp;</code></td><td><code>&amp;amp;</code></td><td>senão vira o começo de uma entidade</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="out:&lt;b&gt;pão quentinho&lt;/b&gt;">
+<p class="try-task"><strong>Missão:</strong> a tela mostra o pão em negrito. Faça aparecer o <strong>texto das tags</strong> — <code>&lt;b&gt;pão quentinho&lt;/b&gt;</code> escrito na tela — sem mudar o valor guardado.</p>
+<pre class="script" data-file="Recado.svelte">&lt;script&gt;
+  let texto = $state('&lt;b&gt;pão quentinho&lt;/b&gt;');
+&lt;/script&gt;
+
+&lt;p&gt;{@html texto}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Recado.svelte">&lt;script&gt;
+  let texto = $state('&lt;b&gt;pão quentinho&lt;/b&gt;');
+&lt;/script&gt;
+
+&lt;p&gt;{texto}&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>9. O CSS e o selo <code>svelte-xxxxx</code></h2>
+
+<p>O bloco <code>&lt;style&gt;</code> é CSS comum, com uma diferença que você vê no resultado: o compilador renomeia cada seletor com um selo. O selo é um código curto derivado do conteúdo do componente, e aparece tanto no CSS quanto nas tags do HTML.</p>
+
+<pre class="file" data-file="src/Fonte.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;p&gt;Aberta das 6h às 13h&lt;/p&gt;
+
+&lt;style&gt;
+  h1 {
+    color: #2e7d32;
+  }
+  p {
+    font-size: 14px;
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">h1.svelte-1efiwzv {
+  color: #2e7d32;
+}
+p.svelte-1efiwzv {
+  font-size: 14px;
+}</pre>
+
+<p>E o HTML que o navegador recebe carrega o mesmo selo:</p>
+
+<pre class="out">&lt;h1 class="svelte-1efiwzv"&gt;Padaria da Ana&lt;/h1&gt; &lt;p class="svelte-1efiwzv"&gt;Aberta das 6h às 13h&lt;/p&gt;</pre>
+
+<p>Por que fazer isso? Porque CSS é global por natureza. Se dois componentes escrevem <code>h1 { color: green }</code> e <code>h1 { color: red }</code>, em CSS tradicional o último carregado ganha e a cor de um vaza para o outro. Com o selo, cada regra só alcança as tags daquele componente. Você deixa de precisar de nomes de classe inventados à mão para isolar estilos.</p>
+
+<p>O preço é que às vezes você quer atingir algo de fora — o <code>body</code>, uma classe global do site, o conteúdo de um componente filho. Para isso existe <code>:global(seletor)</code>, que desliga o escopo naquele seletor específico. Use pouco: cada <code>:global</code> é uma porta aberta no isolamento que o compilador construiu.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As quatro mensagens abaixo saíram do compilador desta versão, copiadas como estão. Repare que quase todas apontam linha e coluna: é o primeiro lugar para olhar.</p>
+
+<div class="cenario">
+<strong>Erro 1 — chave dinâmica em atributo com aspas</strong>
+<p>O valor de um evento tem de ser uma expressão JavaScript entre chaves. Entre aspas, ele é texto, e texto não é função.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick="cliques++"&gt;Cliques: {cliques}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 8): Event attribute must be a JavaScript expression, not a string</pre>
+<p>A tradução é direta: "atributo de evento tem de ser uma expressão JavaScript, não uma string". Troque as aspas por chaves e escreva uma função.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — chaves que não fecham</strong>
+<p>Cada <code>{</code> precisa de um <code>}</code>. Quando o compilador chega ao fim do arquivo com uma chave aberta, ele reclama de bloco deixado aberto.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#if nome === 'Ana'}
+  &lt;p&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>"Block was left open" quer dizer "bloco ficou aberto". A linha apontada é onde o bloco começou, não o fim do arquivo — o que ajuda: o problema está no <code>{#if}</code> sem <code>{/if}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — diretiva de texto vazia</strong>
+<p><code>{@html}</code> sem valor não é uma expressão: falta o que colocar dentro. O compilador espera um espaço e um valor depois da diretiva.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;{@html}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 9): Expected whitespace</pre>
+<p>"Expected whitespace" quer dizer "esperava um espaço". A correção é sempre a mesma: um valor depois de <code>@html</code>, como <code>{@html texto}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 4 — nome que não existe</strong>
+<p>Este componente compila: o erro acontece na hora de desenhar, e a mensagem vem do JavaScript, não do compilador.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1&gt;{naoExiste}&lt;/h1&gt;</pre>
+<pre class="out">naoExiste is not defined</pre>
+<p>"is not defined" quer dizer "não foi definido". O compilador não sabe adivinhar se você quis escrever <code>nome</code>, então trata o nome desconhecido como variável global — e ela não existe. Confira letra por letra.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>As três tabelas abaixo são o resumo para consulta. Elas não substituem as seções acima; servem para o dia em que você já sabe o conceito e esqueceu a forma exata.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Forma</th><th>Onde aparece</th></tr>
+<tr><td>bloco de dados</td><td><code>&lt;script&gt; … &lt;/script&gt;</code></td><td>topo do arquivo</td></tr>
+<tr><td>expressão</td><td><code>{preco * 2}</code></td><td>texto ou atributo</td></tr>
+<tr><td>diretiva de HTML</td><td><code>{@html texto}</code></td><td>no meio do HTML</td></tr>
+<tr><td>diretiva de trecho</td><td><code>{@render linha(item)}</code></td><td>onde o trecho deve aparecer</td></tr>
+<tr><td>bloco lógico</td><td><code>{#if …} … {/if}</code></td><td>no meio do HTML</td></tr>
+<tr><td>estilo</td><td><code>&lt;style&gt; … &lt;/style&gt;</code></td><td>fim do arquivo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro que você vai ver</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>Block was left open</code></td><td>um bloco não foi fechado</td><td>conte os pares <code>{#if}</code> / <code>{/if}</code></td></tr>
+<tr><td><code>Expected whitespace</code></td><td>falta o valor de uma diretiva</td><td>escreva <code>{@html texto}</code></td></tr>
+<tr><td><code>… is not defined</code></td><td>nome não declarado</td><td>confira o <code>let</code> e a grafia</td></tr>
+<tr><td><code>Event attribute must be a JavaScript expression, not a string</code></td><td>evento entre aspas</td><td>troque as aspas por chaves</td></tr>
+<tr><td><code>Unterminated regular expression</code></td><td>uma chave <code>{</code> ficou aberta</td><td>feche a expressão antes da tag seguinte</td></tr>
+<tr><td><code>Unexpected token</code></td><td>sobrou ou faltou um sinal</td><td>confira chaves, parênteses e aspas do trecho apontado</td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O servidor de desenvolvimento é o que transforma "salvei o arquivo" em "a página mudou". Ele compila cada <code>.svelte</code> ao salvar e recarrega o navegador. Se a sintaxe estiver errada, o erro aparece na tela em vez da página, com linha e coluna — as mesmas que o compilador deste guia mostra.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Bu90QDWp.js  40.96 kB │ gzip: 15.72 kB
+✓ built in 1.67s</pre>
+
+<p>"111 modules transformed" é o compilador passando por cada arquivo. O JavaScript final tem nome com hash (<code>index-Bu90QDWp.js</code>), o que permite ao navegador guardar o arquivo em cache sem medo: se o conteúdo mudar, o nome muda junto.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um arquivo <code>.svelte</code> tem até três camadas: <code>&lt;script&gt;</code> (dados), HTML (tela) e <code>&lt;style&gt;</code> (aparência). Só o HTML é obrigatório.</li>
+  <li>Fora das chaves é HTML; dentro delas é JavaScript. Chaves esperam um <strong>valor</strong>, não um comando.</li>
+  <li>Atributo pode ser fixo (<code>title="oi"</code>), dinâmico (<code>title={nome}</code>), booleano (<code>disabled={x}</code>) ou espalhado (<code>{...attrs}</code>).</li>
+  <li>Evento é atributo com <code>on</code> na frente: <code>onclick</code>, <code>oninput</code>, <code>onsubmit</code>. O valor é uma função, nunca uma string.</li>
+  <li>Comentário de HTML (<code>&lt;!-- --&gt;</code>) não chega ao navegador; comentário de JavaScript fica dentro do <code>&lt;script&gt;</code>.</li>
+  <li>Diretivas têm dois-pontos no nome: <code>bind:value</code>, <code>class:negrito</code>, <code>style:color</code>, <code>use:acao</code>, <code>transition:fly</code>.</li>
+  <li><code>{texto}</code> escapa os sinais de tag e mostra o texto; <code>{@html texto}</code> injeta marcação de verdade.</li>
+  <li>O CSS do componente ganha um selo (<code>svelte-1efiwzv</code>) no seletor e nas tags; é isso que impede o estilo de vazar.</li>
+  <li>Erro de sintaxe vem com linha e coluna; erro de nome vem na hora de desenhar, sem posição.</li>
+  <li><code>npm run dev</code> mostra o erro na tela; <code>npm run build</code> gera a versão de produção em <code>dist/</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

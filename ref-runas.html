@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Todas as Runas — $state, $derived, $effect, $props e as outras | Guia Svelte</title>
+<meta name="description" content="Catálogo das runas do Svelte 5: $state, $state.raw, $state.snapshot, $derived, $derived.by, $effect, $props, $bindable, $inspect e $host, com saídas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Todas as Runas</span></h1>
+
+<p class="intro">A Ana comprou uma máquina de café expresso para a padaria. No painel existem sete botões, cada um com um símbolo e uma função: um acende a luz, outro mói o grão, outro solta a água. A máquina só reconhece aqueles símbolos — se ela colar um adesivo com o desenho de uma xícara, nada acontece. As <strong>runas</strong> são os símbolos do Svelte: palavras com cifrão na frente que o compilador reconhece e que não funcionam em nenhum outro lugar. Esta página é o manual do painel: o que cada botão faz, o que ele devolve e onde pode ser apertado.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma runa e por que ela não é uma função comum.</li>
+  <li><code>$state</code> e as duas variantes: <code>$state.raw</code> e <code>$state.snapshot</code>.</li>
+  <li><code>$derived</code> para contas de uma linha e <code>$derived.by</code> para contas com laço.</li>
+  <li>A família de efeitos: <code>$effect</code>, <code>$effect.pre</code>, <code>$effect.tracking</code> e <code>$effect.root</code>.</li>
+  <li><code>$props</code>, <code>$props.id</code> e <code>$bindable</code>: o que vem de fora do componente.</li>
+  <li><code>$inspect</code> e <code>$inspect.trace</code> para olhar valores sem parar a página.</li>
+  <li><code>$host</code>, a runa que só existe em componente de elemento customizado.</li>
+  <li>Onde cada runa pode ser escrita — e o que acontece quando você erra o lugar.</li>
+  <li>As mensagens reais do compilador para os erros mais comuns de runa.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: runa é símbolo do compilador, não função</h2>
+
+<p>Uma função você chama e recebe uma resposta: <code>Math.round(2.6)</code> devolve <code>3</code>. Uma runa parece uma chamada, mas não é. Quando o compilador do Svelte encontra <code>$state(0)</code>, ele não procura uma função chamada <code>$state</code> — ele <em>reescreve</em> aquele pedaço de código para criar um valor observável. É por isso que <code>$state</code> fora de um componente não roda: não existe função para chamar, existe uma transformação que só acontece em arquivos que o compilador processa.</p>
+
+<p>O nome "runa" vem disso: são símbolos que só têm significado dentro de um arquivo <code>.svelte</code> ou de um módulo <code>.svelte.js</code>. Você não importa <code>$state</code> de lugar nenhum nem instala pacote: ele já está lá.</p>
+
+<p>Hoje o Svelte 5 tem dez runas, e cada uma resolve um pedaço do problema de manter a tela igual ao dado. Nenhuma é opcional por capricho: se você escrever <code>let nome = 'Ana'</code> sem runa, o valor existe, mas a tela nunca fica sabendo que ele mudou. A tabela abaixo é o mapa do painel; as seções seguintes abrem cada botão.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Runa</th><th>Devolve</th><th>Onde pode ser escrita</th></tr>
+<tr><td><code>$state</code></td><td>um valor observável</td><td>script do componente, <code>.svelte.js</code>, campo de classe</td></tr>
+<tr><td><code>$state.raw</code></td><td>um valor observável só na troca</td><td>mesmos lugares</td></tr>
+<tr><td><code>$state.snapshot</code></td><td>uma cópia comum do valor</td><td>em qualquer expressão</td></tr>
+<tr><td><code>$derived</code></td><td>um valor calculado</td><td>inicialização de variável</td></tr>
+<tr><td><code>$derived.by</code></td><td>um valor calculado por função</td><td>inicialização de variável</td></tr>
+<tr><td><code>$effect</code></td><td>nada (roda um efeito)</td><td>durante a inicialização do componente</td></tr>
+<tr><td><code>$props</code></td><td>os valores que vieram de fora</td><td>topo do componente</td></tr>
+<tr><td><code>$bindable</code></td><td>um prop que aceita <code>bind:</code></td><td>dentro da desestruturação de <code>$props()</code></td></tr>
+<tr><td><code>$inspect</code></td><td>nada (mostra no console em dev)</td><td>script do componente ou <code>.svelte.js</code></td></tr>
+<tr><td><code>$host</code></td><td>o elemento que envolve o componente</td><td>componente compilado como elemento customizado</td></tr>
+</table>
+</div>
+
+<p>Duas linhas dessa tabela explicam quase todos os erros de quem começa: <code>$state</code> precisa estar na inicialização de uma variável, e <code>$props()</code> só pode ser chamado no topo do componente. Guarde as duas; voltamos a elas na seção 10.</p>
+
+<hr>
+
+<h2>2. <code>$state</code>: o valor que avisa a tela</h2>
+
+<p>É a runa do dia a dia. Ela marca uma variável como observável: quando o valor muda, todo lugar que mostra aquele valor é redesenhado. O exemplo mais curto possível:</p>
+
+<pre class="file" data-file="src/Saudacao.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Olá, Ana&lt;/p&gt;</pre>
+
+<p>O HTML gerado não mostra nenhum sinal de runa — e é assim que deve ser. A runa é uma instrução para o compilador, não um enfeite para o navegador. Quem lê o arquivo final vê apenas o valor já resolvido.</p>
+
+<dl class="anatomy">
+  <dt>let nome</dt><dd>a <strong>declaração</strong>. O <code>let</code> é obrigatório: <code>$state</code> precisa de uma variável para guardar o valor.</dd>
+  <dt>= $state('Ana')</dt><dd>a <strong>runa</strong> com o valor inicial. O que está entre parênteses é o ponto de partida, não um limite: pode mudar depois.</dd>
+  <dt>{nome}</dt><dd>o <strong>consumidor</strong>. Toda expressão que lê a variável entra na lista de quem deve ser redesenhado.</dd>
+  <dt>nome = 'Bia'</dt><dd>a <strong>troca</strong>, em qualquer lugar do script ou de um evento. A tela acompanha sozinha.</dd>
+</dl>
+
+<p>Vocabulário: <em>estado</em> é o dado guardado; <em>reativo</em> é o que acontece quando ele muda. <code>$state</code> cria as duas coisas juntas.</p>
+
+<div class="tip">
+<strong>Quando não usar</strong>
+<p>Se o valor nunca muda depois de criado, não precisa de runa. <code>const meses = ['jan', 'fev']</code> é mais honesto do que <code>$state</code>: o código diz "isto é fixo" e o compilador não gasta trabalho observando.</p>
+</div>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o botão soma no script, mas o número na tela nunca muda. Faça a tela mostrar <code>Cliques: 1</code> depois de <strong>um</strong> clique.</p>
+<pre class="script" data-file="Contador.svelte">&lt;script&gt;
+  let cliques = 0;
+  let etiqueta = $state('Cliques');
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;{etiqueta}: {cliques}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="Contador.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let etiqueta = $state('Cliques');
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cliques++}&gt;{etiqueta}: {cliques}&lt;/button&gt;</pre>
+</div>
+
+<p>Rode os dois e compare. O valor da variável muda nos dois casos — a diferença é que, sem a runa, ninguém avisa o HTML de que mudou.</p>
+
+<p>O compilador não deixa isso passar em silêncio. Ele avisa no terminal, com o nome da variável, e o aviso tem código próprio:</p>
+
+<div class="cenario">
+<strong>O aviso real de variável não reativa</strong>
+<p>O componente compila e a página abre. O aviso só aparece no terminal e no painel do Vite — mas é o recado mais útil que existe para quem esqueceu a runa.</p>
+<pre class="out">non_reactive_update: `cliques` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates</pre>
+<p>Tradução: "<code>cliques</code> é atualizado, mas não foi declarado com <code>$state(...)</code>; mudar o valor não vai disparar as atualizações corretamente". Se você entender o que é "disparar atualização", entendeu o Svelte inteiro.</p>
+</div>
+
+<p>Uma pegadinha que vale conhecer agora: num componente <strong>sem nenhuma runa</strong>, o Svelte 5 entra no modo antigo e volta a tratar <code>let</code> como reativo, por compatibilidade com projetos do Svelte 4. Assim que uma runa aparece no arquivo, o modo é o novo e <code>let</code> comum deixa de avisar a tela. Foi por isso que a caixa acima tem <code>etiqueta = $state('Cliques')</code>: é ela que coloca o componente no modo novo.</p>
+
+<hr>
+
+<h2>3. <code>$state.raw</code>: quando vigiar cada item custa caro</h2>
+
+<p><code>$state</code> é profundo: ele observa o objeto inteiro, cada propriedade e cada item de lista. Isso é cômodo e tem preço — em listas grandes, criar o observador de cada item demora. <code>$state.raw</code> faz o contrário: observa só a <strong>troca do valor</strong>, não o que acontece dentro dele.</p>
+
+<pre class="file" data-file="src/Pedido.svelte">&lt;script&gt;
+  let pedido = $state.raw({ cliente: 'Ana', itens: ['pão', 'leite'] });
+&lt;/script&gt;
+
+&lt;p&gt;{pedido.cliente}: {pedido.itens.length}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana: 2&lt;/p&gt;</pre>
+
+<p>A saída é idêntica à de <code>$state</code>, porque a leitura é a mesma. A diferença aparece na escrita: com <code>raw</code>, <code>pedido.itens.push('café')</code> altera o array mas <strong>não</strong> redesenha a tela. Para atualizar, você troca o objeto inteiro por um novo:</p>
+
+<pre class="file" data-file="src/PedidoNovo.svelte">&lt;script&gt;
+  let pedido = $state.raw({ cliente: 'Ana', itens: ['pão', 'leite'] });
+
+  function adicionar() {
+    pedido = { ...pedido, itens: [...pedido.itens, 'café'] };
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{pedido.cliente}: {pedido.itens.length} itens&lt;/p&gt;
+&lt;button onclick={adicionar}&gt;adicionar café&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana: 2 itens&lt;/p&gt; &lt;button&gt;adicionar café&lt;/button&gt;</pre>
+
+<p>O <code>...</code> é o espalhamento: copia as propriedades do objeto antigo para um novo. Essa cópia é justamente o que dispara o aviso, porque o valor guardado mudou de identidade. O custo é que você passa a escrever mais código; o ganho é que dados grandes e imutáveis ficam baratos.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Runas</th><th>Observa o quê</th><th>Bom para</th><th>Cuidado</th></tr>
+<tr><td><code>$state</code></td><td>o valor e tudo dentro dele</td><td>objetos pequenos, formulários, listas curtas</td><td>listas enormes ficam lentas de criar</td></tr>
+<tr><td><code>$state.raw</code></td><td>só a troca do valor</td><td>listas grandes, dados que vêm de API</td><td>mexer dentro não redesenha</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Itens: 2">
+<p class="try-task"><strong>Missão:</strong> com <code>$state.raw</code>, o botão empurra um item na lista e a tela continua dizendo <code>Itens: 1</code>. Faça chegar a <code>Itens: 2</code> <strong>sem</strong> trocar a runa.</p>
+<pre class="script" data-file="Lista.svelte">&lt;script&gt;
+  let itens = $state.raw(['pão']);
+
+  function adicionar() {
+    itens.push('leite');
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar&lt;/button&gt;
+&lt;p&gt;Itens: {itens.length}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Lista.svelte">&lt;script&gt;
+  let itens = $state.raw(['pão']);
+
+  function adicionar() {
+    itens = [...itens, 'leite'];
+  }
+&lt;/script&gt;
+
+&lt;button onclick={adicionar}&gt;Adicionar&lt;/button&gt;
+&lt;p&gt;Itens: {itens.length}&lt;/p&gt;</pre>
+</div>
+
+<p>A lição vale para qualquer runa do tipo <code>raw</code>: o aviso só sai quando a variável recebe um valor novo. Alterar o que está dentro é invisível para a tela.</p>
+
+<hr>
+
+<h2>4. <code>$state.snapshot</code>: a foto do valor</h2>
+
+<p>Um valor com <code>$state</code> é um objeto especial, cheio de ligações internas. Quando você o entrega para fora — para uma API, para o <code>console.log</code>, para uma biblioteca que não conhece Svelte — é melhor mandar uma cópia comum. <code>$state.snapshot</code> tira essa foto:</p>
+
+<pre class="file" data-file="src/Snapshot.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let copia = $state.snapshot(nome);
+&lt;/script&gt;
+
+&lt;p&gt;{copia}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana&lt;/p&gt;</pre>
+
+<p>Com um texto o resultado é banal. O valor da runa aparece com objetos e listas: a foto é uma estrutura nova, sem as ligações internas, segura para serializar com <code>JSON.stringify</code> e para guardar sem que ninguém mexa no original. O compilador, porém, deixa um recado quando você usa a foto fora de hora:</p>
+
+<div class="cenario">
+<strong>O aviso real do compilador</strong>
+<p>O aviso não impede a página de rodar. Ele aparece no terminal e no painel do Vite, e aponta que aquela leitura pegou só o valor do primeiro desenho.</p>
+<pre class="out">state_referenced_locally: This reference only captures the initial value of `nome`. Did you mean to reference it inside a closure instead?</pre>
+<p>A tradução: "esta referência só captura o valor inicial de <code>nome</code>; você não queria referenciar dentro de uma função?" Se a intenção é acompanhar mudanças, use <code>$derived</code>; se é só uma foto do momento, o aviso pode ser ignorado — e o código fica mais claro com um comentário.</p>
+</div>
+
+<p>Na padaria, a foto aparece antes de enviar o pedido para o servidor: <code>JSON.stringify($state.snapshot(pedido))</code>. Sem ela, o objeto sai com as ligações internas do Svelte e o servidor recebe campos que não esperava.</p>
+
+<hr>
+
+<h2>5. <code>$derived</code>: a conta que se refaz sozinha</h2>
+
+<p>Metade dos valores de uma tela é conta feita a partir de outros: o total do pedido, o troco, a média da turma. <code>$derived</code> declara esse valor uma vez e deixa o compilador refazer a conta quando um ingrediente muda.</p>
+
+<pre class="file" data-file="src/Total.svelte">&lt;script&gt;
+  let itens = $state([{ preco: 0.9, qtd: 2 }, { preco: 1.2, qtd: 1 }]);
+  let total = $derived(itens.reduce((soma, i) =&gt; soma + i.preco * i.qtd, 0));
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 3.00&lt;/p&gt;</pre>
+
+<p>A conta é <code>0.9 × 2 + 1.2 × 1 = 3.00</code>, feita pelo <code>reduce</code> — um método de lista que percorre os itens acumulando um resultado. Se a Ana mudar a quantidade de pães, o <code>total</code> se refaz e o parágrafo se redesenha, sem nenhuma linha de código a mais.</p>
+
+<p>A diferença em relação a <code>$state</code> é conceitual e importante: <strong>estado é o que você digita, derivado é o que você calcula</strong>. Guardar o total como estado e atualizá-lo à mão em cada lugar é a receita para o dia em que alguém esquece um lugar e a tela mostra um total que não fecha.</p>
+
+<div class="warning">
+<strong>Não atribua a um derivado</strong>
+<p><code>total = 10</code> numa variável criada com <code>$derived</code> é uma contradição: o valor deveria vir da conta. O compilador desta versão aceita a atribuição em alguns casos, mas o resultado deixa de acompanhar os ingredientes. Se você precisa mudar o valor, ele não é derivado: é estado.</p>
+</div>
+
+<hr>
+
+<h2>6. <code>$derived.by</code>: a conta com mais de uma linha</h2>
+
+<p><code>$derived</code> recebe uma expressão — uma linha. Quando a conta precisa de um laço, de variáveis intermediárias ou de um <code>if</code>, você entrega uma função para <code>$derived.by</code>:</p>
+
+<pre class="file" data-file="src/TotalBy.svelte">&lt;script&gt;
+  let itens = $state([{ preco: 0.9, qtd: 2 }, { preco: 1.2, qtd: 1 }]);
+  let total = $derived.by(() =&gt; {
+    let soma = 0;
+    for (const i of itens) soma += i.preco * i.qtd;
+    return soma;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 3.00&lt;/p&gt;</pre>
+
+<p>Mesmo resultado, código mais legível quando a conta cresce. O <code>return</code> é obrigatório: o que a função devolve é o valor do derivado. O compilador observa quais variáveis foram lidas dentro da função e refaz a conta quando qualquer uma muda.</p>
+
+<p>Agora o erro que quase todo mundo comete: usar <code>$derived</code> com uma função de várias linhas. O código compila, roda e mostra o <em>texto da função</em> na tela:</p>
+
+<pre class="file" data-file="src/TotalErrado.svelte">&lt;script&gt;
+  let itens = $state([{ preco: 0.9, qtd: 2 }, { preco: 1.2, qtd: 1 }]);
+  let total = $derived(() =&gt; {
+    let soma = 0;
+    for (const i of itens) soma += i.preco * i.qtd;
+    return soma;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total}&lt;/p&gt;</pre>
+
+<pre class="out">Total: R$ () =&gt; { let soma = 0; for (const i of itens) soma += i.preco * i.qtd; return soma; }</pre>
+
+<p>Faz sentido quando você entende a regra: <code>$derived</code> devolve o que a expressão vale, e a expressão é uma função — logo, o derivado é a função, não o resultado dela. <code>$derived.by</code> existe exatamente para esse caso. A diferença em uma tabela:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Recebe</th><th>Quando usar</th><th>Saída típica</th></tr>
+<tr><td><code>$derived(expr)</code></td><td>uma expressão</td><td>conta curta, uma linha</td><td><code>Total: R$ 3.00</code></td></tr>
+<tr><td><code>$derived.by(fn)</code></td><td>uma função</td><td>laço, <code>if</code>, variáveis intermediárias</td><td><code>Total: R$ 3.00</code></td></tr>
+<tr><td><code>$derived(() =&gt; {…})</code></td><td>uma função, por engano</td><td>nunca</td><td>o texto da função na tela</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="out:Total: R$ 3.00">
+<p class="try-task"><strong>Missão:</strong> a tela mostra o texto da função em vez do total. Faça aparecer <code>Total: R$ 3.00</code>, mantendo o laço dentro da conta.</p>
+<pre class="script" data-file="Total.svelte">&lt;script&gt;
+  let itens = $state([{ preco: 0.9, qtd: 2 }, { preco: 1.2, qtd: 1 }]);
+  let total = $derived(() =&gt; {
+    let soma = 0;
+    for (const i of itens) soma += i.preco * i.qtd;
+    return soma;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="Total.svelte">&lt;script&gt;
+  let itens = $state([{ preco: 0.9, qtd: 2 }, { preco: 1.2, qtd: 1 }]);
+  let total = $derived.by(() =&gt; {
+    let soma = 0;
+    for (const i of itens) soma += i.preco * i.qtd;
+    return soma;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Compare os dois exemplos desta seção. O primeiro mostra <code>{total}</code> e a tela exibe o texto da função, porque a função é o valor do derivado. A caixa pede <code>{total.toFixed(2)}</code> e quebra antes de desenhar: função não tem <code>toFixed</code>. O conserto é o mesmo nos dois casos, e a lição é uma só: <strong>depois de <code>$derived</code> vai uma expressão, não um bloco</strong>.</p>
+
+<hr>
+
+<h2>7. A família de efeitos: <code>$effect</code> e as variantes</h2>
+
+<p>Efeito é código que roda <strong>depois</strong> que a tela foi desenhada, para fazer algo fora do componente: falar com o servidor, medir um elemento, guardar no <code>localStorage</code>. É o lugar do trabalho que não pode acontecer durante o desenho.</p>
+
+<pre class="file" data-file="src/Efeito.svelte">&lt;script&gt;
+  let total = $state(0);
+  $effect(() =&gt; {
+    console.log('o total mudou para', total);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{total}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;0&lt;/p&gt;</pre>
+
+<p>O parágrafo mostra <code>0</code> e nada mais: efeito não desenha. No navegador, a mensagem aparece no console a cada mudança de <code>total</code>; no servidor, efeito nem roda. Essa é a razão de a saída acima ser só o número — e a razão de você nunca depender de um efeito para montar o HTML.</p>
+
+<p>As variantes existem porque "depois de desenhar" nem sempre é o momento certo:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Quando roda</th><th>Uso típico</th></tr>
+<tr><td><code>$effect(fn)</code></td><td>depois do desenho, e de novo quando o que ele leu muda</td><td>chamar API, salvar preferência, medir</td></tr>
+<tr><td><code>$effect.pre(fn)</code></td><td>antes do desenho</td><td>ler a posição da rolagem antes de reposicionar</td></tr>
+<tr><td><code>$effect.tracking()</code></td><td>devolve <code>true</code> se está dentro de um efeito</td><td>bibliotecas que precisam saber se são observadas</td></tr>
+<tr><td><code>$effect.root(fn)</code></td><td>cria um escopo próprio, fora do componente</td><td>iniciar um recurso global e poder pará-lo</td></tr>
+</table>
+</div>
+
+<p>O <code>$effect.tracking()</code> é o mais estranho dos quatro e o mais fácil de demonstrar, porque devolve um booleano de verdade:</p>
+
+<pre class="file" data-file="src/Tracking.svelte">&lt;script&gt;
+  const dentro = $effect.tracking();
+&lt;/script&gt;
+
+&lt;p&gt;Dentro de um efeito: {String(dentro)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Dentro de um efeito: false&lt;/p&gt;</pre>
+
+<p>Fora de um efeito, <code>false</code>. Dentro, <code>true</code>. Serve para uma função saber se está sendo observada e, com isso, decidir se cria ligações ou só calcula — detalhe de biblioteca, raramente de página.</p>
+
+<div class="warning">
+<strong>Efeito que escreve estado pode girar para sempre</strong>
+<p>Se o efeito lê <code>total</code> e escreve <code>total</code>, cada escrita dispara o efeito de novo. O compilador avisa em alguns casos, mas não em todos. A regra é simple: efeito lê estado e escreve no mundo de fora; quem escreve estado são os eventos e as funções chamadas por eles.</p>
+</div>
+
+<pre class="file" data-file="src/Raiz.svelte">&lt;script&gt;
+  let n = $state(0);
+
+  const parar = $effect.root(() =&gt; {
+    $effect(() =&gt; console.log('n =', n));
+    return () =&gt; console.log('limpo');
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; n++}&gt;somar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button&gt;somar&lt;/button&gt;</pre>
+
+<p><code>$effect.root</code> devolve uma função que desmonta tudo o que foi criado lá dentro — o que uma biblioteca usa para ter reatividade fora de qualquer componente.</p>
+
+<hr>
+
+<h2>8. <code>$props</code>, <code>$props.id</code> e <code>$bindable</code>: o que vem de fora</h2>
+
+<p>Um componente que só mostra valores próprios serve para uma coisa só. Para reaproveitar, ele precisa aceitar valores de fora — as <strong>propriedades</strong>, ou props. No Svelte 5 elas chegam por <code>$props()</code>, desestruturadas como um objeto comum:</p>
+
+<pre class="file" data-file="src/Cartao.svelte">&lt;script&gt;
+  let { titulo = 'Pão francês', preco = 0.9 } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{titulo}: R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pão francês: R$ 0.90&lt;/p&gt;</pre>
+
+<p>O sinal de igual dentro das chaves é o <strong>valor padrão</strong>: se ninguém passar <code>titulo</code>, vale <code>'Pão francês'</code>. É isso que faz o cartão funcionar sozinho, como na saída acima, e também aceitar <code>&lt;Cartao titulo="Pão de queijo" preco={1.5} /&gt;</code>.</p>
+
+<dl class="anatomy">
+  <dt>let { … } = $props()</dt><dd>a <strong>desestruturação</strong>: cada nome vira uma prop. O compilador passa a tratar esses nomes como valores que vêm de fora.</dd>
+  <dt>titulo = 'Pão francês'</dt><dd>o <strong>padrão</strong>, usado quando a prop não é passada. Sem padrão, a prop fica <code>undefined</code>.</dd>
+  <dt>$bindable(0)</dt><dd>marca a prop como <strong>ligável</strong>: quem usa o componente pode escrever <code>bind:valor</code> e receber as mudanças.</dd>
+  <dt>$props.id()</dt><dd>devolve um <strong>id único</strong> para a instância, útil para ligar <code>&lt;label&gt;</code> e campo sem inventar nome.</dd>
+</dl>
+
+<pre class="file" data-file="src/Quantidade.svelte">&lt;script&gt;
+  let { valor = $bindable(0) } = $props();
+&lt;/script&gt;
+
+&lt;input type="number" bind:value={valor} /&gt;</pre>
+
+<pre class="out">&lt;input type="number" value="0"/&gt;</pre>
+
+<p>O <code>$props.id()</code> resolve um problema chato de formulário: ligar o <code>&lt;label&gt;</code> ao campo certo quando o mesmo componente aparece várias vezes na página. Ele devolve um identificador único por instância, com prefixo curto gerado pelo compilador:</p>
+
+<pre class="file" data-file="src/Campo.svelte">&lt;script&gt;
+  const id = $props.id();
+&lt;/script&gt;
+
+&lt;label for={id}&gt;Nome&lt;/label&gt;
+&lt;input id={id} /&gt;</pre>
+
+<pre class="out">&lt;label for="s1"&gt;Nome&lt;/label&gt; &lt;input id="s1"/&gt;</pre>
+
+<p>O <code>s1</code> não é escolhido por você: o compilador numera as instâncias, e na segunda vez o id é outro. Escrever <code>id="nome"</code> à mão funciona uma vez e quebra na segunda.</p>
+
+<p>Sem <code>$bindable</code>, a prop é somente leitura para quem está fora: o componente até pode usar o valor, mas não consegue devolver a mudança. Com ela, o pai escreve <code>&lt;Quantidade bind:valor={qtd} /&gt;</code> e as duas pontas ficam iguais. O custo é que agora existem dois donos do mesmo dado — e dono duplicado é fonte de confusão; use quando o campo é realmente compartilhado.</p>
+
+<hr>
+
+<h2>9. <code>$inspect</code> e <code>$host</code>: as runas de nicho</h2>
+
+<p><code>$inspect</code> é o <code>console.log</code> que o compilador remove da versão de produção. Ele mostra o valor no console sempre que muda, sem que você precise lembrar de apagar a linha depois:</p>
+
+<pre class="file" data-file="src/Inspect.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  $inspect(nome);
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Ana&lt;/p&gt;</pre>
+
+<p>A saída não muda: o <code>$inspect</code> não desenha nada. No modo de desenvolvimento do navegador, ele imprime o valor com uma marca indicando que veio de inspeção; na build de produção, o compilador joga a linha fora. É a ferramenta certa para investigar um valor sem sujar a tela nem o código final.</p>
+
+<p>Existe também <code>$inspect.trace()</code>, que imprime a pilha de chamadas que levou até ali — útil quando o valor muda e você não sabe quem mudou. E <code>$inspect(nome).with(fn)</code> troca o <code>console.log</code> por uma função sua, caso queira registrar em outro lugar.</p>
+
+<p>A última runa da lista é a mais específica: <code>$host</code> devolve o elemento que envolve o componente quando ele foi compilado como <strong>elemento customizado</strong> (<code>&lt;meu-cartao&gt;</code> dentro de uma página que não é Svelte). Fora desse caso, ela nem compila:</p>
+
+<pre class="file" data-file="src/RuimHost.svelte">&lt;script&gt;
+  $host().style.border = '1px solid green';
+&lt;/script&gt;
+
+&lt;p&gt;Cartão&lt;/p&gt;</pre>
+
+<pre class="out">Erro de compilação (linha 2, coluna 2): `$host()` can only be used inside custom element component instances</pre>
+
+<p>A mensagem é literal: "só pode ser usada dentro de instâncias de componente de elemento customizado". Para 99% dos projetos, isso significa "não use". Ela está no catálogo para você reconhecer o nome quando encontrar em código de biblioteca.</p>
+
+<hr>
+
+<h2>10. As regras: onde cada runa pode aparecer</h2>
+
+<p>As runas não são livres. Cada uma tem um lugar permitido, e o compilador recusa o resto com uma mensagem específica. As três regras que resolvem quase tudo:</p>
+
+<p><strong>Primeira:</strong> <code>$state</code> e <code>$derived</code> só valem na inicialização de uma variável (ou num campo de classe). <code>$state(1);</code> solto no meio de uma função não cria estado nenhum — e o compilador reclama:</p>
+
+<div class="cenario">
+<strong>Erro 1 — runa solta no meio do código</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let contador = $state(0);
+  function somar() { $state(1); }
+&lt;/script&gt;
+
+&lt;p&gt;{contador}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 21): `$state(...)` can only be used as a variable declaration initializer, a class field declaration, or the first assignment to a class field at the top level of the constructor.</pre>
+<p>Traduzindo: "<code>$state</code> só pode ser usado como inicialização de declaração de variável, declaração de campo de classe, ou a primeira atribuição a um campo de classe dentro do construtor". Na prática: sempre <code>let nome = $state(valor)</code>.</p>
+</div>
+
+<p><strong>Segunda:</strong> <code>$props()</code> é do topo do componente. Ele não pode ser chamado dentro de uma função nem de um bloco:</p>
+
+<div class="cenario">
+<strong>Erro 2 — <code>$props()</code> dentro de uma função</strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function somar() {
+    let { a } = $props();
+    return a;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{somar()}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 16): `$props()` can only be used at the top level of components as a variable declaration initializer</pre>
+<p>"Só pode ser usado no topo dos componentes, como inicialização de declaração de variável." A correção é mover a linha para fora da função, no começo do <code>&lt;script&gt;</code>.</p>
+</div>
+
+<p><strong>Terceira:</strong> <code>$bindable</code> só existe dentro de um <code>$props()</code>. Ele não é uma runa de estado; é uma marcação na prop:</p>
+
+<div class="cenario">
+<strong>Erro 3 — <code>$bindable</code> sem <code>$props</code></strong>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let valor = $bindable(0);
+&lt;/script&gt;
+
+&lt;p&gt;{valor}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 14): `$bindable()` can only be used inside a `$props()` declaration</pre>
+<p>A mensagem diz onde ele pode morar: "dentro de uma declaração <code>$props()</code>". A forma certa é <code>let { valor = $bindable(0) } = $props();</code>.</p>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Conserto</th></tr>
+<tr><td>a tela não muda ao clicar</td><td>variável sem runa</td><td><code>let x = $state(0)</code></td></tr>
+<tr><td>aparece o texto de uma função</td><td><code>$derived</code> com função</td><td>troque por <code>$derived.by</code></td></tr>
+<tr><td>a conta fica velha</td><td>total guardado como estado</td><td>transforme em <code>$derived</code></td></tr>
+<tr><td>erro "can only be used"</td><td>runa no lugar errado</td><td>mova para a inicialização da variável</td></tr>
+<tr><td>efeito roda sem parar</td><td>efeito que escreve o que lê</td><td>separe leitura de escrita</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>Para consulta no dia a dia, as duas tabelas abaixo. A primeira é a lista completa com a forma exata; a segunda, os erros com a tradução.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Devolve</th></tr>
+<tr><td><code>$state(v)</code></td><td><code>let n = $state(0)</code></td><td>valor observável</td></tr>
+<tr><td><code>$state.raw(v)</code></td><td><code>let l = $state.raw([])</code></td><td>valor observável na troca</td></tr>
+<tr><td><code>$state.snapshot(v)</code></td><td><code>let copia = $state.snapshot(p)</code></td><td>cópia comum</td></tr>
+<tr><td><code>$derived(expr)</code></td><td><code>let t = $derived(a * b)</code></td><td>valor calculado</td></tr>
+<tr><td><code>$derived.by(fn)</code></td><td><code>let t = $derived.by(() =&gt; { … })</code></td><td>valor calculado por função</td></tr>
+<tr><td><code>$effect(fn)</code></td><td><code>$effect(() =&gt; { … })</code></td><td>nada</td></tr>
+<tr><td><code>$effect.pre(fn)</code></td><td><code>$effect.pre(() =&gt; { … })</code></td><td>nada</td></tr>
+<tr><td><code>$effect.tracking()</code></td><td><code>const t = $effect.tracking()</code></td><td><code>true</code> ou <code>false</code></td></tr>
+<tr><td><code>$effect.root(fn)</code></td><td><code>const parar = $effect.root(fn)</code></td><td>função que desmonta</td></tr>
+<tr><td><code>$props()</code></td><td><code>let { a, b } = $props()</code></td><td>objeto das props</td></tr>
+<tr><td><code>$props.id()</code></td><td><code>const id = $props.id()</code></td><td>texto único</td></tr>
+<tr><td><code>$bindable(v)</code></td><td><code>let { x = $bindable(0) } = $props()</code></td><td>prop ligável</td></tr>
+<tr><td><code>$inspect(v)</code></td><td><code>$inspect(nome)</code></td><td>nada</td></tr>
+<tr><td><code>$host()</code></td><td><code>$host().style…</code></td><td>o elemento anfitrião</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que significa</th></tr>
+<tr><td><code>`$state(...)` can only be used as a variable declaration initializer</code></td><td>falta <code>let nome =</code> antes da runa</td></tr>
+<tr><td><code>`$props()` can only be used at the top level of components</code></td><td>mova a linha para o topo do <code>&lt;script&gt;</code></td></tr>
+<tr><td><code>`$bindable()` can only be used inside a `$props()` declaration</code></td><td>o <code>$bindable</code> vai dentro da desestruturação de <code>$props()</code></td></tr>
+<tr><td><code>`$host()` can only be used inside custom element component instances</code></td><td>componente comum não tem elemento anfitrião</td></tr>
+<tr><td><code>get_value is not a function</code></td><td><code>$derived.by</code> recebeu algo que não é função</td></tr>
+<tr><td><code>state_referenced_locally</code> (aviso)</td><td>a leitura pegou só o valor inicial; use <code>$derived</code></td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ node -p "require('svelte/package.json').version"
+5.59.2
+ana@notebook:~/loja$ node -p "process.version"
+v22.23.5</pre>
+
+<p>Vale conferir a versão antes de seguir um tutorial: as runas mudaram de nome e de regra entre o Svelte 4 e o 5, e quase todo exemplo antigo da internet usa o modo anterior. O número <code>5.59.2</code> é o que o guia usa em todas as caixas.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+&gt; loja@0.0.1 dev
+&gt; vite
+
+  VITE v7.3.8  ready in 1191 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O servidor de desenvolvimento é quem mostra os avisos de runa no terminal: <code>state_referenced_locally</code>, <code>ownership_invalid_mutation</code> e companhia aparecem ali, com arquivo e linha. Em produção eles somem — o que não quer dizer que o problema sumiu.</p>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Runa é símbolo do compilador, não função: não se importa e não funciona fora de <code>.svelte</code> ou <code>.svelte.js</code>.</li>
+  <li><code>let x = $state(v)</code> cria valor observável; sem a runa, a tela não é avisada.</li>
+  <li><code>$state.raw</code> observa só a troca do valor: mexer dentro não redesenha, trocar o objeto sim.</li>
+  <li><code>$state.snapshot</code> tira uma cópia comum, boa para <code>console.log</code>, <code>JSON.stringify</code> e envio ao servidor.</li>
+  <li><code>$derived</code> é para conta de uma linha; <code>$derived.by</code> é para conta com laço ou <code>if</code>.</li>
+  <li>Nunca atribua a um derivado: se precisa mudar, é estado.</li>
+  <li><code>$effect</code> roda depois do desenho, só no navegador; <code>.pre</code> roda antes; <code>.tracking()</code> diz se está dentro; <code>.root()</code> cria escopo próprio.</li>
+  <li><code>$props()</code> só no topo do componente, com padrões à direita do <code>=</code>; <code>$bindable</code> só dentro dele.</li>
+  <li><code>$inspect</code> mostra no console em desenvolvimento e desaparece na produção; <code>$host</code> só em elemento customizado.</li>
+  <li>As mensagens de erro dizem literalmente onde a runa pode morar — leia a frase inteira antes de procurar no Google.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
