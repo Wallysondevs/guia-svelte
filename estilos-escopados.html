@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estilos Escopados — o CSS que não vaza | Guia Svelte</title>
+<meta name="description" content="Como o CSS de um componente Svelte ganha um selo e não vaza para o resto da página: o hash svelte-, :global, seletores que não casam e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Estilos Escopados</span></h1>
+
+<p class="intro">A Ana quer o título da padaria em dourado, mas só na placa da entrada — não no site inteiro, onde outros títulos também são <code>&lt;h1&gt;</code>. Em CSS tradicional, "todo h1 dourado" é uma regra que vaza e obriga a inventar nomes de classe. No Svelte, o estilo escrito dentro do componente vale só ali, e quem garante isso é o compilador, com um selo que ele mesmo inventa.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é <strong>escopo</strong> e por que ele evita nomes de classe inventados.</li>
+  <li>Como o compilador renomeia os seletores do componente.</li>
+  <li>Que o mesmo selo aparece nas tags do HTML gerado.</li>
+  <li>Por que o selo muda quando o nome do arquivo muda.</li>
+  <li>Como abrir uma exceção com <code>:global(…)</code>.</li>
+  <li>O que é um seletor que não casa e o aviso <code>css_unused_selector</code>.</li>
+  <li>O <code>:where(…)</code> que aparece nos seletores descendentes.</li>
+  <li>Como o CSS do componente sai no build, num arquivo só.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Como conferir o CSS gerado com <code>npm run build</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o estilo da placa não vaza</h2>
+
+<p>Na padaria, a placa da entrada tem letra dourada. O cartaz do café, ao lado, tem letra preta. Se a regra fosse "toda letra grande é dourada", o cartaz do café ficaria dourado por acidente. Em CSS tradicional, é exatamente isso que acontece: um seletor <code>h1 { color: gold }</code> numa folha de estilo atinge <em>todos</em> os <code>h1</code> da página, de todos os componentes.</p>
+
+<p>A solução clássica é inventar nomes de classe únicos — <code>.titulo-padaria-dourado</code> — e torcer para ninguém repetir. Funciona, mas custa disciplina: cada regra precisa de um nome inventado, e o HTML fica cheio de apelidos que não dizem nada sobre o conteúdo.</p>
+
+<p>No Svelte, o problema simplesmente não existe. O CSS escrito dentro do componente é compilado com um <strong>selo</strong>: o compilador acrescenta ao seletor uma classe que só aquele componente tem, e coloca a mesma classe nas tags do HTML. A regra continua sendo "todo h1", mas passa a significar "todo h1 <em>deste arquivo</em>".</p>
+
+<p>Vale entender o tamanho da economia. Num site com trinta componentes, o CSS tradicional precisa de trinta nomes de classe únicos e de uma convenção que todos sigam. Quando alguém esquece a convenção, o estilo de um componente pinta o de outro, e o problema aparece longe de onde foi criado. Com escopo automático, o nome do arquivo já é o nome do escopo — e ninguém precisa combinar nada.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A placa da entrada, com o seu dourado</td><td>O bloco <code>&lt;style&gt;</code> de <code>App.svelte</code></td></tr>
+<tr><td>O número da placa que a identifica</td><td>O selo <code>svelte-1n46o8q</code> na classe</td></tr>
+<tr><td>Pintar só a placa, não a loja toda</td><td>O escopo do componente</td></tr>
+<tr><td>Uma faixa pintada na rua, para todos</td><td><code>:global(…)</code></td></tr>
+<tr><td>Pintar uma placa que não existe</td><td>Seletor que não casa: <code>css_unused_selector</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. O primeiro estilo escopado</h2>
+
+<p>Um componente com estilo é um arquivo com o HTML em cima e um bloco <code>&lt;style&gt;</code> embaixo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;p&gt;Pão francês: R$ 0,90&lt;/p&gt;
+
+&lt;style&gt;
+  h1 {
+    color: #b8860b;
+    font-family: system-ui, sans-serif;
+  }
+  p {
+    margin: 0;
+  }
+&lt;/style&gt;</pre>
+
+<p>Peça o CSS ao compilador e ele devolve os seletores com o selo, não como você escreveu:</p>
+
+<pre class="out">h1.svelte-1n46o8q {
+    color: #b8860b;
+    font-family: system-ui, sans-serif;
+  }
+  p.svelte-1n46o8q {
+    margin: 0;
+  }</pre>
+
+<p><code>svelte-1n46o8q</code> é o selo deste arquivo. Ele não foi escolhido por você, não aparece no seu código e não precisa ser lembrado. O compilador o gera a partir do nome do arquivo, e usa o mesmo valor em todos os seletores daquele componente.</p>
+
+<p>Quando o projeto roda em modo de desenvolvimento, o selo aparece com outro formato (algo como <code>s-XsEmFtvddWTw</code>) porque o Vite injeta o CSS de um jeito diferente, pensado para trocar o estilo sem recarregar a página. No build, vale o formato <code>svelte-…</code> que você vê acima. Os dois funcionam igual: o que muda é o nome do selo, não a ideia.</p>
+
+<h3>A anatomia do seletor escopado</h3>
+
+<dl class="anatomy">
+  <dt>h1</dt><dd>o <strong>seletor</strong> que você escreveu. Continua sendo uma tag, uma classe ou um atributo — o que você quiser.</dd>
+  <dt>.svelte-1n46o8q</dt><dd>o <strong>selo</strong> acrescentado pelo compilador. Ele restringe a regra aos elementos deste componente.</dd>
+  <dt>{ … }</dt><dd>o <strong>bloco de declarações</strong>: cada linha é uma propriedade e um valor, terminada em ponto e vírgula.</dd>
+  <dt>#b8860b</dt><dd>um <strong>valor</strong>. Cores podem ser nome (<code>goldenrod</code>), hexadecimal (<code>#b8860b</code>) ou <code>rgb(…)</code>.</dd>
+  <dt>&lt;style&gt;</dt><dd>o <strong>bloco</strong> do componente. Fica no fim do arquivo, depois do HTML.</dd>
+</dl>
+
+<p>O selo tem outra metade, que aparece no HTML. O compilador coloca a mesma classe nas tags que casam com alguma regra do componente:</p>
+
+<p>O <code>h1</code> sai como <code>&lt;h1 class="svelte-1n46o8q"&gt;</code> e o <code>p</code> sai como <code>&lt;p class="svelte-1n46o8q"&gt;</code>. É esse par — seletor com selo no CSS, classe com selo no HTML — que faz o estilo valer só ali.</p>
+
+<div class="tip">
+<strong>O selo depende do nome do arquivo</strong>
+<p>O mesmo CSS em <code>App.svelte</code> e em <code>Cartao.svelte</code> gera selos diferentes. Por isso as aulas deste guia dizem com qual nome de arquivo cada saída foi colhida: o valor do selo muda junto. Se o seu resultado tiver outro código depois de <code>svelte-</code>, não é erro — é outro nome de arquivo.</p>
+</div>
+
+<hr>
+
+<h2>3. O selo só vai para quem casa</h2>
+
+<p>Uma consequência que surpreende: o Svelte não coloca a classe em todos os elementos do componente, só nos que alguma regra pode atingir. Se a sua única regra é sobre <code>h1</code>, o <code>p</code> fica sem classe nenhuma.</p>
+
+<p>Isso importa quando você olha o HTML gerado e não encontra o selo: ele não é um enfeite global, é parte do seletor. Sem regra que case, sem classe.</p>
+
+<div class="trysvelte" data-goal="html:<h1 class=&quot;svelte-n50uah&quot;>Padaria</h1> <p>Pão</p>">
+<p class="try-task"><strong>Missão:</strong> o componente não tem estilo nenhum. Adicione um <code>&lt;style&gt;</code> que pinte só o <code>h1</code> — o HTML gerado tem de sair com o selo no título e sem selo no parágrafo.</p>
+<pre class="script" data-file="App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+&lt;p&gt;Pão&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+&lt;p&gt;Pão&lt;/p&gt;
+
+&lt;style&gt;
+  h1 { color: #b8860b; }
+&lt;/style&gt;</pre>
+</div>
+
+<p>A caixa mostra o HTML gerado embaixo do componente. Antes da correção ele é <code>&lt;h1&gt;Padaria&lt;/h1&gt; &lt;p&gt;Pão&lt;/p&gt;</code>; depois, o <code>h1</code> ganha <code>class="svelte-n50uah"</code>. O valor do selo muda porque a caixa compila com o nome <code>App.svelte</code> — o mesmo nome de arquivo deste guia, mas sem a pasta <code>src/</code>.</p>
+
+<hr>
+
+<h2>4. <code>:global(…)</code>: a porta de saída</h2>
+
+<p>De vez em quando você <em>quer</em> atingir algo fora do componente: o <code>body</code>, uma classe aplicada por uma biblioteca, o <code>html</code> inteiro. Para isso existe <code>:global(…)</code>, que desliga o escopo naquele seletor:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+
+&lt;style&gt;
+  :global(body) {
+    margin: 0;
+    background: #fffdf5;
+  }
+  h1 {
+    color: #b8860b;
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">body {
+    margin: 0;
+    background: #fffdf5;
+  }
+  h1.svelte-1n46o8q {
+    color: #b8860b;
+  }</pre>
+
+<p>Repare na diferença: o <code>body</code> saiu <strong>sem</strong> selo, porque a regra é global de propósito; o <code>h1</code> continua escopado. As duas regras convivem no mesmo bloco de estilo, cada uma com o seu alcance.</p>
+
+<p>O custo do <code>:global</code> é o mesmo de qualquer porta aberta: a regra pode atingir qualquer elemento da página, inclusive de componentes que você nem conhece. Use para o que é realmente global — <code>body</code>, <code>html</code>, variáveis CSS na raiz — e não como atalho para "resolver" um seletor que não estava casando.</p>
+
+<p>Um uso legítimo e comum é declarar as cores da padaria uma vez só, no componente que embrulha a aplicação: <code>:global(:root) { --dourado: #b8860b; }</code>. A partir daí, qualquer componente usa <code>color: var(--dourado)</code> sem precisar de <code>:global</code> — a variável viaja pela herança do CSS, que é global por natureza. Assim você abre uma porta em vez de deixar todas abertas.</p>
+
+<div class="trysvelte" data-goal="html:<h1>Padaria</h1> <p>Pão</p>">
+<p class="try-task"><strong>Missão:</strong> a regra do parágrafo está escopada e o Svelte marca o <code>p</code> com o selo. Torne a regra global, para o HTML sair sem selo em nenhum elemento.</p>
+<pre class="script" data-file="App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+&lt;p&gt;Pão&lt;/p&gt;
+
+&lt;style&gt;
+  p { color: #b8860b; }
+&lt;/style&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+&lt;p&gt;Pão&lt;/p&gt;
+
+&lt;style&gt;
+  :global(p) { color: #b8860b; }
+&lt;/style&gt;</pre>
+</div>
+
+<p>Sem o selo, a regra vale para todo parágrafo da página — inclusive os de fora do componente. É exatamente o que o <code>:global</code> promete, e é por isso que ele pede cuidado.</p>
+
+<hr>
+
+<h2>5. O seletor que não casa</h2>
+
+<p>Um erro silencioso: escrever uma regra para uma classe que não existe no HTML. O CSS compila, a classe fica sem efeito e a página não muda. O compilador avisa com o código <code>css_unused_selector</code> — a mensagem, na linha da regra, é <em>"Unused CSS selector '.preco'"</em> (a documentação fica em <code>https://svelte.dev/e/css_unused_selector</code>).</p>
+
+<p>O CSS gerado mostra o que aconteceu: a regra não é aplicada, fica como comentário.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;p class="valor"&gt;R$ 0,90&lt;/p&gt;
+
+&lt;style&gt;
+  .preco {
+    color: #2e7d32;
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">/* (unused) .preco {
+    color: #2e7d32;
+  }*/</pre>
+
+<p><code>(unused)</code> quer dizer "não usada". Repare também que o HTML não ganhou selo: <code>&lt;p class="valor"&gt;R$ 0,90&lt;/p&gt;</code> sai igual ao que foi escrito, porque nenhuma regra casou. Um seletor que não casa não deixa o código mais lento — deixa a intenção perdida.</p>
+
+<div class="trysvelte" data-goal="html:<p class=&quot;valor svelte-n50uah&quot;>R$ 0,90</p>">
+<p class="try-task"><strong>Missão:</strong> a regra fala de <code>.preco</code>, e o parágrafo tem <code>class="valor"</code>. Faça o estilo valer para o preço — o HTML tem de sair com o selo junto da classe.</p>
+<pre class="script" data-file="App.svelte">&lt;p class="valor"&gt;R$ 0,90&lt;/p&gt;
+
+&lt;style&gt;
+  .preco { color: green; }
+&lt;/style&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;p class="valor"&gt;R$ 0,90&lt;/p&gt;
+
+&lt;style&gt;
+  p { color: green; }
+&lt;/style&gt;</pre>
+</div>
+
+<p>A solução troca a classe por um seletor de tag. Outra saída seria mudar o HTML para <code>class="valor preco"</code> — aí a regra casaria e o selo apareceria junto. As duas funcionam; escolha a que diz melhor o que você quer.</p>
+
+<hr>
+
+<h2>6. Descendentes e o <code>:where(…)</code></h2>
+
+<p>Quando o seletor tem mais de um pedaço — "o parágrafo dentro do cartão" — o compilador precisa ser cuidadoso. Ele marca o ancestral e envolve o descendente num <code>:where(…)</code>, que é uma forma de aplicar o selo sem aumentar a especificidade da regra:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;div class="cartao"&gt;
+  &lt;p&gt;Pão francês&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;style&gt;
+  .cartao {
+    padding: 8px;
+  }
+  .cartao p {
+    margin: 0;
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">.cartao.svelte-1n46o8q {
+    padding: 8px;
+  }
+  .cartao.svelte-1n46o8q p:where(.svelte-1n46o8q) {
+    margin: 0;
+  }</pre>
+
+<p>O HTML correspondente sai com selo nos dois elementos: <code>&lt;div class="cartao svelte-1n46o8q"&gt;</code> e <code>&lt;p class="svelte-1n46o8q"&gt;</code>. O <code>:where()</code> tem peso zero na conta de especificidade do CSS — ele marca sem brigar com as suas regras. É um detalhe que você não precisa escrever, mas que explica por que o CSS gerado parece diferente do seu.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você escreve</th><th>O compilador gera</th></tr>
+<tr><td><code>h1</code></td><td><code>h1.svelte-xxxx</code></td></tr>
+<tr><td><code>.cartao</code></td><td><code>.cartao.svelte-xxxx</code></td></tr>
+<tr><td><code>.cartao p</code></td><td><code>.cartao.svelte-xxxx p:where(.svelte-xxxx)</code></td></tr>
+<tr><td><code>:global(body)</code></td><td><code>body</code></td></tr>
+<tr><td><code>.preco</code> sem uso</td><td><code>/* (unused) .preco { … }*/</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>7. Especificidade: quem ganha a briga</h2>
+
+<p>Quando duas regras pintam o mesmo elemento, o CSS decide pela <strong>especificidade</strong>: conta quantos seletores de tag, classe e id cada regra tem. O selo acrescentado pelo Svelte entra nessa conta como uma classe a mais, e é aí que mora uma surpresa: uma regra do componente fica mais "forte" do que uma regra global equivalente.</p>
+
+<p>Isso é bom na maioria dos casos — o estilo do componente vence o estilo geral do site, que é o que você espera. Mas pode atrapalhar quando a intenção é justamente o contrário, e a solução é a de sempre em CSS: aumentar a especificidade da regra que deve vencer, não brigar com <code>!important</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Quem vence</th><th>Por quê</th></tr>
+<tr><td><code>h1</code> global × <code>h1</code> do componente</td><td>o do componente</td><td>o selo conta como classe</td></tr>
+<tr><td><code>.cartao p</code> × <code>p</code></td><td><code>.cartao p</code></td><td>o <code>:where()</code> não soma, mas a classe do cartão soma</td></tr>
+<tr><td><code>:global(p)</code> × <code>p</code> escopado</td><td>o escopado</td><td>o escopado tem o selo; o global não</td></tr>
+<tr><td>estilo inline <code>style="…"</code></td><td>o inline</td><td>estilo no atributo vence seletor</td></tr>
+</table>
+</div>
+
+<p>O conselho prático: mantenha os seletores curtos. Se você precisar de três níveis para explicar o que quer pintar, provavelmente o componente está grande demais — dividir em dois componentes resolve a pintura e a leitura.</p>
+
+<p>E evite <code>!important</code>. Ele resolve a briga de hoje e cria a de amanhã, porque só perde para outro <code>!important</code>. Quando o estilo não aplica, quase sempre a causa é uma classe escrita errada, um seletor que não casa ou uma regra global mais específica — três coisas que você consegue ver lendo o CSS gerado.</p>
+
+<hr>
+
+<h2>8. Rodando no computador da Ana</h2>
+
+<p>No servidor de desenvolvimento, o CSS do componente é injetado na página e o selo é outro formato (o Vite usa um nome diferente do build). Na hora de salvar o arquivo, o terminal mostra a atualização:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev -- --port 5193
+
+> loja@0.0.1 dev
+> vite --port 5193
+
+  VITE v7.3.8  ready in 510 ms
+
+  ➜  Local:   http://localhost:5193/
+  ➜  Network: use --host to expose
+5:49:13 PM [vite] (client) hmr update /src/App.svelte?svelte&type=style&lang.css</pre>
+
+<p>A linha <code>hmr update</code> é o Vite avisando que trocou o CSS do componente sem recarregar a página. O número da porta aparece porque a 5173 estava ocupada nesta gravação: o endereço vem do terminal, nunca do código.</p>
+
+<p>No build, o CSS de todos os componentes vai para um arquivo separado:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-Bsc9RzxG.css   0.03 kB │ gzip:  0.05 kB
+dist/assets/index-uhv52wBK.js   36.00 kB │ gzip: 13.91 kB
+✓ built in 3.93s</pre>
+
+<p>O arquivo <code>.css</code> tem 0,03 kB porque o componente da Ana tem poucas regras. Num projeto grande, ele cresce — e como o nome tem hash, o navegador pode guardar em cache para sempre: se o CSS mudar, o nome muda junto.</p>
+
+<p>Repare que o CSS saiu do JavaScript: o navegador baixa um arquivo de estilo e um de script. Isso é melhor do que injetar estilo por código, porque o navegador consegue aplicar o CSS antes de desenhar a página e evitar o piscar de conteúdo sem estilo. O selo viaja junto: as classes do HTML continuam batendo com os seletores do arquivo.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>Três erros de compilação, todos de CSS malformado. Nenhum deles é sobre escopo: o compilador só consegue aplicar o selo se o CSS estiver válido.</p>
+
+<p>Isso tem uma consequência prática: um erro de CSS derruba o componente inteiro, não só o estilo. O HTML deixa de ser gerado e a página fica em branco até você corrigir. Por isso vale escrever o bloco de estilo devagar, fechando cada regra antes de passar para a próxima — e desconfiar do editor quando ele "ajuda" demais com autocompletar.</p>
+
+<div class="cenario">
+<p><strong>1. Declaração sem valor.</strong> Faltou o valor depois dos dois-pontos:</p>
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+
+&lt;style&gt;
+  h1 { color: ; }
+&lt;/style&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 7): Declaration cannot be empty</pre>
+<p>"Declaração não pode ficar vazia". Toda propriedade precisa de um valor: <code>color: #b8860b;</code>, <code>margin: 0;</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. Chave sem fechar.</strong> O bloco de regra foi aberto e o arquivo terminou antes do fechamento:</p>
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+
+&lt;style&gt;
+  h1 { color: red;
+&lt;/style&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 8): Unexpected end of input</pre>
+<p>"Fim de entrada inesperado" quer dizer que algo ficou aberto. Conte as chaves: cada <code>{</code> precisa de um <code>}</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. Seletor com dois pontos.</strong> Um erro de digitação no seletor de classe:</p>
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+
+&lt;style&gt;
+  h1..x { color: red; }
+&lt;/style&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 5): Expected a valid CSS identifier</pre>
+<p>"Esperava um identificador CSS válido". Depois do ponto vem o nome da classe, sem outro ponto: <code>.x</code>. O compilador para na primeira coisa que não consegue interpretar.</p>
+</div>
+
+<hr>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Alcance</th></tr>
+<tr><td><code>h1 { … }</code></td><td>só os <code>h1</code> deste componente</td></tr>
+<tr><td><code>.cartao { … }</code></td><td>só os elementos com essa classe neste componente</td></tr>
+<tr><td><code>.cartao p { … }</code></td><td>parágrafos dentro do cartão deste componente</td></tr>
+<tr><td><code>:global(body) { … }</code></td><td>a página inteira, sem selo</td></tr>
+<tr><td><code>:global(.externo) { … }</code></td><td>uma classe de fora, sem selo</td></tr>
+<tr><td><code>@media (…) { … }</code></td><td>as regras dentro continuam escopadas</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que fazer</th></tr>
+<tr><td><code>css_unused_selector</code></td><td>o seletor não casa com nada; corrija a classe ou a regra</td></tr>
+<tr><td><code>Declaration cannot be empty</code></td><td>dê um valor à propriedade</td></tr>
+<tr><td><code>Unexpected end of input</code></td><td>falta fechar uma chave</td></tr>
+<tr><td><code>Expected a valid CSS identifier</code></td><td>erro de digitação no seletor</td></tr>
+</table>
+</div>
+
+<p>A ideia final: o escopo é do arquivo, não do seletor. Você escreve CSS como escreveria numa folha de estilo, e o compilador cuida de não vazar. O único momento em que você precisa pensar nisso é quando <em>quer</em> vazar — e aí existe o <code>:global</code>, com o custo de abrir a porta.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que o compilador faz com o seletor <code>p { color: red }</code> de um componente?</p>
+<label><input type="radio" name="q1"> deixa igual, mas aplica só depois do carregamento</label>
+<label><input type="radio" name="q1"> transforma em <code>p { color: red !important }</code></label>
+<label><input type="radio" name="q1"> acrescenta o selo do componente: <code>p.svelte-xxxx</code></label>
+<label><input type="radio" name="q1"> remove a regra e avisa que é proibido</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. Para que serve <code>:global(body)</code>?</p>
+<label><input type="radio" name="q1"> para aplicar a regra ao <code>body</code> da página, fora do escopo do componente</label>
+<label><input type="radio" name="q1"> para deixar o estilo mais rápido</label>
+<label><input type="radio" name="q1"> para aplicar a regra a todos os componentes do projeto</label>
+<label><input type="radio" name="q1"> para impedir que o CSS seja incluído no build</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. O que significa o aviso <code>css_unused_selector</code>?</p>
+<label><input type="radio" name="q1"> que o CSS é grande demais</label>
+<label><input type="radio" name="q1"> que a regra não casa com nenhum elemento do componente e não terá efeito</label>
+<label><input type="radio" name="q1"> que o seletor precisa de <code>:global</code> para funcionar</label>
+<label><input type="radio" name="q1"> que o navegador não suporta a propriedade</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;h1&gt;Padaria&lt;/h1&gt;<br><br>&lt;style&gt;<br>&nbsp;&nbsp;<input data-answer="h1"> { color: #b8860b; }<br>&lt;/style&gt;<br><br>// o seletor que pinta o título deste componente</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><strong>Escopo</strong> é o alcance de uma regra; no Svelte, o CSS do componente vale só para ele.</li>
+  <li>O compilador acrescenta um selo aos seletores (<code>h1.svelte-xxxx</code>) e às tags do HTML.</li>
+  <li>O selo vem do nome do arquivo: o mesmo CSS em outro arquivo gera outro código.</li>
+  <li>Só recebem a classe os elementos que alguma regra pode atingir.</li>
+  <li><code>:global(…)</code> desliga o escopo naquele seletor e atinge a página inteira.</li>
+  <li>Seletor que não casa gera o aviso <code>css_unused_selector</code> e aparece como <code>/* (unused) … */</code> no CSS.</li>
+  <li>Seletores descendentes viram <code>.cartao.svelte-xxxx p:where(.svelte-xxxx)</code>.</li>
+  <li>O selo conta como classe na especificidade, então o estilo do componente vence o global equivalente.</li>
+  <li>No build, o CSS de todos os componentes vira um arquivo com hash no nome.</li>
+  <li>Erros desta aula: declaração vazia, chave sem fechar e seletor inválido.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

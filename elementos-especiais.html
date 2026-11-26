@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>svelte:element e Afins | Guia Svelte</title>
+<meta name="description" content="Os elementos svelte: do Svelte 5: svelte:element com tag dinâmica, svelte:head, svelte:window, svelte:options, svelte:boundary e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">svelte:element e Afins</span></h1>
+
+<p class="intro">A Ana tem um caderno de pedidos com títulos de tamanhos diferentes: o nome da padaria é grande, o nome do cliente é médio, o item é pequeno. No HTML, isso são <code>h1</code>, <code>h2</code> e <code>h3</code> — tags diferentes para o mesmo tipo de conteúdo. Escrever três <code>{#if}</code> só para trocar a tag é feio. O Svelte tem uma família de tags que começam com <code>svelte:</code> justamente para esses casos: elas não são HTML, são instruções para o compilador.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que são as tags <code>svelte:</code> e por que elas não aparecem no HTML.</li>
+  <li>Como trocar a tag de um elemento em tempo de execução com <code>svelte:element</code>.</li>
+  <li>Por que o elemento dinâmico sempre recebe o selo do componente.</li>
+  <li>O que são as âncoras <code>&lt;!----&gt;</code> que aparecem no navegador.</li>
+  <li>Como colocar o título da aba com <code>svelte:head</code>.</li>
+  <li>Como ouvir eventos de <code>window</code>, <code>document</code> e <code>body</code>.</li>
+  <li>Para que serve o <code>svelte:options</code> e as opções deste arquivo.</li>
+  <li>O que aconteceu com <code>svelte:self</code> e <code>svelte:component</code>.</li>
+  <li>Como segurar um erro com <code>svelte:boundary</code>.</li>
+  <li>Os três erros reais destas tags, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. Tags que o compilador lê antes de desenhar</h2>
+
+<p>Todo arquivo <code>.svelte</code> já tem tags especiais: <code>&lt;script&gt;</code> e <code>&lt;style&gt;</code> não viram elementos na página, viram código. As tags <code>svelte:</code> seguem a mesma ideia, com um detalhe: elas são instruções para o compilador, e cada uma mexe numa parte diferente da página.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Tag</th><th>O que faz</th><th>Desenha algo?</th></tr>
+<tr><td><code>svelte:element</code></td><td>desenha um elemento cuja tag vem de uma expressão</td><td>sim, a tag que você escolher</td></tr>
+<tr><td><code>svelte:head</code></td><td>põe conteúdo no <code>&lt;head&gt;</code> da página</td><td>não no corpo</td></tr>
+<tr><td><code>svelte:window</code></td><td>ouve eventos da janela</td><td>não</td></tr>
+<tr><td><code>svelte:document</code></td><td>ouve eventos do documento</td><td>não</td></tr>
+<tr><td><code>svelte:body</code></td><td>ouve eventos do <code>&lt;body&gt;</code></td><td>não</td></tr>
+<tr><td><code>svelte:options</code></td><td>configura o arquivo (runas, custom element…)</td><td>não</td></tr>
+<tr><td><code>svelte:boundary</code></td><td>segura erros de um pedaço da tela</td><td>sim, o conteúdo dela</td></tr>
+</table>
+</div>
+
+<p>Duas diferenças em relação a um componente comum: você não importa nada para usar essas tags — elas fazem parte do compilador — e o nome delas nunca chega ao navegador. Se você abrir o inspetor de elementos e procurar por <code>&lt;svelte:head&gt;</code>, não vai achar: vai achar o que ela colocou lá.</p>
+
+<p>A lista completa, como o próprio compilador a escreve: <code>svelte:head</code>, <code>svelte:options</code>, <code>svelte:window</code>, <code>svelte:document</code>, <code>svelte:body</code>, <code>svelte:element</code>, <code>svelte:component</code>, <code>svelte:self</code>, <code>svelte:fragment</code> e <code>svelte:boundary</code>. Guarde essa lista: ela aparece inteira numa mensagem de erro da seção 10.</p>
+
+<hr>
+
+<h2>2. <code>&lt;svelte:element&gt;</code>: a tag que vem de uma variável</h2>
+
+<p>O caso da Ana: o título do pedido precisa ser <code>h1</code>, <code>h2</code> ou <code>h3</code> conforme o nível. Em vez de escrever três blocos e repetir o conteúdo, ela guarda o nome da tag numa variável e usa <code>svelte:element</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tag = $state('h2');
+&lt;/script&gt;
+
+&lt;svelte:element this={tag}&gt;Padaria da Ana&lt;/svelte:element&gt;</pre>
+
+<pre class="out">&lt;h2&gt;Padaria da Ana&lt;/h2&gt;</pre>
+
+<p>O atributo <code>this</code> é obrigatório e recebe uma <strong>expressão</strong>, sempre entre chaves. Ele é o único atributo com esse nome no Svelte, e é o que diz ao compilador "a tag deste elemento está aqui". O conteúdo entre as tags é o conteúdo do elemento, como em qualquer outra tag.</p>
+
+<dl class="anatomy">
+  <dt>this</dt><dd>o nome fixo do atributo que recebe a tag. Não é uma variável sua: é do Svelte.</dd>
+  <dt>{tag}</dt><dd>uma expressão que resulta numa <strong>string</strong>: <code>'h2'</code>, <code>'li'</code>, <code>'button'</code>.</dd>
+  <dt>Padaria da Ana</dt><dd>o conteúdo do elemento, que pode ter texto, outras tags e expressões.</dd>
+  <dt>class="…"</dt><dd>qualquer outro atributo funciona normalmente, inclusive <code>class</code> e <code>onclick</code>.</dd>
+  <dt>&lt;/svelte:element&gt;</dt><dd>o fechamento. Como qualquer tag, precisa ser fechada.</dd>
+</dl>
+
+<p>Como o <code>this</code> aceita qualquer expressão, dá para montar o nome da tag na hora: <code>this={'h' + nivel}</code> com <code>nivel</code> valendo 3 vira <code>h3</code>. Também dá para escolher entre tags que não são títulos — <code>'li'</code> numa lista, <code>'button'</code> num menu, <code>'div'</code> quando não há tag melhor.</p>
+
+<div class="trysvelte" data-goal="html:&lt;!----&gt;&lt;h3&gt;Padaria&lt;/h3&gt;">
+<p class="try-task"><strong>Missão:</strong> o título está fixo em <code>h2</code>, mas o nível vem do estado. Escreva a tag a partir da variável <code>nivel</code>, usando <code>svelte:element</code>. A meta mostra as âncoras <code>&lt;!----&gt;</code> porque o elemento é dinâmico — o Svelte precisa de um lugar para trocar a tag.</p>
+<pre class="script" data-file="App.svelte">&lt;h2&gt;Padaria&lt;/h2&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nivel = $state(3);
+&lt;/script&gt;
+
+&lt;svelte:element this={'h' + nivel}&gt;Padaria&lt;/svelte:element&gt;</pre>
+</div>
+
+<p>Antes, o HTML é <code>&lt;h2&gt;Padaria&lt;/h2&gt;</code>. Depois, é <code>&lt;!----&gt;&lt;h3&gt;Padaria&lt;/h3&gt;&lt;!----&gt;</code>: o texto é o mesmo, a tag mudou e apareceram dois comentários vazios. Eles são as <strong>âncoras</strong> do elemento dinâmico, e você vai entender o papel delas na próxima seção.</p>
+
+<p>Um aviso que vale conhecer: se você escrever o valor como texto, <code>this="h2"</code>, o compilador avisa <code>svelte_element_invalid_this</code> com a mensagem <em>"`this` should be an `{expression}`. Using a string attribute value will cause an error in future versions of Svelte"</em>. Hoje ainda funciona; amanhã, não. Use chaves desde já.</p>
+
+<hr>
+
+<h2>3. O selo e as âncoras do elemento dinâmico</h2>
+
+<p>Um componente com estilo e um elemento dinâmico levantam uma pergunta: o selo vai no elemento? O compilador não sabe qual tag virá, então ele não tem como decidir pelo seletor. A resposta é que o selo vai <em>sempre</em>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tag = $state('h2');
+&lt;/script&gt;
+
+&lt;svelte:element this={tag}&gt;Padaria da Ana&lt;/svelte:element&gt;
+
+&lt;style&gt;
+  h2 { color: #b8860b; }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;h2 class="svelte-1n46o8q"&gt;Padaria da Ana&lt;/h2&gt;</pre>
+
+<p>Aqui o selo até parece fazer sentido, porque a tag é <code>h2</code> e existe uma regra para <code>h2</code>. Mas teste trocar o valor para <code>'div'</code>: o elemento continua recebendo <code>class="svelte-1n46o8q"</code>, mesmo sem nenhuma regra para <code>div</code>. O compilador marca o elemento dinâmico por precaução — quem decide se a regra vale é o seletor inteiro, no navegador: <code>h2.svelte-1n46o8q</code> não casa com um <code>div</code>, então nada muda na tela.</p>
+
+<p>Isso tem uma consequência prática boa: o estilo do componente vale para o elemento dinâmico <em>quando a tag escolhida casa com a regra</em>. Se a sua regra é <code>.cartao { … }</code> e o elemento dinâmico tem <code>class="cartao"</code>, ele é pintado normalmente, qualquer que seja a tag.</p>
+
+<p>Agora as âncoras. Um elemento dinâmico pode mudar de tag a qualquer momento — de <code>h2</code> para <code>h3</code>, por exemplo. Trocar um elemento por outro no meio da árvore não é simples: o navegador precisa saber onde o antigo estava para colocar o novo no mesmo lugar. É para isso que servem os comentários vazios. No navegador, com o componente da Ana rodando no servidor de desenvolvimento, o HTML do bloco é este:</p>
+
+<p><code>&lt;!----&gt;&lt;h2&gt;Padaria da Ana&lt;/h2&gt;&lt;!----&gt; &lt;p&gt;Pão quentinho todo dia&lt;/p&gt;</code></p>
+
+<p>As duas âncoras marcam o começo e o fim do espaço que o elemento dinâmico ocupa. Quando a Ana mudou a variável para <code>'h1'</code> e salvou o arquivo, o navegador trocou só aquele pedaço: <code>&lt;!----&gt;&lt;h1&gt;Padaria da Ana&lt;/h1&gt;&lt;!----&gt;</code>. O parágrafo seguinte não foi tocado.</p>
+
+<p>E quando o valor é <code>null</code>? O Svelte simplesmente não desenha nada — nem a tag, nem o conteúdo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tag = $state(null);
+&lt;/script&gt;
+
+&lt;svelte:element this={tag}&gt;Padaria&lt;/svelte:element&gt;
+&lt;p&gt;fim&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;fim&lt;/p&gt;</pre>
+
+<p>Isso é útil: uma lista de opções vazia pode render nada em vez de um <code>div</code> fantasma. Só não confunda com <code>undefined</code> escrito como texto — o valor precisa ser <code>null</code> de verdade, ou uma string com nome de tag válido.</p>
+
+<hr>
+
+<h2>4. <code>&lt;svelte:head&gt;</code>: o título da aba</h2>
+
+<p>O título que aparece na aba do navegador mora no <code>&lt;head&gt;</code> do documento, não no corpo. Se você escrever <code>&lt;title&gt;</code> no meio do componente, ele é desenhado no corpo — e o navegador ignora o título da aba. O <code>svelte:head</code> resolve isso: o conteúdo dele é levado para o <code>&lt;head&gt;</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;svelte:head&gt;
+  &lt;title&gt;Padaria da Ana&lt;/title&gt;
+&lt;/svelte:head&gt;
+
+&lt;h1&gt;Padaria da Ana&lt;/h1&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;</pre>
+
+<p>Repare no que o corpo <em>não</em> tem: o título. Ele foi para o <code>head</code>, onde o compilador o entrega separado do resto. Nesta renderização, o head recebe <code>&lt;meta name="description" content="Pão quentinho todo dia"/&gt;</code> e <code>&lt;title&gt;Padaria da Ana&lt;/title&gt;</code> — as duas tags que estavam dentro do bloco.</p>
+
+<p>Nada impede vários componentes de terem o seu <code>svelte:head</code>: o Svelte junta os pedidos e atualiza o documento. É assim que uma página de produto troca o título da aba sem recarregar o site. Como o <code>head</code> é um lugar só, o último que escrever vence — então evite dois componentes disputando o mesmo <code>&lt;title&gt;</code>.</p>
+
+<div class="trysvelte" data-goal="html:<h1>Padaria</h1>">
+<p class="try-task"><strong>Missão:</strong> o <code>&lt;title&gt;</code> está no corpo do componente, e por isso não vira o título da aba. Mova-o para um <code>&lt;svelte:head&gt;</code>, deixando o corpo só com o <code>h1</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;title&gt;Padaria da Ana&lt;/title&gt;
+&lt;h1&gt;Padaria&lt;/h1&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;svelte:head&gt;
+  &lt;title&gt;Padaria da Ana&lt;/title&gt;
+&lt;/svelte:head&gt;
+
+&lt;h1&gt;Padaria&lt;/h1&gt;</pre>
+</div>
+
+<p>Antes, o HTML do componente é <code>&lt;title&gt;Padaria da Ana&lt;/title&gt;&lt;h1&gt;Padaria&lt;/h1&gt;</code> — o título está no lugar errado. Depois, sobra <code>&lt;h1&gt;Padaria&lt;/h1&gt;</code> no corpo, e o título assume o seu posto no <code>head</code>.</p>
+
+<hr>
+
+<h2>5. <code>&lt;svelte:window&gt;</code>, <code>&lt;svelte:document&gt;</code> e <code>&lt;svelte:body&gt;</code></h2>
+
+<p>A Ana quer mostrar a última tecla que o cliente digitou. Escrever isso exigiria pegar o objeto <code>window</code> e adicionar um ouvinte de evento na mão, com cuidado para remover quando o componente sair da tela. O <code>svelte:window</code> faz o trabalho: você declara o evento como se fosse um atributo de uma tag:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tecla = $state('');
+&lt;/script&gt;
+
+&lt;svelte:window onkeydown={(e) =&gt; tecla = e.key} /&gt;
+&lt;p&gt;Última tecla: {tecla}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Última tecla: &lt;/p&gt;</pre>
+
+<p>O elemento não desenha nada: o corpo tem só o parágrafo, e o valor de <code>tecla</code> está vazio porque ninguém digitou ainda. Quando alguém digita, o Svelte chama a função, o estado muda e o parágrafo se atualiza. Na tela, o texto passa a ser <em>Última tecla: a</em>, depois <em>Última tecla: b</em>.</p>
+
+<p>O mesmo padrão vale para os outros dois: <code>&lt;svelte:document&gt;</code> ouve eventos do documento — <code>onvisibilitychange</code> quando a aba perde ou ganha foco, <code>onpointerlockchange</code> — e <code>&lt;svelte:body&gt;</code> ouve eventos do <code>body</code>, como <code>onmouseenter</code> e <code>onmouseleave</code>. Os três desenham zero elementos.</p>
+
+<p>Há regras de lugar para eles. Todos precisam estar no nível de fora do componente: não podem ficar dentro de uma <code>&lt;div&gt;</code> nem de um <code>{#if}</code>. Se você tentar, o compilador responde <em>"`&lt;svelte:window&gt;` tags cannot be inside elements or blocks"</em>. E cada componente aceita um só: dois <code>svelte:window</code> no mesmo arquivo dão o erro <em>"A component can only have one `&lt;svelte:window&gt;` element"</em>. Para vários eventos, junte tudo na mesma tag.</p>
+
+<hr>
+
+<h2>6. <code>&lt;svelte:options&gt;</code>: as opções do arquivo</h2>
+
+<p>O <code>svelte:options</code> é a única tag <code>svelte:</code> que não tem a ver com a página: ela configura como o arquivo é compilado. A mais usada hoje é <code>runes={true}</code>, que força o modo das runas:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;svelte:options runes={true} /&gt;
+
+&lt;script&gt;
+  let n = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Contador: {n}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Contador: 0&lt;/p&gt;</pre>
+
+<p>Como você pode ver, a tag não desenha nada: o corpo tem só o parágrafo. O que ela fez foi dizer ao compilador "este arquivo usa runas" — e com isso <code>let n = $state(0)</code> passa a ser reagente de verdade, e <code>$:</code> deixa de ser aceito.</p>
+
+<p>As outras opções raramente aparecem num projeto de aprendizado: <code>immutable</code> (diz que o estado nunca é mutado, só trocado), <code>accessors</code> (cria getters e setters para props), <code>namespace</code> (para gerar SVG ou MathML por padrão) e <code>customElement</code> (empacota o componente como um elemento HTML de verdade). Esta última tem uma pegadinha: ela só vale quando o projeto compila com <code>customElement: true</code>; sem isso, o compilador avisa <code>options_missing_custom_element</code> com <em>"The `customElement` option is used when generating a custom element. Did you forget the `customElement: true` compile option?"</em>.</p>
+
+<p>No dia a dia, você quase não escreve <code>svelte:options</code>. Vale saber que existe para não estranhar quando um arquivo de exemplo começar com ela.</p>
+
+<hr>
+
+<h2>7. <code>&lt;svelte:self&gt;</code> e <code>&lt;svelte:component&gt;</code>: o que era e o que virou</h2>
+
+<p>Duas tags desta família entraram em desuso no Svelte 5. Elas continuam funcionando, mas o compilador avisa — e você vai encontrar as duas em código antigo.</p>
+
+<p><code>&lt;svelte:self&gt;</code> servia para um componente desenhar a si mesmo: uma árvore de pastas, um comentário com respostas. Hoje o compilador avisa <code>svelte_self_deprecated</code>: <em>"`&lt;svelte:self&gt;` is deprecated — use self-imports (e.g. `import App from './App.svelte'`) instead"</em>. A receita nova é literalmente importar o próprio arquivo: <code>import App from './App.svelte'</code> e usar <code>&lt;App n={n - 1} /&gt;</code> dentro do <code>{#if}</code>. O <code>svelte:self</code> antigo também tinha uma exigência chata: só podia existir dentro de <code>{#if}</code>, <code>{#each}</code> ou de um <code>{#snippet}</code> — fora deles, o erro é <em>"`&lt;svelte:self&gt;` components can only exist inside `{#if}` blocks, `{#each}` blocks, `{#snippet}` blocks or slots passed to components"</em>. Sem esse limite, o componente se chamaria para sempre.</p>
+
+<p><code>&lt;svelte:component&gt;</code> servia para escolher qual componente desenhar numa variável. No Svelte 5 isso ficou desnecessário: uma variável que guarda um componente já pode ser usada direto na tag, e o compilador avisa <code>svelte_component_deprecated</code>: <em>"`&lt;svelte:component&gt;` is deprecated in runes mode — components are dynamic by default"</em>. O "dynamic by default" é a chave: <code>&lt;qual /&gt;</code> já funciona, sem tag especial.</p>
+
+<p>A terceira aposentada é <code>&lt;svelte:fragment&gt;</code>, substituída pelos <code>{#snippet}</code> que você já usa. Nenhuma delas quebra de imediato; todas pedem uma migração quando você tiver tempo.</p>
+
+<hr>
+
+<h2>8. <code>&lt;svelte:boundary&gt;</code>: quando um pedaço quebra</h2>
+
+<p>Um erro dentro de um componente derruba a página inteira: a tela fica em branco e o console mostra o motivo. O <code>svelte:boundary</code> existe para limitar o estrago: se algo dentro dele quebrar, o Svelte desenha um trecho alternativo no lugar — e o resto da página continua de pé.</p>
+
+<p>O trecho alternativo é um <code>{#snippet failed}</code>. Ele recebe o erro e uma função para tentar de novo:</p>
+
+<div class="trysvelte" data-goal="out:Deu erro: sem tempero">
+<p class="try-task"><strong>Missão:</strong> este componente quebra de propósito — a expressão lança um erro durante o desenho. Envolva tudo num <code>&lt;svelte:boundary&gt;</code> com um <code>{#snippet failed(erro)}</code> que mostre <code>Deu erro: {erro.message}</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;p&gt;{ (function () { throw new Error('sem tempero') })() }&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;svelte:boundary&gt;
+  &lt;p&gt;{ (function () { throw new Error('sem tempero') })() }&lt;/p&gt;
+
+  {#snippet failed(erro)}
+    &lt;p&gt;Deu erro: {erro.message}&lt;/p&gt;
+  {/snippet}
+&lt;/svelte:boundary&gt;</pre>
+</div>
+
+<p>Antes, o componente quebra: o erro <em>sem tempero</em> sobe até a raiz e não há o que desenhar. Depois, o <code>boundary</code> segura o erro e a tela mostra <em>Deu erro: sem tempero</em> — a mensagem que o snippet montou a partir de <code>erro.message</code>.</p>
+
+<p>Esse é um recurso de Nível 2 e não é para envolver tudo: use onde há risco real — conteúdo que vem de fora, um componente de terceiros, um trecho que depende de dados que podem faltar. Um <code>boundary</code> em volta da aplicação inteira só troca a tela em branco por uma mensagem em branco.</p>
+
+<hr>
+
+<h2>9. Rodando no computador da Ana</h2>
+
+<p>A Ana trocou o <code>h2</code> do título por <code>h1</code>, com o servidor rodando, e o Vite trocou o componente sem recarregar a página:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 415 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+
+5:56:23 PM [vite] (client) hmr update /src/App.svelte</pre>
+
+<p>A linha final não tem <code>type=style</code> nem <code>lang.css</code>: desta vez a troca foi de marcação e de script, não só de estilo. O endereço e a porta (5173) vêm do terminal; se a 5173 estiver ocupada, o Vite escolhe a próxima e escreve o número certo na linha <code>Local</code>.</p>
+
+<p>No build, este componente não gera arquivo de CSS — ele não tem <code>&lt;style&gt;</code>. Repare na lista, que tem só um <code>.js</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-UsOgDiRa.js  36.16 kB │ gzip: 13.83 kB
+✓ built in 710ms</pre>
+
+<p>Nas aulas anteriores o build terminava com <code>✓ built in 1.66s</code> e três arquivos; aqui são dois e menos de um segundo. A diferença não é do <code>svelte:element</code>: é que este componente é menor e não tem estilo. Um projeto real terá os arquivos de todas as páginas juntos.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são todas sobre o lugar ou a forma das tags <code>svelte:</code>. Repare que duas delas listam o que é válido — mensagens assim são um mapa, não um castigo.</p>
+
+<div class="cenario">
+<p><strong>1. <code>svelte:element</code> sem <code>this</code>.</strong> A tag precisa saber qual elemento desenhar:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tag = $state('h2');
+&lt;/script&gt;
+
+&lt;svelte:element&gt;{tag}&lt;/svelte:element&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): `&lt;svelte:element&gt;` must have a 'this' attribute with a value</pre>
+<p>"<code>&lt;svelte:element&gt;</code> precisa de um atributo 'this' com um valor". O conteúdo do elemento não serve como tag: <code>{tag}</code> ali dentro só desenharia o texto <code>h2</code>. A correção é <code>&lt;svelte:element this={tag}&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. Nome de tag que não existe.</strong> Um <code>svelte:janela</code>, traduzido do inglês:</p>
+<pre class="file" data-file="src/App.svelte">&lt;svelte:janela /&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 1): Valid `&lt;svelte:...&gt;` tag names are svelte:head, svelte:options, svelte:window, svelte:document, svelte:body, svelte:element, svelte:component, svelte:self, svelte:fragment or svelte:boundary</pre>
+<p>A mensagem lista os dez nomes válidos. Note que todos são em inglês e em minúsculas: <code>svelte:window</code>, não <code>svelte:janela</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. <code>svelte:window</code> no lugar errado.</strong> Dentro de um <code>{#if}</code>, o compilador não aceita:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let ativo = $state(true);
+&lt;/script&gt;
+
+{#if ativo}
+  &lt;svelte:window onkeydown={() =&gt; {}} /&gt;
+{/if}</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 2): `&lt;svelte:window&gt;` tags cannot be inside elements or blocks</pre>
+<p>"Tags <code>&lt;svelte:window&gt;</code> não podem ficar dentro de elementos ou blocos". Tire a tag do <code>{#if}</code> e controle o evento pela função: <code>onkeydown={(e) =&gt; { if (ativo) { … } }}</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Resultado</th></tr>
+<tr><td><code>&lt;svelte:element this={tag} /&gt;</code></td><td>a tag que estiver em <code>tag</code>; <code>null</code> não desenha nada</td></tr>
+<tr><td><code>&lt;svelte:element this={'h' + n}&gt;…&lt;/svelte:element&gt;</code></td><td>monta o nome da tag na hora</td></tr>
+<tr><td><code>&lt;svelte:head&gt;&lt;title&gt;…&lt;/title&gt;&lt;/svelte:head&gt;</code></td><td>o título vai para o <code>head</code>, não para o corpo</td></tr>
+<tr><td><code>&lt;svelte:window onresize={…} /&gt;</code></td><td>ouve um evento da janela; não desenha nada</td></tr>
+<tr><td><code>&lt;svelte:document onvisibilitychange={…} /&gt;</code></td><td>ouve um evento do documento</td></tr>
+<tr><td><code>&lt;svelte:body onmouseenter={…} /&gt;</code></td><td>ouve um evento do <code>body</code></td></tr>
+<tr><td><code>&lt;svelte:options runes={true} /&gt;</code></td><td>força o modo das runas neste arquivo</td></tr>
+<tr><td><code>&lt;svelte:boundary&gt;…{#snippet failed(e)}…{/snippet}&lt;/svelte:boundary&gt;</code></td><td>desenha o plano B quando algo dentro quebra</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que fazer</th></tr>
+<tr><td><code>must have a 'this' attribute</code></td><td>escreva <code>this={expressão}</code> no <code>svelte:element</code></td></tr>
+<tr><td><code>Valid `&lt;svelte:...&gt;` tag names are …</code></td><td>o nome não existe; use um da lista</td></tr>
+<tr><td><code>tags cannot be inside elements or blocks</code></td><td>tire a tag de dentro de <code>&lt;div&gt;</code> ou <code>{#if}</code></td></tr>
+<tr><td><code>A component can only have one …</code></td><td>junte os eventos numa tag só</td></tr>
+<tr><td><code>svelte_element_invalid_this</code></td><td>troque <code>this="h2"</code> por <code>this={'h2'}</code></td></tr>
+<tr><td><code>svelte_component_deprecated</code></td><td>use o componente direto na tag</td></tr>
+</table>
+</div>
+
+<p>O resumo da ideia: as tags <code>svelte:</code> são atalhos para coisas que o HTML não sabe expressar — uma tag decidida em tempo de execução, um conteúdo que pertence a outro lugar do documento, um evento da janela, um erro contido. Elas não são componentes e não são importadas; são parte da linguagem que o compilador entende.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o atributo <code>this</code> do <code>&lt;svelte:element&gt;</code> recebe?</p>
+<label><input type="radio" name="q1"> o texto que aparece dentro do elemento</label>
+<label><input type="radio" name="q1"> uma expressão que resulta no nome da tag</label>
+<label><input type="radio" name="q1"> o id do elemento no documento</label>
+<label><input type="radio" name="q1"> um componente a ser desenhado</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Onde o conteúdo de <code>&lt;svelte:head&gt;</code> é desenhado?</p>
+<label><input type="radio" name="q1"> no corpo, antes do primeiro elemento</label>
+<label><input type="radio" name="q1"> dentro de um comentário, invisível</label>
+<label><input type="radio" name="q1"> no <code>&lt;head&gt;</code> do documento</label>
+<label><input type="radio" name="q1"> num arquivo separado, gerado no build</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o elemento dinâmico recebe o selo do componente mesmo quando a tag não casa com nenhuma regra?</p>
+<label><input type="radio" name="q1"> porque o compilador não sabe qual tag virá e marca por precaução; o seletor decide no navegador</label>
+<label><input type="radio" name="q1"> porque o selo é sempre aplicado a todos os elementos da página</label>
+<label><input type="radio" name="q1"> porque <code>svelte:element</code> não aceita estilo</label>
+<label><input type="radio" name="q1"> porque o navegador exige uma classe em elementos dinâmicos</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;let tag = $state('h2');<br>&lt;/script&gt;<br><br>&lt;svelte:element <input data-answer="this={tag}">&gt;Padaria&lt;/svelte:element&gt;<br><br>// o atributo que diz qual tag desenhar</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>As tags <code>svelte:</code> são instruções para o compilador; não são componentes e não são importadas.</li>
+  <li><code>&lt;svelte:element this={…}&gt;</code> desenha a tag que a expressão devolver.</li>
+  <li><code>this</code> precisa ser uma expressão entre chaves; string solta gera <code>svelte_element_invalid_this</code>.</li>
+  <li>O elemento dinâmico recebe o selo sempre; o seletor é quem decide se a regra casa.</li>
+  <li>As âncoras <code>&lt;!----&gt;</code> marcam onde o elemento dinâmico pode ser trocado.</li>
+  <li><code>this={null}</code> não desenha nada.</li>
+  <li><code>svelte:head</code> manda o conteúdo para o <code>&lt;head&gt;</code>; é assim que se muda o título da aba.</li>
+  <li><code>svelte:window</code>, <code>svelte:document</code> e <code>svelte:body</code> ouvem eventos e precisam ficar no nível de fora do componente.</li>
+  <li><code>svelte:options</code> configura o arquivo (<code>runes</code>, <code>customElement</code>) e não desenha nada.</li>
+  <li><code>svelte:self</code> e <code>svelte:component</code> estão em desuso; <code>svelte:boundary</code> segura erros com um <code>{#snippet failed}</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

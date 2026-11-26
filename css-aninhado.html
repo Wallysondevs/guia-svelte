@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSS Aninhado e :global | Guia Svelte</title>
+<meta name="description" content="Escrever CSS na forma do HTML: aninhamento de regras no componente Svelte, o seletor &amp;, @media dentro da regra, :global e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">CSS Aninhado e :global</span></h1>
+
+<p class="intro">O caderno de pedidos da Ana tem uma estrutura simples: cada pedido é uma caixa, e dentro da caixa ficam o nome do cliente, os itens e o total. No CSS, ela escrevia <code>.pedido .cliente { … }</code>, <code>.pedido .total { … }</code> — repetindo o nome da caixa em toda linha só para dizer "isto está dentro daquilo". O CSS aninhado permite escrever a regra na mesma forma do HTML: a caixa por fora, os filhos por dentro. E o Svelte entende isso sem perder o escopo que você aprendeu na aula anterior.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é <strong>aninhamento</strong> de regras e por que ele deixa o CSS na forma do HTML.</li>
+  <li>Como o seletor aninhado sai do compilador, com o selo do componente.</li>
+  <li>O que o <code>:where(…)</code> faz nos seletores de dentro.</li>
+  <li>Para que serve o <code>&amp;</code> e quando ele é obrigatório.</li>
+  <li>A diferença entre <code>p</code> e <code>&amp; &gt; p</code> dentro da regra.</li>
+  <li>Por que uma regra aninhada pode virar <code>/* (unused) … */</code>.</li>
+  <li>Como colocar <code>@media</code> dentro de uma regra.</li>
+  <li>Como <code>:global(…)</code> funciona no meio do aninhamento.</li>
+  <li>O que o build faz com o aninhamento e o que ele achata.</li>
+  <li>Os três erros reais de aninhamento, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: escrever o CSS na forma do HTML</h2>
+
+<p>O HTML de um componente é uma árvore: uma caixa que contém um título, um parágrafo, uma lista. O CSS sempre foi uma lista de caminhos até essas peças, e o caminho repete o nome de cada degrau. Para pintar o título que está dentro da caixa, você escreve <code>.cartao h1</code>. Para pintar o parágrafo da mesma caixa, <code>.cartao p</code>. O nome <code>.cartao</code> aparece em todas as linhas, e é fácil esquecer um.</p>
+
+<p>O CSS aninhado resolve isso deixando você escrever a árvore uma vez só:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>CSS plano</th><th>CSS aninhado</th></tr>
+<tr><td><code>.cartao { padding: 8px; }</code><br><code>.cartao h1 { color: #b8860b; }</code><br><code>.cartao p { margin: 0; }</code></td><td><code>.cartao {</code><br><code>&nbsp;&nbsp;padding: 8px;</code><br><code>&nbsp;&nbsp;h1 { color: #b8860b; }</code><br><code>&nbsp;&nbsp;p { margin: 0; }</code><br><code>}</code></td></tr>
+<tr><td>o nome da caixa se repete em cada seletor</td><td>o nome da caixa aparece uma vez, e os filhos ficam dentro</td></tr>
+<tr><td>fácil esquecer um <code>.cartao</code> e a regra vaza para a página</td><td>não há como esquecer: a regra está fisicamente dentro</td></tr>
+</table>
+</div>
+
+<p>Durante muito tempo isso foi coisa de pré-processador — Sass, Less, Stylus. Você escrevia aninhado e a ferramenta achatava antes de entregar ao navegador. Hoje o próprio CSS aceita aninhamento, e o Svelte o aceita de fábrica: nada de instalar plugin, nada de arquivo <code>.scss</code>. Você escreve dentro do bloco <code>&lt;style&gt;</code> e o compilador cuida de aplicar o selo do componente em cada pedaço.</p>
+
+<p>Repare na palavra "cada pedaço". Um seletor aninhado não é uma regra só: é uma regra composta, e o selo precisa aparecer no pai e no filho. É aí que a saída do compilador começa a ficar interessante — e é o que você vai ver na próxima seção.</p>
+
+<hr>
+
+<h2>2. A primeira regra aninhada</h2>
+
+<p>O cartão de pedido da Ana, com o título dentro da caixa:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;div class="cartao"&gt;
+  &lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+  &lt;p&gt;Pão francês: R$ 0,90&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;style&gt;
+  .cartao {
+    padding: 8px;
+    border: 1px solid #eee;
+
+    h1 {
+      color: #b8860b;
+      font-size: 20px;
+    }
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">.cartao.svelte-1n46o8q {
+    padding: 8px;
+    border: 1px solid #eee;
+
+    h1:where(.svelte-1n46o8q) {
+      color: #b8860b;
+      font-size: 20px;
+    }
+  }</pre>
+
+<p>O compilador não achatou nada: o aninhamento continua lá, exatamente na posição em que você escreveu, inclusive a linha em branco. O que ele fez foi acrescentar o selo <code>svelte-1n46o8q</code> em dois lugares — no <code>.cartao</code> e no <code>h1</code>, este último dentro de um <code>:where(…)</code>. As declarações <code>padding</code> e <code>border</code> ficaram onde estavam, antes da regra de dentro.</p>
+
+<p>O HTML gerado mostra a outra metade do trabalho: <code>&lt;div class="cartao svelte-1n46o8q"&gt;</code> e <code>&lt;h1 class="svelte-1n46o8q"&gt;</code>. O parágrafo, que não é citado por nenhuma regra, sai limpo: <code>&lt;p&gt;Pão francês: R$ 0,90&lt;/p&gt;</code>. Sem regra que possa atingi-lo, sem selo.</p>
+
+<p>Esse é o ponto que costuma confundir: o aninhamento <strong>não</strong> muda o alcance da regra. <code>.cartao { h1 { … } }</code> atinge exatamente os mesmos elementos que <code>.cartao h1 { … }</code> atingiria — os títulos dentro de uma caixa com a classe <code>cartao</code>. A diferença é de leitura e de manutenção, não de resultado na tela.</p>
+
+<div class="trysvelte" data-goal="html:<div class=&quot;cartao svelte-n50uah&quot;><h1 class=&quot;svelte-n50uah&quot;>A</h1></div> <h1>B</h1>">
+<p class="try-task"><strong>Missão:</strong> a regra do <code>h1</code> está solta, então ela marca também o título que está fora da caixa. Aninhe a regra dentro de <code>.cartao</code> para o selo ir só no título de dentro.</p>
+<pre class="script" data-file="App.svelte">&lt;div class="cartao"&gt;
+  &lt;h1&gt;A&lt;/h1&gt;
+&lt;/div&gt;
+&lt;h1&gt;B&lt;/h1&gt;
+
+&lt;style&gt;
+  h1 { color: #b8860b; }
+&lt;/style&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;div class="cartao"&gt;
+  &lt;h1&gt;A&lt;/h1&gt;
+&lt;/div&gt;
+&lt;h1&gt;B&lt;/h1&gt;
+
+&lt;style&gt;
+  .cartao {
+    h1 { color: #b8860b; }
+  }
+&lt;/style&gt;</pre>
+</div>
+
+<p>Antes da correção, os dois títulos recebem a classe: <code>&lt;div class="cartao"&gt;&lt;h1 class="svelte-n50uah"&gt;A&lt;/h1&gt;&lt;/div&gt; &lt;h1 class="svelte-n50uah"&gt;B&lt;/h1&gt;</code>. Depois, só o de dentro: o <code>h1</code> de fora fica sem classe, porque nenhuma regra do componente pode alcançá-lo. A caixa também ganha o selo, já que ela é o pai do seletor.</p>
+
+<hr>
+
+<h2>3. O selo e o <code>:where(…)</code> do filho</h2>
+
+<p>Vale abrir o seletor gerado peça por peça, porque ele tem uma forma que você vai encontrar em todo CSS aninhado do Svelte:</p>
+
+<dl class="anatomy">
+  <dt>.cartao</dt><dd>a classe que você escreveu, o <strong>pai</strong> da regra.</dd>
+  <dt>.svelte-1n46o8q</dt><dd>o selo do componente colado no pai, do jeito que você já conhece.</dd>
+  <dt>h1</dt><dd>o seletor de dentro, o <strong>filho</strong>. Continua sendo descendente do pai, sem <code>&gt;</code>.</dd>
+  <dt>:where(.svelte-1n46o8q)</dt><dd>o selo do filho, envolvido por <code>:where</code>. Esse invólucro tem peso <strong>zero</strong> na especificidade.</dd>
+  <dt>{ … }</dt><dd>as declarações do filho, no lugar em que você as escreveu.</dd>
+</dl>
+
+<p>O <code>:where(…)</code> existe para o selo não inflar a força da regra. Sem ele, cada nível de aninhamento somaria uma classe à especificidade, e uma regra de dois níveis venceria qualquer regra de um nível só. Com <code>:where</code>, o seletor marca o elemento sem participar da briga: <code>.cartao h1</code> e <code>.cartao { h1 { … } }</code> têm exatamente a mesma força.</p>
+
+<p>E por que marcar o filho, se o pai já tem o selo? Porque o pai pode conter componentes de fora. Se um componente filho renderizar um <code>h1</code> dentro do seu <code>.cartao</code>, esse título não tem o selo <code>svelte-1n46o8q</code> e a sua regra não o atinge — ele pertence ao componente dele, com o estilo dele. O selo no filho é o que impede o aninhamento de virar uma porta aberta para dentro dos outros componentes.</p>
+
+<div class="tip">
+<strong>Você não escreve <code>:where</code></strong>
+<p>Ele aparece só na saída do compilador. Se você digitar <code>:where</code> no seu CSS, o Svelte respeita o que você escreveu e ainda acrescenta o selo dele. Não há motivo para isso: escreva o seletor simples e deixe o invólucro para o compilador.</p>
+</div>
+
+<hr>
+
+<h2>4. O <code>&amp;</code>: o pai como referência</h2>
+
+<p>Até aqui, os seletores de dentro eram descendentes — coisas <em>dentro</em> do pai. Mas há um caso diferente: quando você quer falar do próprio elemento, num outro estado. O botão de comprar da padaria muda de cor quando o mouse passa por cima. O estado <code>:hover</code> não é um filho do botão; é o botão mesmo. Para dizer isso, o CSS aninhado usa o <code>&amp;</code>, que significa "o seletor do pai, aqui":</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;button class="botao"&gt;Comprar&lt;/button&gt;
+
+&lt;style&gt;
+  .botao {
+    padding: 6px 12px;
+    border-radius: 4px;
+
+    &amp;:hover {
+      background: #b8860b;
+    }
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">.botao.svelte-1n46o8q {
+    padding: 6px 12px;
+    border-radius: 4px;
+
+    &amp;:hover {
+      background: #b8860b;
+    }
+  }</pre>
+
+<p>O <code>&amp;</code> foi mantido na saída, colado no <code>:hover</code>, sem espaço entre os dois. Isso quer dizer "este mesmo elemento, quando o mouse estiver em cima" — e não "um filho em estado de hover". Sem o <code>&amp;</code>, o compilador entenderia <code>:hover</code> como um descendente e a regra nunca casaria com nada.</p>
+
+<dl class="anatomy">
+  <dt>&amp;</dt><dd>o <strong>pai</strong> naquele ponto. Vale por <code>.botao.svelte-1n46o8q</code> inteiro.</dd>
+  <dt>:hover</dt><dd>uma <strong>pseudo-classe</strong>, um estado do elemento. Outras comuns: <code>:focus</code>, <code>:disabled</code>, <code>:first-child</code>.</dd>
+  <dt>&amp;:hover</dt><dd>sem espaço entre <code>&amp;</code> e <code>:</code> — o pai <em>no estado</em> hover. Com espaço (<code>&amp; :hover</code>) seria um descendente.</dd>
+  <dt>background</dt><dd>a declaração que só vale nesse estado.</dd>
+</dl>
+
+<p>O <code>&amp;</code> também serve para grudar uma classe: <code>&amp;.ativo</code> significa "o botão que tem as classes <code>botao</code> e <code>ativo</code> ao mesmo tempo". É o mesmo que escrever <code>.botao.ativo</code> por fora, mas sem repetir o nome do pai. E serve para combinar com outras coisas: <code>&amp; + &amp;</code> é "um botão logo depois de outro", <code>&amp;:not(:last-child)</code> é "todo botão que não é o último".</p>
+
+<p>Uma observação prática: dentro de uma regra aninhada, o <code>&amp;</code> é opcional quando o seletor começa por uma tag, uma classe ou um id. <code>h1 { … }</code> e <code>&amp; h1 { … }</code> dão no mesmo. Mas ele é obrigatório quando o seletor começa por <code>:</code>, <code>::</code>, <code>[</code> ou <code>&gt;</code> — porque aí não há como saber se você quer o pai ou um descendente. Na dúvida, use <code>&amp;</code>: ele nunca erra o alvo e deixa a intenção explícita.</p>
+
+<hr>
+
+<h2>5. <code>&amp; &gt; p</code>: só o filho direto</h2>
+
+<p>Um cartão de pedido pode ter caixas dentro de si — o miolo do pão, o recheio, os acompanhamentos. A regra <code>p</code> dentro de <code>.cartao</code> atinge <em>todos</em> os parágrafos descendentes, inclusive os que estão dentro dessas caixas internas. Se a Ana quer zerar a margem só do primeiro nível, o seletor precisa dizer "filho direto", com <code>&gt;</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;div class="cartao"&gt;
+  &lt;p&gt;Pão francês&lt;/p&gt;
+  &lt;div class="miolo"&gt;
+    &lt;p&gt;Miolo do pão&lt;/p&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;style&gt;
+  .cartao {
+    &amp; &gt; p {
+      margin: 0;
+    }
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">.cartao.svelte-1n46o8q {
+    &amp; &gt; p:where(.svelte-1n46o8q) {
+      margin: 0;
+    }
+  }</pre>
+
+<p>E o HTML gerado confirma o alcance: <code>&lt;div class="cartao svelte-1n46o8q"&gt;&lt;p class="svelte-1n46o8q"&gt;Pão francês&lt;/p&gt; &lt;div class="miolo"&gt;&lt;p&gt;Miolo do pão&lt;/p&gt;&lt;/div&gt;&lt;/div&gt;</code>. O parágrafo de dentro do <code>.miolo</code> saiu sem classe, porque nenhuma regra pode alcançá-lo. É o selo funcionando como espelho do seletor: se a regra não chega, o elemento fica limpo.</p>
+
+<p>Repare que o <code>&amp; &gt; p</code> virou <code>&amp; &gt; p:where(…)</code>, com o <code>&amp;</code> preservado. O compilador não troca o <code>&amp;</code> pelo seletor do pai — ele entrega o aninhamento ao navegador, que hoje sabe ler <code>&amp;</code>. Quem faz a expansão final é o navegador, na hora de aplicar o estilo.</p>
+
+<div class="trysvelte" data-goal="html:<div class=&quot;cartao svelte-n50uah&quot;><p class=&quot;svelte-n50uah&quot;>Pão</p><div><p>Miolo</p></div></div>">
+<p class="try-task"><strong>Missão:</strong> o <code>margin: 0</code> está pegando também no parágrafo que mora dentro da caixa interna. Restrinja a regra ao filho direto, usando <code>&amp; &gt; p</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;div class="cartao"&gt;
+  &lt;p&gt;Pão&lt;/p&gt;
+  &lt;div&gt;&lt;p&gt;Miolo&lt;/p&gt;&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;style&gt;
+  .cartao {
+    p { margin: 0; }
+  }
+&lt;/style&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;div class="cartao"&gt;
+  &lt;p&gt;Pão&lt;/p&gt;
+  &lt;div&gt;&lt;p&gt;Miolo&lt;/p&gt;&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;style&gt;
+  .cartao {
+    &amp; &gt; p { margin: 0; }
+  }
+&lt;/style&gt;</pre>
+</div>
+
+<p>Antes, o HTML é <code>&lt;div class="cartao svelte-n50uah"&gt;&lt;p class="svelte-n50uah"&gt;Pão&lt;/p&gt;&lt;div&gt;&lt;p class="svelte-n50uah"&gt;Miolo&lt;/p&gt;&lt;/div&gt;&lt;/div&gt;</code> — os dois parágrafos marcados. Depois, o de dentro perde a classe. A diferença na tela é de alguns pixels de margem; a diferença no código é saber quem manda em quem.</p>
+
+<hr>
+
+<h2>6. Quando a regra aninhada não casa</h2>
+
+<p>Uma armadilha do <code>&amp;</code>: escrever um estado ou uma classe que o HTML não tem. O CSS compila, o navegador não aplica nada e a página fica igual. O compilador percebe e avisa. Aqui a Ana escreveu <code>&amp;.ativo</code> para o botão em destaque, mas o botão do HTML só tem a classe <code>botao</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;button class="botao"&gt;Comprar&lt;/button&gt;
+
+&lt;style&gt;
+  .botao {
+    padding: 6px 12px;
+    &amp;:hover {
+      background: #b8860b;
+    }
+    &amp;.ativo {
+      font-weight: bold;
+    }
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">.botao.svelte-1n46o8q {
+    padding: 6px 12px;
+    &amp;:hover {
+      background: #b8860b;
+    }
+    /* (unused) &amp;.ativo {
+      font-weight: bold;
+    }*/
+  }</pre>
+
+<p>O aviso, na linha da regra, é <em>"Unused CSS selector "&amp;.ativo""</em> com o código <code>css_unused_selector</code>. Repare no detalhe: o compilador cita o seletor como você o escreveu, com o <code>&amp;</code>, e não como ele apareceria expandido. É uma boa pista de onde olhar — a linha 9 deste arquivo.</p>
+
+<p>O que aconteceu é que <code>&amp;.ativo</code> pede um elemento com as duas classes. O único botão do componente tem só <code>botao</code>. Como nenhum elemento casa, a regra vira comentário no CSS gerado, e o HTML sai sem o selo no botão — o mesmo HTML de antes. A correção tem duas saídas honestas: acrescentar <code>ativo</code> à classe do botão, ou tirar a regra que ninguém usa. As duas são melhores do que deixar o CSS mentindo.</p>
+
+<p>Aviso não é erro: a página funciona. Mas cada <code>css_unused_selector</code> é uma linha de CSS que você acha que está fazendo algo e não está. Em um projeto grande, eles se acumulam e viram um capítulo de arqueologia.</p>
+
+<hr>
+
+<h2>7. <code>@media</code> dentro da regra</h2>
+
+<p>O preço do café muda de tamanho conforme a largura da tela. Em CSS plano, você repete o seletor dentro do <code>@media</code>. Com aninhamento, o <code>@media</code> pode ficar dentro da regra, junto do que ele afeta:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;p class="preco"&gt;R$ 0,90&lt;/p&gt;
+
+&lt;style&gt;
+  .preco {
+    font-size: 18px;
+
+    @media (min-width: 600px) {
+      font-size: 24px;
+    }
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">.preco.svelte-1n46o8q {
+    font-size: 18px;
+
+    @media (min-width: 600px) {
+      font-size: 24px;
+    }
+  }</pre>
+
+<p>O <code>@media</code> continua dentro do <code>.preco</code> e o selo aparece uma vez só, no seletor de fora. Por dentro, as declarações herdam o seletor do pai — é como se o <code>@media</code> fosse um envelope transparente para o seletor. Na tela, isso significa 18 pixels no celular e 24 no computador, sem repetir <code>.preco</code>.</p>
+
+<p>As demais regras de grupo funcionam do mesmo jeito: <code>@supports</code>, <code>@container</code>, <code>@starting-style</code>. O que <strong>não</strong> pode ficar dentro de uma regra é <code>@import</code> e <code>@font-face</code> — eles precisam estar no nível de fora, porque descrevem coisas que não pertencem a nenhum elemento.</p>
+
+<p>O HTML do exemplo é <code>&lt;p class="preco svelte-1n46o8q"&gt;R$ 0,90&lt;/p&gt;</code>. O selo é um só, porque a regra também é uma só: o <code>@media</code> não é um seletor novo, é uma condição sobre a mesma regra.</p>
+
+<hr>
+
+<h2>8. <code>:global(…)</code> dentro do aninhamento</h2>
+
+<p>Às vezes a caixa embrulha conteúdo que não é seu: um texto vindo de uma biblioteca, o HTML de um campo de formulário, o conteúdo de um componente filho. Nesse caso, o seletor de dentro precisa ficar de fora do escopo — e <code>:global(…)</code> faz isso dentro do aninhamento também:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;div class="cartao"&gt;
+  &lt;p&gt;Pão francês&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;style&gt;
+  .cartao {
+    :global(p) {
+      margin: 0;
+    }
+  }
+&lt;/style&gt;</pre>
+
+<pre class="out">.cartao.svelte-1n46o8q {
+    p {
+      margin: 0;
+    }
+  }</pre>
+
+<p>A saída perde o <code>:global</code> e mantém o <code>p</code> sem selo: <code>.cartao.svelte-1n46o8q p</code>. O pai continua escopado, o filho não. Na prática, a regra vale para <em>qualquer</em> parágrafo dentro da sua caixa, inclusive os que vieram de fora. É a porta aberta, mas do lado de dentro da caixa — bem mais contida do que um <code>:global(p)</code> no nível de fora, que atingiria a página inteira.</p>
+
+<p>No HTML, o efeito é direto: <code>&lt;div class="cartao svelte-1n46o8q"&gt;&lt;p&gt;Pão francês&lt;/p&gt;&lt;/div&gt;</code>. O parágrafo fica sem classe, porque o seletor dele é global e não precisa de selo. É a assinatura do <code>:global</code>: elementos limpos e regras amplas.</p>
+
+<div class="trysvelte" data-goal="html:<div class=&quot;cartao svelte-n50uah&quot;><p>A</p></div> <p>B</p>">
+<p class="try-task"><strong>Missão:</strong> o parágrafo de dentro da caixa é conteúdo de fora, e o selo do componente está indo nele. Deixe a regra do <code>p</code> global, sem tirar o escopo da caixa: o HTML tem de sair com selo no <code>div</code> e sem selo no <code>p</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;div class="cartao"&gt;
+  &lt;p&gt;A&lt;/p&gt;
+&lt;/div&gt;
+&lt;p&gt;B&lt;/p&gt;
+
+&lt;style&gt;
+  .cartao {
+    p { margin: 0; }
+  }
+&lt;/style&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;div class="cartao"&gt;
+  &lt;p&gt;A&lt;/p&gt;
+&lt;/div&gt;
+&lt;p&gt;B&lt;/p&gt;
+
+&lt;style&gt;
+  .cartao {
+    :global(p) { margin: 0; }
+  }
+&lt;/style&gt;</pre>
+</div>
+
+<p>O resultado parece o mesmo do começo, e não é: antes, o <code>p</code> de dentro tinha o selo e a regra valia só para ele; agora o <code>p</code> não tem selo nenhum e a regra vale para qualquer parágrafo dentro da caixa, inclusive um que venha de um componente filho. A escolha entre os dois é a escolha entre proteger e alcançar.</p>
+
+<hr>
+
+<h2>9. Rodando no computador da Ana</h2>
+
+<p>O servidor de desenvolvimento aceita o aninhamento sem configuração. Aqui, depois de subir o projeto e abrir a página no navegador, a Ana editou o bloco de estilo para acrescentar o <code>&amp;:hover</code> da lista de pães:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 678 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+
+5:54:22 PM [vite] (client) hmr update /src/App.svelte?svelte&type=style&lang.css</pre>
+
+<p>A última linha é o Vite avisando que trocou <em>só o CSS</em> do componente, sem recarregar a página: o endereço termina em <code>type=style&amp;lang.css</code>, que é a marca de uma atualização de estilo. O número da porta — 5173 — vem do terminal, não do código; se a 5173 estiver ocupada, o Vite escolhe a próxima e mostra o endereço certo na mesma linha <code>Local</code>.</p>
+
+<p>Já o build faz uma coisa que surpreende: ele achata o aninhamento. O mesmo componente, depois de <code>npm run build</code>, vira um arquivo de CSS onde cada regra aninhada foi expandida:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-Du-p9NBP.css   0.17 kB │ gzip:  0.11 kB
+dist/assets/index-C5thInyN.js   40.96 kB │ gzip: 15.74 kB
+✓ built in 1.66s
+ana@notebook:~/loja$ cat dist/assets/index-Du-p9NBP.css
+.lista.svelte-1n46o8q{padding:0}.lista.svelte-1n46o8q li:where(.svelte-1n46o8q){list-style:none}.lista.svelte-1n46o8q li:where(.svelte-1n46o8q):hover{background:#fffdf5}</pre>
+
+<p>Compare com o que o compilador entregou: <code>.lista { padding: 0; li { list-style: none; &amp;:hover { … } } }</code>. No arquivo final, o <code>li</code> virou <code>.lista.svelte-1n46o8q li:where(.svelte-1n46o8q)</code> e o <code>&amp;:hover</code> virou mais um pedaço no fim do mesmo seletor. Quem fez isso foi o minificador do build, que também tirou espaços e quebras de linha — daí as 170 bytes.</p>
+
+<p>O achatamento é bom para o navegador e indiferente para você: o resultado na tela é o mesmo, com ou sem aninhamento. Mas é útil saber que ele existe, porque explica duas coisas. Primeira: o CSS que você lê no <code>dist/</code> nunca é igual ao que você escreveu — não tente comparar linha por linha. Segunda: o selo viaja junto na expansão, e continua batendo com as classes do HTML.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>Os três erros abaixo são todos de aninhamento mal posicionado. Repare que os três acontecem na linha 4 ou 5 — o começo do bloco de estilo, onde a estrutura é decidida.</p>
+
+<div class="cenario">
+<p><strong>1. <code>&amp;</code> no nível de fora.</strong> O <code>&amp;</code> precisa de um pai. Solto no começo do arquivo, não há a que se referir:</p>
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+
+&lt;style&gt;
+  &amp; { color: red; }
+&lt;/style&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 2): Nesting selectors can only be used inside a rule or as the first selector inside a lone `:global(...)`</pre>
+<p>"Seletores de aninhamento só podem ser usados dentro de uma regra, ou como o primeiro seletor dentro de um <code>:global(...)</code> sozinho". A mensagem até entrega a exceção: <code>:global(&amp;)</code> no nível de fora é aceito. Para o caso comum, a correção é envolver o <code>&amp;</code> numa regra — <code>h1 { &amp; { … } }</code> funciona, embora seja redundante.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. <code>:global</code> como bloco, com declarações.</strong> A Ana quis deixar tudo global e escreveu <code>:global</code> sem parênteses, com uma declaração dentro:</p>
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+
+&lt;style&gt;
+  :global { color: red; }
+&lt;/style&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 12): A top-level `:global {...}` block can only contain rules, not declarations</pre>
+<p>"Um bloco <code>:global {...}</code> de nível superior só pode conter regras, não declarações". Um bloco <code>:global</code> é um envelope para <em>seletores</em>; <code>color: red</code> não é um seletor. Ou você usa <code>:global(h1) { color: red; }</code>, ou coloca as declarações dentro de uma regra.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. <code>&amp;</code> sem nada depois.</strong> Um dois-pontos digitado no lugar errado:</p>
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria&lt;/h1&gt;
+
+&lt;style&gt;
+  h1 {
+    &amp;: { color: blue; }
+  }
+&lt;/style&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 6): Expected a valid CSS identifier</pre>
+<p>"Esperava um identificador CSS válido". Depois de <code>&amp;:</code> tem de vir o nome do estado — <code>&amp;:hover</code>, <code>&amp;:focus</code>, <code>&amp;:first-child</code>. Sozinho, o dois-pontos não forma nada.</p>
+</div>
+
+<hr>
+
+<h2>11. Regras de ouro e referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você escreve</th><th>O compilador entrega</th><th>Vale para</th></tr>
+<tr><td><code>.cartao { h1 { … } }</code></td><td><code>.cartao.svelte-x { h1:where(.svelte-x) { … } }</code></td><td>todo <code>h1</code> descendente</td></tr>
+<tr><td><code>.cartao { &amp; &gt; p { … } }</code></td><td><code>.cartao.svelte-x { &amp; &gt; p:where(.svelte-x) { … } }</code></td><td>só o <code>p</code> filho direto</td></tr>
+<tr><td><code>.botao { &amp;:hover { … } }</code></td><td><code>.botao.svelte-x { &amp;:hover { … } }</code></td><td>o próprio botão, no hover</td></tr>
+<tr><td><code>.botao { &amp;.ativo { … } }</code></td><td><code>.botao.svelte-x { &amp;.ativo { … } }</code></td><td>o botão com as duas classes</td></tr>
+<tr><td><code>.preco { @media (…) { … } }</code></td><td>o <code>@media</code> dentro da regra</td><td>a mesma regra, sob a condição</td></tr>
+<tr><td><code>.cartao { :global(p) { … } }</code></td><td><code>.cartao.svelte-x { p { … } }</code></td><td>qualquer <code>p</code> dentro da caixa</td></tr>
+</table>
+</div>
+
+<p>Três hábitos resolvem quase tudo:</p>
+
+<p><strong>Um.</strong> Mantenha as declarações do pai antes das regras aninhadas. O compilador preserva a ordem em que você escreveu, e uma declaração perdida depois de duas regras aninhadas é difícil de achar às duas da manhã. Declarações primeiro, filhos depois, é a leitura que todos esperam.</p>
+
+<p><strong>Dois.</strong> Não aninhe mais do que dois ou três níveis. Se você chegou em <code>.cartao { .lista { li { .preco { … } } } }</code>, o problema provavelmente não é o seletor: é o componente fazendo coisa demais. Dividir em dois componentes resolve o estilo e a leitura de uma vez.</p>
+
+<p><strong>Três.</strong> Prefira <code>&amp;</code> quando o seletor começa por <code>:</code> e prefira <code>&amp; &gt;</code> quando você sabe que quer só o filho direto. O primeiro evita o erro de achar que <code>:hover</code> é descendente; o segundo evita pintar netos sem querer.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que significa</th><th>Como resolver</th></tr>
+<tr><td><code>css_unused_selector</code></td><td>a regra aninhada não casa com nada e virou comentário</td><td>corrija a classe no HTML ou apague a regra</td></tr>
+<tr><td><code>Nesting selectors can only be used inside a rule…</code></td><td><code>&amp;</code> fora de qualquer regra</td><td>envolva o <code>&amp;</code> numa regra pai</td></tr>
+<tr><td><code>A top-level `:global {...}` block…</code></td><td><code>:global</code> como bloco recebeu declarações</td><td>use <code>:global(seletor) { … }</code></td></tr>
+<tr><td><code>Expected a valid CSS identifier</code></td><td>falta o nome depois de <code>&amp;:</code> ou de um ponto</td><td>escreva <code>&amp;:hover</code>, <code>.classe</code></td></tr>
+</table>
+</div>
+
+<p>A ideia final: o aninhamento é uma forma de escrever, não um recurso a mais. A regra vale o mesmo que valeria escrita por extenso — o que muda é quantas vezes você repete o nome do pai e quantas chances tem de esquecer o escopo. Escreva na forma do HTML, deixe o <code>&amp;</code> explicar os estados e lembre que <code>:global</code> continua sendo a porta que se abre de propósito.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>&amp;</code> significa dentro de uma regra aninhada?</p>
+<label><input type="radio" name="q1"> o elemento seguinte, irmão do pai</label>
+<label><input type="radio" name="q1"> o seletor do pai, naquele ponto</label>
+<label><input type="radio" name="q1"> o filho direto do pai</label>
+<label><input type="radio" name="q1"> um seletor global</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual a diferença entre <code>.cartao { p { … } }</code> e <code>.cartao { &amp; &gt; p { … } }</code>?</p>
+<label><input type="radio" name="q1"> nenhuma, os dois geram o mesmo CSS</label>
+<label><input type="radio" name="q1"> o primeiro atinge só o filho direto</label>
+<label><input type="radio" name="q1"> o primeiro atinge todos os <code>p</code> descendentes; o segundo, só o filho direto</label>
+<label><input type="radio" name="q1"> o segundo deixa de ser escopado</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que o compilador envolve o selo do filho em <code>:where(…)</code>?</p>
+<label><input type="radio" name="q1"> para o selo não aumentar a especificidade da regra</label>
+<label><input type="radio" name="q1"> para o CSS ficar mais curto</label>
+<label><input type="radio" name="q1"> para desligar o escopo naquele seletor</label>
+<label><input type="radio" name="q1"> porque o navegador não aceita classe em seletor descendente</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;button class="botao"&gt;Comprar&lt;/button&gt;<br><br>&lt;style&gt;<br>&nbsp;&nbsp;.botao {<br>&nbsp;&nbsp;&nbsp;&nbsp;padding: 6px 12px;<br>&nbsp;&nbsp;&nbsp;&nbsp;<input data-answer="&amp;:hover"> { background: #b8860b; }<br>&nbsp;&nbsp;}<br>&lt;/style&gt;<br><br>// o estado do próprio botão, quando o mouse está em cima</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O <strong>aninhamento</strong> deixa o CSS na mesma forma do HTML: o pai por fora, os filhos dentro.</li>
+  <li>O compilador mantém o aninhamento e acrescenta o selo no pai e no filho.</li>
+  <li>O selo do filho vem em <code>:where(…)</code>, que tem peso zero na especificidade.</li>
+  <li>Marcar o filho impede que a regra vaze para dentro de componentes de fora.</li>
+  <li><code>&amp;</code> significa "o seletor do pai aqui": <code>&amp;:hover</code>, <code>&amp;.ativo</code>, <code>&amp; + &amp;</code>.</li>
+  <li><code>&amp;</code> é obrigatório quando o seletor de dentro começa por <code>:</code>, <code>::</code>, <code>[</code> ou <code>&gt;</code>.</li>
+  <li><code>p</code> atinge todos os descendentes; <code>&amp; &gt; p</code> atinge só o filho direto.</li>
+  <li>Regra aninhada que não casa vira <code>/* (unused) … */</code> e avisa <code>css_unused_selector</code>.</li>
+  <li><code>@media</code> pode ficar dentro da regra; <code>@import</code> e <code>@font-face</code>, não.</li>
+  <li><code>:global(p)</code> dentro do aninhamento deixa o filho sem selo e mantém o pai escopado.</li>
+  <li>O build achata o aninhamento e minifica; o resultado na tela é o mesmo.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

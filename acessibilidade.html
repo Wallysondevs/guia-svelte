@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acessibilidade | Guia Svelte</title>
+<meta name="description" content="Os avisos a11y_ do compilador Svelte: alt nas imagens, texto em botões, role e teclado em divs clicáveis, label ligada ao campo e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Acessibilidade</span></h1>
+
+<p class="intro">A Ana tem uma cliente que encomenda pão pelo celular usando leitor de tela, porque não enxerga bem. Na primeira versão do site, o leitor anunciava "botão" sem dizer de quê, não lia o preço da foto do pão e pulava o campo de nome. Nada disso era erro de JavaScript: o código funcionava. O que faltava eram as informações que só existem para quem não vê a tela — e o compilador do Svelte sabe apontar boa parte delas.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é acessibilidade e por que ela começa no HTML, não no JavaScript.</li>
+  <li>Como ler os avisos que começam com <code>a11y_</code>.</li>
+  <li>Por que toda <code>img</code> precisa de <code>alt</code> — e quando o alt é vazio.</li>
+  <li>Quando um <code>div</code> clicável deve virar <code>button</code>.</li>
+  <li>Como dar nome a um botão só com ícone, com <code>aria-label</code>.</li>
+  <li>Como ligar o <code>label</code> ao campo com <code>for</code> e <code>id</code>.</li>
+  <li>O que fazer quando o clique precisa vir de teclado também.</li>
+  <li>Os avisos de mídia, de <code>role</code> desconhecido e de <code>autofocus</code>.</li>
+  <li>Quando um aviso de acessibilidade é falso positivo.</li>
+  <li>Os três erros de estrutura que quebram a árvore de acessibilidade.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A página também é lida por quem não vê</h2>
+
+<p>Um leitor de tela não "vê" a página: ele percorre a árvore de acessibilidade, uma versão do documento que o navegador monta a partir das suas tags. Nessa árvore, cada elemento tem um <strong>papel</strong> (é um botão? um link? um título?), um <strong>nome</strong> (o que ele anuncia) e um <strong>estado</strong> (desabilitado, marcado, expandido). Se o seu HTML não diz o papel, o leitor chuta; se não diz o nome, ele lê "botão" e segue.</p>
+
+<p>É por isso que acessibilidade começa no HTML. Um <code>&lt;button&gt;</code> já vem com papel de botão, nome vindo do texto e comportamento de teclado — entra no <kbd>Tab</kbd>, ativa com <kbd>Enter</kbd> e <kbd>Espaço</kbd>. Um <code>&lt;div&gt;</code> com <code>onclick</code> não vem com nada disso: ele é uma caixa, e só o mouse funciona.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que o leitor anuncia</th><th>De onde vem</th></tr>
+<tr><td>"botão, Comprar"</td><td>papel do elemento + texto dentro dele</td></tr>
+<tr><td>"botão, Comprar" (só ícone)</td><td><code>aria-label="Comprar"</code></td></tr>
+<tr><td>"imagem, Pão francês"</td><td><code>alt="Pão francês"</code></td></tr>
+<tr><td>(nada — imagem decorativa)</td><td><code>alt=""</code></td></tr>
+<tr><td>"campo de texto, Seu nome"</td><td><code>&lt;label for&gt;</code> ligado ao <code>id</code></td></tr>
+<tr><td>"título nível 1, Padaria da Ana"</td><td>a tag <code>h1</code></td></tr>
+</table>
+</div>
+
+<p>Repare que nenhuma linha da tabela fala de Svelte. O compilador não inventa acessibilidade: ele <em>avisa</em> quando o seu HTML deixa de dizer algo que deveria. É um revisor automático com bom gosto — e, como todo revisor automático, às vezes exagera.</p>
+
+<hr>
+
+<h2>2. O compilador como revisor</h2>
+
+<p>Os avisos de acessibilidade têm um prefixo comum: <code>a11y_</code>. O número 11 vem das letras entre o "a" e o "y" de <em>accessibility</em> — é a abreviação usada na área toda. Cada aviso traz o código, a linha e uma frase em inglês explicando o problema, com um endereço <code>svelte.dev/e/…</code> no fim.</p>
+
+<p>Aqui está o que o compilador diz de um <code>div</code> com clique, que é o erro mais comum de quem está começando:</p>
+
+<p><code>aviso: a11y_click_events_have_key_events (linha 1): Visible, non-interactive element `&lt;div&gt;` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `&lt;button type="button"&gt;` or `&lt;a&gt;` might be more appropriate</code></p>
+
+<p>E, na mesma linha, um segundo aviso: <code>a11y_no_static_element_interactions</code> — <em>"`&lt;div&gt;` with a click handler must have an ARIA role"</em>. Dois avisos para o mesmo problema: um pede teclado, o outro pede papel. Nas próximas seções você vai ver o que fazer com cada um.</p>
+
+<p>Uma coisa importante desde já: <strong>aviso não é erro</strong>. O componente compila, a página abre e o clique funciona com o mouse. O aviso é uma dívida anotada, não um bloqueio. Mas, diferente de um comentário no código, ele aparece toda vez que você compila — e é por isso que vale zerar.</p>
+
+<hr>
+
+<h2>3. Imagens: o <code>alt</code> é obrigatório</h2>
+
+<p>Uma imagem sem <code>alt</code> é um espaço em branco no leitor de tela: ele anuncia "imagem" e nada mais. A Ana começou com a foto do pão assim:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;img src="pao.png"&gt;</pre>
+
+<pre class="out">&lt;img src="pao.png"/&gt;</pre>
+
+<p>O HTML é exatamente o que ela escreveu — o compilador não conserta nada por conta própria — mas o terminal mostra o aviso <code>a11y_missing_attribute</code>: <em>"`&lt;img&gt;` element should have an alt attribute"</em>. Com o <code>alt</code>, o mesmo componente sai assim:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;img src="pao.png" alt="Pão francês"&gt;</pre>
+
+<pre class="out">&lt;img src="pao.png" alt="Pão francês"/&gt;</pre>
+
+<p>E o aviso desaparece. O que escrever no <code>alt</code>? A regra prática: descreva a informação que a imagem passa, não a imagem. "Pão francês" serve; "foto de um pão" não acrescenta; "imagem" é pior que nada.</p>
+
+<dl class="anatomy">
+  <dt>src</dt><dd>o endereço do arquivo. Obrigatório.</dd>
+  <dt>alt</dt><dd>o texto que substitui a imagem. Sem ele, o leitor de tela não tem o que anunciar.</dd>
+  <dt>alt=""</dt><dd><strong>vazio de propósito</strong>: diz ao leitor "ignore esta imagem, ela é decorativa". É diferente de não ter <code>alt</code>.</dd>
+  <dt>/&gt;</dt><dd>a forma como o compilador escreve elementos vazios na saída. No seu código, <code>&lt;img&gt;</code> basta.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="html:<img src=&quot;pao.png&quot; alt=&quot;Pão francês&quot;>">
+<p class="try-task"><strong>Missão:</strong> a foto do pão não tem descrição, e o compilador avisa <code>a11y_missing_attribute</code>. Acrescente o <code>alt</code> com o texto <em>Pão francês</em>.</p>
+<pre class="script" data-file="App.svelte">&lt;img src="pao.png"&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;img src="pao.png" alt="Pão francês"&gt;</pre>
+</div>
+
+<p>O HTML antes é <code>&lt;img src="pao.png"&gt;</code>; depois, <code>&lt;img src="pao.png" alt="Pão francês"&gt;</code>. Nada muda na tela para quem enxerga — e muda tudo para quem ouve.</p>
+
+<hr>
+
+<h2>4. Botões e links: o nome vem do texto</h2>
+
+<p>O nome de um botão é o texto dentro dele. Quando o botão tem só um ícone, não há texto — e o leitor anuncia "botão" e para. O carrinho de compras da Ana era assim:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;button aria-label="Comprar" onclick={() =&gt; avisar('pedido')}&gt;🛒&lt;/button&gt;</pre>
+
+<pre class="out">&lt;button aria-label="Comprar"&gt;🛒&lt;/button&gt;</pre>
+
+<p>Repare em dois detalhes da saída. Primeiro: o <code>aria-label</code> aparece no HTML, porque é um atributo de acessibilidade e faz parte do documento. Segundo: o <code>onclick</code> <em>não</em> aparece — a função vive no JavaScript do componente, não no HTML. E, com o <code>aria-label</code>, o aviso <code>a11y_consider_explicit_label</code> desaparece: <em>"Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute"</em>.</p>
+
+<p>Um link tem o mesmo problema quando o texto é vago. "Clique aqui" e "saiba mais" viram, num leitor de tela, uma lista de links todos iguais. Prefira o texto que descreve o destino: "Ver os pedidos de hoje".</p>
+
+<p>E tem um caso que passa sem aviso mas continua ruim: um <code>h1</code> dentro de um <code>button</code>. O compilador não reclama, e o HTML sai <code>&lt;button&gt;&lt;h1&gt;Comprar&lt;/h1&gt;&lt;/button&gt;</code> — um título dentro de um controle, o que confunde a navegação por cabeçalhos. Se precisa de letra grande, use <code>font-size</code> no botão.</p>
+
+<hr>
+
+<h2>5. Cliques que não são botões</h2>
+
+<p>Este é o aviso mais frequente de todos. A Ana fez o cartão de pedido clicável com um <code>div</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;div onclick={() =&gt; avisar('pedido')}&gt;Comprar&lt;/div&gt;</pre>
+
+<pre class="out">&lt;div&gt;Comprar&lt;/div&gt;</pre>
+
+<p>Com o mouse, funciona. Com teclado, não acontece nada: o <code>div</code> não recebe foco, então o <kbd>Tab</kbd> passa por ele e o <kbd>Enter</kbd> não ativa. Daí os dois avisos: um pede que o elemento seja de verdade interativo, o outro que exista um tratador de teclado.</p>
+
+<p>A correção certa é trocar por um <code>&lt;button&gt;</code>. Ele já entra no <kbd>Tab</kbd>, já responde a <kbd>Enter</kbd> e <kbd>Espaço</kbd>, e o leitor de tela anuncia "botão". Só quando o visual não permite (um cartão inteiro clicável, uma linha de tabela) vale insistir no <code>div</code> — e aí ele precisa de três coisas: um <code>role</code>, um <code>tabindex</code> e um tratador de teclado:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;div role="button" tabindex="0" onclick={() =&gt; avisar('pedido')} onkeydown={(e) =&gt; e.key === 'Enter' &amp;&amp; avisar('pedido')}&gt;Comprar&lt;/div&gt;</pre>
+
+<pre class="out">&lt;div role="button" tabindex="0"&gt;Comprar&lt;/div&gt;</pre>
+
+<dl class="anatomy">
+  <dt>role="button"</dt><dd>o <strong>papel</strong> que o elemento finge ter. Sem ele, o leitor anuncia uma caixa de texto qualquer.</dd>
+  <dt>tabindex="0"</dt><dd>põe o elemento na <strong>ordem de foco</strong>: ele entra na fila do <kbd>Tab</kbd>.</dd>
+  <dt>onclick</dt><dd>o clique do mouse. Continua sendo o caminho mais fácil — por isso quase ninguém percebe o problema.</dd>
+  <dt>onkeydown</dt><dd>o <strong>teclado</strong>. Aqui, só o <kbd>Enter</kbd> dispara; um botão de verdade também aceita <kbd>Espaço</kbd>.</dd>
+  <dt>role + tabindex no HTML</dt><dd>os dois aparecem na saída; os dois tratadores, não.</dd>
+</dl>
+
+<p>Essa segunda versão compila sem nenhum aviso. Mas compare o tamanho: cinco atributos contra a tag <code>button</code> e mais nada. O <code>role</code> é um remendo bom; a tag certa é o tecido.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Comprar">
+<p class="try-task"><strong>Missão:</strong> o "botão" de comprar é um <code>div</code> com <code>onclick</code> — funciona no mouse e não no teclado. Troque por um <code>button</code>, mantendo o texto. A meta clica num <code>button</code>: hoje não existe nenhum.</p>
+<pre class="script" data-file="App.svelte">&lt;div onclick={() =&gt; avisar('pedido')}&gt;Comprar&lt;/div&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;button onclick={() =&gt; avisar('pedido')}&gt;Comprar&lt;/button&gt;</pre>
+</div>
+
+<p>Com o <code>div</code>, o compilador avisa duas vezes e a meta nem encontra o botão. Com o <code>button</code>, os avisos somem e o leitor de tela passa a anunciar "botão, Comprar".</p>
+
+<hr>
+
+<h2>6. Formulários: o <code>label</code> precisa de <code>for</code></h2>
+
+<p>Um campo sem rótulo ligado é um campo sem nome: o leitor anuncia "campo de texto" e o cliente não sabe se ali vai o nome ou o telefone. A ligação é feita em dois lados, com <code>for</code> no <code>label</code> e <code>id</code> no campo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;label for="nome"&gt;Nome&lt;/label&gt;
+&lt;input id="nome"&gt;</pre>
+
+<pre class="out">&lt;label for="nome"&gt;Nome&lt;/label&gt; &lt;input id="nome"/&gt;</pre>
+
+<p>Sem o <code>for</code> (ou sem o <code>id</code>), o compilador avisa <code>a11y_label_has_associated_control</code>: <em>"A form label must be associated with a control"</em>. E não basta ter os dois: os valores têm de coincidir. <code>for="nome"</code> com <code>id="seu-nome"</code> não liga nada e o aviso continua.</p>
+
+<div class="trysvelte" data-goal="html:<label for=&quot;nome&quot;>Nome</label> <input id=&quot;nome&quot;>">
+<p class="try-task"><strong>Missão:</strong> o rótulo está solto e o campo está sem nome. Ligue os dois: o <code>label</code> recebe <code>for="nome"</code> e o campo já tem <code>id="nome"</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;label&gt;Nome&lt;/label&gt;
+&lt;input id="nome"&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;label for="nome"&gt;Nome&lt;/label&gt;
+&lt;input id="nome"&gt;</pre>
+</div>
+
+<p>Antes, o HTML é <code>&lt;label&gt;Nome&lt;/label&gt; &lt;input id="nome"/&gt;</code> — os dois elementos existem, mas não se conhecem. Depois, o <code>for="nome"</code> fecha a ligação: clicar no texto leva o cursor ao campo, e o leitor de tela anuncia o nome do campo ao entrar nele.</p>
+
+<hr>
+
+<h2>7. Mídia, <code>role</code> e outros avisos</h2>
+
+<p>O resto da lista é curto e vale conhecer pelo código, porque é o que aparece no terminal:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Aviso</th><th>Mensagem real (resumida)</th></tr>
+<tr><td><code>a11y_missing_attribute</code></td><td>"`&lt;iframe&gt;` element should have a title attribute"</td></tr>
+<tr><td><code>a11y_media_has_caption</code></td><td>"`&lt;video&gt;` elements must have a `&lt;track kind="captions"&gt;`"</td></tr>
+<tr><td><code>a11y_unknown_role</code></td><td>"Unknown role 'botao'"</td></tr>
+<tr><td><code>a11y_distracting_elements</code></td><td>"Avoid `&lt;marquee&gt;` elements"</td></tr>
+<tr><td><code>a11y_autofocus</code></td><td>"Avoid using autofocus"</td></tr>
+<tr><td><code>a11y_hidden</code></td><td>"`&lt;h1&gt;` element should not be hidden"</td></tr>
+<tr><td><code>a11y_incorrect_aria_attribute_type_boolean</code></td><td>"The value of 'aria-hidden' must be either 'true' or 'false'. It cannot be empty"</td></tr>
+<tr><td><code>a11y_no_noninteractive_tabindex</code></td><td>"noninteractive element cannot have nonnegative tabIndex value"</td></tr>
+<tr><td><code>a11y_invalid_attribute</code></td><td>"'javascript:void(0)' is not a valid href attribute"</td></tr>
+</table>
+</div>
+
+<p>Alguns merecem um comentário. O <code>title</code> do <code>iframe</code> é o nome do quadro para o leitor de tela — sem ele, o cliente ouve "quadro" e não sabe o que tem dentro. O <code>track kind="captions"</code> é a legenda do vídeo, obrigatória para quem não ouve. O <code>role</code> desconhecido é quase sempre erro de digitação (<code>botao</code> em vez de <code>button</code>) e é pior que não ter role nenhum: um papel inventado não é anunciado.</p>
+
+<p><code>autofocus</code> é tentador num campo de busca, mas tira o foco de onde a pessoa estava e pode rolar a página sem ela pedir. E <code>aria-hidden="true"</code> num título é uma ordem para o leitor de tela ignorar o elemento — raramente é o que se quer.</p>
+
+<p>Nem todo aviso pede correção. Se você tem uma imagem puramente decorativa, o certo é <code>alt=""</code> — e aí não há aviso, porque o vazio é informação. Se o seu botão é um ícone com <code>aria-label</code>, também não há aviso. O compilador é uma heurística: ele sabe que <code>&lt;img&gt;</code> sem <code>alt</code> costuma ser esquecimento, não sabe se a sua imagem é decorativa. Na dúvida, pergunte a si mesmo: "se eu ouvisse esta página, o que precisaria saber aqui?"</p>
+
+<hr>
+
+<h2>8. O que o compilador não vê</h2>
+
+<p>Vale saber o limite do revisor. Ele olha tag por tag e não entende intenção. Uma ordem de títulos que pula do <code>h1</code> para o <code>h3</code> passa sem aviso, e é um problema real: quem navega por cabeçalhos usa essa ordem como índice. Um texto cinza claro sobre branco passa sem aviso e é ilegível no sol. Um <code>tabindex="1"</code> positivo passa sem aviso em alguns casos e bagunça a ordem de foco.</p>
+
+<p>Três hábitos cobrem o que o compilador não cobrir:</p>
+
+<p><strong>Um.</strong> Use a tag certa antes de pensar em <code>role</code>. <code>button</code> para ação, <code>a href</code> para navegação, <code>h1</code> a <code>h6</code> para a hierarquia do texto, <code>label</code> para rótulo de campo.</p>
+
+<p><strong>Dois.</strong> Teste com o teclado. Feche o mouse, abra a página e tente fazer o pedido só com <kbd>Tab</kbd>, <kbd>Enter</kbd> e as setas. Onde você se perder, o leitor de tela também se perde.</p>
+
+<p><strong>Três.</strong> Não use <code>aria-*</code> como enfeite. Cada atributo ARIA promete um comportamento; se o comportamento não existe, o leitor de tela anuncia uma mentira.</p>
+
+<hr>
+
+<h2>9. Rodando no computador da Ana</h2>
+
+<p>Os avisos aparecem no terminal do servidor de desenvolvimento, junto com a atualização do componente:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 415 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+
+5:56:23 PM [vite] (client) hmr update /src/App.svelte</pre>
+
+<p>Aqui não há aviso nenhum na sessão porque a Ana já tinha corrigido a imagem e o rótulo. Quando havia, a linha vinha com o código e a linha do arquivo — e, no navegador, o console mostrava o mesmo texto, com o endereço <code>svelte.dev/e/…</code> para a explicação completa.</p>
+
+<p>O build não muda nada por causa de um aviso: ele não impede a compilação. Este é o build da versão corrigida do formulário:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BDOgQFII.js  35.42 kB │ gzip: 13.66 kB
+✓ built in 875ms</pre>
+
+<p>Não há arquivo de CSS porque este componente não tem <code>&lt;style&gt;</code>. E não há linha de aviso porque não sobrou nenhum: <code>label</code> com <code>for</code>, campo com <code>id</code>, botão com texto. O ganho não aparece no tamanho do arquivo — aparece no leitor de tela.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>Os erros abaixo não são avisos de acessibilidade: são erros de <em>estrutura</em> que impedem o componente de compilar. Todos quebram a árvore de acessibilidade de um jeito que nenhum atributo conserta.</p>
+
+<div class="cenario">
+<p><strong>1. Botão sem fechar.</strong> O <code>&lt;button&gt;</code> foi aberto e o arquivo terminou antes do fechamento:</p>
+<pre class="file" data-file="src/App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+
+&lt;button onclick={() =&gt; avisar('pedido')}&gt;Enviar</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 0): `&lt;button&gt;` was left open</pre>
+<p>"<code>&lt;button&gt;</code> ficou aberto". Se o compilador aceitasse, o botão engoliria todo o resto da página — e o leitor de tela anunciaria um botão gigante chamado "Enviar Padaria da Ana". Feche com <code>&lt;/button&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<p><strong>2. Dois <code>alt</code> na mesma imagem.</strong> Um atributo repetido não tem "o último vale": o compilador recusa:</p>
+<pre class="file" data-file="src/App.svelte">&lt;img src="pao.png" alt="Pão" alt="Padaria"&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 29): Attributes need to be unique</pre>
+<p>"Atributos precisam ser únicos". O erro aponta o segundo <code>alt</code> (coluna 29). Escolha um texto: o que descreve a imagem para quem não a vê.</p>
+</div>
+
+<div class="cenario">
+<p><strong>3. Fechamento fora de ordem.</strong> O <code>span</code> foi aberto dentro do <code>div</code> e fechado depois dele:</p>
+<pre class="file" data-file="src/App.svelte">&lt;div&gt;
+  &lt;span&gt;Pão
+&lt;/div&gt;
+&lt;/span&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 0): `&lt;/span&gt;` attempted to close an element that was not open</pre>
+<p>"<code>&lt;/span&gt;</code> tentou fechar um elemento que não estava aberto". Na linha 3 o <code>div</code> já fechou, então o <code>span</code> não existe mais. Feche na ordem inversa da abertura: primeiro o <code>span</code>, depois o <code>div</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Elemento</th><th>O mínimo para ser acessível</th></tr>
+<tr><td><code>&lt;img&gt;</code></td><td><code>alt</code> descritivo, ou <code>alt=""</code> se for decorativa</td></tr>
+<tr><td><code>&lt;button&gt;</code></td><td>texto dentro, ou <code>aria-label</code> quando só tem ícone</td></tr>
+<tr><td><code>&lt;a&gt;</code></td><td><code>href</code> e texto que diga o destino</td></tr>
+<tr><td><code>&lt;input&gt;</code></td><td><code>id</code> ligado ao <code>&lt;label for&gt;</code></td></tr>
+<tr><td><code>&lt;iframe&gt;</code></td><td><code>title</code> com o nome do quadro</td></tr>
+<tr><td><code>&lt;video&gt;</code></td><td><code>&lt;track kind="captions"&gt;</code> com a legenda</td></tr>
+<tr><td><code>&lt;div&gt;</code> clicável</td><td><code>role</code> + <code>tabindex="0"</code> + <code>onkeydown</code> (ou trocar por <code>&lt;button&gt;</code>)</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que fazer</th></tr>
+<tr><td>aviso <code>a11y_*</code> no terminal</td><td>conserte o HTML; o aviso desaparece sozinho</td></tr>
+<tr><td>aviso em algo decorativo</td><td>use <code>alt=""</code> e deixe claro no código que é de propósito</td></tr>
+<tr><td>vários avisos na mesma linha</td><td>um problema só, visto por dois ângulos: troque a tag</td></tr>
+<tr><td>aviso não bloqueia o build</td><td>mas ele volta em toda compilação: anote e resolva</td></tr>
+</table>
+</div>
+
+<p>A ideia final: acessibilidade não é uma etapa depois do site pronto. É a consequência de usar a tag certa para cada coisa e de dizer, em atributos, o que a tela mostra sozinha. O compilador do Svelte é um bom lembrete dessas duas regras — e o teste definitivo continua sendo o mesmo: feche o mouse e tente usar o seu site.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o <code>alt</code> de uma imagem faz?</p>
+<label><input type="radio" name="q1"> mostra um texto embaixo da imagem</label>
+<label><input type="radio" name="q1"> é o texto que substitui a imagem no leitor de tela</label>
+<label><input type="radio" name="q1"> define o tamanho da imagem</label>
+<label><input type="radio" name="q1"> impede que a imagem seja carregada</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que um <code>div</code> com <code>onclick</code> gera dois avisos?</p>
+<label><input type="radio" name="q1"> porque <code>div</code> não aceita eventos</label>
+<label><input type="radio" name="q1"> porque o clique é lento em elementos que não são botões</label>
+<label><input type="radio" name="q1"> porque ele não tem papel interativo nem tratador de teclado</label>
+<label><input type="radio" name="q1"> porque todo <code>div</code> precisa de <code>id</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual destes deixa um campo de formulário acessível?</p>
+<label><input type="radio" name="q1"> <code>&lt;label for="nome"&gt;</code> e <code>&lt;input id="nome"&gt;</code> com os valores iguais</label>
+<label><input type="radio" name="q1"> <code>&lt;label&gt;</code> perto do campo, sem <code>for</code></label>
+<label><input type="radio" name="q1"> <code>placeholder="Nome"</code> no campo</label>
+<label><input type="radio" name="q1"> <code>autofocus</code> no campo</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;img src="pao.png" <input data-answer="alt=&quot;Pão francês&quot;">&gt;<br><br>// o atributo que descreve a imagem para quem não a vê</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O leitor de tela percorre a árvore de acessibilidade: papel, nome e estado de cada elemento.</li>
+  <li>Os avisos de acessibilidade do Svelte começam com <code>a11y_</code> e não impedem a compilação.</li>
+  <li><code>&lt;img&gt;</code> precisa de <code>alt</code>; <code>alt=""</code> é o certo para imagem decorativa.</li>
+  <li>Botão com texto dispensa atributos; botão só de ícone precisa de <code>aria-label</code>.</li>
+  <li><code>div</code> com <code>onclick</code> gera dois avisos: falta papel e falta teclado.</li>
+  <li>A correção preferida é trocar por <code>&lt;button&gt;</code>; o remendo é <code>role</code> + <code>tabindex</code> + <code>onkeydown</code>.</li>
+  <li><code>label for</code> e <code>input id</code> com o mesmo valor dão nome ao campo.</li>
+  <li>Mídia: <code>iframe</code> com <code>title</code>, <code>video</code> com <code>track kind="captions"</code>.</li>
+  <li>O compilador não vê ordem de títulos, contraste nem <code>tabindex</code> positivo: teste com o teclado.</li>
+  <li>Erros desta aula: tag sem fechar, atributo repetido e fechamento fora de ordem.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
