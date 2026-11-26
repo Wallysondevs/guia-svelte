@@ -270,7 +270,7 @@ dist/assets/index-CoVqj_oV.js  37.33 kB │ gzip: 14.41 kB
 
 <p>Do lado de quem usa, a chamada é <code>&lt;Campo bind:valor={quantidade} /&gt;</code>. O valor digitado dentro do filho volta para a variável do pai. Sem <code>$bindable</code>, a ligação não funciona: o filho recebe uma cópia do valor e o que ele escrever não volta para o pai. É a mesma ideia do <code>bind:value</code>, agora entre dois arquivos.</p>
 
-<p>O custo é de acoplamento: o filho passa a poder escrever no estado do pai. Em componentes pequenos de formulário, isso é conveniente. Em componentes grandes, é melhor o filho receber o valor e avisar por callback, deixando o pai decidir se aceita. A escolha é a mesma da seção 1: atalho ou controle.</p>
+<p>O custo é de acoplamento: o filho passa a poder escrever no estado do pai. Em <a href="componentes-pequenos.html">componentes pequenos</a> de formulário, isso é conveniente. Em componentes grandes, é melhor o filho receber o valor e avisar por callback, deixando o pai decidir se aceita. A escolha é a mesma da seção 1: atalho ou controle.</p>
 
 <h2>8. O custo escondido do <code>bind</code></h2>
 

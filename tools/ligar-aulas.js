@@ -22,6 +22,9 @@ const args = process.argv.slice(2);
 const gravar = args.includes("--gravar");
 const alvos = args.filter((a) => !a.startsWith("-"));
 const MAX_POR_PAGINA = 3;
+/* teto por destino: a mesma frase aparece em quase toda aula ("o servidor de desenvolvimento"),
+ * e 50 links para a mesma página deixam de parecer escrita e passam a parecer template */
+const MAX_POR_ALVO = 6;
 
 /* títulos da NIVEIS: arquivo -> título */
 function titulos() {
@@ -45,6 +48,7 @@ const CANDIDATOS = [...TITULOS.entries()]
   .filter(([arq, titulo]) => titulo.trim().split(/\s+/).length >= 2 && !NAO_LIGAR.test(titulo))
   .map(([arq, titulo]) => ({ arq, titulo }));
 
+const jaLigado = new Map();
 const semAcento = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const IGNORAR_DENTRO = new Set(["pre", "code", "a", "h1", "h2", "h3", "h4", "h5", "h6", "script", "style", "title"]);
@@ -80,6 +84,7 @@ function ligar(html, nomeArq) {
     for (const c of CANDIDATOS) {
       if (usados.has(c.arq)) continue;
       if (achados.length + jaTem >= MAX_POR_PAGINA) break;
+      if ((jaLigado.get(c.arq) || 0) >= MAX_POR_ALVO) continue;
       // a menção tem de estar em texto puro, com fronteira de palavra
       const re = new RegExp("(^|[^\\p{L}\\p{N}])(" + c.titulo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?![\\p{L}\\p{N}])", "iu");
       const m = re.exec(texto);
@@ -88,6 +93,7 @@ function ligar(html, nomeArq) {
       const fim = ini + m[2].length;
       texto = texto.slice(0, ini) + '<a href="' + c.arq + '">' + texto.slice(ini, fim) + "</a>" + texto.slice(fim);
       usados.add(c.arq);
+      jaLigado.set(c.arq, (jaLigado.get(c.arq) || 0) + 1);
       achados.push({ de: nomeArq, para: c.arq, texto: m[2] });
     }
     pedacos[i] = texto;

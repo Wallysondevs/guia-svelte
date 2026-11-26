@@ -376,7 +376,7 @@ export function criar(cliente, sabor) {
 	return pedido;
 }</pre>
 
-<p>Outro detalhe do mesmo módulo: a lista é <strong>do processo</strong>, não do visitante. Duas pessoas que abrirem a página veem a mesma fila, e o pedido de uma aparece para a outra. Em produção, isso é o comportamento esperado de um painel de cozinha compartilhado — e um desastre se o dado fosse carrinho de compras. Guarde a pergunta: <em>este dado é de quem?</em></p>
+<p>Outro detalhe do mesmo módulo: a lista é <strong>do processo</strong>, não do visitante. Duas pessoas que abrirem a página veem a mesma fila, e o pedido de uma aparece para a outra. Em produção, isso é o comportamento esperado de um painel de cozinha compartilhado — e um desastre se o dado fosse <a href="projeto-carrinho.html">carrinho de compras</a>. Guarde a pergunta: <em>este dado é de quem?</em></p>
 
 <p>Trocar a memória por banco de dados não muda a action: ela continua lendo o formulário, validando e chamando uma função. O que muda é o conteúdo de <code>criar()</code>. Essa é a vantagem de separar o módulo: o dia da troca fica num arquivo só, e o formulário nem percebe.</p>
 <hr>

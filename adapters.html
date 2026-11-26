@@ -245,7 +245,7 @@ server</pre>
 
 <p>Essa pasta é o que você copia para a VPS. Ela não precisa do seu código-fonte, nem da pasta <code>node_modules</code> de desenvolvimento, nem do Vite. Precisa de Node instalado e das dependências de produção — no caso da Ana, nenhuma além do próprio Node. Menos coisa para dar errado na máquina de produção.</p>
 
-<p>E a pasta <code>prerendered/</code> merece uma olhada antes de publicar, porque o que está lá não muda mais. No projeto da Ana ela trouxe <code>seo.html</code>, <code>sobre.html</code> e também um <code>conta.html</code> que ninguém pediu: o rastreador seguiu o link do menu e congelou uma página que dependia de login. O arquivo é um redirecionamento de 112 bytes, mas o susto é real. Cache e pré-render têm aula própria; aqui o que importa é saber que a pasta existe e que você deve abri-la.</p>
+<p>E a pasta <code>prerendered/</code> merece uma olhada antes de publicar, porque o que está lá não muda mais. No projeto da Ana ela trouxe <code>seo.html</code>, <code>sobre.html</code> e também um <code>conta.html</code> que ninguém pediu: o rastreador seguiu o link do menu e congelou uma página que dependia de login. O arquivo é um redirecionamento de 112 bytes, mas o susto é real. <a href="cache.html">Cache e pré-render</a> têm aula própria; aqui o que importa é saber que a pasta existe e que você deve abri-la.</p>
 
 <h2>8. Caixa 2: o que precisa de servidor</h2>
 
@@ -430,7 +430,7 @@ Could not detect a supported production environment. See https://svelte.dev/docs
 <label><input type="radio" name="q-ad"> o código tem um erro de sintaxe</label>
 <label><input type="radio" name="q-ad"> o Node não está instalado</label></div>
 
-<div class="mc" data-answer="2"><p class="mc-q">3. Por que o <code>adapter-static</code> recusa uma rota com form actions?</p>
+<div class="mc" data-answer="2"><p class="mc-q">3. Por que o <code>adapter-static</code> recusa uma rota com <a href="form-actions.html">form actions</a>?</p>
 <label><input type="radio" name="q-ad"> porque actions só funcionam em TypeScript</label>
 <label><input type="radio" name="q-ad"> porque um site de arquivos parados não tem servidor para receber o POST</label>
 <label><input type="radio" name="q-ad"> porque o adaptador não foi instalado com <code>-D</code></label>

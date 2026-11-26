@@ -47,7 +47,7 @@
 <tr><th>Grupo</th><th>Pergunta que respondeu</th><th>Peça central</th></tr>
 <tr><td>Ciclo de vida</td><td>o que roda quando o componente nasce e morre?</td><td><code>onMount</code>, <code>tick</code>, <code>$effect</code></td></tr>
 <tr><td>Composição</td><td>como um componente conversa com outro?</td><td><code>$props</code>, snippets, context, stores</td></tr>
-<tr><td>Recursos avançados</td><td>como lidar com listas grandes e trabalho repetido?</td><td><code>use:</code>, debounce, paginação</td></tr>
+<tr><td>Recursos avançados</td><td>como lidar com <a href="listas-grandes.html">listas grandes</a> e trabalho repetido?</td><td><code>use:</code>, debounce, paginação</td></tr>
 <tr><td>Qualidade</td><td>como o projeto continua legível e confiável?</td><td>pastas, nomes, testes, medição, refatoração</td></tr>
 </table>
 </div>
@@ -326,7 +326,7 @@ dist/assets/index-BMDXiK3B.js  46.10 kB │ gzip: 17.68 kB
 </table>
 </div>
 
-<p>O conceito novo é o <em>servidor</em>: parte do código roda antes de a página chegar ao navegador, e lá não existe <code>window</code> nem <code>document</code>. É por isso que a aula de “o que roda no servidor” vem antes de SvelteKit — componente que toca o navegador no topo do script quebra na renderização do servidor.</p>
+<p>O conceito novo é o <em>servidor</em>: parte do código roda antes de a página chegar ao navegador, e lá não existe <code>window</code> nem <code>document</code>. É por isso que a aula de “<a href="ssr-cuidados.html">o que roda no servidor</a>” vem antes de SvelteKit — componente que toca o navegador no topo do script quebra na renderização do servidor.</p>
 
 <p>Fora isso, o dia a dia continua igual: <code>$state</code> para o que muda, <code>$derived</code> para o que se calcula, <code>$props</code> para o que vem de fora, teste para o que precisa continuar valendo. Quem chega ao SvelteKit com esses quatro conceitos firmes aprende rotas em uma tarde.</p>
 

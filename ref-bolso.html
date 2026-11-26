@@ -140,7 +140,7 @@
 </table>
 </div>
 
-<p>O bloco <code>{#each}</code> aceita as três formas juntas: <code>{#each pedidos as pedido, i (pedido.id)}</code> — item, índice e chave. A chave só é necessária quando a lista é reordenada e você quer que o Svelte reaproveite os elementos certos; com <code>animate:</code> ela é obrigatória.</p>
+<p>O bloco <code>{#each}</code> aceita as três formas juntas: <code>{#each pedidos as pedido, i (pedido.id)}</code> — item, <a href="each-index.html">índice e chave</a>. A chave só é necessária quando a lista é reordenada e você quer que o Svelte reaproveite os elementos certos; com <code>animate:</code> ela é obrigatória.</p>
 
 <pre class="file" data-file="Lista.svelte">&lt;ul&gt;
   {#each ['pão', 'leite'] as item, i (item)}

@@ -42,7 +42,7 @@
 
 <p>Um quiz é uma máquina de estados pequena. Existe a pergunta atual, o que o jogador escolheu e quantos pontos ele já fez. Quando ele clica, a escolha é guardada e comparada com a certa; quando ele avança, a pergunta troca e a escolha volta ao nada. Nada além disso — e é essa simplicidade que faz do quiz um bom segundo projeto.</p>
 
-<p>A diferença em relação à lista de tarefas é que aqui existe uma <em>posição</em>. A lista de tarefas mostra tudo ao mesmo tempo; o quiz mostra uma pergunta por vez, e para isso precisa de um número que diga qual. Esse número é o índice, e quase todo bug de quiz nasce dele: avançar quando já era a última, voltar para uma pergunta que não existe, mostrar "pergunta 4 de 3".</p>
+<p>A diferença em relação à <a href="projeto-tarefas.html">lista de tarefas</a> é que aqui existe uma <em>posição</em>. A lista de tarefas mostra tudo ao mesmo tempo; o quiz mostra uma pergunta por vez, e para isso precisa de um número que diga qual. Esse número é o índice, e quase todo bug de quiz nasce dele: avançar quando já era a última, voltar para uma pergunta que não existe, mostrar "pergunta 4 de 3".</p>
 
 <p>A terceira peça é a comparação. O jogador escolhe a alternativa de índice <code>0</code> ou <code>1</code>; a pergunta guarda qual é a certa. Acertar é <code>escolha === certa</code>. É tentador escrever <code>escolha = certa</code> — parece a mesma coisa e faz outra: em vez de comparar, atribui. O programa passa a dizer que todo mundo acertou.</p>
 

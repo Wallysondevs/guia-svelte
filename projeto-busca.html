@@ -360,7 +360,7 @@
 
 <p>A solução é separar a letra do acento antes de comparar. O método <code>normalize('NFD')</code> faz exatamente isso: transforma <code>ã</code> em <code>a</code> mais um acento separado, e esse acento é um caractere na faixa que vai de U+0300 a U+036F. Uma expressão regular remove essa faixa, e o texto fica sem acento: <code>texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '')</code>.</p>
 
-<p>O custo é que a normalização precisa rodar dos dois lados, e rodar a cada tecla. Em listas pequenas, tanto faz. Em listas grandes, vale normalizar o catálogo uma vez, quando ele carrega, e guardar o nome já sem acento ao lado do nome bonito — assim a busca compara textos prontos e a tela mostra o nome com acento. É o mesmo raciocínio do preço: calcule com um valor, mostre outro.</p>
+<p>O custo é que a normalização precisa rodar dos dois lados, e rodar a cada tecla. Em listas pequenas, tanto faz. Em <a href="listas-grandes.html">listas grandes</a>, vale normalizar o catálogo uma vez, quando ele carrega, e guardar o nome já sem acento ao lado do nome bonito — assim a busca compara textos prontos e a tela mostra o nome com acento. É o mesmo raciocínio do preço: calcule com um valor, mostre outro.</p>
 
 <p>Vale lembrar também que <code>includes</code> diferencia maiúsculas de minúsculas em qualquer idioma, e que ordenar alfabeticamente em português exige <code>localeCompare</code> com o locale <code>pt-BR</code>. São detalhes que passam despercebidos até a primeira cliente chamada Ângela procurar o próprio nome.</p>
 

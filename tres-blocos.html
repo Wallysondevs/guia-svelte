@@ -257,7 +257,7 @@
 
 <p>Funciona, mas não é uma boa ideia. A convenção existe para quem lê: com o estilo sempre no fim, você sabe onde procurar a cor de um elemento sem varrer o arquivo. Em um projeto com dezenas de componentes, padronizar a leitura economiza mais tempo do que qualquer otimização. Use a ordem do guia.</p>
 
-<p>Existe uma exceção legítima: o <code>&lt;script module&gt;</code>, que roda uma vez para todos os usos do componente, pode vir antes ou depois do <code>&lt;script&gt;</code> comum. Ele é usado para estado compartilhado e tem aula própria no Nível 2. Por enquanto, um script comum basta.</p>
+<p>Existe uma exceção legítima: o <code>&lt;script module&gt;</code>, que roda uma vez para todos os usos do componente, pode vir antes ou depois do <code>&lt;script&gt;</code> comum. Ele é usado para <a href="script-module.html">estado compartilhado</a> e tem aula própria no Nível 2. Por enquanto, um script comum basta.</p>
 
 <p>Outro detalhe de leitura: o HTML pode ter comentários, mas eles somem da saída. Isso é assunto da próxima aula, com calma — só saiba que o compilador limpa o que é comentário antes de entregar a página.</p>
 
@@ -321,7 +321,7 @@ svelte-trusted</pre>
 
 <pre class="out">Erro de compilação (linha 8, coluna 13): Expected a valid CSS identifier</pre>
 
-<p>O CSS é compilado antes de o componente rodar: ele não tem acesso a valores que só existem na hora da execução. Para mudar cor dinamicamente, o caminho é o atributo <code>style</code> com chaves, ou a diretiva <code>style:</code> — assuntos da aula de atributos dinâmicos e de estilo por condição. O bloco <code>&lt;style&gt;</code> é para o que não muda.</p>
+<p>O CSS é compilado antes de o componente rodar: ele não tem acesso a valores que só existem na hora da execução. Para mudar cor dinamicamente, o caminho é o atributo <code>style</code> com chaves, ou a diretiva <code>style:</code> — assuntos da aula de <a href="atributos.html">atributos dinâmicos</a> e de estilo por condição. O bloco <code>&lt;style&gt;</code> é para o que não muda.</p>
 
 <hr>
 

@@ -44,7 +44,7 @@
 
 <p>Repare que já existe uma separação importante nessa frase: <em>o lugar onde o número fica guardado</em> e <em>a parte da tela que mostra o número</em>. Em programação, o lugar chama-se <strong>estado</strong> (aquilo que pode mudar) e a parte da tela é o HTML. O trabalho do Svelte é manter os dois de acordo: você muda o estado, ele redesenha o pedaço de tela que usa aquele estado. Nenhum <code>document.getElementById</code>, nenhum <code>innerHTML</code>.</p>
 
-<p>Um contador parece bobo, e é justamente por isso que ele serve de primeiro projeto. Ele tem tudo o que os projetos grandes têm, em miniatura: um valor que muda, um evento que muda o valor, um limite que não pode ser passado, um cálculo que depende do valor e um histórico do que aconteceu. Quem entende essas cinco peças num contador reconhece as mesmas cinco num carrinho de compras.</p>
+<p>Um contador parece bobo, e é justamente por isso que ele serve de primeiro projeto. Ele tem tudo o que os projetos grandes têm, em miniatura: um valor que muda, um evento que muda o valor, um limite que não pode ser passado, um cálculo que depende do valor e um histórico do que aconteceu. Quem entende essas cinco peças num contador reconhece as mesmas cinco num <a href="projeto-carrinho.html">carrinho de compras</a>.</p>
 
 <div class="table-wrap">
 <table class="ref">
@@ -95,7 +95,7 @@
 
 <pre class="out">&lt;h1&gt;Placar de pães&lt;/h1&gt; &lt;p&gt;Cliques: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt;</pre>
 
-<p>Se você lesse esse HTML sozinho, sem saber o que é Svelte, concluiria que a página mostra um zero fixo. É aí que entra a segunda metade: o navegador recebe também o JavaScript que liga o botão ao número. Quando o clique acontece, o valor muda e o trecho <code>Cliques: 0</code> é reescrito. O HTML acima é o <em>primeiro</em> desenho, não o único.</p>
+<p>Se você lesse esse HTML sozinho, sem saber <a href="o-que-e-svelte.html">o que é Svelte</a>, concluiria que a página mostra um zero fixo. É aí que entra a segunda metade: o navegador recebe também o JavaScript que liga o botão ao número. Quando o clique acontece, o valor muda e o trecho <code>Cliques: 0</code> é reescrito. O HTML acima é o <em>primeiro</em> desenho, não o único.</p>
 
 <h3>A anatomia da versão 1</h3>
 

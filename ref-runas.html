@@ -127,7 +127,7 @@
 
 <h2>3. <code>$state.raw</code>: quando vigiar cada item custa caro</h2>
 
-<p><code>$state</code> é profundo: ele observa o objeto inteiro, cada propriedade e cada item de lista. Isso é cômodo e tem preço — em listas grandes, criar o observador de cada item demora. <code>$state.raw</code> faz o contrário: observa só a <strong>troca do valor</strong>, não o que acontece dentro dele.</p>
+<p><code>$state</code> é profundo: ele observa o objeto inteiro, cada propriedade e cada item de lista. Isso é cômodo e tem preço — em <a href="listas-grandes.html">listas grandes</a>, criar o observador de cada item demora. <code>$state.raw</code> faz o contrário: observa só a <strong>troca do valor</strong>, não o que acontece dentro dele.</p>
 
 <pre class="file" data-file="src/Pedido.svelte">&lt;script&gt;
   let pedido = $state.raw({ cliente: 'Ana', itens: ['pão', 'leite'] });

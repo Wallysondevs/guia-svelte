@@ -338,7 +338,7 @@ const total = computed(() =&gt; preco * qtd.value);</pre>
 
 <p>Nem tudo traduz. Estes são os pontos em que o Svelte resolveu o problema de outro jeito, e você precisa reaprender em vez de traduzir:</p>
 
-<p><strong>Eventos de componente.</strong> React passa <code>onSave</code> como prop desde sempre; Vue emite eventos com <code>emit</code>. No Svelte 5, é prop de função — igual ao React. O <code>createEventDispatcher</code> do Svelte 4 continua existindo por compatibilidade, mas não é o caminho novo.</p>
+<p><strong><a href="eventos-de-componente.html">Eventos de componente</a>.</strong> React passa <code>onSave</code> como prop desde sempre; Vue emite eventos com <code>emit</code>. No Svelte 5, é prop de função — igual ao React. O <code>createEventDispatcher</code> do Svelte 4 continua existindo por compatibilidade, mas não é o caminho novo.</p>
 
 <p><strong>Slots.</strong> O Vue tem slots nomeados e com escopo; o Svelte 5 trocou por snippets, que são funções de marcação. A vantagem é que um snippet pode ser passado como qualquer prop, inclusive para componentes que não são filhos diretos.</p>
 

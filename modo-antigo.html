@@ -172,7 +172,7 @@
 <tr><td><code>on:click={…}</code></td><td><code>onclick={…}</code></td><td>não misture os dois no mesmo elemento</td></tr>
 <tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td><td><code>children</code> vem do <code>$props()</code></td></tr>
 <tr><td><code>&lt;slot name="rodape"&gt;</code></td><td>snippet passado como prop</td><td>aula de snippets</td></tr>
-<tr><td><code>createEventDispatcher</code></td><td>função passada como prop (<em>callback</em>)</td><td>aula de eventos de componente</td></tr>
+<tr><td><code>createEventDispatcher</code></td><td>função passada como prop (<em>callback</em>)</td><td>aula de <a href="eventos-de-componente.html">eventos de componente</a></td></tr>
 </table>
 </div>
 
@@ -329,7 +329,7 @@ dist/assets/index-B9uVAhc8.js  38.38 kB │ gzip: 14.87 kB
 
 <p>Além das cinco marcas principais, o modo antigo tem vizinhos que você vai encontrar em projetos reais. Nenhum deles é runa, e todos têm equivalente no mundo novo:</p>
 
-<p><strong>Stores.</strong> Antes das runas, estado compartilhado entre componentes se fazia com <em>stores</em>: objetos com <code>subscribe</code>, lidos no HTML com o cifrão. Hoje, um módulo <code>.svelte.js</code> com <code>$state</code> resolve o mesmo problema com menos cerimônia. Stores continuam existindo e funcionando — e são a razão de o cifrão ser reservado.</p>
+<p><strong>Stores.</strong> Antes das runas, <a href="script-module.html">estado compartilhado</a> entre componentes se fazia com <em>stores</em>: objetos com <code>subscribe</code>, lidos no HTML com o cifrão. Hoje, um módulo <code>.svelte.js</code> com <code>$state</code> resolve o mesmo problema com menos cerimônia. Stores continuam existindo e funcionando — e são a razão de o cifrão ser reservado.</p>
 
 <p><strong><code>$$props</code> e <code>$$restProps</code>.</strong> No modo antigo, essas duas variáveis especiais davam acesso a todas as props recebidas. No modo novo, o mesmo papel é do objeto devolvido por <code>$props()</code> e do resto com <code>...resto</code>.</p>
 
@@ -354,7 +354,7 @@ dist/assets/index-B9uVAhc8.js  38.38 kB │ gzip: 14.87 kB
 
 &lt;p&gt;{nome}: {paes} pães&lt;/p&gt;</pre>
 <pre class="out">Erro de compilação (linha 2, coluna 2): Cannot use `export let` in runes mode — use `$props()` instead</pre>
-<p>Troque a linha por <code>let { nome = 'Ana' } = $props()</code>. Se preferir manter <code>export let</code>, tire todas as runas do arquivo — mas aí você está no modo antigo de propósito.</p>
+<p>Troque a linha por <code>let { nome = 'Ana' } = $props()</code>. Se preferir manter <code>export let</code>, tire <a href="ref-runas.html">todas as runas</a> do arquivo — mas aí você está no modo antigo de propósito.</p>
 </div>
 
 <div class="cenario">

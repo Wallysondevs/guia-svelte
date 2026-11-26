@@ -113,7 +113,7 @@
 
 <p>Vale notar o que o pai <em>não</em> precisa saber: como o filho desenha o botão, se ele tem estilo próprio, se o clique vem de um botão ou de um item de lista. O contrato entre os dois é só o nome da propriedade e o formato do argumento. Essa fronteira estreita é o que permite trocar o visual do filho sem tocar no pai — e é o assunto da aula de composição com snippets.</p>
 
-<p>Ao renderizar o pai, a saída é a do filho mais a lista vazia: um botão escrito "pedir pão" e o aviso "nenhum pedido". No clique, o filho chama a função do pai com <code>'pão'</code>, o pai acrescenta à lista e a própria tela se atualiza — o filho não mudou nada além de chamar.</p>
+<p>Ao renderizar o pai, a saída é a do filho mais a <a href="lista-vazia.html">lista vazia</a>: um botão escrito "pedir pão" e o aviso "nenhum pedido". No clique, o filho chama a função do pai com <code>'pão'</code>, o pai acrescenta à lista e a própria tela se atualiza — o filho não mudou nada além de chamar.</p>
 
 <p>A função do pai é uma <em>arrow function</em> de uma expressão: recebe <code>sabor</code> e devolve a lista nova. Funciona, e é curta. Quando o handler cresce, vale trocar por uma função nomeada no script — fica mais fácil de ler, de testar e de depurar:</p>
 

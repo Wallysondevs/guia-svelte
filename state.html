@@ -128,7 +128,7 @@
 
 <p>Existe uma armadilha que faz gente experiente perder a tarde. Se os dois números estiverem no mesmo parágrafo, o Svelte desenha os dois numa atualização só: o clique no estado dispara essa atualização, e o valor comum é lido de novo junto. Parece que funciona. No código gerado dá para ver por quê — o compilador escreve <code>$.update(vendas); cafes++;</code> e uma única função que redesenha os dois textos.</p>
 
-<p>Por isso o aviso do compilador vale mais do que o teste de clicar e ver: ele olha a declaração, não o acaso daquela tela. E existe um segundo caso que confunde: um componente que <strong>não usa runa nenhuma</strong> é compilado no modo antigo, onde <code>let</code> com atribuição ainda atualiza a tela. Esse é o mundo anterior ao Svelte 5, com regras próprias — ele tem aula inteira nesta trilha, "let e o Modo Antigo", logo depois desta. O guia ensina o mundo novo: runas, sempre.</p>
+<p>Por isso o aviso do compilador vale mais do que o teste de clicar e ver: ele olha a declaração, não o acaso daquela tela. E existe um segundo caso que confunde: um componente que <strong>não usa runa nenhuma</strong> é compilado no modo antigo, onde <code>let</code> com atribuição ainda atualiza a tela. Esse é o mundo anterior ao Svelte 5, com regras próprias — ele tem aula inteira nesta trilha, "<a href="modo-antigo.html">let e o Modo Antigo</a>", logo depois desta. O guia ensina o mundo novo: runas, sempre.</p>
 
 <div class="trysvelte" data-goal="clique:button;;outre:^Cafés: 1">
 <p class="try-task"><strong>Missão:</strong> o contador de vendas funciona e o de cafés fica parado. Faça o café subir para 1 no primeiro clique, do jeito certo.</p>
@@ -268,7 +268,7 @@
 
 <h2>7. <code>$state.raw</code>: quando não precisa vigiar por dentro</h2>
 
-<p><code>$state</code> comum vigia o valor e tudo o que está dentro dele: cada item de uma lista, cada campo de um objeto. Isso custa um pouco de trabalho, e em listas grandes o custo aparece. Quando a Ana troca a lista inteira a cada mudança, vigiar item por item é desperdício. Para esse caso existe <code>$state.raw</code>:</p>
+<p><code>$state</code> comum vigia o valor e tudo o que está dentro dele: cada item de uma lista, cada campo de um objeto. Isso custa um pouco de trabalho, e em <a href="listas-grandes.html">listas grandes</a> o custo aparece. Quando a Ana troca a lista inteira a cada mudança, vigiar item por item é desperdício. Para esse caso existe <code>$state.raw</code>:</p>
 
 <pre class="file" data-file="src/App.svelte">&lt;script&gt;
   let cores = $state.raw(['trigo', 'centeio']);
