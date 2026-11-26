@@ -87,8 +87,8 @@ const DEFEITOS = [
   {
     nome: "link para página que não existe",
     espera: /NÃO existe no disco/,
-    html: (h) => h.replace("<p>Aquele <code>svelte-7mbznn</code> é um selo",
-                          "<p><a href=\"nao-existe-mesmo.html\">veja</a> Aquele <code>svelte-7mbznn</code> é um selo"),
+    html: (h) => h.replace("<p>Aquele <code>svelte-",
+                          "<p><a href=\"nao-existe-mesmo.html\">veja</a> Aquele <code>svelte-"),
     semSim: true
   },
   {
