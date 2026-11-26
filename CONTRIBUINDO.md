@@ -191,7 +191,11 @@ ana@notebook:~/loja$ npm run dev
 - o prompt `ana@notebook:~/loja$` aparece sozinho, sem `$` extra;
 - sessões de `npm`, `npx sv`, `vite build` são as reais — rode antes de escrever;
 - para SvelteKit, o projeto de referência em `tmp/kit` existe para colher essas saídas (peça as
-  sessões a quem cuida das ferramentas se precisar de uma que não exista).
+  sessões a quem cuida das ferramentas se precisar de uma que não exista);
+- **limpeza permitida**: tirar os códigos de cor ANSI e as linhas que só existem na máquina de quem
+  colheu (`[vite] Forced re-optimization` com horário, `Port 5173 is in use`). O que **não** se
+  tira é linha de resultado: tamanho de arquivo, número de módulos, tempo de build, mensagem de erro.
+  Se o número muda a cada execução (tempo), a página diz que é uma medição daquela execução.
 
 ## 6. Componentes do guia
 
