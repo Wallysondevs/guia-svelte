@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Condicionais: {#if} — o aviso que só aparece quando precisa | Guia Svelte</title>
+<meta name="description" content="Aprenda {#if} no Svelte 5: mostrar um pedaço da tela só quando a condição é verdadeira, o que conta como falso e a saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Condicionais: {#if}</span></h1>
+
+<p class="intro">A Ana tem uma padaria e uma placa virada para a rua. De manhã ela escreve "PÃO QUENTINHO" e pendura; quando o forno esfria, ela desliga a placa. O problema é que a placa da parede não sabe quando o forno está quente — quem sabe é a Ana, e ela vive esquecendo de trocar. Nesta aula você vai ensinar o componente a decidir sozinho: mostrar um pedaço da tela só quando uma condição for verdadeira, e não mostrar nada quando não for. O nome disso é <strong>condicional</strong>, e em Svelte ela se escreve <code>{#if}</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma condição e por que a tela precisa de uma.</li>
+  <li>A escrever <code>{#if …}{/if}</code> e ver o HTML real dos dois casos.</li>
+  <li>O que o Svelte considera verdadeiro e falso — a lista completa.</li>
+  <li>Que bloco escondido não deixa lixo na tela, mas deixa um espaço.</li>
+  <li>Como esconder vários elementos de uma vez, sem inventar uma tag nova.</li>
+  <li>Como uma condição pode nascer de uma conta com comparações.</li>
+  <li>Como aninhar um <code>{#if}</code> dentro de outro sem se perder.</li>
+  <li>Como o clique no botão muda o valor e a tela acompanha.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>O que o terminal do projeto da Ana imprime ao compilar tudo isso.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: uma decisão escrita no meio do HTML</h2>
+
+<p>Um componente que mostra sempre a mesma coisa é fácil. O difícil é o componente que mostra <em>às vezes</em>. "Se tem pão, mostre o aviso de pão quentinho; se não tem, não mostre nada." Você já escreve frases assim o dia inteiro, e a estrutura é sempre a mesma: uma condição ("se tem pão"), uma consequência ("mostre o aviso") e, às vezes, um caminho alternativo ("senão, mostre o aviso de forno vazio").</p>
+
+<p>O Svelte aceita essa estrutura no meio do HTML, com uma marca própria. A marca começa com <code>{#if</code> e termina com <code>{/if}</code>, e tudo o que estiver entre as duas só vai para a tela quando a condição for verdadeira. Não existe função para chamar nem elemento para esconder: você escreve a decisão onde ela acontece, no lugar exato do HTML em que o pedaço deve aparecer.</p>
+
+<p>O ganho aparece no dia a dia. Sem condicional, você resolve o aviso de duas formas ruins: escreve o aviso sempre (e ele mente quando o forno está frio) ou esconde com CSS (e o texto continua na página, invisível, ocupando lugar e aparecendo para quem lê a página com um leitor de tela). Com <code>{#if}</code>, o pedaço simplesmente não existe no HTML enquanto a condição for falsa. É a diferença entre uma placa virada para a parede e uma placa que não foi pendurada.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>"Se tem pão, pendure o aviso"</td><td><code>{#if temPao}</code></td></tr>
+<tr><td>O aviso pendurado</td><td>o HTML entre <code>{#if}</code> e <code>{/if}</code></td></tr>
+<tr><td>"Recolha o aviso"</td><td>a condição ficou falsa: o HTML sai da tela</td></tr>
+<tr><td>Um aviso que nunca sai da parede</td><td>HTML sem condicional nenhuma</td></tr>
+<tr><td>Um aviso coberto com um pano</td><td>esconder com CSS: continua na página</td></tr>
+<tr><td>A pessoa que decide pendurar</td><td><code>$state</code>: o valor que diz se a condição é verdadeira</td></tr>
+</table>
+</div>
+
+<p>Repare no vocabulário: a <em>condição</em> é a pergunta ("tem pão?"), o <em>bloco</em> é o pedaço de HTML que depende dela, e <em>estado</em> é a variável onde a resposta mora. A condição não é avaliada uma vez só: sempre que o estado muda, o Svelte pergunta de novo e ajusta a tela. É isso que faz o aviso aparecer no instante em que a Ana tira o último pão da prateleira.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>{#if}</code> da Ana</h2>
+
+<p>Comece pelo caso mais simples possível: uma variável de estado que guarda "tem pão ou não", e um parágrafo que só aparece quando ela é verdadeira.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let temPao = $state(true);
+&lt;/script&gt;
+
+&lt;p&gt;Tem pão quentinho saindo do forno.&lt;/p&gt;
+
+{#if temPao}
+  &lt;p&gt;Pão francês na prateleira.&lt;/p&gt;
+{/if}</pre>
+
+<p>Se você pedir ao compilador o HTML que esse arquivo produz, ele devolve duas linhas: o parágrafo de fora, que está sempre lá, e o parágrafo de dentro do bloco, porque a condição é verdadeira.</p>
+<pre class="out">&lt;p&gt;Tem pão quentinho saindo do forno.&lt;/p&gt; &lt;p&gt;Pão francês na prateleira.&lt;/p&gt;</pre>
+
+<p>O texto que aparece na tela é este:</p>
+<pre class="out">Tem pão quentinho saindo do forno. Pão francês na prateleira.</pre>
+
+<p>Agora troque <code>true</code> por <code>false</code> e peça o HTML de novo. O parágrafo de dentro do bloco desaparece — não fica escondido, não fica com <code>display: none</code>: ele não está mais no HTML.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let temPao = $state(false);
+&lt;/script&gt;
+
+&lt;p&gt;Tem pão quentinho saindo do forno.&lt;/p&gt;
+
+{#if temPao}
+  &lt;p&gt;Pão francês na prateleira.&lt;/p&gt;
+{/if}
+
+&lt;p&gt;Fim.&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;Tem pão quentinho saindo do forno.&lt;/p&gt;  &lt;p&gt;Fim.&lt;/p&gt;</pre>
+<pre class="out">Tem pão quentinho saindo do forno. Fim.</pre>
+
+<p>Duas coisas para notar nessa segunda saída. A primeira: o texto de dentro do bloco sumiu por completo, e o "Fim." que vinha depois continuou no lugar. A segunda: sobraram <strong>dois espaços</strong> entre um parágrafo e outro, no lugar onde o bloco estava. É o espaço em branco do arquivo, que continua contando. Isso não atrapalha nada na tela, mas explica por que o HTML gerado às vezes tem espaços a mais — e por que comparar HTML "no olho" engana.</p>
+
+<h3>A anatomia do bloco</h3>
+<dl class="anatomy">
+  <dt>{#if temPao}</dt><dd>a <strong>abertura</strong>: a cerquilha (<code>#</code>) avisa que começa um bloco, e o que vem depois é a <strong>condição</strong>.</dd>
+  <dt>temPao</dt><dd>a condição em si: o nome de uma variável, uma comparação, uma conta — qualquer expressão que resulte em verdadeiro ou falso.</dd>
+  <dt><p>Pão francês…</p></dt><dd>o <strong>corpo</strong> do bloco: o HTML que só aparece quando a condição é verdadeira. Pode ter uma linha ou cinquenta.</dd>
+  <dt>{/if}</dt><dd>o <strong>fechamento</strong>: a barra (<code>/</code>) avisa que o bloco acabou. Sem ele, o compilador reclama.</dd>
+</dl>
+
+<p>O par <code>{#if}</code> / <code>{/if}</code> é como uma moldura: o HTML de dentro pertence ao bloco, e o de fora não. Se você esquecer o fechamento, metade da página vira parte do bloco — e aí o erro aparece longe de onde você errou, o que é a pior parte de trabalhar com blocos.</p>
+
+<div class="tip">
+<strong>Bloco não é tag</strong>
+<p><code>{#if}</code> não cria nenhum elemento no HTML final. Não existe <code>&lt;if&gt;</code> na página, e o CSS não tem como selecionar "o bloco". O que você estiliza são as tags de dentro dele, como o <code>&lt;p&gt;</code> do exemplo.</p>
+</div>
+
+<hr>
+
+<h2>3. Experimente: acenda e apague o aviso</h2>
+
+<p>A caixa abaixo compila o componente de verdade e mostra o resultado. O valor começa em <code>false</code>, então o aviso não aparece. Sua missão é fazer o aviso aparecer.</p>
+<div class="trysvelte" data-goal="outre:Bom dia! O balcão está aberto">
+<p class="try-task"><strong>Missão:</strong> o balcão está fechado (o aviso não aparece). Troque o valor inicial para o aviso <strong>aparecer</strong> e clique em Verificar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(false);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (aberto = !aberto)}&gt;Abrir a padaria&lt;/button&gt;
+
+{#if aberto}
+  &lt;p&gt;Bom dia! O balcão está aberto.&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (aberto = !aberto)}&gt;Abrir a padaria&lt;/button&gt;
+
+{#if aberto}
+  &lt;p&gt;Bom dia! O balcão está aberto.&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Antes da mudança, o texto da tela é só o do botão: <code>Abrir a padaria</code>. Depois, o parágrafo entra no fim. Repare que o botão continua ali o tempo todo — ele está fora do bloco, então nada nele depende da condição.</p>
+
+<p>Enquanto você edita, cada <strong>Rodar</strong> compila o arquivo com o compilador de verdade do Svelte. Se você escrever algo que o compilador recusa, a caixa mostra a mensagem dele, não um aviso inventado pelo guia.</p>
+
+<hr>
+
+<h2>4. O que conta como verdadeiro</h2>
+
+<p>Em português, "verdadeiro" é uma palavra só. Em JavaScript, qualquer valor pode ocupar o lugar da condição, e o Svelte aproveita a regra da linguagem: alguns valores contam como falsos e todo o resto conta como verdadeiro. A lista dos falsos é curta e vale memorizar: <code>false</code>, <code>0</code>, <code>''</code> (texto vazio), <code>null</code>, <code>undefined</code> e <code>NaN</code> (o resultado de uma conta impossível).</p>
+
+<p>Isso cria armadilhas gostosas de descobrir. Um texto com um zero dentro (<code>'0'</code>) é verdadeiro, porque é um texto com conteúdo. Uma lista vazia (<code>[]</code>) também é verdadeira, porque é um objeto — o JavaScript não olha para dentro dela para decidir. Veja os quatro casos no mesmo componente:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let texto = $state('');
+  let zero = $state(0);
+  let lista = $state([]);
+  let textoZero = $state('0');
+&lt;/script&gt;
+
+{#if texto}&lt;p&gt;texto conta&lt;/p&gt;{/if}
+{#if zero}&lt;p&gt;zero conta&lt;/p&gt;{/if}
+{#if lista}&lt;p&gt;lista conta&lt;/p&gt;{/if}
+{#if textoZero}&lt;p&gt;texto zero conta&lt;/p&gt;{/if}</pre>
+<pre class="out">&lt;p&gt;lista conta&lt;/p&gt; &lt;p&gt;texto zero conta&lt;/p&gt;</pre>
+<pre class="out">lista conta texto zero conta</pre>
+
+<p>Dos quatro blocos, só dois apareceram. O texto vazio e o zero ficaram de fora, como esperado. A lista vazia entrou, e o texto <code>'0'</code> entrou. Se a Ana quisesse "lista vazia não conta", a condição teria de ser explícita: <code>{#if lista.length > 0}</code>. Essa é a regra prática: <strong>quando o valor não é um booleano de verdade, escreva a comparação você mesma</strong>, para quem lê o código não precisar decorar a tabela.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Valor na condição</th><th>O bloco aparece?</th><th>Por quê</th></tr>
+<tr><td><code>true</code></td><td>sim</td><td>é o verdadeiro explícito</td></tr>
+<tr><td><code>false</code></td><td>não</td><td>é o falso explícito</td></tr>
+<tr><td><code>0</code></td><td>não</td><td>zero conta como falso</td></tr>
+<tr><td><code>''</code></td><td>não</td><td>texto vazio conta como falso</td></tr>
+<tr><td><code>'0'</code></td><td>sim</td><td>é um texto com um caractere dentro</td></tr>
+<tr><td><code>[]</code></td><td>sim</td><td>lista vazia continua sendo um objeto</td></tr>
+<tr><td><code>null</code> e <code>undefined</code></td><td>não</td><td>"nada" conta como falso</td></tr>
+<tr><td><code>'Ana'</code></td><td>sim</td><td>texto com conteúdo</td></tr>
+</table>
+</div>
+
+<p>Esse é o mesmo teste que o JavaScript usa em <code>if</code> normal dentro do <code>&lt;script&gt;</code>. O Svelte não inventou uma regra nova para a marcação: ele reaproveita a da linguagem, o que é bom — uma coisa menos para aprender.</p>
+
+<hr>
+
+<h2>5. Experimente: um clique, dois estados</h2>
+
+<p>Condição parada não muda nada na vida real. O que a Ana precisa é de um botão que feche o balcão e outro estado que reflita isso na hora. Na caixa abaixo, o botão sempre fecha — clique duas vezes e veja o problema.</p>
+<div class="trysvelte" data-goal="clique:button;;outre:O balcão está fechado;;clique:button;;outre:O balcão está aberto">
+<p class="try-task"><strong>Missão:</strong> o botão só fecha. Faça ele <strong>alternar</strong>: um clique fecha, o outro abre. Use <code>!aberto</code> em vez de <code>false</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (aberto = false)}&gt;Fechar ou abrir&lt;/button&gt;
+
+{#if aberto}
+  &lt;p&gt;O balcão está aberto.&lt;/p&gt;
+{/if}
+
+{#if !aberto}
+  &lt;p&gt;O balcão está fechado.&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (aberto = !aberto)}&gt;Fechar ou abrir&lt;/button&gt;
+
+{#if aberto}
+  &lt;p&gt;O balcão está aberto.&lt;/p&gt;
+{/if}
+
+{#if !aberto}
+  &lt;p&gt;O balcão está fechado.&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>O ponto importante não é o botão: é que os dois parágrafos nascem da <strong>mesma</strong> variável, um com a condição direta e outro com a condição negada. O <code>!</code> na frente é o "não" do JavaScript: inverte o valor. Enquanto <code>aberto</code> for verdadeiro, o primeiro bloco aparece e o segundo não; quando o valor vira falso, acontece o contrário, no mesmo desenho da tela.</p>
+
+<p>Na próxima aula do guia você vai ver que existe um jeito mais curto de escrever esse par, com <code>{:else}</code>. Aqui a versão de dois blocos separados serve para você enxergar que cada bloco é independente: o Svelte avalia um, avalia o outro, e nenhum sabe da existência do vizinho.</p>
+
+<hr>
+
+<h2>6. Condições que nascem de contas</h2>
+
+<p>Até agora a condição foi uma variável solta. Na prática ela quase sempre é uma <strong>comparação</strong>. As ferramentas são seis, e todas devolvem verdadeiro ou falso:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>Pergunta que faz</th><th>Exemplo verdadeiro</th></tr>
+<tr><td><code>a === b</code></td><td>é igual (mesmo valor e mesmo tipo)?</td><td><code>2 === 2</code></td></tr>
+<tr><td><code>a !== b</code></td><td>é diferente?</td><td><code>'pão' !== 'bolo'</code></td></tr>
+<tr><td><code>a &gt; b</code>, <code>a &lt; b</code></td><td>é maior / menor?</td><td><code>5 &gt; 3</code></td></tr>
+<tr><td><code>a &gt;= b</code>, <code>a &lt;= b</code></td><td>é maior ou igual / menor ou igual?</td><td><code>4 &lt;= 4</code></td></tr>
+<tr><td><code>a &amp;&amp; b</code></td><td>os dois são verdadeiros?</td><td><code>2 &gt; 1 &amp;&amp; 3 &gt; 2</code></td></tr>
+<tr><td><code>a || b</code></td><td>pelo menos um é verdadeiro?</td><td><code>0 &gt; 1 || 3 &gt; 2</code></td></tr>
+</table>
+</div>
+
+<p>Com elas dá para escrever a regra da padaria com precisão: avisar quando a quantidade vendida alcança a quantidade assada, e avisar também quando há pão na prateleira e a venda já começou.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let paes = $state(4);
+  let vendidos = $state(6);
+&lt;/script&gt;
+
+{#if vendidos &gt;= paes}
+  &lt;p&gt;O forno precisa de mais pão.&lt;/p&gt;
+{/if}
+
+{#if vendidos &gt; 0 &amp;&amp; paes &gt; 0}
+  &lt;p&gt;A prateleira tem pão e a venda já começou.&lt;/p&gt;
+{/if}</pre>
+<pre class="out">&lt;p&gt;O forno precisa de mais pão.&lt;/p&gt; &lt;p&gt;A prateleira tem pão e a venda já começou.&lt;/p&gt;</pre>
+<pre class="out">O forno precisa de mais pão. A prateleira tem pão e a venda já começou.</pre>
+
+<p>Quatro pães assados, seis vendidos: a primeira conta dá verdadeiro e o primeiro aviso aparece. E como ainda há pão na prateleira e a venda já começou, o segundo também aparece. As duas perguntas são independentes — nenhuma sabe da existência da outra, e as duas podem ser verdadeiras ao mesmo tempo. Se a Ana assar mais dez pães, <code>paes</code> vira 14, a primeira condição fica falsa e o primeiro aviso sai da tela sozinho, sem ninguém tocar no HTML.</p>
+
+<div class="warning">
+<strong><code>=</code> não é <code>===</code></strong>
+<p>Um sinal de igual <strong>guarda</strong> um valor; três sinais <strong>comparam</strong>. Escrever <code>{#if paes = 0}</code> não compila, e a mensagem do compilador fala de atribuição em posição inesperada. Dentro de <code>{#if}</code>, você quer sempre <code>===</code>, <code>!==</code>, <code>&gt;</code> ou <code>&lt;</code>.</p>
+</div>
+
+<hr>
+
+<h2>7. Esconder vários elementos de uma vez</h2>
+
+<p>Uma condição pode proteger mais de uma tag. Não é preciso embrulhar tudo numa <code>&lt;div&gt;</code> só para o bloco ter um dono: o corpo do <code>{#if}</code> aceita quantos elementos você quiser, um embaixo do outro.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let chovendo = $state(true);
+&lt;/script&gt;
+
+{#if chovendo}
+  &lt;h2&gt;Entrega com guarda-chuva&lt;/h2&gt;
+  &lt;p&gt;O pão vai protegido.&lt;/p&gt;
+{/if}</pre>
+<pre class="out">&lt;h2&gt;Entrega com guarda-chuva&lt;/h2&gt; &lt;p&gt;O pão vai protegido.&lt;/p&gt;</pre>
+
+<p>Isso importa mais do que parece. Em muitos frameworks você é obrigado a criar um elemento extra para agrupar, e esse elemento extra aparece no HTML atrapalhando o CSS. Aqui não: se a condição for falsa, as duas tags somem juntas; se for verdadeira, as duas entram juntas. O bloco é invisível — só as tags de dentro têm existência na página.</p>
+
+<p>O mesmo vale para tags soltas e para componentes inteiros. Um bloco pode proteger um <code>&lt;li&gt;</code> dentro de uma lista, uma linha de tabela, um formulário de dez campos ou um componente que você escreveu. A regra é uma só: o que está entre <code>{#if}</code> e <code>{/if}</code> pertence à condição.</p>
+
+<h3>Aninhar sem se perder</h3>
+
+<p>Um <code>{#if}</code> pode morar dentro de outro. Na padaria, "está aberta?" e "tem pão?" são perguntas diferentes, e o aviso de pão só faz sentido se a padaria estiver aberta.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+  let temPao = $state(false);
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p&gt;A padaria está aberta.&lt;/p&gt;
+  {#if temPao}
+    &lt;p&gt;Tem pão.&lt;/p&gt;
+  {:else}
+    &lt;p&gt;O pão acabou.&lt;/p&gt;
+  {/if}
+{/if}</pre>
+<pre class="out">&lt;p&gt;A padaria está aberta.&lt;/p&gt; &lt;p&gt;O pão acabou.&lt;/p&gt;</pre>
+
+<p>O segundo bloco usou <code>{:else}</code>, que é o assunto da próxima aula — aqui ele só está de visita, para o exemplo ficar completo. O que interessa é a indentação: cada nível de bloco ganha dois espaços a mais. O compilador não liga para isso, mas quem lê o arquivo liga, e você vai voltar a esse arquivo muitas vezes.</p>
+
+<div class="tip">
+<strong>Quantos níveis cabem?</strong>
+<p>Não existe limite técnico, mas três níveis já são difíceis de ler. Quando a condição fica comprida, o caminho é calcular antes: <code>let podeAvisar = $derived(aberto &amp;&amp; temPao)</code> e usar <code>{#if podeAvisar}</code>. O bloco fica curto e a regra ganha nome.</p>
+</div>
+
+<hr>
+
+<h2>8. Experimente: o forno vazio</h2>
+
+<p>Falta uma decisão na caixa abaixo: quando os pães acabam, nada aparece. Sua missão é acrescentar o aviso de forno vazio, com a condição certa.</p>
+<div class="trysvelte" data-goal="clique:button;;clique:button;;clique:button;;outre:Forno vazio">
+<p class="try-task"><strong>Missão:</strong> clique três vezes para vender os três pães. Falta um aviso quando o estoque chega a zero: acrescente um bloco que mostre <strong>Forno vazio.</strong></p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let paes = $state(3);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; paes--}&gt;vender um pão&lt;/button&gt;
+
+{#if paes &gt; 0}
+  &lt;p&gt;Ainda temos {paes} pães.&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let paes = $state(3);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; paes--}&gt;vender um pão&lt;/button&gt;
+
+{#if paes &gt; 0}
+  &lt;p&gt;Ainda temos {paes} pães.&lt;/p&gt;
+{/if}
+
+{#if paes === 0}
+  &lt;p&gt;Forno vazio.&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Repare que a solução <strong>acrescenta</strong> um bloco em vez de mexer no primeiro. A primeira condição já fazia o trabalho dela: some quando não há pão. A segunda responde outra pergunta: "o estoque zerou?". Duas perguntas, dois blocos, cada um com uma responsabilidade. Quando você tiver <code>{:else}</code> na mão, vai poder juntar os dois em um só — e vai saber escolher entre as duas formas.</p>
+
+<p>Teste também o que acontece se você clicar uma quarta vez: <code>paes</code> vira <code>-1</code>, o aviso de forno vazio desaparece, e a tela fica só com o botão. Nada quebra, mas a padaria vendeu um pão que não tinha. Esse tipo de decisão ("o que fazer no limite?") é conversa de regra de negócio, não de Svelte — mas é bom ver a tela reagindo antes de o problema virar prejuízo.</p>
+
+<hr>
+
+<h2>9. Rodando na máquina da Ana</h2>
+
+<p>O projeto da Ana fica em <code>~/loja</code>, e o componente desta aula é o <code>src/App.svelte</code>. Com o servidor de desenvolvimento ligado, cada <code>Ctrl+S</code> salva e a página se atualiza sem recarregar:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O endereço <code>http://localhost:5173/</code> é a máquina da Ana falando com ela mesma: nada saiu para a internet. Deixe esse terminal aberto enquanto trabalha. A recarga é o motivo de o Svelte ser gostoso de aprender: você muda a condição, olha para o navegador, e a resposta está lá antes de você tirar o dedo da tecla.</p>
+
+<p>Quando a aula termina, o comando de build gera a versão de produção:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CTri1Sda.js  36.03 kB │ gzip: 13.81 kB
+✓ built in 1.90s</pre>
+
+<p>Nesse build há <strong>111 módulos transformados</strong> — cada <code>.svelte</code>, cada arquivo do Svelte e cada dependência vira um pedaço de JavaScript que o navegador entende. O arquivo final tem <code>36.03 kB</code>, e o número entre parênteses do <code>gzip</code> é o que realmente viaja pela rede. Guarde a ideia: condicional no Svelte não custa um framework inteiro; o compilador transforma o bloco em JavaScript comum, do tamanho do que você escreveu.</p>
+
+<div class="warning">
+<strong>Não abra o <code>dist/index.html</code> com dois cliques</strong>
+<p>Os arquivos gerados usam módulos ES, e o navegador bloqueia esse carregamento quando a página vem do disco (<code>file://</code>). Para conferir o build, use <code>npm run preview</code>, que serve a pasta por http.</p>
+</div>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão (5.59.2), copiadas como estão. Todas acontecem com quem está começando, e todas apontam linha e coluna do problema.</p>
+<div class="cenario">
+<strong>Erro 1 — o nome do bloco escrito errado</strong>
+<p>O bloco é <code>{#if}</code>, sem acento e sem abreviação. Quem escreve <code>{#se}</code>, pensando em português, recebe uma lista do que o compilador aceita naquele lugar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let temPao = $state(true);
+&lt;/script&gt;
+
+{#se temPao}
+  &lt;p&gt;tem pão&lt;/p&gt;
+{/se}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 2): Expected 'if', 'each', 'await', 'key' or 'snippet'</pre>
+<p>A mensagem não diz "você errou a palavra": ela lista as cinco aberturas de bloco que existem em Svelte 5 — <code>if</code>, <code>each</code>, <code>await</code>, <code>key</code> e <code>snippet</code>. As três primeiras você vai ver neste nível do guia.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — fechou com o nome de outro bloco</strong>
+<p>Cada abertura tem um fechamento com o mesmo nome. Um <code>{#if}</code> fechado com <code>{/each}</code> é recusado na hora.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let lista = $state([1, 2]);
+&lt;/script&gt;
+
+{#if lista.length &gt; 0}
+  &lt;p&gt;tem item&lt;/p&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 2): Expected token if</pre>
+<p>Traduzindo: "eu esperava a palavra <code>if</code> depois da barra". O compilador sabe qual bloco está aberto, então a mensagem é bem específica. Se você tivesse escrito <code>{/each}</code> no lugar de <code>{/if}</code> em um arquivo grande, o erro apareceria na linha do fechamento errado — não na linha da abertura.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — bloco aberto e nunca fechado</strong>
+<p>O caso mais comum de todos: o <code>{/if}</code> ficou para depois e nunca chegou.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+{#if nome === 'Ana'}
+  &lt;p&gt;oi&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>A linha apontada é a da <strong>abertura</strong>, não a do fim do arquivo: 5, coluna 0. É uma boa notícia — o compilador mostra onde o bloco começou, e você procura o fechamento a partir dali. Quando o arquivo tem vários blocos, conte os pares: cada <code>{#if}</code> precisa de um <code>{/if}</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Quando aparece</th></tr>
+<tr><td><code>{#if condição}</code></td><td>abre o bloco</td><td>uma vez, antes do HTML protegido</td></tr>
+<tr><td><code>{/if}</code></td><td>fecha o bloco</td><td>uma vez, depois do HTML protegido</td></tr>
+<tr><td><code>{#if a &gt; b}</code></td><td>condição com comparação</td><td>quando o valor não é booleano</td></tr>
+<tr><td><code>{#if !a}</code></td><td>condição negada</td><td>para o caso contrário</td></tr>
+<tr><td><code>{#if a &amp;&amp; b}</code></td><td>as duas precisam ser verdadeiras</td><td>regras combinadas</td></tr>
+<tr><td><code>{:else}</code></td><td>o caminho alternativo</td><td>a próxima aula</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que usar</th><th>Por quê</th></tr>
+<tr><td>Mostrar ou não um aviso</td><td><code>{#if aviso}</code></td><td>o HTML só existe quando precisa</td></tr>
+<tr><td>Esconder e reexibir rápido</td><td><code>{#if}</code> mesmo</td><td>é barato: o Svelte cria e remove os nós</td></tr>
+<tr><td>Manter o elemento na página, invisível</td><td>CSS com <code>display: none</code></td><td>quando você precisa medir ou animar</td></tr>
+<tr><td>Trocar entre dois textos</td><td><code>{condição ? 'a' : 'b'}</code></td><td>cabe numa chave só</td></tr>
+<tr><td>Duas ou mais saídas</td><td><code>{#if}</code> com <code>{:else if}</code></td><td>a próxima aula</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td>Nome do bloco errado</td><td><code>Expected 'if', 'each', 'await', 'key' or 'snippet'</code></td></tr>
+<tr><td>Fechamento com outro nome</td><td><code>Expected token if</code></td></tr>
+<tr><td>Sem fechamento</td><td><code>Block was left open</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que acontece com o HTML que está dentro de um <code>{#if}</code> quando a condição é falsa?</p>
+<label><input type="radio" name="q1"> Ele fica escondido com <code>display: none</code></label>
+<label><input type="radio" name="q1"> Ele sai do HTML: o trecho não existe na página</label>
+<label><input type="radio" name="q1"> Ele fica no HTML, mas com o texto apagado</label>
+<label><input type="radio" name="q1"> O compilador recusa o arquivo</label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual destes valores faz o bloco <strong>aparecer</strong>?</p>
+<label><input type="radio" name="q1"> <code>0</code></label>
+<label><input type="radio" name="q1"> <code>''</code> (texto vazio)</label>
+<label><input type="radio" name="q1"> <code>'0'</code> (texto com um zero)</label>
+<label><input type="radio" name="q1"> <code>null</code></label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">3. Para que serve o <code>{/if}</code>?</p>
+<label><input type="radio" name="q1"> Para repetir o bloco várias vezes</label>
+<label><input type="radio" name="q1"> Para inverter a condição</label>
+<label><input type="radio" name="q1"> Para marcar onde o bloco termina</label>
+<label><input type="radio" name="q1"> Para importar o <code>if</code> do Svelte</label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#if <input data-answer="temPao">}<br>&nbsp;&nbsp;&lt;p&gt;Pão na prateleira.&lt;/p&gt;<br>{/if}<br><br>// o bloco só aparece quando a variável temPao for verdadeira</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>{#if condição}</code> abre um bloco e <code>{/if}</code> fecha; só o que está entre os dois depende da condição.</li>
+  <li>Condição falsa <strong>remove</strong> o HTML da página — não é CSS escondendo.</li>
+  <li>Contam como falsos: <code>false</code>, <code>0</code>, <code>''</code>, <code>null</code>, <code>undefined</code> e <code>NaN</code>.</li>
+  <li>Lista vazia (<code>[]</code>) e o texto <code>'0'</code> contam como verdadeiros: escreva a comparação quando importa.</li>
+  <li>O corpo do bloco aceita várias tags, sem precisar de uma <code>&lt;div&gt;</code> em volta.</li>
+  <li>Blocos podem ficar dentro de blocos; cada nível ganha dois espaços de indentação.</li>
+  <li><code>===</code> compara; <code>=</code> guarda. Dentro de <code>{#if}</code> use sempre a comparação.</li>
+  <li>Trocar o estado muda a tela na hora: é o mesmo <code>$state</code> da primeira aula.</li>
+  <li>Os erros desta aula: nome do bloco errado, fechamento com outro nome e bloco sem fechar.</li>
+  <li>Terminal: <code>npm run dev</code> serve em <code>localhost:5173</code>; <code>npm run build</code> gera <code>dist/</code> com 111 módulos.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listas: {#each} — uma linha para cada pedido | Guia Svelte</title>
+<meta name="description" content="Como repetir HTML a partir de um array no Svelte 5 com {#each}: lista de textos e de objetos, saída real do compilador e os três erros mais comuns.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">Listas: {#each}</span></h1>
+
+<p class="intro">A Ana anota os pedidos num caderno de espiral: uma linha por pedido, e a quantidade de linhas muda todo dia. Quando o caderno vira uma tela, o problema aparece: o HTML é fixo, e a Ana não sabe hoje quantos pedidos terá amanhã. Escrever dez <code>&lt;li&gt;</code> e torcer para não passar de dez não é solução. Nesta aula você vai conhecer o bloco que repete HTML a partir de uma lista: <code>{#each}</code>. É ele que transforma três nomes guardados num array em três linhas na tela.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é um <strong>array</strong> (lista) e como guardar vários valores nele.</li>
+  <li>A repetir HTML com <code>{#each lista as item}</code>.</li>
+  <li>A ler a saída real, com uma linha de HTML por item.</li>
+  <li>O que acontece quando você usa a lista em vez do item dentro do bloco.</li>
+  <li>Como listas de objetos deixam cada linha com nome e preço.</li>
+  <li>Por que um objeto mostrado direto vira <code>[object Object]</code>.</li>
+  <li>Como acrescentar itens com um clique e ver a tela crescer.</li>
+  <li>Listas dentro de listas, e a estrutura de tabela que o Svelte aceita.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>O que o build do projeto da Ana mostra quando a lista entra.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: uma linha para cada coisa</h2>
+
+<p>Existe uma diferença entre "um valor" e "vários valores". O nome da Ana é um valor. A lista de pedidos do dia é outra coisa: um valor que contém vários, na ordem em que chegaram. Em JavaScript, essa coleção ordenada se chama <strong>array</strong> (você vai ler "arrei"). Escreve-se entre colchetes, com vírgula entre os itens:</p>
+
+<p>Um array é para a programação o que o caderno de espiral é para a padaria: um lugar onde as coisas ficam em ordem e onde você pode acrescentar mais uma linha no fim sem refazer as anteriores. O HTML, infelizmente, não tem essa ideia: uma tag <code>&lt;li&gt;</code> é uma linha, e pronto. Quem faz a ponte entre os dois é o bloco <code>{#each}</code>, que pega cada item do array e repete o HTML do bloco uma vez para cada um.</p>
+
+<p>Repare no desenho: você escreve o HTML de <em>um</em> item, e o Svelte o repete quantas vezes forem necessárias. Dez pedidos, dez linhas; um pedido, uma linha; zero pedidos, nenhuma linha. O arquivo continua com as mesmas quatro linhas de HTML, o que significa que você não precisa saber hoje quantos pedidos virão amanhã.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No caderno da Ana</th><th>No componente</th></tr>
+<tr><td>O caderno inteiro</td><td>o array: <code>['pão', 'leite', 'café']</code></td></tr>
+<tr><td>Uma linha do caderno</td><td>um item do array: <code>'leite'</code></td></tr>
+<tr><td>"Para cada linha, copie o modelo"</td><td><code>{#each pedidos as pedido}</code></td></tr>
+<tr><td>O modelo da linha (nome e preço)</td><td>o HTML dentro do bloco, com <code>{pedido}</code></td></tr>
+<tr><td>Acrescentar uma linha no fim</td><td><code>pedidos = [...pedidos, 'café']</code></td></tr>
+<tr><td>Arrancar uma folha e usar outra</td><td>trocar o array inteiro por outro</td></tr>
+</table>
+</div>
+
+<p>O nome <code>each</code> vem do inglês "cada". O bloco se lê "para cada <code>pedido</code> em <code>pedidos</code>, repita isto". Duas palavras parecidas de propósito: a lista no plural, o item no singular. Essa escolha não é obrigatória, mas é o padrão que todo mundo usa, e você vai ler código assim em qualquer projeto Svelte.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>{#each}</code> da Ana</h2>
+
+<p>Comece com três pedidos numa lista e um <code>&lt;li&gt;</code> só, dentro do bloco.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O compilador gera três <code>&lt;li&gt;</code>, um para cada item, na ordem do array:</p>
+<pre class="out">&lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;li&gt;leite&lt;/li&gt;&lt;li&gt;café&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>E o texto que aparece na tela é a sequência dos três:</p>
+<pre class="out">pão leite café</pre>
+
+<h3>A anatomia do bloco</h3>
+<dl class="anatomy">
+  <dt>{#each pedidos as pedido}</dt><dd>a <strong>abertura</strong>. Antes do <code>as</code> vai a <strong>lista</strong>; depois, o <strong>nome</strong> que cada item recebe dentro do bloco.</dd>
+  <dt>as pedido</dt><dd>a palavra <code>as</code> ("como") é obrigatória quando você quer usar o item. <code>pedido</code> é uma variável nova, criada pelo bloco, que vale um item por vez.</dd>
+  <dt><li>{pedido}</li></dt><dd>o <strong>modelo</strong> da linha: o HTML que se repete. Dentro dele, <code>{pedido}</code> muda a cada repetição.</dd>
+  <dt>{/each}</dt><dd>o <strong>fechamento</strong>. O HTML entre a abertura e o fechamento é o que se repete — nada mais.</dd>
+</dl>
+
+<p>O bloco não cria elemento nenhum em volta: os três <code>&lt;li&gt;</code> ficam irmãos dentro do <code>&lt;ul&gt;</code> que já existia. Se você escrevesse o mesmo HTML à mão, o resultado seria idêntico — a diferença é que o bloco se adapta quando a lista muda de tamanho.</p>
+
+<div class="tip">
+<strong><code>each</code> não é <code>for</code></strong>
+<p>Quem vem de outras linguagens procura o <code>for</code>. Em Svelte a repetição na marcação se chama <code>each</code>, e fecha com <code>{/each}</code>. O <code>for</code> normal do JavaScript continua existindo dentro do <code>&lt;script&gt;</code>, mas não serve para repetir HTML.</p>
+</div>
+
+<hr>
+
+<h2>3. Experimente: a linha certa</h2>
+
+<p>A caixa abaixo repete a linha três vezes, mas mostra a lista inteira em cada linha. Sua missão é mostrar um item por linha.</p>
+<div class="trysvelte" data-goal="out:pão leite café">
+<p class="try-task"><strong>Missão:</strong> cada linha está mostrando o array todo. Troque o que aparece dentro do <code>&lt;li&gt;</code> para mostrar <strong>um pedido por linha</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedidos}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite', 'café']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Antes da correção, o texto da tela é <code>pão,leite,café</code> repetido três vezes. Isso acontece porque o bloco repetiu o HTML, mas o HTML falava da lista, não do item. O nome <code>pedido</code> é criado a cada volta e vale só dentro do bloco; a lista <code>pedidos</code> continua visível de qualquer lugar.</p>
+
+<p>Esse é o erro mais comum de quem começa: usar o plural dentro do bloco. Se a tela mostra a lista inteira repetida, olhe para o que está entre as chaves e pergunte: "isto é o item ou a lista?".</p>
+
+<hr>
+
+<h2>4. De onde vem a lista</h2>
+
+<p>Um array pode ser guardado em <code>$state</code>, como qualquer outro valor. O que muda é que agora existem duas operações do dia a dia: acrescentar e remover. A mais comum é acrescentar no fim, e ela se escreve copiando a lista antiga e pondo o novo item no fim, com a sintaxe dos três pontos.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão']);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (pedidos = [...pedidos, 'leite'])}&gt;adicionar leite&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each pedidos as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;button&gt;adicionar leite&lt;/button&gt; &lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Esse é o estado inicial: um pedido. Depois do clique, o array vira <code>['pão', 'leite']</code> e a lista ganha a segunda linha — sem você escrever um segundo <code>&lt;li&gt;</code>. A expressão <code>[...pedidos, 'leite']</code> se lê "uma lista nova com tudo o que havia em <code>pedidos</code>, mais o leite".</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Escreva</th><th>O que acontece na tela</th></tr>
+<tr><td>acrescentar no fim</td><td><code>pedidos = [...pedidos, 'café']</code></td><td>uma linha nova no fim</td></tr>
+<tr><td>acrescentar no começo</td><td><code>pedidos = ['café', ...pedidos]</code></td><td>uma linha nova no topo</td></tr>
+<tr><td>tirar o primeiro</td><td><code>pedidos = pedidos.slice(1)</code></td><td>a primeira linha some</td></tr>
+<tr><td>trocar tudo</td><td><code>pedidos = []</code></td><td>todas as linhas somem</td></tr>
+<tr><td>acrescentar sem copiar</td><td><code>pedidos.push('café')</code></td><td>funciona com <code>$state</code>, porque ele observa o array</td></tr>
+</table>
+</div>
+
+<p>A última linha merece um aviso. Com <code>$state</code>, o array é observado em profundidade, então <code>push</code> também avisa a tela. Muitos guias antigos mandam sempre copiar, porque no Svelte 4 a reatividade dependia de atribuição. Aqui as duas formas funcionam; a cópia é mais previsível e é a que você vai ver na maioria dos exemplos deste guia.</p>
+
+<hr>
+
+<h2>5. Experimente: o botão que acrescenta</h2>
+
+<p>Na caixa abaixo o botão existe, mas não faz nada. Sua missão é fazer cada clique acrescentar um leite à lista.</p>
+<div class="trysvelte" data-goal="clique:button;;out:adicionar leite pão leite">
+<p class="try-task"><strong>Missão:</strong> o botão está vazio de ação. Faça o clique acrescentar <code>leite</code> no fim da lista, de modo que a tela fique <strong>adicionar leite pão leite</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão']);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; pedidos}&gt;adicionar leite&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each pedidos as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão']);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (pedidos = [...pedidos, 'leite'])}&gt;adicionar leite&lt;/button&gt;
+
+&lt;ul&gt;
+  {#each pedidos as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>Clique duas ou três vezes depois de resolver: a lista cresce a cada clique, e o bloco repete o <code>&lt;li&gt;</code> quantas vezes forem necessárias. O código do HTML continua com uma linha só. É esse tipo de economia que faz diferença num projeto grande — a Ana nunca vai precisar saber quantos pedidos o dia vai ter.</p>
+
+<p>A função do <code>onclick</code> precisa <strong>atribuir</strong> um valor novo. Escrever <code>() =&gt; pedidos</code> só devolve a lista e joga o resultado fora; nada muda. É a diferença entre apontar para o caderno e escrever nele.</p>
+
+<hr>
+
+<h2>6. Listas de objetos: cada item com partes</h2>
+
+<p>Uma lista de textos serve para nomes. Para pedidos com preço, cada item precisa de duas informações. A solução é um array de <strong>objetos</strong>: cada item é um conjunto de valores com nomes, escrito entre chaves.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { nome: 'pão', preco: 0.9 },
+    { nome: 'leite', preco: 4.5 }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido.nome} — R$ {pedido.preco.toFixed(2)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;pão — R$ 0.90&lt;/li&gt;&lt;li&gt;leite — R$ 4.50&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Cada volta do bloco recebe um objeto inteiro em <code>pedido</code>, e você escolhe o que mostrar com o ponto: <code>pedido.nome</code>, <code>pedido.preco</code>. O ponto é a mesma ideia do <code>toFixed</code> da primeira aula: "pegue esta parte de dentro".</p>
+
+<p>E o que acontece se você esquecer o ponto? O componente compila, roda, e mostra um texto estranho:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { nome: 'pão', preco: 0.9 },
+    { nome: 'leite', preco: 4.5 }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;[object Object]&lt;/li&gt;&lt;li&gt;[object Object]&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p><code>[object Object]</code> é o JavaScript dizendo "isto é um objeto e eu não sei como transformar em texto". Não é erro de compilação: o programa roda, mas a informação não chega. Quando você vir esse texto na tela, a causa é sempre a mesma — falta um ponto e o nome da parte que você quer mostrar.</p>
+
+<hr>
+
+<h2>7. Experimente: nome e preço</h2>
+
+<p>A lista abaixo tem dois produtos com nome e preço, e mostra <code>[object Object]</code>. Sua missão é mostrar as duas informações.</p>
+<div class="trysvelte" data-goal="out:pão — R$ 0.90 leite — R$ 4.50">
+<p class="try-task"><strong>Missão:</strong> cada linha mostra <code>[object Object]</code>. Use as partes do objeto para a tela mostrar <strong>pão — R$ 0.90</strong> e <strong>leite — R$ 4.50</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { nome: 'pão', preco: 0.9 },
+    { nome: 'leite', preco: 4.5 }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let pedidos = $state([
+    { nome: 'pão', preco: 0.9 },
+    { nome: 'leite', preco: 4.5 }
+  ]);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido.nome} — R$ {pedido.preco.toFixed(2)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p>A solução tem dois pontos e uma chamada de método dentro do HTML. Nada disso é novidade: o <code>toFixed(2)</code> já apareceu na aula do primeiro componente, e o ponto já apareceu lá também. O que a aula de hoje acrescenta é que agora essas expressões rodam <strong>uma vez por item</strong>, com um objeto diferente em <code>pedido</code> a cada volta.</p>
+
+<p>Uma consequência prática: se um item não tiver <code>preco</code>, o <code>toFixed</code> quebra e o componente inteiro para. Lista de objetos é ótima, mas cada item precisa ter as partes que o HTML usa. Você vai ver como proteger esse caso na aula de lista vazia.</p>
+
+<hr>
+
+<h2>8. Listas dentro de listas</h2>
+
+<p>Um bloco <code>{#each}</code> pode morar dentro de outro, e um <code>{#if}</code> pode proteger uma lista inteira. Na padaria, cada dia tem a sua própria lista de itens.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let dias = $state([
+    { nome: 'segunda', itens: ['pão', 'leite'] },
+    { nome: 'terça', itens: ['café'] }
+  ]);
+&lt;/script&gt;
+
+{#each dias as dia}
+  &lt;h3&gt;{dia.nome}&lt;/h3&gt;
+  &lt;ul&gt;
+    {#each dia.itens as item}
+      &lt;li&gt;{item}&lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/each}</pre>
+<pre class="out">&lt;h3&gt;segunda&lt;/h3&gt; &lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;li&gt;leite&lt;/li&gt;&lt;/ul&gt;&lt;h3&gt;terça&lt;/h3&gt; &lt;ul&gt;&lt;li&gt;café&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>São dois níveis: o de fora percorre os dias, o de dentro percorre os itens de cada dia. Repare nos nomes — <code>dia</code> no primeiro, <code>item</code> no segundo — e na indentação, que mostra quem está dentro de quem. O bloco de dentro enxerga as duas variáveis: <code>item</code> e <code>dia</code>.</p>
+
+<p>Proteger a lista com uma condição é ainda mais comum do que aninhar duas listas:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão', 'leite']);
+  let aberto = $state(true);
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;ul&gt;
+    {#each pedidos as pedido}
+      &lt;li&gt;{pedido}&lt;/li&gt;
+    {/each}
+  &lt;/ul&gt;
+{/if}</pre>
+<pre class="out">&lt;ul&gt;&lt;li&gt;pão&lt;/li&gt;&lt;li&gt;leite&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Com <code>aberto</code> em <code>true</code>, a lista aparece normalmente. Com <code>false</code>, o <code>&lt;ul&gt;</code> inteiro sai da tela, com os itens dentro. Os dois blocos se combinam sem nenhum truque: cada um fecha com o seu próprio nome.</p>
+
+<div class="warning">
+<strong>Tabela tem regra própria</strong>
+<p>Dentro de <code>&lt;table&gt;</code>, o Svelte exige a estrutura que o HTML aceita: as linhas precisam estar dentro de <code>&lt;tbody&gt;</code>. Um <code>{#each}</code> que gera <code>&lt;tr&gt;</code> direto no <code>&lt;table&gt;</code> é recusado pelo compilador, com uma mensagem que você vai ver no fim desta aula. A forma certa fica assim:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;table&gt;
+  &lt;tbody&gt;
+    {#each itens as item}
+      &lt;tr&gt;&lt;td&gt;{item}&lt;/td&gt;&lt;/tr&gt;
+    {/each}
+  &lt;/tbody&gt;
+&lt;/table&gt;</pre>
+<pre class="out">&lt;table&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;pão&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;leite&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;</pre>
+</div>
+
+<hr>
+
+<h2>9. Rodando na máquina da Ana</h2>
+
+<p>Com o componente no <code>src/App.svelte</code>, o servidor de desenvolvimento mostra a lista e atualiza a cada arquivo salvo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Vale a pena brincar com o tamanho da lista nesse servidor: acrescente um item no array com a página aberta e salve. A lista ganha uma linha, e o <code>&lt;li&gt;</code> do arquivo continua sendo um só. É a demonstração mais direta do que o <code>{#each}</code> faz.</p>
+
+<p>No build de produção, o número de módulos continua o mesmo, mas o tamanho do arquivo muda — listas puxam um pouco mais de código do motor do Svelte:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-B229pQKK.js  40.92 kB │ gzip: 15.72 kB
+✓ built in 2.08s</pre>
+
+<p>Comparado ao build da aula de condicionais (<code>36.03 kB</code>), este ficou em <code>40.92 kB</code>. Parte é o código da lista, parte é o motor que sabe atualizar itens existentes em vez de recriar tudo. Pagar esse preço uma vez, num projeto, é o que permite ao Svelte mover um item de lugar sem redesenhar a lista inteira.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. A primeira e a segunda tratam do fechamento do bloco; a terceira, de uma regra do HTML que o Svelte resolve por você ao compilar.</p>
+<div class="cenario">
+<strong>Erro 1 — fechou com o nome de outro comando</strong>
+<p>Cada abertura tem um fechamento com o mesmo nome. <code>{/for}</code> não existe em Svelte: quem repete na marcação é o <code>each</code>.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+  {/for}
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 4): Expected token each</pre>
+<p>"Expected token each" quer dizer "eu esperava a palavra each depois da barra". Repare que a linha apontada é a do fechamento errado, não a da abertura: o compilador sabe qual bloco está aberto e cobra o nome certo.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — o bloco ficou aberto</strong>
+<p>Aqui a tag <code>&lt;/ul&gt;</code> aparece antes do <code>{/each}</code>. O compilador tenta fechar a lista e descobre que ainda está dentro do bloco.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let pedidos = $state(['pão']);
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each pedidos as pedido}
+    &lt;li&gt;{pedido}&lt;/li&gt;
+&lt;/ul&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 0): `&lt;/ul&gt;` attempted to close an element that was not open</pre>
+<p>A mensagem fala da <code>&lt;/ul&gt;</code> porque é ali que a estrutura deixa de fazer sentido. Traduzindo: "você está fechando um elemento que, para mim, nunca foi aberto neste ponto". O conserto é pôr o <code>{/each}</code> antes do <code>&lt;/ul&gt;</code>.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — <code>&lt;tr&gt;</code> direto dentro de <code>&lt;table&gt;</code></strong>
+<p>O HTML moderno não aceita uma linha solta dentro da tabela: ela precisa estar num <code>&lt;tbody&gt;</code>. O Svelte prefere recusar a entregar uma página que o navegador vai "consertar" por conta própria.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'leite']);
+&lt;/script&gt;
+
+&lt;table&gt;
+  &lt;tr&gt;&lt;th&gt;Item&lt;/th&gt;&lt;/tr&gt;
+  {#each itens as item}
+    &lt;tr&gt;&lt;td&gt;{item}&lt;/td&gt;&lt;/tr&gt;
+  {/each}
+&lt;/table&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 2): `&lt;tr&gt;` cannot be a child of `&lt;table&gt;`. `&lt;table&gt;` only allows these children: `&lt;caption&gt;`, `&lt;colgroup&gt;`, `&lt;tbody&gt;`, `&lt;thead&gt;`, `&lt;tfoot&gt;`, `&lt;style&gt;`, `&lt;script&gt;`, `&lt;template&gt;`. The browser will 'repair' the HTML (by moving, removing, or inserting elements) which breaks Svelte's assumptions about the structure of your components.</pre>
+<p>A mensagem é comprida porque explica o motivo: o navegador moveria, removeria ou inseriria elementos para consertar o HTML, e isso quebraria as contas que o Svelte faz sobre a sua marcação. O conserto é embrulhar o <code>{#each}</code> num <code>&lt;tbody&gt;</code>, como no exemplo da seção 8.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th></tr>
+<tr><td><code>{#each lista as item}</code></td><td>repete o HTML do bloco uma vez por item</td></tr>
+<tr><td><code>{#each lista as item, i}</code></td><td>repete e guarda a posição em <code>i</code> (aula <code>each-index.html</code>)</td></tr>
+<tr><td><code>{#each lista as item (item.id)}</code></td><td>diz qual identificador único cada item tem (aula <code>each-index.html</code>)</td></tr>
+<tr><td><code>{:else}</code> dentro do bloco</td><td>o que mostrar quando a lista está vazia (aula <code>lista-vazia.html</code>)</td></tr>
+<tr><td><code>{/each}</code></td><td>fecha o bloco</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que você tem</th><th>O bloco repete?</th><th>Exemplo</th></tr>
+<tr><td>array com itens</td><td>uma vez por item</td><td><code>['pão', 'leite']</code></td></tr>
+<tr><td>array vazio</td><td>nenhuma vez</td><td><code>[]</code></td></tr>
+<tr><td>texto</td><td>uma vez por caractere</td><td><code>'pão'</code> vira três linhas</td></tr>
+<tr><td>número</td><td>nunca</td><td><code>3</code> não mostra nada</td></tr>
+<tr><td><code>null</code> ou <code>undefined</code></td><td>nunca</td><td>não quebra, só não mostra</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td>Fechamento com outro nome</td><td><code>Expected token each</code></td></tr>
+<tr><td>Bloco aberto antes de fechar a tag</td><td><code>attempted to close an element that was not open</code></td></tr>
+<tr><td><code>&lt;tr&gt;</code> sem <code>&lt;tbody&gt;</code></td><td><code>cannot be a child of &lt;table&gt;</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="1"><p class="mc-q">1. O que o texto <code>'{#each pedidos as pedido}'</code> significa?</p>
+<label><input type="radio" name="q1"> Repita o HTML uma vez por pedido da lista</label>
+<label><input type="radio" name="q1"> Crie uma lista chamada <code>pedido</code> com o conteúdo de <code>pedidos</code></label>
+<label><input type="radio" name="q1"> Mostre todos os pedidos na mesma linha</label>
+<label><input type="radio" name="q1"> Verifique se <code>pedido</code> existe em <code>pedidos</code></label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que aparece na tela quando o array tem um objeto e o bloco mostra <code>{pedido}</code>?</p>
+<label><input type="radio" name="q1"> O objeto formatado como JSON</label>
+<label><input type="radio" name="q1"> A palavra <code>undefined</code></label>
+<label><input type="radio" name="q1"> <code>[object Object]</code></label>
+<label><input type="radio" name="q1"> O compilador recusa o arquivo</label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. Quantos <code>&lt;li&gt;</code> o bloco gera para o array <code>['pão', 'leite', 'café']</code>?</p>
+<label><input type="radio" name="q1"> Um, com os três valores juntos</label>
+<label><input type="radio" name="q1"> Três, um por item</label>
+<label><input type="radio" name="q1"> Depende do tamanho do texto de cada item</label>
+<label><input type="radio" name="q1"> Nenhum: é preciso um segundo bloco dentro do primeiro</label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#each pedidos <input data-answer="as"> pedido}<br>&nbsp;&nbsp;&lt;li&gt;{pedido}&lt;/li&gt;<br>{/each}<br><br>// dê um nome a cada item da lista</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>{#each lista as item}</code> repete o HTML do bloco uma vez por item da lista.</li>
+  <li>A lista vem antes do <code>as</code>; o nome do item vem depois e só existe dentro do bloco.</li>
+  <li>O bloco fecha com <code>{/each}</code> — não existe <code>{/for}</code> na marcação.</li>
+  <li>O bloco não cria elemento em volta: os itens ficam irmãos, dentro da tag que você já escreveu.</li>
+  <li>Use o <strong>item</strong> dentro do bloco; usar a lista mostra o array inteiro repetido.</li>
+  <li>Array de objetos deixa cada linha com partes: <code>{pedido.nome}</code>, <code>{pedido.preco}</code>.</li>
+  <li>Mostrar um objeto direto na tela imprime <code>[object Object]</code>.</li>
+  <li>Acrescentar item: <code>lista = [...lista, 'novo']</code>; com <code>$state</code>, <code>push</code> também avisa a tela.</li>
+  <li>Listas podem ficar dentro de condicionais e dentro de outras listas, cada bloco com o seu fechamento.</li>
+  <li>Dentro de <code>&lt;table&gt;</code>, as linhas precisam de <code>&lt;tbody&gt;</code>: o compilador recusa o resto.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

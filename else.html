@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{:else} e {:else if} — o caminho alternativo no Svelte | Guia Svelte</title>
+<meta name="description" content="O caminho alternativo do {#if}: {:else}, cadeias com {:else if}, a ordem das condições e as três mensagens de erro do compilador Svelte 5.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+<h1>Svelte · <span class="hl">O caminho alternativo: {:else}</span></h1>
+
+<p class="intro">Na padaria da Ana há duas placas guardadas atrás do balcão: uma diz "ABERTO" e a outra diz "FECHADO". Ela nunca pendura as duas ao mesmo tempo — escolhe uma, pendura, e a outra fica guardada. No componente é igual: quando uma condição é falsa, quase sempre existe uma segunda resposta para dar no lugar. Essa segunda resposta é o <code>{:else}</code>. Nesta aula você vai aprender a escrever os dois caminhos, a criar três ou quatro caminhos em cadeia, e a descobrir por que a <strong>ordem</strong> das perguntas decide o resultado.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que <code>{:else}</code> faz e onde ele fica dentro do bloco.</li>
+  <li>A ver a saída real dos dois caminhos, um de cada vez.</li>
+  <li>Como escrever três ou mais caminhos com <code>{:else if}</code>.</li>
+  <li>Por que a primeira condição verdadeira ganha e as outras nem são avaliadas.</li>
+  <li>O que acontece quando você ordena as perguntas do jeito errado.</li>
+  <li>Que o <code>{:else}</code> pode proteger vários elementos de uma vez.</li>
+  <li>Como o compilador reage a dois <code>{:else}</code> no mesmo bloco.</li>
+  <li>O que significa o erro <code>Expected whitespace</code> depois de <code>{:else if}</code>.</li>
+  <li>Como rodar o projeto da Ana e ver o build mudar de tamanho.</li>
+  <li>Quando vale a pena usar cadeia de <code>if</code> e quando é hora de outra estrutura.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: toda pergunta tem uma resposta contrária</h2>
+
+<p>Quando a Ana pergunta "está aberto?", existem duas respostas possíveis, e o cliente precisa ouvir uma delas. "Está aberto, pode entrar" ou "está fechado, volte às seis". Se o componente só souber falar a primeira, o cliente fica olhando para uma tela vazia quando a resposta é a segunda. Tela vazia não é resposta — é dúvida.</p>
+
+<p>Na aula anterior você viu que um <code>{#if}</code> sozinho remove o HTML quando a condição é falsa. Isso é ótimo para um aviso que pode muito bem não existir. Mas quando o leitor <em>precisa</em> de uma informação, remover e não colocar nada no lugar deixa um buraco. O <code>{:else}</code> existe para preencher esse buraco com o outro caminho.</p>
+
+<p>A palavra vem do inglês, "else", e se lê "élse". Ela mora <strong>dentro</strong> do bloco, entre o fechamento do primeiro caminho e o <code>{/if}</code> final. Não é um bloco novo: é uma segunda parte do mesmo bloco. Isso importa porque as duas partes compartilham as mesmas variáveis e o mesmo lugar na página — só uma delas aparece por vez.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>"Se estiver aberto, pendure ABERTO"</td><td><code>{#if aberto}</code></td></tr>
+<tr><td>"Senão, pendure FECHADO"</td><td><code>{:else}</code></td></tr>
+<tr><td>"Recolha a outra placa"</td><td>o outro caminho sai da tela sozinho</td></tr>
+<tr><td>"Se não tem pão, senão se está assando, senão…"</td><td><code>{:else if}</code> em cadeia</td></tr>
+<tr><td>As duas placas penduradas juntas</td><td>dois <code>{#if}</code> separados (e aí os dois podem aparecer)</td></tr>
+</table>
+</div>
+
+<p>Repare na última linha da tabela: dois <code>{#if}</code> separados não são a mesma coisa que um <code>{#if}</code> com <code>{:else}</code>. Blocos separados são independentes e podem aparecer ao mesmo tempo. O par <code>if/else</code> garante que <strong>exatamente um</strong> dos caminhos apareça. Quando a regra é "um ou outro", use o par; quando as regras são independentes, use dois blocos.</p>
+
+<hr>
+
+<h2>2. O primeiro <code>{:else}</code> da Ana</h2>
+
+<p>Comece com o caso de duas saídas. A variável <code>aberto</code> guarda a resposta, e o bloco mostra um dos dois parágrafos.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p&gt;Bom dia! O balcão está aberto.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Volte às 6h: o balcão está fechado.&lt;/p&gt;
+{/if}</pre>
+
+<p>Com <code>aberto</code> valendo <code>true</code>, o compilador gera só o primeiro parágrafo:</p>
+<pre class="out">&lt;p&gt;Bom dia! O balcão está aberto.&lt;/p&gt;</pre>
+
+<p>Agora troque o valor inicial para <code>false</code>. O mesmo arquivo passa a gerar o outro parágrafo, e o primeiro desaparece:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aberto = $state(false);
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p&gt;Bom dia! O balcão está aberto.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Volte às 6h: o balcão está fechado.&lt;/p&gt;
+{/if}</pre>
+<pre class="out">&lt;p&gt;Volte às 6h: o balcão está fechado.&lt;/p&gt;</pre>
+
+<p>Duas informações para guardar. A primeira: o HTML gerado <strong>nunca</strong> tem os dois parágrafos. O compilador não esconde um com CSS; ele só coloca na página o caminho que ganhou. A segunda: quando o valor muda, o Svelte troca um pelo outro na hora, sem recarregar nada.</p>
+
+<h3>A anatomia do par</h3>
+<dl class="anatomy">
+  <dt>{#if aberto}</dt><dd>a <strong>primeira pergunta</strong> e o caminho que responde "sim".</dd>
+  <dt>{:else}</dt><dd>a <strong>segunda parte</strong>: começa com dois-pontos, não com cerquilha. O dois-pontos marca continuação de um bloco já aberto.</dd>
+  <dt><p>Volte às 6h…</p></dt><dd>o <strong>caminho do "não"</strong>. Pode ter quantas tags você quiser, inclusive nenhuma.</dd>
+  <dt>{/if}</dt><dd>o <strong>fechamento</strong>, um só para o bloco inteiro — não existe <code>{/else}</code>.</dd>
+</dl>
+
+<p>Esse último detalhe pega muita gente: o <code>{/if}</code> fecha o bloco todo, incluindo o <code>{:else}</code>. Escrever <code>{/else}</code> não compila. O bloco tem uma abertura, quantas continuações você quiser (<code>{:else if}</code> e, no máximo, um <code>{:else}</code>) e um fechamento.</p>
+
+<div class="tip">
+<strong>Quando não usar <code>{:else}</code></strong>
+<p>Se o caminho do "não" não mostra nada — nenhum texto, nenhuma dica —, o <code>{:else}</code> é peso morto. Um <code>{#if aviso}</code> sozinho já faz isso. Use <code>{:else}</code> quando o leitor precisa de uma resposta nos dois casos.</p>
+</div>
+
+<hr>
+
+<h2>3. Experimente: complete o par</h2>
+
+<p>A caixa abaixo tem um <code>{#if}</code> sem caminho alternativo. Quando você clica no botão, o aviso some e não fica nada no lugar. Sua missão é acrescentar o outro caminho.</p>
+<div class="trysvelte" data-goal="clique:button;;outre:Balcão fechado">
+<p class="try-task"><strong>Missão:</strong> clique no botão para fechar o balcão. Falta a resposta do "não": acrescente um <code>{:else}</code> que mostre <strong>Balcão fechado.</strong></p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (aberto = !aberto)}&gt;Fechar ou abrir&lt;/button&gt;
+
+{#if aberto}
+  &lt;p&gt;Balcão aberto.&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (aberto = !aberto)}&gt;Fechar ou abrir&lt;/button&gt;
+
+{#if aberto}
+  &lt;p&gt;Balcão aberto.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Balcão fechado.&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Depois da solução, o botão alterna os dois parágrafos e a tela nunca fica vazia. Repare que o botão está fora do bloco: ele continua na página nos dois estados, porque a condição não fala dele. Isso é útil — o leitor precisa do botão justamente para voltar atrás.</p>
+
+<p>A caixa compila com o compilador de verdade do Svelte, e cada Rodar parte do código que está na tela naquele momento. Se você apagar o <code>{/if}</code> por acidente, a mensagem do compilador aparece ali, com a linha.</p>
+
+<hr>
+
+<h2>4. Três caminhos: <code>{:else if}</code></h2>
+
+<p>Duas saídas resolvem muita coisa, mas a vida da Ana tem mais casos. O troco, por exemplo, tem três: sobra dinheiro, conta certa, falta dinheiro. A estrutura ganha mais uma pergunta no meio, escrita como <code>{:else if condição}</code> — um "senão, se…".</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let saldo = $state(0);
+&lt;/script&gt;
+
+{#if saldo &gt; 0}
+  &lt;p&gt;Troco a devolver: R$ {saldo.toFixed(2)}&lt;/p&gt;
+{:else if saldo === 0}
+  &lt;p&gt;Conta certa, sem troco.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Faltam R$ {(-saldo).toFixed(2)}&lt;/p&gt;
+{/if}</pre>
+
+<p>Com <code>saldo</code> valendo <code>0</code>, quem responde é a segunda pergunta, e as outras duas ficam de fora:</p>
+<pre class="out">&lt;p&gt;Conta certa, sem troco.&lt;/p&gt;</pre>
+
+<p>Mude o valor inicial para <code>5</code> e depois para <code>-3</code> para ver os outros dois caminhos, sempre com a mesma estrutura:</p>
+<pre class="out">Troco a devolver: R$ 5.00</pre>
+<pre class="out">Faltam R$ 3.00</pre>
+
+<p>O <code>{:else if}</code> pode aparecer quantas vezes você precisar, um depois do outro, e o <code>{:else}</code> — se existir — fica por último. Cada condição é uma pergunta nova, feita só se todas as anteriores deram falso. É exatamente assim que o JavaScript funciona com <code>else if</code> dentro de uma função; o Svelte só levou a mesma ideia para o HTML.</p>
+
+<h3>A leitura da cadeia</h3>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Linha</th><th>Como se lê</th><th>Quando o bloco da linha aparece</th></tr>
+<tr><td><code>{#if saldo &gt; 0}</code></td><td>"o saldo é positivo?"</td><td>se a resposta for sim</td></tr>
+<tr><td><code>{:else if saldo === 0}</code></td><td>"senão, o saldo é zero?"</td><td>se as anteriores deram falso e esta der verdadeiro</td></tr>
+<tr><td><code>{:else}</code></td><td>"senão…"</td><td>se todas as anteriores deram falso</td></tr>
+</table>
+</div>
+
+<p>A segunda linha é o coração da aula: <code>{:else if}</code> é <em>uma pergunta feita depois de outra ter falhado</em>. O Svelte não avalia todas as condições de uma vez; ele vai descendo a lista e para na primeira que der verdadeiro. Isso economiza contas e, mais importante, define o resultado quando duas condições poderiam ser verdadeiras ao mesmo tempo.</p>
+
+<hr>
+
+<h2>5. Experimente: o caso que falta</h2>
+
+<p>O componente abaixo trata dois casos: tem troco ou falta dinheiro. O caso do saldo zerado está caindo no lugar errado. Sua missão é dar a ele o texto certo.</p>
+<div class="trysvelte" data-goal="out:Conta certa, sem troco.">
+<p class="try-task"><strong>Missão:</strong> com o saldo em <code>0</code>, a tela diz que falta dinheiro. Acrescente um <code>{:else if}</code> para o saldo zerado, mostrando <strong>Conta certa, sem troco.</strong></p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let saldo = $state(0);
+&lt;/script&gt;
+
+{#if saldo &gt; 0}
+  &lt;p&gt;Troco a devolver.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Falta dinheiro.&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let saldo = $state(0);
+&lt;/script&gt;
+
+{#if saldo &gt; 0}
+  &lt;p&gt;Troco a devolver.&lt;/p&gt;
+{:else if saldo === 0}
+  &lt;p&gt;Conta certa, sem troco.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Falta dinheiro.&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Note a posição do novo caminho: ele entra <strong>antes</strong> do <code>{:else}</code>, empurrando o "falta dinheiro" para o fim. Se você colocar o <code>{:else if}</code> depois do <code>{:else}</code>, o compilador recusa o arquivo — o <code>{:else}</code> é sempre o último da cadeia, porque ele é a resposta "e se nada disso".</p>
+
+<p>Também vale experimentar o contrário: apague o <code>{:else}</code> final e deixe só o <code>{:else if}</code>. Com <code>saldo</code> em <code>-3</code>, nenhuma condição é verdadeira e a tela fica vazia. Cadeia sem <code>{:else}</code> é permitida, mas você precisa saber o que acontece quando nada casa.</p>
+
+<hr>
+
+<h2>6. A ordem das perguntas decide o resultado</h2>
+
+<p>Aqui está a parte que separa quem entendeu de quem decorou. Numa cadeia, a ordem não é estilo: é lógica. Veja o mesmo boletim escrito na ordem errada.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nota = $state(7);
+&lt;/script&gt;
+
+{#if nota &gt;= 5}
+  &lt;p&gt;Recuperação.&lt;/p&gt;
+{:else if nota &gt;= 7}
+  &lt;p&gt;Aprovada.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Reprovada.&lt;/p&gt;
+{/if}</pre>
+<pre class="out">Recuperação.</pre>
+
+<p>A nota é <code>7</code>, que deveria ser "Aprovada". Mas a primeira pergunta é <code>nota &gt;= 5</code>, e 7 é maior ou igual a 5. A condição deu verdadeiro, o bloco respondeu e o Svelte nem olhou para a segunda linha. A pergunta "<code>nota &gt;= 7</code>" está lá, escrita corretamente, mas é inalcançável: todo número que a satisfaz também satisfaz a primeira.</p>
+
+<p>A correção é ordenar da pergunta mais exigente para a mais frouxa:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nota = $state(7);
+&lt;/script&gt;
+
+{#if nota &gt;= 7}
+  &lt;p&gt;Aprovada.&lt;/p&gt;
+{:else if nota &gt;= 5}
+  &lt;p&gt;Recuperação.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Reprovada.&lt;/p&gt;
+{/if}</pre>
+<pre class="out">Aprovada.</pre>
+
+<p>Com <code>7</code>, a primeira pergunta dá verdadeiro e responde "Aprovada". Com <code>6</code>, a primeira falha e a segunda responde "Recuperação". Com <code>4</code>, as duas falham e o <code>{:else}</code> responde "Reprovada". Três valores, três caminhos, nenhum buraco.</p>
+
+<div class="warning">
+<strong>Regra prática para ordenar</strong>
+<p>Faça a si mesma duas perguntas: "algum valor pode satisfazer duas destas condições?" e "qual delas eu quero que ganhe?". Se as respostas forem "sim" e "a mais específica", escreva a mais específica primeiro. No caso do troco, a condição mais específica é <code>saldo === 0</code>, que só aceita um valor.</p>
+</div>
+
+<hr>
+
+<h2>7. Experimente: conserte a ordem</h2>
+
+<p>O boletim abaixo está na ordem errada: com nota 7, ele mostra "Recuperação". Sua missão é fazer a tela mostrar "Aprovada" sem mudar o valor da nota.</p>
+<div class="trysvelte" data-goal="outre:^Aprovada">
+<p class="try-task"><strong>Missão:</strong> a nota é <code>7</code> e a tela mostra "Recuperação". Troque a <strong>ordem</strong> das condições para a nota 7 cair no caminho certo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nota = $state(7);
+&lt;/script&gt;
+
+{#if nota &gt;= 5}
+  &lt;p&gt;Recuperação.&lt;/p&gt;
+{:else if nota &gt;= 7}
+  &lt;p&gt;Aprovada.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Reprovada.&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nota = $state(7);
+&lt;/script&gt;
+
+{#if nota &gt;= 7}
+  &lt;p&gt;Aprovada.&lt;/p&gt;
+{:else if nota &gt;= 5}
+  &lt;p&gt;Recuperação.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Reprovada.&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>Se você tentou resolver mudando <code>nota</code> para 8, a tela mostrou "Recuperação" do mesmo jeito — e essa é a prova de que o problema é a ordem, não o valor. Depois de consertar, teste mudando a nota para 5, 6 e 10 no código: os três caminhos continuam corretos, porque cada pergunta só é feita se a anterior falhou.</p>
+
+<hr>
+
+<h2>8. Vários elementos no caminho alternativo</h2>
+
+<p>O <code>{:else}</code> não aceita só uma tag. Como o <code>{#if}</code>, ele protege um bloco inteiro, com quantos elementos você precisar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let temPao = $state(false);
+&lt;/script&gt;
+
+{#if temPao}
+  &lt;p&gt;Pão na prateleira.&lt;/p&gt;
+{:else}
+  &lt;p&gt;O forno está apagado.&lt;/p&gt;
+  &lt;p&gt;Volte em uma hora.&lt;/p&gt;
+{/if}</pre>
+<pre class="out">&lt;p&gt;O forno está apagado.&lt;/p&gt; &lt;p&gt;Volte em uma hora.&lt;/p&gt;</pre>
+
+<p>As duas tags aparecem juntas porque pertencem ao mesmo caminho. E o par continua valendo: quando <code>temPao</code> for verdadeiro, essas duas saem e entra "Pão na prateleira." — nunca as três ao mesmo tempo.</p>
+
+<p>O mesmo desenho vale para o <code>{:else if}</code>: cada caminho da cadeia tem o seu próprio bloco, com o tamanho que precisar. É comum um caminho ter uma linha de texto e outro ter um formulário completo; nada muda na estrutura.</p>
+
+<h3>Onde mais o <code>{:else}</code> aparece</h3>
+
+<p>O <code>{:else}</code> não é exclusividade do <code>{#if}</code>. Nas próximas aulas deste nível você vai encontrar a mesma palavra em dois outros blocos: no <code>{#each}</code>, para o caso da lista vazia, e no <code>{#await}</code>, para o caso da promessa que falhou. A forma é sempre parecida — dois-pontos, a palavra, e o caminho —, o que ajuda a memória: <code>{:else}</code> é o "e se não for isso" do Svelte.</p>
+
+<hr>
+
+<h2>9. Rodando na máquina da Ana</h2>
+
+<p>O componente desta aula é o <code>src/App.svelte</code> do projeto em <code>~/loja</code>. Ligue o servidor de desenvolvimento e a página se atualiza a cada arquivo salvo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1007 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Abra o endereço no navegador e troque o valor de <code>saldo</code> no arquivo, salvando entre uma troca e outra. Você vê o parágrafo mudar sem recarregar a página — o mesmo mecanismo do <code>$state</code> da primeira aula, agora escolhendo entre caminhos.</p>
+
+<p>Terminado o trabalho, o build de produção compila o projeto inteiro:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BfZWKjZi.js  35.81 kB │ gzip: 13.69 kB
+✓ built in 3.13s</pre>
+
+<p>Repare que o arquivo final desta aula tem <code>35.81 kB</code>, um pouco menor que o da aula anterior (<code>36.03 kB</code>). A diferença vem do código que você escreveu: cada parágrafo a mais, cada condição a mais, entra nessa conta. Não é preciso decorar números — é só saber que o tamanho do build é a soma do que você escreveu, e que o <code>gzip</code> é o que viaja de verdade pela rede.</p>
+
+<div class="tip">
+<strong>Um componente, um arquivo</strong>
+<p>Enquanto você trabalha no <code>App.svelte</code>, tudo bem ter dez condicionais ali. Quando o arquivo passar de umas cem linhas, o caminho é separar em componentes — assunto do Nível 2. Condicional grande costuma ser sinal de que a regra merece um nome próprio.</p>
+</div>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão, copiadas como estão. As duas primeiras tratam da estrutura do bloco; a terceira, de um <code>{:else}</code> que perdeu o dono.</p>
+<div class="cenario">
+<strong>Erro 1 — dois <code>{:else}</code> no mesmo bloco</strong>
+<p>Um bloco aceita vários <code>{:else if}</code>, mas só um <code>{:else}</code>. Dois "senão" não têm significado: não existe um segundo caminho do "não".</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+&lt;/script&gt;
+
+{#if aberto}
+  &lt;p&gt;aberto&lt;/p&gt;
+{:else}
+  &lt;p&gt;fechado&lt;/p&gt;
+{:else}
+  &lt;p&gt;outra vez&lt;/p&gt;
+{/if}</pre>
+<pre class="out">Erro de compilação (linha 9, coluna 1): {:else} cannot appear more than once within a block</pre>
+<p>A mensagem é direta e aponta a linha do segundo <code>{:else}</code>. Na prática, quem chega aqui queria duas coisas diferentes: ou um <code>{:else if}</code> com condição, ou um <code>{#if}</code> novo, separado. Decida qual das duas era a intenção.</p>
+</div>
+<div class="cenario">
+<strong>Erro 2 — <code>{:else if}</code> sem condição</strong>
+<p>O <code>{:else if}</code> precisa de uma expressão depois do <code>if</code>. Sem ela, o compilador espera um espaço e encontra a chave de fechamento.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let saldo = $state(0);
+&lt;/script&gt;
+
+{#if saldo &gt; 0}
+  &lt;p&gt;tem troco&lt;/p&gt;
+{:else if}
+  &lt;p&gt;zerado&lt;/p&gt;
+{/if}</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 9): Expected whitespace</pre>
+<p>"Expected whitespace" quer dizer "eu esperava um espaço aqui" — o começo de uma expressão. A coluna 9 é exatamente o <code>}</code>. Para consertar, escreva a pergunta que faltou: <code>{:else if saldo === 0}</code>.</p>
+</div>
+<div class="cenario">
+<strong>Erro 3 — <code>{:else}</code> sem <code>{#if}</code></strong>
+<p>O dois-pontos só faz sentido dentro de um bloco já aberto. Um <code>{:else}</code> solto no meio do HTML não tem a que se referir.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let saldo = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;oi&lt;/p&gt;
+{:else}
+  &lt;p&gt;sem troco&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 1): {:...} block is invalid at this position (did you forget to close the preceding element or block?)</pre>
+<p>A mensagem oficial fala em "posição inválida" e sugere que você esqueceu de fechar algo antes. As duas causas reais: o <code>{#if}</code> foi apagado e o <code>{:else}</code> ficou; ou o <code>{#if}</code> está aberto mais acima e algo no meio fechou o bloco antes da hora.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escrita</th><th>O que faz</th><th>Quantos por bloco</th></tr>
+<tr><td><code>{#if condição}</code></td><td>abre o bloco com a primeira pergunta</td><td>um</td></tr>
+<tr><td><code>{:else if condição}</code></td><td>faz outra pergunta se a anterior falhou</td><td>quantos quiser</td></tr>
+<tr><td><code>{:else}</code></td><td>responde quando nada deu verdadeiro</td><td>no máximo um, por último</td></tr>
+<tr><td><code>{/if}</code></td><td>fecha o bloco inteiro</td><td>um</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Você quer</th><th>Use</th><th>Por quê</th></tr>
+<tr><td>Um aviso que pode não existir</td><td><code>{#if}</code> sozinho</td><td>não há resposta alternativa</td></tr>
+<tr><td>Duas respostas possíveis, sempre uma</td><td><code>{#if} {:else}</code></td><td>garante exatamente um caminho</td></tr>
+<tr><td>Três ou mais respostas</td><td>cadeia com <code>{:else if}</code></td><td>uma pergunta por caso</td></tr>
+<tr><td>Regras independentes</td><td>dois <code>{#if}</code> separados</td><td>podem aparecer juntos</td></tr>
+<tr><td>Texto curto de duas opções</td><td><code>{ok ? 'sim' : 'não'}</code></td><td>cabe numa chave só</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Erro</th><th>Mensagem do compilador</th></tr>
+<tr><td>Dois <code>{:else}</code></td><td><code>{:else} cannot appear more than once within a block</code></td></tr>
+<tr><td><code>{:else if}</code> sem expressão</td><td><code>Expected whitespace</code></td></tr>
+<tr><td><code>{:else}</code> sem bloco</td><td><code>{:...} block is invalid at this position</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Numa cadeia de <code>{#if}</code> com <code>{:else if}</code>, o que o Svelte faz?</p>
+<label><input type="radio" name="q1"> Avalia todas as condições e escolhe a última verdadeira</label>
+<label><input type="radio" name="q1"> Para na primeira condição verdadeira e ignora as seguintes</label>
+<label><input type="radio" name="q1"> Sorteia um caminho quando duas condições dão verdadeiro</label>
+<label><input type="radio" name="q1"> Mostra todos os caminhos verdadeiros ao mesmo tempo</label>
+</div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Onde o <code>{:else}</code> pode ficar?</p>
+<label><input type="radio" name="q1"> Antes do <code>{#if}</code>, para preparar o caminho</label>
+<label><input type="radio" name="q1"> Em qualquer posição, desde que dentro do bloco</label>
+<label><input type="radio" name="q1"> Depois de todos os <code>{:else if}</code>, como último caminho</label>
+<label><input type="radio" name="q1"> Fora do bloco, logo depois do <code>{/if}</code></label>
+</div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. Qual é a diferença entre um bloco com <code>{:else}</code> e dois <code>{#if}</code> separados?</p>
+<label><input type="radio" name="q1"> Nenhuma: os dois produzem o mesmo HTML</label>
+<label><input type="radio" name="q1"> O par mostra no máximo um caminho; os blocos separados podem aparecer juntos</label>
+<label><input type="radio" name="q1"> O par é mais lento porque avalia duas condições</label>
+<label><input type="radio" name="q1"> Os blocos separados não aceitam <code>{:else if}</code></label>
+</div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">{#if saldo &gt; 0}<br>&nbsp;&nbsp;&lt;p&gt;Troco a devolver.&lt;/p&gt;<br><input data-answer="{:else}"><br>&nbsp;&nbsp;&lt;p&gt;Falta dinheiro.&lt;/p&gt;<br>{/if}<br><br>// o segundo caminho aparece quando o saldo não é positivo</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>{:else}</code> é o caminho alternativo do <code>{#if}</code> e fica dentro do mesmo bloco.</li>
+  <li>Um bloco fecha com <code>{/if}</code>, nunca com <code>{/else}</code>.</li>
+  <li>O par garante que apareça <strong>exatamente um</strong> dos caminhos; o HTML gerado nunca tem os dois.</li>
+  <li><code>{:else if condição}</code> acrescenta perguntas e pode repetir quantas vezes você quiser.</li>
+  <li>O <code>{:else}</code>, se existir, é sempre o último da cadeia e aparece no máximo uma vez.</li>
+  <li>A primeira condição verdadeira ganha: as seguintes nem são avaliadas.</li>
+  <li>Ordene da condição mais específica para a mais frouxa, ou o resultado sai errado.</li>
+  <li>Cada caminho protege vários elementos de uma vez, sem precisar de <code>&lt;div&gt;</code> em volta.</li>
+  <li>Os erros desta aula: dois <code>{:else}</code>, <code>{:else if}</code> sem expressão e <code>{:else}</code> sem bloco.</li>
+  <li>Use dois <code>{#if}</code> separados quando as regras são independentes.</li>
+</ul>
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
