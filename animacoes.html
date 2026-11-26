@@ -95,39 +95,35 @@
 
 <p>O botão não faz nada de especial: ele inverte a lista com <code>slice().reverse()</code>, criando uma lista nova. O que o leitor vê é o cartaz deslizando para o outro lado — desde que a chave exista.</p>
 
-<div class="trysvelte" data-goal="clique:button;;out:b a inverter">
+<div class="trysvelte" data-goal="clique:button;;depois:350;;out:b a inverter">
 <p class="try-task"><strong>Missão:</strong> o compilador recusa esta lista porque o <code>{#each}</code> não tem chave. Acrescente a chave certa e o clique deve inverter a ordem: <code>b a</code>.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  function meuFlip(node, { from, to }) {
-    const dy = from.top - to.top;
-    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
-  }
+  import { flip } from 'svelte/animate';
+
   let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
 &lt;/script&gt;
 
 &lt;ul&gt;
   {#each itens as it}
-    &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+    &lt;li animate:flip={{ duration: 300 }}&gt;{it.n}&lt;/li&gt;
   {/each}
 &lt;/ul&gt;
 &lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  function meuFlip(node, { from, to }) {
-    const dy = from.top - to.top;
-    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
-  }
+  import { flip } from 'svelte/animate';
+
   let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
 &lt;/script&gt;
 
 &lt;ul&gt;
   {#each itens as it (it.id)}
-    &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+    &lt;li animate:flip={{ duration: 300 }}&gt;{it.n}&lt;/li&gt;
   {/each}
 &lt;/ul&gt;
 &lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
 </div>
 
-<p>Como nas outras caixas do guia, o <code>svelte/animate</code> não é importável aqui: a caixa compila um componente só. O <code>meuFlip</code> do exemplo é o <code>flip</code> escrito à mão, com as mesmas peças — <code>from</code>, <code>to</code>, <code>duration</code> e <code>css</code>.</p>
+<p>A caixa importa <code>svelte/animate</code> de verdade: o <code>flip</code> é o da biblioteca, compilado e montado no seu navegador. A missão cobra a condição que o compilador não perdoa — a chave no <code>{#each}</code> — e a solução cumpre sem mexer no resto do componente.</p>
 
 <hr>
 
@@ -141,35 +137,31 @@
 
 <p><strong>3. Tem de ser um elemento do DOM, não um componente.</strong> Um componente pode desenhar dez elementos; o Svelte não teria como medir "o componente". Se precisar animar um componente, envolva-o num elemento e ponha a diretiva no elemento.</p>
 
-<div class="trysvelte" data-goal="clique:button;;out:b a inverter">
+<div class="trysvelte" data-goal="clique:button;;depois:350;;out:b a inverter">
 <p class="try-task"><strong>Missão:</strong> a diretiva está dentro de um <code>{#if}</code>, e o compilador recusa. Coloque a diretiva no <code>&lt;li&gt;</code>, que é o filho direto do bloco, e o clique deve inverter para <code>b a</code>.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  function meuFlip(node, { from, to }) {
-    const dy = from.top - to.top;
-    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
-  }
+  import { flip } from 'svelte/animate';
+
   let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
 &lt;/script&gt;
 
 &lt;ul&gt;
   {#each itens as it (it.id)}
     {#if it.n}
-      &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+      &lt;li animate:flip={{ duration: 300 }}&gt;{it.n}&lt;/li&gt;
     {/if}
   {/each}
 &lt;/ul&gt;
 &lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  function meuFlip(node, { from, to }) {
-    const dy = from.top - to.top;
-    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
-  }
+  import { flip } from 'svelte/animate';
+
   let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
 &lt;/script&gt;
 
 &lt;ul&gt;
   {#each itens as it (it.id)}
-    &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+    &lt;li animate:flip={{ duration: 300 }}&gt;{it.n}&lt;/li&gt;
   {/each}
 &lt;/ul&gt;
 &lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
@@ -211,36 +203,33 @@
 
 <p>Numa lista vertical, o deslocamento que importa é o vertical — <code>from.top - to.top</code>. Medindo de verdade numa lista de dois itens de 24 pixels, o valor dá <code>-24</code> para o item que desceu e <code>+24</code> para o que subiu. Usar <code>left</code> numa lista vertical dá zero, e a animação não aparece: o item só reaparece no lugar novo. É um erro silencioso, do tipo que a gente demora a achar.</p>
 
-<div class="trysvelte" data-goal="clique:button;;out:b a inverter">
-<p class="try-task"><strong>Missão:</strong> o elemento tem duas diretivas <code>animate:</code> e o compilador recusa. Deixe só o <code>meuFlip</code> e o clique deve inverter a lista para <code>b a</code>.</p>
+<div class="trysvelte" data-goal="clique:button;;depois:350;;out:b a inverter">
+<p class="try-task"><strong>Missão:</strong> o elemento tem duas diretivas <code>animate:</code> e o compilador recusa. Deixe só o <code>flip</code> e o clique deve inverter a lista para <code>b a</code>.</p>
 <pre class="script" data-file="App.svelte">&lt;script&gt;
-  function meuFlip(node, { from, to }) {
-    const dy = from.top - to.top;
-    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
-  }
-  function meuOutro(node, { from, to }) {
+  import { flip } from 'svelte/animate';
+
+  function meuVira(node, { from, to }) {
     return { duration: 200, css: (t) =&gt; `opacity: ${t}` };
   }
+
   let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
 &lt;/script&gt;
 
 &lt;ul&gt;
   {#each itens as it (it.id)}
-    &lt;li animate:meuFlip animate:meuOutro&gt;{it.n}&lt;/li&gt;
+    &lt;li animate:flip={{ duration: 300 }} animate:meuVira&gt;{it.n}&lt;/li&gt;
   {/each}
 &lt;/ul&gt;
 &lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
 <pre class="solucao" data-file="App.svelte">&lt;script&gt;
-  function meuFlip(node, { from, to }) {
-    const dy = from.top - to.top;
-    return { duration: 300, css: (t) =&gt; `transform: translateY(${dy * (1 - t)}px)` };
-  }
+  import { flip } from 'svelte/animate';
+
   let itens = $state([{ id: 1, n: 'a' }, { id: 2, n: 'b' }]);
 &lt;/script&gt;
 
 &lt;ul&gt;
   {#each itens as it (it.id)}
-    &lt;li animate:meuFlip&gt;{it.n}&lt;/li&gt;
+    &lt;li animate:flip={{ duration: 300 }}&gt;{it.n}&lt;/li&gt;
   {/each}
 &lt;/ul&gt;
 &lt;button onclick={() =&gt; itens = itens.slice().reverse()}&gt;inverter&lt;/button&gt;</pre>
@@ -426,7 +415,7 @@ dist/assets/index-DrjEY7hM.js  52.20 kB │ gzip: 20.21 kB
 
 <h2>11. O que a caixa verifica e o que ela não verifica</h2>
 
-<p>Vale ser honesto sobre o limite das caixas desta aula. A verificação confere três coisas: que o componente compila, que a lista aparece na ordem certa e que o clique inverte a ordem. O que ela <strong>não</strong> confere é o movimento em si — a animação é visual e acontece nos 300 milissegundos entre um quadro e outro.</p>
+<p>Vale ser honesto sobre o limite das caixas desta aula. A verificação confere três coisas na solução: que o componente compila, que a lista aparece na ordem certa e que o clique inverte a ordem. O que ela <strong>não</strong> confere é o movimento em si — a animação é visual e acontece nos 300 milissegundos entre um quadro e outro.</p>
 
 <p>Isso não é uma limitação do guia, é da natureza do teste: verificar animação de verdade exige comparar quadros, e isso é trabalho de ferramenta de captura de tela, não de asserção de texto. Por isso as missões atacam o que dá para provar — a chave, o filho direto, a diretiva única —, que é justamente onde as pessoas erram.</p>
 
