@@ -125,7 +125,7 @@ const app = mount(Saudacao, {
   props: { nome: 'Bia', cidade: 'Campinas' }
 });</pre>
 
-<p>O nome da chave no objeto precisa ser igual ao nome que o componente espera. <code>nome</code> com <code>nome</code>, <code>cidade</code> com <code>cidade</code>. Um erro de digitação não dá erro: o componente simplesmente usa o valor padrão, e a pessoa vê "Ana" onde deveria ver "Bia".</p>
+<p>O nome da chave no objeto precisa ser igual ao nome que o componente espera. <code>nome</code> com <code>nome</code>, <code>cidade</code> com <code>cidade</code>. Um erro de digitação não dá erro: o componente usa o valor padrão, e a pessoa vê "Ana" onde deveria ver "Bia".</p>
 
 <div class="trysvelte" data-goal="outre:^Olá, Ana!">
 <p class="try-task"><strong>Missão:</strong> o componente espera a prop <code>nome</code>, mas o valor não chegou e a tela mostra "Olá, !". Dê um valor padrão para a prop e mostre <strong>Olá, Ana!</strong>.</p>
@@ -253,7 +253,7 @@ unmount(app);</pre>
 &lt;/ul&gt;</pre>
 </div>
 
-<p>O <code>flushSync</code> também aceita uma função e devolve o que ela devolver: <code>flushSync(() =&gt; { … })</code>. Serve para deixar claro que aquele bloco precisa do DOM atualizado e para agrupar as mudanças de uma vez. O custo é real: aplicar no meio do handler quebra o agrupamento automático, então use quando a leitura é necessária — medir altura, posicionar um tooltip, dar foco — e não por hábito.</p>
+<p>O <code>flushSync</code> também aceita uma função e devolve o que ela devolver: <code>flushSync(() =&gt; { … })</code>. Serve para marcar que aquele bloco precisa do DOM atualizado e para agrupar as mudanças de uma vez. O custo é real: aplicar no meio do handler quebra o agrupamento automático, então use quando a leitura é necessária — medir altura, posicionar um tooltip, dar foco — e não por hábito.</p>
 
 <div class="trysvelte" data-goal="clique:button;;out:pão bolo itens na tela: 2 abrir">
 <p class="try-task"><strong>Missão:</strong> o botão abre dois avisos e mede zero, porque o DOM ainda não mudou. Aplique as mudanças antes da medição e mostre <strong>itens na tela: 2</strong>.</p>

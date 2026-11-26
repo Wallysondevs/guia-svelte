@@ -116,7 +116,7 @@ const pagina = `&#60;!doctype html&#62;
 
 <h2>4. O que não roda no servidor</h2>
 
-<p>O servidor não tem tela, não tem janela e não tem navegador. O que existe é o Node: memória, arquivos, rede. Por isso o Svelte desliga, durante o <code>render()</code>, tudo o que depende do navegador: efeitos não rodam, <code>onMount</code> não é chamado, e as APIs como <code>window</code>, <code>document</code>, <code>localStorage</code> e <code>matchMedia</code> simplesmente não existem.</p>
+<p>O servidor não tem tela, não tem janela e não tem navegador. O que existe é o Node: memória, arquivos, rede. Por isso o Svelte desliga, durante o <code>render()</code>, tudo o que depende do navegador: efeitos não rodam, <code>onMount</code> não é chamado, e as APIs como <code>window</code>, <code>document</code>, <code>localStorage</code> e <code>matchMedia</code> não existem.</p>
 
 <pre class="file" data-file="src/App.svelte">&lt;script&gt;
   import { onMount } from 'svelte';

@@ -121,7 +121,7 @@
 
 <dl class="anatomy">
   <dt>let relogio</dt><dd>o <strong>identificador</strong> do temporizador pendente. Não é estado: ele não aparece na tela, então não precisa avisar ninguém quando muda.</dd>
-  <dt>clearTimeout(relogio)</dt><dd>cancela o temporizador anterior, se existir. Cancelar um número que não existe não dá erro: a função simplesmente não faz nada.</dd>
+  <dt>clearTimeout(relogio)</dt><dd>cancela o temporizador anterior, se existir. Cancelar um número que não existe não dá erro: a função não faz nada.</dd>
   <dt>setTimeout(f, 300)</dt><dd>marca <code>f</code> para rodar daqui a 300 ms e devolve um número que identifica esse agendamento.</dd>
   <dt>() =&gt; { buscado = termo; }</dt><dd>o trabalho que só roda <strong>depois</strong> da espera. Aqui ele lê o termo do momento em que a função roda, não do momento em que foi agendada.</dd>
   <dt>evento.target.value</dt><dd>o texto atual do campo. É o valor de agora, mesmo que o estado demore um instante para acompanhar.</dd>
