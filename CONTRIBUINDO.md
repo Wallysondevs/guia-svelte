@@ -208,6 +208,39 @@ ana@notebook:~/loja$ npm run dev
 | `<div class="exercise">` | completar código com `<input data-answer="…">` (1 por página) |
 | `<div class="tip">`, `<div class="warning">`, `<div class="note">` | dica, aviso, nota |
 
+## 6.1 Convenções que o time fechou (versão, portas, onde vai cada saída)
+
+**Versões canônicas** (medidas nesta máquina; a página que citar versão usa estas):
+
+| | versão | onde |
+|---|---|---|
+| Svelte | **5.59.2** | `assets/vendor.json` e o motor das caixas |
+| Vite | **7.3.8** | projeto `~/loja` (Svelte puro) |
+| SvelteKit | **3.4.1** | projeto `tmp/kit` do Nível 3 |
+| `@sveltejs/vite-plugin-svelte` | 6.2.4 | Svelte puro |
+
+No SvelteKit 3 **não existe `svelte.config.js`**: o plugin e o adaptador ficam no `vite.config.js`
+(`sveltekit({ compilerOptions, adapter })`). Se uma aula falar do arquivo antigo, diga que ele não
+é mais lido — é o que `kit-projeto.html` e `adapters.html` fazem.
+
+**Portas**: `npm run dev` usa **5173** e `npm run preview` usa **4173**. Se na sua máquina a porta
+estiver ocupada, o Vite escreve `Port 5173 is in use, trying another one…` — não esconda a linha, e
+diga na página que o número vem do terminal, não do código.
+
+**Onde vai cada saída:**
+
+| tipo de saída | bloco | conferido por máquina? |
+|---|---|---|
+| HTML/texto/CSS que o compilador gera de um `.svelte` | `pre.out` logo depois do `pre.file` | **sim** (`verificar-saidas.js`) |
+| mensagem de erro do compilador sobre um `.svelte` | `pre.out` logo depois do `pre.file` | **sim** |
+| sessão de terminal: `npm`, `curl`, `build`, `dev`, `ls` | `pre.term` | não (é sessão, não saída de componente) |
+| resposta HTTP, log de servidor, saída de teste | `pre.term` | não |
+| aviso do compilador (`a11y_*`, `non_reactive_update`) | prosa, com o texto entre `<code>` | — |
+
+Um `pre.out` **só** existe pareado com um `pre.file`: é o que o conferidor recompila. Saída de
+pai+filho ou que depende de `props` vai como `pre.term` (ou como segundo `pre.out`, com a ressalva
+escrita na página de que aquele bloco é composição de dois arquivos).
+
 ## 7. Privacidade
 
 Proibido: o nome do dono da máquina, o home real, o caminho de root, o IP da VPS, o IP da rede
