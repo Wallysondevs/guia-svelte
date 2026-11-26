@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autenticação no SvelteKit — login, cookie e sessão | Guia Svelte</title>
+<meta name="description" content="O crachá da equipe da padaria: form action com fail, cookie httpOnly, hook que barra a área logada e locals que levam o usuário até a página, com as respostas reais.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Autenticação</span></h1>
+
+<p class="intro">A Ana tem quatro funcionários e uma porta de serviço. Cada um recebe um crachá com nome e função; sem crachá, ninguém entra na cozinha. No site acontece igual: o cliente digita a senha uma vez, o servidor entrega um crachá chamado <strong>cookie de sessão</strong> e, a cada pedido novo, confere o crachá antes de mostrar a conta. Esta aula monta esse caminho inteiro — formulário, ação, cookie, hook e página protegida — e mostra o que o servidor responde em cada passo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que autenticação precisa de servidor, e não só de estado no componente.</li>
+  <li>Como é um formulário de login ligado a um <code>form action</code>.</li>
+  <li>Como conferir a senha, devolver erro com <code>fail</code> e redirecionar com <code>redirect</code>.</li>
+  <li>Como gravar o cookie de sessão com <code>cookies.set</code> e as bandeiras certas.</li>
+  <li>Como o hook barra a área logada antes de a página carregar.</li>
+  <li>Como <code>locals</code> leva o usuário do hook até o <code>load</code> e até a tela.</li>
+  <li>Como fazer logout apagando o cookie.</li>
+  <li>Por que senha nunca é guardada como texto e o que é <em>hash</em>.</li>
+  <li>Os três tropeços reais: dado nulo na tela, CSRF e página protegida que virou arquivo.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o crachá da equipe</h2>
+
+<p>O crachá da padaria tem três propriedades que interessam. Ele é emitido pelo dono, não pelo funcionário — ninguém fabrica o próprio crachá. Ele é conferido na porta, não dentro da cozinha. E ele pode ser cancelado: quando alguém sai da equipe, o crachá para de funcionar.</p>
+
+<p>No site, o crachá é um cookie: um pedacinho de texto que o servidor manda e o navegador devolve em cada pedido seguinte. Esse texto não é a senha. É um identificador que só o servidor sabe interpretar. A senha foi conferida uma vez, no login; depois disso, o que viaja é a marca de que aquela sessão já foi autenticada.</p>
+
+<p>Quem emite o cookie é o servidor, numa ação de formulário. Quem confere é um hook, antes de a página ser renderizada. E quem mostra a conta é a página, lendo o usuário que o hook colocou em <code>locals</code>. Três peças, cada uma no seu lugar — e o valor de entender as três é saber onde procurar quando o login “não funciona”.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No crachá da padaria</th><th>No site</th></tr>
+<tr><td>O dono emite o crachá</td><td><code>cookies.set</code> numa ação de servidor</td></tr>
+<tr><td>O crachá fica pendurado no funcionário</td><td>o navegador guarda o cookie e o envia de volta</td></tr>
+<tr><td>O porteiro confere na porta</td><td>o hook <code>handle</code> confere a cada pedido</td></tr>
+<tr><td>O crachá diz nome e função</td><td><code>event.locals.usuario</code></td></tr>
+<tr><td>Crachar cancelado no dia da saída</td><td><code>cookies.delete</code> no logout</td></tr>
+</table>
+</div>
+
+<h2>2. Sessão em três peças</h2>
+
+<p>Antes do código, o mapa. Uma sessão de login atravessa três arquivos e cada um tem uma responsabilidade que não se mistura com as outras:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Arquivo</th><th>Responsabilidade</th></tr>
+<tr><td>Formulário</td><td><code>+page.svelte</code></td><td>mostrar os campos e a mensagem de erro</td></tr>
+<tr><td>Ação</td><td><code>+page.server.js</code></td><td>conferir a senha, criar ou apagar o cookie</td></tr>
+<tr><td>Porteiro</td><td><code>hooks.server.js</code></td><td>ler o cookie e barrar quem não tem crachá</td></tr>
+<tr><td>Página protegida</td><td><code>+page.server.js</code> da rota</td><td>ler <code>locals</code> e devolver os dados</td></tr>
+</table>
+</div>
+
+<p>A confusão mais comum é tentar autenticar no componente. Guardar a senha numa variável <code>$state</code> e comparar com a senha certa dentro do <code>.svelte</code> parece funcionar no teste e não funciona na prática: o código do componente vai para o navegador, e a senha certa vai junto. Autenticação mora no servidor, sempre.</p>
+
+<h2>3. O formulário de entrada</h2>
+
+<p>A página de login é um formulário comum, com um detalhe: o <code>action</code> aponta para uma ação nomeada do servidor, e o SvelteKit entrega o resultado da ação numa propriedade chamada <code>form</code>.</p>
+
+<pre class="file" data-file="src/routes/entrar/+page.svelte">&lt;script&gt;
+	let { form } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Entrar&lt;/h1&gt;
+
+{#if form?.erro}
+	&lt;p class="erro"&gt;{form.erro}&lt;/p&gt;
+{/if}
+
+&lt;form method="POST" action="?/entrar"&gt;
+	&lt;label&gt;Senha &lt;input type="password" name="senha" /&gt;&lt;/label&gt;
+	&lt;button&gt;Entrar&lt;/button&gt;
+&lt;/form&gt;</pre>
+
+<pre class="out">&lt;h1&gt;Entrar&lt;/h1&gt;  &lt;form method="POST" action="?/entrar"&gt;&lt;label&gt;Senha &lt;input type="password" name="senha"/&gt;&lt;/label&gt; &lt;button&gt;Entrar&lt;/button&gt;&lt;/form&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let { form }</dt><dd>os dados que a ação devolveu. Começa <code>undefined</code> na primeira visita e chega preenchido quando o POST falha.</dd>
+  <dt>form?.erro</dt><dd>o encadeamento opcional evita quebrar quando não há erro. Se <code>form</code> for <code>undefined</code>, a condição é falsa.</dd>
+  <dt>method="POST"</dt><dd>envia os campos no corpo do pedido. Sem método, o navegador manda GET e a senha aparece na URL.</dd>
+  <dt>action="?/entrar"</dt><dd>o nome da ação, com interrogação na frente. É o que liga o formulário à função <code>entrar</code> do servidor.</dd>
+  <dt>name="senha"</dt><dd>o nome do campo. Sem ele, o valor não chega no <code>formData</code> do servidor.</dd>
+  <dt>type="password"</dt><dd>esconde os caracteres na tela. Esconde na tela, não no pedido: quem protege o pedido é o HTTPS.</dd>
+</dl>
+
+<p>Repare no HTML que o compilador gerou: o parágrafo de erro não aparece, porque <code>form</code> está vazio. É o mesmo componente em dois estados — sem erro e com erro — e a diferença vem do servidor, não de uma variável do navegador.</p>
+
+<h2>4. A ação que confere a senha</h2>
+
+<p>A ação é uma função exportada com nome, dentro do <code>+page.server.js</code> da rota. Ela recebe o pedido, lê os campos, decide e responde:</p>
+
+<pre class="file" data-file="src/routes/entrar/+page.server.js">import { fail, redirect } from '@sveltejs/kit';
+
+export const actions = {
+	entrar: async ({ request, cookies }) =&gt; {
+		const dados = await request.formData();
+		const senha = dados.get('senha');
+
+		if (senha !== 'pao123') {
+			return fail(400, { erro: 'Senha incorreta, tente de novo.', senha });
+		}
+
+		cookies.set('sessao', 'ana-123', {
+			path: '/',
+			httpOnly: true,
+			sameSite: 'lax',
+			maxAge: 60 * 60 * 24
+		});
+
+		throw redirect(303, '/conta');
+	}
+};</pre>
+
+<p>Quatro decisões moram nesse bloco. A primeira: a comparação acontece no servidor, com a senha que só ele conhece. A segunda: senha errada devolve <code>fail(400, …)</code>, que é um erro “esperado” — o formulário recebe os dados e mostra a mensagem sem derrubar a página. A terceira: o cookie nasce com <code>httpOnly</code>, então o JavaScript da página não consegue lê-lo. A quarta: quem deu certo não fica vendo a tela de login; recebe um redirecionamento 303 para a conta.</p>
+
+<p>Sobre o <code>throw redirect</code>: no SvelteKit 3 a função <code>redirect()</code> já lança o redirecionamento por dentro. Escrever <code>throw</code> na frente funciona igual e deixa a intenção explícita para quem lê o código — é a forma que o guia usa.</p>
+
+<h2>5. O que o servidor responde</h2>
+
+<p>Os três pedidos abaixo foram feitos ao servidor de desenvolvimento desta máquina e estão copiados como chegaram. O primeiro pede a conta sem crachá:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i http://localhost:5173/conta | head -5
+HTTP/1.1 303 See Other
+Vary: Origin
+location: /entrar?de=/conta
+Date: Thu, 26 Nov 2026 17:41:59 GMT
+Connection: keep-alive</pre>
+
+<p>O <code>303</code> manda o navegador para <code>/entrar?de=/conta</code>. O pedaço <code>de=/conta</code> é uma convenção útil: depois de entrar, a página de login pode devolver o cliente para onde ele queria ir. Sem isso, ele cai sempre na página inicial e perde o caminho.</p>
+
+<p>O segundo pedido é o formulário com a senha errada. Note o status e o corpo:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i -X POST -d 'senha=errada' 'http://localhost:5173/entrar?/entrar' | head -14
+HTTP/1.1 400 Bad Request
+Vary: Origin
+content-type: application/json
+x-sveltekit-version: 1795714916883
+content-length: 135
+Date: Thu, 26 Nov 2026 17:41:59 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"type":"failure","status":400,"location":"/entrar","data":"[{\"erro\":1,\"senha\":2},\"Senha incorreta, tente de novo.\",\"errada\"]"}</pre>
+
+<p>O <code>curl</code> não pediu HTML, então o SvelteKit respondeu no formato de dados: tipo <code>failure</code>, status <code>400</code> e um pacote com a mensagem e o valor digitado. Num navegador, a mesma resposta vira a página com o parágrafo de erro — o componente que você viu na seção 3.</p>
+
+<p>O terceiro pedido é o login que dá certo:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i -X POST -d 'senha=pao123' 'http://localhost:5173/entrar?/entrar' | head -6
+HTTP/1.1 200 OK
+Vary: Origin
+content-type: application/json
+set-cookie: sessao=ana-123; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax
+content-length: 52
+
+{"type":"redirect","status":303,"location":"/conta"}</pre>
+
+<p>O status 200 aqui não significa “ficou na página”: significa que a ação respondeu com um redirecionamento dentro do envelope. O cabeçalho <code>set-cookie</code> é o crachá sendo entregue, com as bandeiras: <code>Max-Age=86400</code> (um dia), <code>Path=/</code> (vale no site inteiro), <code>HttpOnly</code> (script não lê) e <code>SameSite=Lax</code> (não viaja em POST de outro site).</p>
+
+<h2>6. Caixa 1: a mensagem de erro no formulário</h2>
+
+<p>A caixa abaixo confere a senha e não mostra nada quando erra. A missão é exibir a mensagem que já está calculada.</p>
+
+<div class="trysvelte" data-goal="digitar:input=errada;;clique:button;;outre:Senha incorreta">
+<p class="try-task"><strong>Missão:</strong> digite <code>errada</code> no campo, clique no botão e mostre a mensagem <code>Senha incorreta</code> na tela. A variável <code>erro</code> já tem o texto certo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let senha = $state('');
+	let erro = $state('');
+
+	function entrar() {
+		erro = senha === 'pao123' ? '' : 'Senha incorreta';
+	}
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (senha = e.currentTarget.value)} /&gt;
+&lt;button onclick={entrar}&gt;Entrar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let senha = $state('');
+	let erro = $state('');
+
+	function entrar() {
+		erro = senha === 'pao123' ? '' : 'Senha incorreta';
+	}
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (senha = e.currentTarget.value)} /&gt;
+&lt;button onclick={entrar}&gt;Entrar&lt;/button&gt;
+{#if erro}
+	&lt;p&gt;{erro}&lt;/p&gt;
+{/if}</pre>
+</div>
+
+<p>O bloco <code>{#if}</code> com <code>{/if}</code> mostra o parágrafo só quando a condição é verdadeira. Como <code>erro</code> começa vazio, texto vazio é falso, e o parágrafo não aparece na primeira visita. É a mesma estrutura do <code>form?.erro</code> do componente real, com a diferença de que lá o valor vem do servidor.</p>
+
+<h2>7. O hook que barra a área logada</h2>
+
+<p>Conferir o crachá em cada página protegida seria repetitivo e fácil de esquecer. O lugar certo é o <code>hooks.server.js</code>, que roda em todo pedido, antes da rota:</p>
+
+<pre class="file" data-file="src/hooks.server.js">import { sequence } from '@sveltejs/kit/hooks';
+import { redirect } from '@sveltejs/kit';
+
+const sessao = async ({ event, resolve }) =&gt; {
+	const sid = event.cookies.get('sessao');
+	event.locals.usuario = sid === 'ana-123' ? { nome: 'Ana', papel: 'dona' } : null;
+
+	if (event.url.pathname.startsWith('/conta') &amp;&amp; !event.locals.usuario) {
+		throw redirect(303, `/entrar?de=${event.url.pathname}`);
+	}
+	return resolve(event);
+};
+
+export const handle = sequence(sessao);</pre>
+
+<p>Três linhas fazem o trabalho. <code>cookies.get('sessao')</code> lê o crachá. <code>locals.usuario</code> recebe o funcionário ou <code>null</code>. E o <code>if</code> decide: caminho dentro de <code>/conta</code> sem usuário vira redirecionamento 303. Repare que a condição usa <code>startsWith</code> e não igualdade, para cobrir também <code>/conta/pedidos</code> e <code>/conta/endereco</code>.</p>
+
+<p>O <code>!event.locals.usuario</code> funciona porque <code>null</code> é falso em JavaScript. É uma economia de código que cobra o preço da clareza: quem lê precisa saber que <code>locals.usuario</code> é <code>null</code>, e não <code>undefined</code>, em caso de visita anônima. Numa equipe, vale comentar.</p>
+
+<h2>8. Caixa 2: a decisão do porteiro</h2>
+
+<p>O hook é uma decisão binária: entra ou é barrado. A caixa abaixo recebe o conteúdo do cookie e sempre mostra a conta.</p>
+
+<div class="trysvelte" data-goal="out:redireciona para /entrar">
+<p class="try-task"><strong>Missão:</strong> o cookie está vazio, então a visita é anônima. Mostre <code>redireciona para /entrar</code> quando não houver crachá, e <code>mostra a conta</code> quando houver.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const cookie = '';
+&lt;/script&gt;
+
+&lt;p&gt;mostra a conta&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const cookie = '';
+	const logado = $derived(cookie.startsWith('sessao='));
+&lt;/script&gt;
+
+&lt;p&gt;{logado ? 'mostra a conta' : 'redireciona para /entrar'}&lt;/p&gt;</pre>
+</div>
+
+<p>Se você trocar <code>const cookie = ''</code> por <code>'sessao=ana-123'</code>, o texto vira “mostra a conta” — e é isso que o servidor faz quando o crachá é válido. A decisão é sempre do servidor: a página nunca recebe os dados antes de o hook liberar.</p>
+
+<h2>9. A página protegida</h2>
+
+<p>A rota <code>/conta</code> tem dois arquivos. O <code>+page.server.js</code> devolve o usuário; o <code>+page.svelte</code> mostra:</p>
+
+<pre class="file" data-file="src/routes/conta/+page.server.js">export function load({ locals }) {
+	return { usuario: locals.usuario };
+}</pre>
+
+<pre class="file" data-file="src/routes/conta/+page.svelte">&lt;script&gt;
+	let { data } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;Minha conta&lt;/h1&gt;
+&lt;p&gt;Bem-vinda, {data.usuario.nome} ({data.usuario.papel}).&lt;/p&gt;</pre>
+
+<p>Com o crachá certo, o pedido devolve a página montada. Este é o terminal, com o cookie enviado à mão:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -H 'cookie: sessao=ana-123' http://localhost:5173/conta | grep -o '&lt;p&gt;Bem-vinda[^&lt;]*&lt;/p&gt;'
+&lt;p&gt;Bem-vinda, Ana (dona).&lt;/p&gt;</pre>
+
+<p>Uma nota sobre o menu: o projeto da Ana tem um <code>+layout.server.js</code> que devolve <code>locals.usuario</code> para todas as páginas. É por isso que o cabeçalho consegue mostrar “Minha conta” ou “Entrar” sem repetir a leitura do cookie em cada <code>load</code>. O layout serve de ponte entre o hook e qualquer página.</p>
+
+<p>Duas observações que evitam erro futuro. O <code>data.usuario.nome</code> só funciona porque o hook garante que existe usuário quando a página é renderizada. E o <code>+layout.server.js</code> do projeto também devolve <code>locals.usuario</code>, o que deixa qualquer página do site saber quem está logado — útil para o menu mostrar “Minha conta” ou “Entrar”.</p>
+
+<h2>10. Caixa 3: sair da conta</h2>
+
+<p>Logout é apagar o crachá. No componente, isso aparece como limpar o estado e voltar para o texto de visitante:</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:sessão encerrada">
+<p class="try-task"><strong>Missão:</strong> faça o botão <strong>Sair</strong> limpar a sessão. Depois do clique, o texto na tela precisa conter <code>sessão encerrada</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let sessao = $state('ana-123');
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (sessao = sessao)}&gt;Sair&lt;/button&gt;
+&lt;p&gt;sessão ativa: {sessao}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let sessao = $state('ana-123');
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (sessao = '')}&gt;Sair&lt;/button&gt;
+&lt;p&gt;{sessao ? `sessão ativa: ${sessao}` : 'sessão encerrada'}&lt;/p&gt;</pre>
+</div>
+
+<p>No servidor, a mesma ideia precisa de uma ação e de uma linha de <code>cookies.delete('sessao', { path: '/' })</code>. O <code>path</code> importa: apagar sem caminho não remove o cookie gravado em <code>/</code>, e o crachá continua valendo. Depois da exclusão, um redirecionamento 303 para a página inicial fecha o ciclo.</p>
+
+<h2>11. Senha: hash, nunca texto</h2>
+
+<p>O exemplo desta aula compara a senha com <code>'pao123'</code> escrita no código. Isso serve para aprender o caminho e não serve para a vida real. Numa padaria de verdade, as senhas ficam num banco, guardadas como <em>hash</em>: o resultado de uma função que transforma o texto num código do qual não se volta.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Guardar</th><th>Se o banco vazar</th><th>Serve?</th></tr>
+<tr><td>senha em texto</td><td>todas as senhas legíveis</td><td>nunca</td></tr>
+<tr><td>MD5 ou SHA-1</td><td>quebráveis com tabela pronta</td><td>nunca</td></tr>
+<tr><td>hash com <em>salt</em> e custo alto</td><td>inviável em massa</td><td>sim</td></tr>
+<tr><td>senha dentro do componente</td><td>está no navegador de todos</td><td>nunca</td></tr>
+</table>
+</div>
+
+<p>Na prática, você não escreve a função de hash: usa uma biblioteca feita para isso, como <code>argon2</code> ou <code>bcrypt</code>. O fluxo é sempre o mesmo — no cadastro, gerar o hash e guardar; no login, gerar o hash da senha digitada e comparar com o guardado. A senha original nunca é armazenada, e nem o dono do site consegue lê-la.</p>
+
+<p>Duas práticas completam o quadro. A primeira: nunca dizer se o erro foi “usuário não existe” ou “senha errada”. A mensagem única “usuário ou senha incorretos” impede alguém de descobrir quais e-mails têm conta. A segunda: limitar tentativas. O <code>fail(400)</code> registrado no log, repetido cem vezes em um minuto, é o sinal de ataque de força bruta.</p>
+
+<h2>12. Quando dá errado</h2>
+
+<p>As três respostas abaixo são reais. A primeira é uma tela que quebrou; a segunda é o servidor recusando um pedido de outro site; a terceira é um arquivo que ninguém queria gerar.</p>
+
+<div class="cenario">
+<strong>Erro 1 — a página protegida sem crachá</strong>
+<p>Quando o hook não existe ou não cobre a rota, o <code>load</code> devolve <code>usuario: null</code> e o componente tenta ler <code>.nome</code>. O servidor responde 500 e registra a pilha.</p>
+<pre class="term">TypeError: Cannot read properties of null (reading 'nome')
+    at eval (src/routes/quebra-locals/+page.svelte:5:29)
+    at eval (node_modules/svelte/src/internal/server/renderer.js:416:11)
+    at Renderer.child (node_modules/svelte/src/internal/server/renderer.js:305:18)</pre>
+<p>Há duas correções possíveis, e elas não são equivalentes. A primeira é <code>data.usuario?.nome ?? 'visitante'</code>, que esconde o problema e mostra a página para quem não deveria vê-la. A segunda é garantir o redirecionamento no hook, para que a página só seja renderizada com usuário. Em área logada, a segunda é a certa.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — o POST de outro site</strong>
+<p>Um formulário enviado de outra origem é recusado em produção. A defesa é automática e o corpo da resposta é uma frase curta.</p>
+<pre class="term">HTTP/1.1 403 Forbidden
+content-length: 46
+Date: Thu, 26 Nov 2026 17:10:32 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+Cross-site POST form submissions are forbidden</pre>
+<p>Se esse 403 aparecer num teste com <code>curl</code>, o motivo costuma ser a falta do cabeçalho de origem: sem <code>origin</code>, o pedido é tratado como suspeito. Mandar <code>-H 'origin: http://localhost:3000'</code> resolve o teste. Em navegador, o cabeçalho vai sozinho.</p>
+</div>
+
+<div class="cenario">
+<strong>Aviso 3 — a página de conta que virou arquivo</strong>
+<p>O rastreador de links do build encontrou <code>/conta</code> pelo menu, recebeu o redirecionamento do hook e congelou o resultado. Em produção, o pedido devolve 200 sem passar pelo hook.</p>
+<pre class="term">ana@notebook:~/loja$ wc -c build/prerendered/conta.html
+112 build/prerendered/conta.html
+ana@notebook:~/loja$ grep -o 'url=[^"]*' build/prerendered/conta.html
+url=/entrar?de=/conta
+ana@notebook:~/loja$ curl -s -D - -o /dev/null http://localhost:3000/conta | head -2
+HTTP/1.1 200 OK
+etag: "7-DYfYF_Azx3mHEh08LY_w65McduCKKcStU7BxjvvLY"</pre>
+<p>Nenhum dado pessoal vazou — o arquivo é só o redirecionamento. Mas a área logada não deve ser pré-renderizável: <code>export const prerender = false</code> no layout de <code>/conta</code> impede o arquivo de nascer, e a revisão da pasta antes de publicar pega o caso.</p>
+</div>
+
+<h2>13. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Função</th><th>Vem de</th><th>Para que serve</th></tr>
+<tr><td><code>fail(status, dados)</code></td><td><code>@sveltejs/kit</code></td><td>erro esperado; preenche <code>form</code> na página</td></tr>
+<tr><td><code>redirect(status, local)</code></td><td><code>@sveltejs/kit</code></td><td>manda o navegador para outro endereço</td></tr>
+<tr><td><code>cookies.set(nome, valor, opções)</code></td><td><code>event</code></td><td>emite o cookie de sessão</td></tr>
+<tr><td><code>cookies.get(nome)</code></td><td><code>event</code></td><td>lê o cookie que o navegador mandou</td></tr>
+<tr><td><code>cookies.delete(nome, { path })</code></td><td><code>event</code></td><td>apaga o cookie no logout</td></tr>
+<tr><td><code>event.locals</code></td><td><code>event</code></td><td>leva o usuário do hook para o <code>load</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Status</th><th>Quando aparece</th></tr>
+<tr><td>303</td><td>depois do login e nas rotas protegidas sem sessão</td></tr>
+<tr><td>400</td><td>senha errada, campo vazio, dado inválido</td></tr>
+<tr><td>403</td><td>pedido de outro site ou acesso proibido</td></tr>
+<tr><td>500</td><td>erro inesperado no <code>load</code> ou no componente</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Onde a senha deve ser conferida?</p>
+<label><input type="radio" name="q-au"> no componente, com uma variável <code>$state</code></label>
+<label><input type="radio" name="q-au"> no navegador, antes de enviar</label>
+<label><input type="radio" name="q-au"> numa ação de <code>+page.server.js</code>, que só roda no servidor</label>
+<label><input type="radio" name="q-au"> no arquivo <code>robots.txt</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. O que <code>fail(400, { erro: '…' })</code> faz?</p>
+<label><input type="radio" name="q-au"> devolve erro esperado e preenche <code>form</code> na página</label>
+<label><input type="radio" name="q-au"> apaga o cookie de sessão</label>
+<label><input type="radio" name="q-au"> redireciona para <code>/entrar</code></label>
+<label><input type="radio" name="q-au"> grava o erro no banco</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">3. Por que o cookie de sessão leva <code>HttpOnly</code>?</p>
+<label><input type="radio" name="q-au"> para durar um dia</label>
+<label><input type="radio" name="q-au"> para o JavaScript da página não conseguir ler o crachá</label>
+<label><input type="radio" name="q-au"> para o cookie ser comprimido</label>
+<label><input type="radio" name="q-au"> para o cookie funcionar em <code>localhost</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">// src/routes/entrar/+page.server.js<br>if (senha !== 'pao123') {<br>&nbsp;&nbsp;return <input data-answer="fail(400, { erro: 'Senha incorreta' })|fail(400,{erro:'Senha incorreta'})">;<br>}<br><br>// erro esperado: o formulário recebe a mensagem e continua na tela</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Autenticação mora no servidor: senha comparada no <code>+page.server.js</code>, nunca no componente.</li>
+  <li>O formulário usa <code>method="POST"</code> e <code>action="?/nome-da-acao"</code>.</li>
+  <li><code>fail(400, dados)</code> devolve erro esperado e entrega os dados ao <code>form</code> da página.</li>
+  <li><code>cookies.set</code> emite o crachá com <code>httpOnly</code>, <code>sameSite</code> e <code>maxAge</code>.</li>
+  <li>Login bem-sucedido termina com <code>redirect(303, '/conta')</code>.</li>
+  <li>O hook <code>handle</code> lê o cookie, preenche <code>locals.usuario</code> e barra quem não tem crachá.</li>
+  <li><code>locals</code> leva o usuário do hook até o <code>load</code> e até a tela.</li>
+  <li>Logout é <code>cookies.delete</code> com o mesmo <code>path</code> usado na criação.</li>
+  <li>Senha vai para o banco como hash com salt, nunca como texto.</li>
+  <li>Erros desta aula: leitura de <code>null</code>, 403 de CSRF e <code>conta.html</code> pré-renderizada.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

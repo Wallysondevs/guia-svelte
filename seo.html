@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEO e svelte:head — o título que o buscador lê | Guia Svelte</title>
+<meta name="description" content="Título, meta description, sitemap e robots.txt na padaria da Ana: como o svelte:head escreve no cabeçalho, o HTML que o buscador recebe e os erros reais desse caminho.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">SEO e svelte:head</span></h1>
+
+<p class="intro">A Ana pinta o nome da padaria na fachada, coloca uma placa na calçada e cadastra o endereço no catálogo da cidade. São três coisas diferentes para o mesmo objetivo: ser encontrada. Na internet o objetivo é o mesmo, e as ferramentas têm nomes esquisitos — <em>título</em>, <em>meta description</em>, <em>sitemap</em>. Esta aula mostra onde cada uma mora no SvelteKit e o que o buscador realmente recebe quando visita o site da Ana.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é SEO e o que ele tem a ver com o HTML que o servidor entrega.</li>
+  <li>Como o <code>&lt;svelte:head&gt;</code> escreve no cabeçalho do documento.</li>
+  <li>Por que o título da página não aparece no corpo do HTML.</li>
+  <li>Como conferir o que o buscador recebe, com <code>curl</code> e com o arquivo pré-renderizado.</li>
+  <li>Como escrever um título e uma descrição que caibam no resultado da busca.</li>
+  <li>Como um endpoint gera o <code>sitemap.xml</code> a partir de uma lista de páginas.</li>
+  <li>O papel do <code>robots.txt</code> e como os dois arquivos conversam.</li>
+  <li>Por que o <code>content-type</code> errado atrapalha um sitemap.</li>
+  <li>Os três tropeços reais: <code>&lt;svelte:head&gt;</code> no lugar errado, título no corpo e sitemap como texto puro.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a fachada, a placa e o catálogo</h2>
+
+<p>Quando alguém procura “padaria perto de mim”, não vê o site da Ana: vê uma lista de resultados com um título azul, um endereço verde e duas linhas de descrição cinza. Quem monta essa lista é o buscador, e ele monta a partir do que leu no HTML da página — não do que está bonito na tela.</p>
+
+<p>É por isso que SEO começa com uma pergunta técnica: o HTML que o servidor entrega já contém o título e a descrição, ou eles só aparecem depois que o JavaScript roda? O SvelteKit entrega HTML pronto desde que a página seja renderizada no servidor — o que é o padrão — e o <code>&lt;svelte:head&gt;</code> é o bloco que coloca as informações no lugar certo.</p>
+
+<p>A analogia com a padaria ajuda a separar as partes. O título é a placa na calçada: precisa ser curto, dizer o que é e caber no espaço. A descrição é a ficha do catálogo telefônico: duas linhas que convencem quem está folheando. O <code>sitemap.xml</code> é a lista de endereços que a Ana entrega ao catálogo, para ninguém precisar adivinhar onde ficam as páginas.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No site</th><th>Onde fica no HTML</th></tr>
+<tr><td>Nome na fachada</td><td>título da página</td><td><code>&lt;title&gt;</code> no <code>&lt;head&gt;</code></td></tr>
+<tr><td>Ficha no catálogo</td><td>meta description</td><td><code>&lt;meta name="description"&gt;</code></td></tr>
+<tr><td>Lista de endereços entregue ao catálogo</td><td>sitemap</td><td><code>/sitemap.xml</code></td></tr>
+<tr><td>Aviso para o entregador</td><td>robots.txt</td><td><code>/robots.txt</code></td></tr>
+</table>
+</div>
+
+<h2>2. O que o buscador lê</h2>
+
+<p>Antes de escrever qualquer coisa, vale saber o que o robô do buscador enxerga. Ele não abre o inspetor nem clica em botão: pede a URL, recebe HTML e lê o texto. Se o título estiver lá, ele usa; se a descrição estiver lá, ele usa; se não estiver, ele inventa a partir do conteúdo — e inventa mal.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O robô lê</th><th>Influi em</th><th>Quem escreve</th></tr>
+<tr><td><code>&lt;title&gt;</code></td><td>o texto azul do resultado e a aba do navegador</td><td><code>&lt;svelte:head&gt;</code></td></tr>
+<tr><td><code>&lt;meta name="description"&gt;</code></td><td>as duas linhas cinza do resultado</td><td><code>&lt;svelte:head&gt;</code></td></tr>
+<tr><td><code>&lt;h1&gt;</code></td><td>o assunto principal da página</td><td>o HTML do componente</td></tr>
+<tr><td>links internos</td><td>o mapa que o robô percorre</td><td><code>&lt;a href&gt;</code></td></tr>
+<tr><td><code>/sitemap.xml</code></td><td>descoberta de páginas</td><td>um <code>+server.js</code></td></tr>
+<tr><td><code>/robots.txt</code></td><td>permissão de rastreamento</td><td>a pasta <code>static</code></td></tr>
+</table>
+</div>
+
+<p>Existe ainda um par de instruções que muda o comportamento do robô sem aparecer na tela. O <code>&lt;link rel="canonical"&gt;</code> diz qual é o endereço oficial de uma página — útil quando o mesmo conteúdo responde em mais de um caminho, como a rota <code>/sobre</code> e o arquivo estático <code>/sobre.html</code> da aula anterior. Já o <code>&lt;meta name="robots" content="noindex"&gt;</code> pede para a página não aparecer nos resultados; é o que se usa em página de agradecimento, de teste e de rascunho. Os dois vão dentro do <code>&lt;svelte:head&gt;</code>, como qualquer outra instrução de cabeçalho.</p>
+
+<p>Duas coisas dessa tabela merecem atenção. A primeira: o <code>&lt;h1&gt;</code> importa tanto quanto o título, e eles não devem dizer a mesma coisa ao contrário — o título fala com quem está na busca, o <code>h1</code> fala com quem já entrou. A segunda: link interno é mapa. Uma página sem nenhum link apontando para ela é uma página que o robô não encontra, mesmo com o sitemap.</p>
+
+<h2>3. <code>&lt;svelte:head&gt;</code>: o bloco que escreve no cabeçalho</h2>
+
+<p>No SvelteKit você não edita o <code>index.html</code> para cada página. O bloco <code>&lt;svelte:head&gt;</code> manda o conteúdo para o <code>&lt;head&gt;</code> do documento, e cada página pode ter o seu:</p>
+
+<pre class="file" data-file="src/routes/seo/+page.svelte">&lt;svelte:head&gt;
+	&lt;title&gt;Pão francês quentinho toda manhã | Padaria da Ana&lt;/title&gt;
+	&lt;meta name="description" content="Pão francês a R$ 0,90, assado às 5h, retirada na porta ou entrega no bairro. Padaria da Ana, desde 1998." /&gt;
+	&lt;meta property="og:title" content="Padaria da Ana" /&gt;
+&lt;/svelte:head&gt;
+
+&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;p&gt;Pão francês quentinho, todos os dias, a partir das 6h.&lt;/p&gt;</pre>
+
+<p>Se você pedir ao compilador o HTML desse componente, recebe só o corpo. O motivo é que o <code>&lt;svelte:head&gt;</code> não é conteúdo da página: ele é instrução para o documento.</p>
+
+<pre class="out">&lt;h1&gt;Padaria da Ana&lt;/h1&gt; &lt;p&gt;Pão francês quentinho, todos os dias, a partir das 6h.&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;svelte:head&gt;</dt><dd>o bloco especial que escreve no <code>&lt;head&gt;</code>. No SvelteKit ele é renderizado no servidor e também atualizado quando o cliente navega.</dd>
+  <dt>&lt;title&gt;</dt><dd>o título do documento. Uma página deve ter um, e só um; ele aparece na aba e no resultado da busca.</dd>
+  <dt>&lt;meta name="description"</dt><dd>a descrição. Não aparece na tela; é lida pelo buscador e por quem compartilha o link.</dd>
+  <dt>property="og:title"</dt><dd>o título usado quando alguém compartilha o endereço numa rede social — o prefixo <code>og:</code> é do padrão Open Graph.</dd>
+  <dt>content="…"</dt><dd>o texto em si. Dentro do <code>&lt;svelte:head&gt;</code> você pode usar chaves com valores, como em qualquer HTML do componente.</dd>
+</dl>
+
+<p>Aquele trecho mostra uma decisão editorial embutida no código: o título tem 53 caracteres, a descrição tem 104. Cabe no resultado da busca sem ser cortado no meio da palavra, e diz o que a pessoa encontra ao clicar. Escrever isso é trabalho de texto, não de programação — mas o lugar onde ele mora é programação.</p>
+
+<h2>4. A prova no HTML servido</h2>
+
+<p>Nada substitui olhar a resposta do servidor. O comando abaixo pede a página e mostra só o trecho do cabeçalho; a saída é de uma execução real no servidor de desenvolvimento:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s http://localhost:5173/seo | sed -n '/&lt;head&gt;/,/&lt;\/head&gt;/p'
+	&lt;head&gt;
+		&lt;meta charset="utf-8" /&gt;
+		&lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;
+		&lt;meta name="text-scale" content="scale" /&gt;
+		&lt;link href="./_app/env.js" rel="modulepreload"&gt;
+		&lt;!--qwgtm2--&gt;&lt;meta name="description" content="Pão francês a R$ 0,90, assado às 5h, retirada na porta ou entrega no bairro. Padaria da Ana, desde 1998."/&gt; &lt;meta property="og:title" content="Padaria da Ana"/&gt;&lt;!----&gt;&lt;title&gt;Pão francês quentinho toda manhã | Padaria da Ana&lt;/title&gt;
+	&lt;/head&gt;</pre>
+
+<p>Três detalhes contam a história. O primeiro: a descrição e o título estão no HTML — o robô não precisa rodar JavaScript. O segundo: o SvelteKit inseriu o conteúdo do <code>&lt;svelte:head&gt;</code> no fim do cabeçalho, depois dos <em>links</em> de módulo que ele mesmo gera. O terceiro: os comentários <code>&lt;!--qwgtm2--&gt;</code> e <code>&lt;!----&gt;</code> são marcadores internos do modo de desenvolvimento; eles existem para o cliente saber o que trocar quando você navega.</p>
+
+<p>Em produção esses marcadores aparecem do mesmo jeito nos arquivos pré-renderizados, o que assusta na primeira vez. Não são erro: são parte do HTML gerado. O que importa é que <code>&lt;title&gt;</code> e <code>description</code> estão lá, com o texto certo.</p>
+
+<h2>5. Caixa 1: montando o título</h2>
+
+<p>O título de uma página costuma ser montado com pedaços: o nome da loja, o assunto e a cidade. A caixa abaixo mostra só o nome, sem o resto.</p>
+
+<div class="trysvelte" data-goal="out:Título: Padaria da Ana — pão quentinho">
+<p class="try-task"><strong>Missão:</strong> monte o texto com a constante <code>nome</code> e o sufixo <code> — pão quentinho</code>. O resultado na tela deve ser <code>Título: Padaria da Ana — pão quentinho</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const nome = 'Padaria da Ana';
+&lt;/script&gt;
+
+&lt;p&gt;Título: {nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const nome = 'Padaria da Ana';
+&lt;/script&gt;
+
+&lt;p&gt;Título: {`${nome} — pão quentinho`}&lt;/p&gt;</pre>
+</div>
+
+<p>O template literal com crases resolve composição de texto em uma linha. Outro caminho, igualmente comum, é <code>{nome + ' — pão quentinho'}</code>. O primeiro deixa o texto mais legível quando há muitos pedaços; o segundo é mais curto quando há dois. Os dois produzem o mesmo resultado.</p>
+
+<h2>6. A página pré-renderizada e o cabeçalho</h2>
+
+<p>Quando a página é pré-renderizada, o cabeçalho vai para o arquivo. É o caso da página <code>/seo</code> do projeto da Ana, que tem <code>export const prerender = true</code>. Depois do build, dá para conferir o resultado direto no disco:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -o "&lt;title&gt;[^&lt;]*&lt;/title&gt;" build/prerendered/seo.html
+&lt;title&gt;Pão francês quentinho toda manhã | Padaria da Ana&lt;/title&gt;
+ana@notebook:~/loja$ grep -o '&lt;meta name="description"[^&gt;]*&gt;' build/prerendered/seo.html
+&lt;meta name="description" content="Pão francês a R$ 0,90, assado às 5h, retirada na porta ou entrega no bairro. Padaria da Ana, desde 1998."/&gt;</pre>
+
+<p>Essa conferência vale mais do que qualquer extensão de navegador. Ela mostra o texto exato que o buscador recebe, com aspas, acentos e espaços. Se o título está errado aqui, está errado para todo mundo.</p>
+
+<p>Um cuidado com páginas pré-renderizadas: o título é congelado junto. Se o título vem de um dado do banco — o nome do produto, por exemplo — ele será o do dia do build. Para páginas dinâmicas, o título é montado a cada pedido, o que é mais lento e mais correto.</p>
+
+<h2>7. Caixa 2: descrição que cabe no resultado</h2>
+
+<p>Descrição curta demais não diz nada; longa demais é cortada pelo buscador. A faixa usual é de 100 a 180 caracteres. A caixa abaixo tem duas descrições e diz “ok” para as duas, sem olhar o tamanho.</p>
+
+<div class="trysvelte" data-goal="outre:13 caracteres: curta">
+<p class="try-task"><strong>Missão:</strong> mostre <code>boa</code> quando a descrição tiver 100 caracteres ou mais e <code>curta</code> quando tiver menos. O texto precisa conter <code>13 caracteres: curta</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const descricoes = [
+		'Pão quentinho',
+		'Pão francês a R$ 0,90, assado às 5h, retirada na porta ou entrega no bairro. Padaria da Ana, desde 1998.'
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each descricoes as d}
+		&lt;li&gt;{d.length} caracteres: ok&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const descricoes = [
+		'Pão quentinho',
+		'Pão francês a R$ 0,90, assado às 5h, retirada na porta ou entrega no bairro. Padaria da Ana, desde 1998.'
+	];
+&lt;/script&gt;
+
+&lt;ul&gt;
+	{#each descricoes as d}
+		&lt;li&gt;{d.length} caracteres: {d.length &gt;= 100 ? 'boa' : 'curta'}&lt;/li&gt;
+	{/each}
+&lt;/ul&gt;</pre>
+</div>
+
+<p><code>.length</code> de um texto conta caracteres, incluindo espaços e acentos. É a mesma propriedade que conta itens de uma lista — o JavaScript usa o mesmo nome para as duas coisas, o que confunde no começo. Na dúvida, conte e mostre na tela: número é mais confiável do que a impressão de que “está bom”.</p>
+
+<h2>8. Sitemap: a lista de endereços</h2>
+
+<p>O <code>sitemap.xml</code> é um arquivo de texto com a lista de páginas que você quer que o buscador conheça. No SvelteKit ele pode ser gerado por um endpoint — um arquivo <code>+server.js</code> que responde a GET:</p>
+
+<pre class="file" data-file="src/routes/sitemap.xml/+server.js">const paginas = ['/', '/produtos', '/sobre', '/seo'];
+
+export function GET({ url }) {
+	const corpo = `&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"&gt;
+${paginas.map((p) =&gt; `	&lt;url&gt;&lt;loc&gt;${url.origin}${p}&lt;/loc&gt;&lt;/url&gt;`).join('\n')}
+&lt;/urlset&gt;`;
+
+	return new Response(corpo, {
+		headers: { 'content-type': 'application/xml' }
+	});
+}</pre>
+
+<p>Três coisas fazem esse arquivo funcionar. A primeira é o nome da pasta: <code>src/routes/sitemap.xml</code> responde em <code>/sitemap.xml</code>. A segunda é o <code>url.origin</code>, que traz o endereço completo do site — <code>https://padariadaana.com.br</code> em produção — para montar URLs absolutas, que é o que o padrão exige. A terceira é o <code>content-type</code>: sem ele, o mesmo XML é servido como texto puro.</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s http://localhost:5173/sitemap.xml
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"&gt;
+	&lt;url&gt;&lt;loc&gt;http://localhost:5173/&lt;/loc&gt;&lt;/url&gt;
+	&lt;url&gt;&lt;loc&gt;http://localhost:5173/produtos&lt;/loc&gt;&lt;/url&gt;
+	&lt;url&gt;&lt;loc&gt;http://localhost:5173/sobre&lt;/loc&gt;&lt;/url&gt;
+	&lt;url&gt;&lt;loc&gt;http://localhost:5173/seo&lt;/loc&gt;&lt;/url&gt;
+&lt;/urlset&gt;</pre>
+
+<p>O <code>robots.txt</code>, que mora na pasta <code>static</code>, é quem aponta para o sitemap. No projeto da Ana ele está no formato padrão, liberando tudo:</p>
+
+<pre class="file" data-file="static/robots.txt"># allow crawling everything by default
+User-agent: *
+Disallow:</pre>
+
+<p>Para apontar o sitemap, basta uma linha a mais: <code>Sitemap: https://padariadaana.com.br/sitemap.xml</code>. O endereço precisa ser absoluto, com domínio — o robô não sabe o que é “localhost”.</p>
+
+<h2>9. Caixa 3: contando as páginas do sitemap</h2>
+
+<p>Um sitemap com número escrito à mão envelhece na primeira página nova. A caixa abaixo mostra três, e a lista tem quatro.</p>
+
+<div class="trysvelte" data-goal="out:URLs no sitemap: 4">
+<p class="try-task"><strong>Missão:</strong> mostre a quantidade de páginas da lista, em vez do número fixo: <code>URLs no sitemap: 4</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const paginas = ['/', '/produtos', '/sobre', '/seo'];
+&lt;/script&gt;
+
+&lt;p&gt;URLs no sitemap: 3&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const paginas = ['/', '/produtos', '/sobre', '/seo'];
+&lt;/script&gt;
+
+&lt;p&gt;URLs no sitemap: {paginas.length}&lt;/p&gt;</pre>
+</div>
+
+<p>O mesmo <code>length</code> de antes, agora contando endereços. Num sitemap de verdade a lista não é digitada: vem de uma consulta ao banco, com o <code>map</code> transformando cada registro num <code>&lt;loc&gt;</code>. Acrescentar produto novo passa a atualizar o sitemap sozinho.</p>
+
+<h2>10. Título e descrição: o que escrever</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Título</th><th>Descrição</th></tr>
+<tr><td>Quantos caracteres?</td><td>até uns 60</td><td>de 100 a 180</td></tr>
+<tr><td>O que colocar?</td><td>o que a página oferece</td><td>o que a pessoa ganha ao clicar</td></tr>
+<tr><td>Repetir o nome da loja?</td><td>uma vez, no fim</td><td>só se ajudar a confiar</td></tr>
+<tr><td>Repetir palavra-chave?</td><td>uma vez, com naturalidade</td><td>uma vez</td></tr>
+<tr><td>Igual em todas as páginas?</td><td>nunca</td><td>nunca</td></tr>
+</table>
+</div>
+
+<p>“Igual em todas as páginas” é o erro mais comum e o mais fácil de detectar: o robô trata páginas com o mesmo título como conteúdo repetido e escolhe uma para mostrar. Se a padaria tem dez páginas e todas se chamam “Padaria da Ana”, o buscador mostra uma e esconde nove.</p>
+
+<p>Outro cuidado é o texto duplicado entre páginas parecidas. Se o cardápio tem uma página por categoria e todas usam o mesmo parágrafo de apresentação, o buscador pode entender que são a mesma página. Nesse caso, o parágrafo de abertura deve mudar junto com a categoria, e o <code>&lt;h1&gt;</code> também. SEO de loja pequena é, antes de técnica, vontade de escrever texto específico para cada página.</p>
+
+<p>Uma fórmula que funciona para loja pequena: <em>o que a página oferece</em>, uma barra e <em>o nome da loja</em>. “Pão francês quentinho toda manhã | Padaria da Ana”. Na descrição, o que a pessoa encontra, quanto custa e onde — sem promessa que a página não cumpre.</p>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são reais. A primeira é erro de compilação; as outras duas são respostas do servidor, copiadas do <code>curl</code>.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>&lt;svelte:head&gt;</code> dentro de um bloco</strong>
+<p>O bloco só pode ficar no nível de cima do componente. Dentro de um <code>{#if}</code>, o compilador recusa, porque o cabeçalho precisa existir antes da renderização.</p>
+<pre class="file" data-file="src/routes/+page.svelte">&lt;script&gt;
+	let mostrar = $state(true);
+&lt;/script&gt;
+
+{#if mostrar}
+	&lt;svelte:head&gt;
+		&lt;title&gt;Padaria da Ana&lt;/title&gt;
+	&lt;/svelte:head&gt;
+{/if}
+
+&lt;h1&gt;oi&lt;/h1&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 1): `&lt;svelte:head&gt;` tags cannot be inside elements or blocks</pre>
+<p>A mensagem diz onde e por quê: “não podem ficar dentro de elementos ou blocos”. A correção é tirar o bloco de dentro do <code>{#if}</code> e decidir o conteúdo por dentro dele — <code>{#if mostrar}&lt;title&gt;…&lt;/title&gt;{/if}</code> dentro do <code>&lt;svelte:head&gt;</code> funciona.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — o título no meio do conteúdo</strong>
+<p>Fora do <code>&lt;svelte:head&gt;</code>, o <code>&lt;title&gt;</code> é tratado como HTML comum e vai para o corpo da página, junto com o resto. O compilador não reclama; o resultado é que o título não está no cabeçalho.</p>
+<pre class="file" data-file="src/routes/+page.svelte">&lt;title&gt;Padaria da Ana&lt;/title&gt;
+&lt;h1&gt;Bem-vinda&lt;/h1&gt;</pre>
+<pre class="out">&lt;title&gt;Padaria da Ana&lt;/title&gt; &lt;h1&gt;Bem-vinda&lt;/h1&gt;</pre>
+<p>Repare que a saída mantém os dois na ordem escrita. Para o buscador, o título está no lugar errado; para o navegador, a aba pode até mudar de nome, mas o documento não foi montado do jeito que você queria. A correção é envolver a tag no <code>&lt;svelte:head&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Aviso 3 — sitemap servido como texto puro</strong>
+<p>Um endpoint que devolve <code>new Response(corpo)</code> sem cabeçalho não diz o que está entregando. O <code>curl</code> mostra o <code>content-type</code> que o servidor escolheu sozinho.</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -D - http://localhost:5173/sitemap-errado
+HTTP/1.1 200 OK
+Vary: Origin
+content-type: text/plain;charset=UTF-8
+content-length: 55</pre>
+<p>O status é 200 e o XML está correto, mas o tipo é <code>text/plain</code>. Ferramentas que validam sitemap exigem <code>application/xml</code> ou <code>text/xml</code>, e algumas recusam na hora. A correção é uma linha: <code>headers: { 'content-type': 'application/xml' }</code>.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No <code>&lt;svelte:head&gt;</code></th><th>Para que serve</th></tr>
+<tr><td><code>&lt;title&gt;</code></td><td>título da aba e do resultado da busca</td></tr>
+<tr><td><code>&lt;meta name="description"&gt;</code></td><td>as duas linhas do resultado</td></tr>
+<tr><td><code>&lt;meta property="og:title"&gt;</code></td><td>título no compartilhamento em rede social</td></tr>
+<tr><td><code>&lt;link rel="canonical" href="…"&gt;</code></td><td>diz qual é o endereço oficial da página</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Onde fica</th><th>Endereço</th></tr>
+<tr><td><code>robots.txt</code></td><td><code>static/</code></td><td><code>/robots.txt</code></td></tr>
+<tr><td>sitemap</td><td><code>src/routes/sitemap.xml/+server.js</code></td><td><code>/sitemap.xml</code></td></tr>
+<tr><td>título e descrição</td><td>dentro do componente</td><td><code>&lt;head&gt;</code> do HTML</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Onde o <code>&lt;title&gt;</code> deve ficar para o buscador encontrá-lo no lugar certo?</p>
+<label><input type="radio" name="q-seo"> dentro do <code>&lt;h1&gt;</code></label>
+<label><input type="radio" name="q-seo"> dentro do <code>&lt;svelte:head&gt;</code></label>
+<label><input type="radio" name="q-seo"> no fim do arquivo <code>.svelte</code></label>
+<label><input type="radio" name="q-seo"> dentro do <code>load</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que o <code>p.map(...)</code> aparece na geração do sitemap?</p>
+<label><input type="radio" name="q-seo"> para ordenar as páginas por nome</label>
+<label><input type="radio" name="q-seo"> para apagar as páginas repetidas</label>
+<label><input type="radio" name="q-seo"> para transformar cada página da lista num bloco de URL</label>
+<label><input type="radio" name="q-seo"> para baixar o sitemap do servidor</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que acontece com um endpoint de sitemap que devolve <code>new Response(xml)</code> sem cabeçalho?</p>
+<label><input type="radio" name="q-seo"> o <code>content-type</code> sai como <code>text/plain</code></label>
+<label><input type="radio" name="q-seo"> o endpoint devolve erro 500</label>
+<label><input type="radio" name="q-seo"> o navegador baixa o arquivo automaticamente</label>
+<label><input type="radio" name="q-seo"> o sitemap é comprimido em gzip</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;!-- src/routes/seo/+page.svelte --&gt;<br>&lt;<input data-answer="svelte:head">&gt;<br>&nbsp;&nbsp;&lt;title&gt;Padaria da Ana&lt;/title&gt;<br>&lt;/svelte:head&gt;<br><br>// o título precisa chegar ao cabeçalho do documento, não ao corpo</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>O buscador lê o HTML entregue pelo servidor: título, descrição, <code>h1</code> e links.</li>
+  <li><code>&lt;svelte:head&gt;</code> manda o conteúdo para o <code>&lt;head&gt;</code> e vale por página, no nível de cima do componente.</li>
+  <li>O HTML do componente que você vê no renderizador mostra só o corpo; o cabeçalho vai para o documento.</li>
+  <li>Em produção, o cabeçalho pode ser conferido no arquivo pré-renderizado, com <code>grep</code>.</li>
+  <li>Título ideal: até uns 60 caracteres, com o nome da loja no fim; descrição: de 100 a 180.</li>
+  <li>Páginas diferentes precisam de títulos diferentes; repetido, o buscador mostra uma e esconde as outras.</li>
+  <li>O <code>sitemap.xml</code> é gerado por um <code>+server.js</code> que usa <code>url.origin</code> para montar URLs absolutas.</li>
+  <li>O <code>robots.txt</code> mora em <code>static</code> e aponta para o sitemap com endereço completo.</li>
+  <li>Endpoint sem <code>content-type</code> serve o XML como <code>text/plain</code>.</li>
+  <li><code>&lt;svelte:head&gt;</code> dentro de bloco não compila; <code>&lt;title&gt;</code> fora dele cai no corpo.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

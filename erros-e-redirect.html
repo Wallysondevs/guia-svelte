@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>error() e redirect() no SvelteKit — interromper com sentido | Guia Svelte</title>
+<meta name="description" content="O aviso de esgotado e o encaminhamento da padaria da Ana: como error() e redirect() interrompem a requisição, qual status usar e as mensagens reais de erro do SvelteKit 3.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">error() e redirect()</span></h1>
+
+<p class="intro">A Ana pendurou dois avisos na padaria. O primeiro diz “esgotado” e fica no lugar do produto: o cliente entende na hora que não tem, sem precisar perguntar. O segundo é uma seta apontando para o caixa do outro lado, quando o pedido precisa ser pago antes de ser retirado. No SvelteKit essas duas placas se chamam <code>error()</code> e <code>redirect()</code>: as duas interrompem o que estava acontecendo, e a diferença é o que acontece depois. Esta aula mostra quando usar cada uma e o que o servidor responde de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que significa interromper uma requisição no meio do <code>load</code>.</li>
+  <li>Como lançar um erro esperado com <code>error(status, mensagem)</code>.</li>
+  <li>Como o <code>+error.svelte</code> mostra o status e a mensagem com <code>$app/state</code>.</li>
+  <li>Por que <code>redirect()</code> nunca devolve nada: ele lança por dentro.</li>
+  <li>Quando usar 303, 307 e 308.</li>
+  <li>Como redirecionar para fora do site com <code>{ external: true }</code>.</li>
+  <li>A diferença entre erro esperado (4xx) e inesperado (500).</li>
+  <li>Como o <code>handleError</code> decide a mensagem que o cliente lê.</li>
+  <li>Os três tropeços reais: status fora da faixa, redirecionamento externo e corpo de erro obsoleto.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a placa de esgotado e a seta</h2>
+
+<p>As duas placas da Ana resolvem problemas diferentes. A de “esgotado” informa um fim: aquele produto acabou, e o cliente não vai levar. A seta informa um caminho: o pedido existe, mas o próximo passo é em outro lugar. Nenhuma das duas é grosseria — as duas evitam que o cliente fique esperando por algo que não vai acontecer.</p>
+
+<p>No código, a mesma divisão. <code>error(404, 'Pão não encontrado')</code> diz “esta página não existe” e mostra uma página de erro com status 404. <code>redirect(303, '/entrar')</code> diz “o conteúdo está em outro endereço, vá para lá” e manda o navegador buscar o novo endereço. Nos dois casos a função interrompe o <code>load</code> na hora: nada depois dela é executado.</p>
+
+<p>Interromper é o ponto central. Quem começa tenta “avisar e continuar” — retorna um objeto com <code>erro: true</code> e deixa a página decidir. Funciona, e é mais trabalho: a página precisa checar, o status HTTP continua 200, o buscador indexa uma página que não existe. Lançar o erro deixa o framework cuidar do status, da página e do log.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No SvelteKit</th><th>O que o cliente vê</th></tr>
+<tr><td>Placa de esgotado</td><td><code>error(404, '…')</code></td><td>página de erro com o status 404</td></tr>
+<tr><td>Seta para o caixa</td><td><code>redirect(303, '/caixa')</code></td><td>o endereço novo, já carregado</td></tr>
+<tr><td>Funcionário perdido no depósito</td><td>erro inesperado no <code>load</code></td><td>página de erro 500</td></tr>
+<tr><td>Placa com o preço de outra loja</td><td>status fora da faixa</td><td>erro no terminal e status 500</td></tr>
+</table>
+</div>
+
+<h2>2. Dois jeitos de interromper</h2>
+
+<p>As duas funções vêm do pacote <code>@sveltejs/kit</code> e são usadas dentro de <code>load</code>, de ações de formulário, de endpoints e de hooks. A tabela abaixo é o resumo que vale decorar:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>error()</code></th><th><code>redirect()</code></th></tr>
+<tr><td>Primeiro argumento</td><td>status de 400 a 599</td><td>status de 300 a 308</td></tr>
+<tr><td>Segundo argumento</td><td>mensagem para o cliente</td><td>endereço de destino</td></tr>
+<tr><td>O que o navegador faz</td><td>mostra a página de erro</td><td>pede o novo endereço</td></tr>
+<tr><td>O que a URL mostra</td><td>a mesma URL, com status de erro</td><td>a URL nova</td></tr>
+<tr><td>Uso típico</td><td>produto inexistente, acesso negado</td><td>login feito, URL antiga, saída</td></tr>
+</table>
+</div>
+
+<p>Repare que as faixas não se cruzam: 4xx e 5xx para erro, 3xx para redirecionamento. Essa separação não é capricho do SvelteKit — é o protocolo HTTP. Um erro com status 200 engana o buscador e o monitoramento; um redirecionamento com status 200 é uma página em branco.</p>
+
+<h2>3. <code>error()</code>: a página que diz o que aconteceu</h2>
+
+<p>O uso mais comum é num <code>load</code> do servidor: procurar um produto pelo identificador e, se não existir, interromper com 404.</p>
+
+<pre class="file" data-file="src/routes/erro/+page.server.js">import { error } from '@sveltejs/kit';
+
+export function load() {
+	throw error(404, 'Pão não encontrado na prateleira');
+}</pre>
+
+<dl class="anatomy">
+  <dt>throw</dt><dd>a palavra que interrompe. <code>error()</code> devolve um objeto especial; lançar é o que faz o SvelteKit parar o <code>load</code> e montar a resposta de erro.</dd>
+  <dt>404</dt><dd>o status HTTP. Diz “não encontrado”; o navegador, o buscador e o monitoramento entendem o número sem ler a mensagem.</dd>
+  <dt>'Pão não encontrado…'</dt><dd>a mensagem para quem está lendo. Curta, sem detalhe técnico, sem nome de tabela do banco.</dd>
+  <dt>load</dt><dd>o lugar onde isso costuma acontecer: é o código que busca o dado e descobre que ele não existe.</dd>
+</dl>
+
+<p>No SvelteKit 3 essa função <strong>já lança por dentro</strong>. Isso surpreende quem vem de versão anterior, em que o padrão era <code>throw error(...)</code> e o retorno era inútil. Hoje os dois jeitos funcionam, porque o lançamento acontece dentro da própria função — e é por isso que o guia mantém o <code>throw</code>: ele deixa claro, para quem lê, que a linha abaixo não será executada.</p>
+
+<p>As mensagens de status inválido confirmam a faixa aceita. Com um erro de status 200, o terminal do servidor mostra:</p>
+
+<pre class="term">SvelteKit error: invalid_error_status
+HTTP error status codes must be between 400 and 599 — 200 is invalid
+https://svelte.dev/e/kit/invalid_error_status
+    at load (src/routes/quebra-error-status/+page.server.js:4:8)</pre>
+
+<p>A leitura é direta: “status de erro HTTP precisa estar entre 400 e 599”. O <code>200</code> é sucesso, e sucesso não é erro. A linha de baixo mostra o arquivo e a posição da chamada.</p>
+
+<h2>4. A página de erro do projeto</h2>
+
+<p>Sem nenhum arquivo especial, o SvelteKit já mostra uma página de erro. Para personalizar, você cria um <code>+error.svelte</code> na raiz de <code>src/routes</code> (ou numa pasta, para valer só ali). No SvelteKit 3, os dados da página vêm do módulo <code>$app/state</code>:</p>
+
+<pre class="file" data-file="src/routes/+error.svelte">&lt;script&gt;
+	import { page } from '$app/state';
+&lt;/script&gt;
+
+&lt;h1&gt;{page.status}&lt;/h1&gt;
+&lt;p&gt;{page.error.message}&lt;/p&gt;
+&lt;p&gt;&lt;small&gt;{page.error.codigo}&lt;/small&gt;&lt;/p&gt;
+&lt;a href="/"&gt;voltar para a padaria&lt;/a&gt;</pre>
+
+<p>Com esse arquivo no lugar, um pedido a <code>/erro</code> devolve 404 e o corpo com os dados que o <code>handleError</code> decidiu. O terminal mostra o resultado:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s http://localhost:5173/erro | grep -o '&lt;h1&gt;[^&lt;]*&lt;/h1&gt;\|&lt;p&gt;[^&lt;]*&lt;/p&gt;'
+&lt;h1&gt;404&lt;/h1&gt;
+&lt;p&gt;A padaria teve um problema. Tente de novo em instantes.&lt;/p&gt;</pre>
+
+<p>Note que a mensagem não é a do <code>error()</code> — é a que o <code>handleError</code> devolveu. O hook de erro tem a palavra final sobre o que o cliente lê, e isso é intencional: o mesmo <code>handleError</code> atende todos os erros do site, então a mensagem fica consistente. Se você quiser a mensagem específica na tela, é o <code>handleError</code> que precisa repassá-la.</p>
+
+<p>Antes de seguir, uma distinção que evita muita confusão. <code>error()</code> troca a página inteira pela página de erro. Já <code>fail()</code>, usado em ações de formulário, mantém a página no lugar e devolve os dados para o componente — é o que a aula de autenticação usa para mostrar “senha incorreta” sem sair da tela de login. A regra é: erro que impede a página de existir usa <code>error()</code>; erro de preenchimento usa <code>fail()</code>.</p>
+
+<p>E existe um componente que resume a página de erro em duas linhas, útil para testar o visual:</p>
+
+<pre class="file" data-file="src/lib/CartaoDeErro.svelte">&lt;script&gt;
+	let { status = 404, mensagem = 'Pão não encontrado na prateleira' } = $props();
+&lt;/script&gt;
+
+&lt;h1&gt;{status}&lt;/h1&gt;
+&lt;p&gt;{mensagem}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;h1&gt;404&lt;/h1&gt; &lt;p&gt;Pão não encontrado na prateleira&lt;/p&gt;</pre>
+
+<h2>5. Caixa 1: o status vira mensagem</h2>
+
+<p>Uma página de erro precisa traduzir número em frase. A caixa abaixo mostra “ok” para qualquer status, inclusive 404.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:404: Pão não encontrado">
+<p class="try-task"><strong>Missão:</strong> clique no botão e faça o texto virar <code>404: Pão não encontrado</code>. Para qualquer outro status, mantenha <code>ok</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let status = $state(200);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (status = 404)}&gt;buscar pão&lt;/button&gt;
+&lt;p&gt;{status}: ok&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let status = $state(200);
+	const mensagem = $derived(status === 404 ? 'Pão não encontrado' : 'ok');
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (status = 404)}&gt;buscar pão&lt;/button&gt;
+&lt;p&gt;{status}: {mensagem}&lt;/p&gt;</pre>
+</div>
+
+<p>O <code>$derived</code> recalcula a frase quando o status muda, e o botão muda o status. Numa página de erro de verdade, esse par vem do servidor: o status chega no <code>page.status</code> e a mensagem em <code>page.error.message</code>.</p>
+
+<h2>6. <code>redirect()</code>: por que ele nunca volta</h2>
+
+<p>Aqui está a diferença que confunde. <code>redirect()</code> não devolve um valor para você usar depois: ele lança um objeto especial. É o que o código do próprio SvelteKit mostra:</p>
+
+<pre class="term">ana@notebook:~/loja$ sed -n 129,137p node_modules/@sveltejs/kit/src/exports/index.js
+export function redirect(status, location, options) {
+	if ((!BROWSER || DEV) &amp;&amp; (isNaN(status) || status &lt; 300 || status &gt; 308)) {
+		e.invalid_redirect_status({ status: String(status) });
+	}
+
+	const href = location.toString();
+	validate_redirect_location(href, options);
+
+	throw new Redirect(</pre>
+
+<p>Duas coisas nesse trecho explicam o comportamento. A primeira: a validação do status acontece antes de qualquer coisa, com a faixa de 300 a 308. A segunda: a última linha é um <code>throw</code>. Como a função lança por dentro, escrever <code>return redirect(…)</code> ou <code>throw redirect(…)</code> dá no mesmo — nos dois casos a linha seguinte não executa.</p>
+
+<p>O resultado prático, no servidor:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i http://localhost:5173/conta | head -3
+HTTP/1.1 303 See Other
+Vary: Origin
+location: /entrar?de=/conta</pre>
+
+<p>O status 303 e o cabeçalho <code>location</code> são a seta da padaria. O navegador lê e faz um pedido novo, com GET, ao endereço indicado. Se você estiver no cliente e quiser navegar sem recarregar a página inteira, a ferramenta é outra: a função <code>goto</code>, do módulo <code>$app/navigation</code>.</p>
+
+<h2>7. Caixa 2: 303 para POST, 307 para GET</h2>
+
+<p>O status do redirecionamento não é detalhe: ele diz ao navegador qual método usar no pedido seguinte. A caixa abaixo tem os dois casos e nenhum número.</p>
+
+<div class="trysvelte" data-goal="outre:POST → 303">
+<p class="try-task"><strong>Missão:</strong> use 303 para o POST (o navegador busca com GET) e 307 para o GET (o método continua o mesmo). O texto precisa conter <code>POST → 303</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const pedidos = [
+		{ metodo: 'POST', status: '—' },
+		{ metodo: 'GET', status: '—' }
+	];
+&lt;/script&gt;
+
+{#each pedidos as p}
+	&lt;p&gt;{p.metodo} → {p.status}&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const pedidos = [
+		{ metodo: 'POST', status: 303 },
+		{ metodo: 'GET', status: 307 }
+	];
+&lt;/script&gt;
+
+{#each pedidos as p}
+	&lt;p&gt;{p.metodo} → {p.status}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p>Depois de um POST de formulário, o 303 é quase sempre a escolha certa: o navegador deixa de reenviar o formulário e faz um GET limpo. Não à toa o SvelteKit devolve 303 no login bem-sucedido e na saída de conta.</p>
+
+<h2>8. 303, 307 e 308</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Status</th><th>Método no destino</th><th>Quando usar</th></tr>
+<tr><td><code>303</code></td><td>sempre GET</td><td>depois de POST de formulário</td></tr>
+<tr><td><code>307</code></td><td>o mesmo método</td><td>redirecionamento temporário que preserva o pedido</td></tr>
+<tr><td><code>308</code></td><td>o mesmo método</td><td>mudança permanente de endereço</td></tr>
+<tr><td><code>302</code></td><td>historicamente GET</td><td>compatibilidade com sistema antigo</td></tr>
+</table>
+</div>
+
+<p>A diferença entre temporário e permanente tem consequência de SEO. Um 308 diz ao buscador “este endereço mudou para sempre, atualize o índice”; um 307 diz “hoje é aqui, amanhã pode ser outro lugar”. Usar 308 numa mudança que você pretende desfazer transfere autoridade de busca para um endereço que talvez não exista no mês seguinte.</p>
+
+<p>Também existe o redirecionamento para fora do site, e ele precisa de permissão explícita. Sem o terceiro argumento, o SvelteKit recusa:</p>
+
+<pre class="term">SvelteKit error: redirect_external_not_allowed
+Cannot redirect to external URL `"https://evil.example/pagina"`. To redirect to an external URL, pass `{ external: true }` or an allowlist of permitted origins as the third argument to `redirect`
+https://svelte.dev/e/kit/redirect_external_not_allowed</pre>
+
+<p>A proteção existe porque redirecionamento aberto é ferramenta de golpe: um link do seu site levando para uma página falsa. Com <code>redirect(303, url, { external: true })</code> você assume a responsabilidade; com <code>{ external: ['https://parceiro.com'] }</code>, limita o destino a uma lista.</p>
+
+<h2>9. Caixa 3: o erro que vira mensagem</h2>
+
+<p>Dentro de um componente, um erro comum não é tratado pelo SvelteKit — ele quebra a função que o lançou. A caixa abaixo chama uma função que lança e deixa o erro subir.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Pão não encontrado">
+<p class="try-task"><strong>Missão:</strong> clique em <strong>buscar</strong> e mostre a mensagem do erro na tela. Capture com <code>try</code>/<code>catch</code> e use <code>e.message</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let msg = $state('');
+	function buscar() {
+		throw new Error('Pão não encontrado');
+	}
+	function tentar() {
+		buscar();
+	}
+&lt;/script&gt;
+
+&lt;button onclick={tentar}&gt;buscar&lt;/button&gt;
+&lt;p&gt;{msg || 'nada'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let msg = $state('');
+	function buscar() {
+		throw new Error('Pão não encontrado');
+	}
+	function tentar() {
+		try {
+			buscar();
+		} catch (e) {
+			msg = e.message;
+		}
+	}
+&lt;/script&gt;
+
+&lt;button onclick={tentar}&gt;buscar&lt;/button&gt;
+&lt;p&gt;{msg || 'nada'}&lt;/p&gt;</pre>
+</div>
+
+<p><code>try</code> marca o trecho que pode falhar; <code>catch (e)</code> recebe o erro; <code>e.message</code> é o texto que a função passou para <code>Error</code>. Sem o <code>catch</code>, o erro sobe até o topo e o navegador registra no console — a página continua na tela, mas nada acontece para o usuário. Numa página de verdade, o mesmo caso é resolvido por um <code>load</code> que lança <code>error(404, …)</code>.</p>
+
+<h2>10. Erro esperado e erro inesperado</h2>
+
+<p>Nem todo erro é uma placa. Existem os que você previu — produto inexistente, acesso negado, campo inválido — e os que você não previu: banco fora do ar, variável nula, função que não existe. O SvelteKit trata os dois de forma diferente, e o hook <code>handleError</code> recebe os dois.</p>
+
+<p>Um erro previsto tem status escolhido por você e mensagem escrita por você. Um erro não previsto é qualquer exceção solta: o status vira 500 e a mensagem padrão é “Internal Error”. O terminal registra a pilha:</p>
+
+<pre class="term">TypeError: Cannot read properties of null (reading 'nome')
+    at eval (src/routes/quebra-locals/+page.svelte:5:29)
+    at eval (node_modules/svelte/src/internal/server/renderer.js:416:11)
+GET /quebra-locals → 500 (35 ms)
+500 GET /quebra-locals</pre>
+
+<p>No cliente, a página é a do <code>+error.svelte</code>, com o status 500. O <code>handleError</code> do projeto recebeu esse erro e registrou com <code>console.error</code>, como a aula de logs mostrou. O que o cliente lê é a mensagem amigável; o que a equipe lê é a pilha.</p>
+
+<div class="tip">
+<strong>Não esconda o 500</strong>
+<p>Transformar todo erro em 404 é tentador e atrapalha. O 404 diz “isso não existe” e o buscador remove a página do índice; o 500 diz “o servidor falhou” e o monitoramento acende o alarme. Trocar um pelo outro faz você perder as duas informações.</p>
+</div>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do servidor de desenvolvimento desta máquina. As duas primeiras são erros reais de uso; a terceira é um aviso de código obsoleto.</p>
+
+<div class="cenario">
+<strong>Erro 1 — status de redirecionamento fora da faixa</strong>
+<p>Você escreveu <code>redirect(200, '/conta')</code>, misturando sucesso com redirecionamento. O servidor responde 500 e explica no terminal.</p>
+<pre class="term">SvelteKit error: invalid_redirect_status
+Redirect status codes must be between 300 and 308 — 200 is invalid
+https://svelte.dev/e/kit/invalid_redirect_status
+    at load (src/routes/quebra-status/+page.server.js:4:8)
+GET /quebra-status → 500 (252 ms)</pre>
+<p>Esquecer o status produz uma mensagem curiosa, com o endereço no lugar do número: <code>Redirect status codes must be between 300 and 308 — /conta is invalid</code>. Ela vem do mesmo erro e o motivo é o mesmo: o primeiro argumento precisa ser um número na faixa 300–308.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — redirecionamento para fora sem permissão</strong>
+<p>Um destino externo precisa ser declarado. Sem isso, o erro aparece no terminal e o cliente recebe 500.</p>
+<pre class="term">SvelteKit error: redirect_external_not_allowed
+Cannot redirect to external URL `"https://evil.example/pagina"`. To redirect to an external URL, pass `{ external: true }` or an allowlist of permitted origins as the third argument to `redirect`
+https://svelte.dev/e/kit/redirect_external_not_allowed
+GET /quebra-externo → 500 (11 ms)
+500 GET /quebra-externo</pre>
+<p>A correção é o terceiro argumento: <code>redirect(303, url, { external: true })</code> para liberar qualquer destino, ou <code>{ external: ['https://parceiro.com'] }</code> para limitar a uma lista. A segunda opção é a que resiste a erro de digitação.</p>
+</div>
+
+<div class="cenario">
+<strong>Aviso 3 — corpo de erro no formato antigo</strong>
+<p>Passar um objeto como segundo argumento de <code>error()</code> ainda funciona, mas o SvelteKit 3 avisa que o formato mudou: mensagem no segundo argumento, propriedades extras no terceiro.</p>
+<pre class="term">[sveltekit] error_body_deprecated
+Passing an `App.Error` body as the second argument is deprecated — pass the `message` as the second argument, and any additional properties as the third
+https://svelte.dev/e/kit/error_body_deprecated</pre>
+<p>O formato novo é <code>error(404, 'Pão não encontrado', { codigo: 'PAO-404' })</code>. O objeto <code>App.Error</code> declara os campos extras, e eles chegam no <code>page.error</code> do <code>+error.svelte</code>.</p>
+</div>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Status</th><th>Nome</th><th>Quando usar</th></tr>
+<tr><td>301 / 308</td><td>mudança permanente</td><td>o endereço mudou de vez</td></tr>
+<tr><td>303</td><td>veja outro endereço</td><td>depois de POST de formulário</td></tr>
+<tr><td>307</td><td>temporário</td><td>mudança que pode voltar</td></tr>
+<tr><td>400</td><td>pedido malformado</td><td>campo inválido, senha errada</td></tr>
+<tr><td>403</td><td>proibido</td><td>sem permissão para o recurso</td></tr>
+<tr><td>404</td><td>não encontrado</td><td>produto ou página inexistente</td></tr>
+<tr><td>500</td><td>falha do servidor</td><td>erro inesperado</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que você quer</th><th>Código</th></tr>
+<tr><td>interromper com erro</td><td><code>throw error(404, 'mensagem')</code></td></tr>
+<tr><td>mensagem que o cliente lê</td><td>o que o <code>handleError</code> devolve</td></tr>
+<tr><td>depois de login</td><td><code>throw redirect(303, '/conta')</code></td></tr>
+<tr><td>para fora do site</td><td><code>redirect(303, url, { external: true })</code></td></tr>
+<tr><td>navegar no cliente</td><td><code>goto('/conta')</code> de <code>$app/navigation</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual status é aceito por <code>error()</code>?</p>
+<label><input type="radio" name="q-er"> de 200 a 299</label>
+<label><input type="radio" name="q-er"> de 400 a 599</label>
+<label><input type="radio" name="q-er"> de 300 a 308</label>
+<label><input type="radio" name="q-er"> qualquer número</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que <code>redirect(303, '/conta')</code> faz com a linha seguinte do <code>load</code>?</p>
+<label><input type="radio" name="q-er"> executa normalmente</label>
+<label><input type="radio" name="q-er"> é executada duas vezes</label>
+<label><input type="radio" name="q-er"> não executa, porque o redirecionamento é lançado dentro da função</label>
+<label><input type="radio" name="q-er"> só executa em produção</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O terminal mostra <code>Cannot redirect to external URL</code>. O que faltou?</p>
+<label><input type="radio" name="q-er"> o terceiro argumento, como <code>{ external: true }</code></label>
+<label><input type="radio" name="q-er"> o status 200</label>
+<label><input type="radio" name="q-er"> o prefixo <code>https://</code> no destino</label>
+<label><input type="radio" name="q-er"> uma função <code>goto</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">// src/routes/produtos/[id]/+page.server.js<br>const produto = await buscar(params.id);<br><br>if (!produto) {<br>&nbsp;&nbsp;throw <input data-answer="error(404, 'Produto não encontrado')|error(404,'Produto não encontrado')">;<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>error()</code> e <code>redirect()</code> interrompem o <code>load</code>: nada depois delas executa.</li>
+  <li>No SvelteKit 3 as duas lançam por dentro; <code>throw</code> na frente deixa a intenção explícita.</li>
+  <li><code>error()</code> aceita status de 400 a 599; <code>redirect()</code>, de 300 a 308.</li>
+  <li>O <code>+error.svelte</code> personaliza a página e lê <code>page.status</code> e <code>page.error</code> de <code>$app/state</code>.</li>
+  <li>O <code>handleError</code> decide a mensagem que o cliente lê em qualquer erro do site.</li>
+  <li>303 manda buscar com GET; 307 e 308 preservam o método.</li>
+  <li>Destino externo exige <code>{ external: true }</code> ou uma lista de origens.</li>
+  <li>Erro esperado vira 4xx com mensagem sua; inesperado vira 500 com pilha no terminal.</li>
+  <li>Erros desta aula: <code>invalid_redirect_status</code>, <code>redirect_external_not_allowed</code> e <code>error_body_deprecated</code>.</li>
+  <li><code>fail()</code> é para formulário: mantém a página e devolve os dados; <code>error()</code> troca a página inteira.</li>
+  <li>O erro procura o <code>+error.svelte</code> mais próximo subindo pelas pastas; sem nenhum, o Kit usa a página padrão dele.</li>
+  <li>O que aparece para o visitante é sempre a mensagem que o <code>handleError</code> devolveu — nunca a pilha do servidor, que fica registrada apenas no terminal de quem programou.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

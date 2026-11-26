@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segurança no SvelteKit — HTML, CSRF, cookies e segredos | Guia Svelte</title>
+<meta name="description" content="A porta dos fundos da padaria da Ana: como o SvelteKit escapa texto, bloqueia POST de outro site em produção, protege cookie de sessão e mantém segredo no servidor.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">Segurança</span></h1>
+
+<p class="intro">A Ana fecha a padaria às 19h, tranca a porta da frente e confere a dos fundos. Segurança de site é a mesma rotina, com outras portas: o texto que o cliente escreve, o formulário que envia dinheiro, o cookie que diz quem ele é e o segredo do banco. A boa notícia é que o SvelteKit já tranca algumas dessas portas sozinho. A parte que sobra é sua, e é sobre ela que esta aula trata — com as respostas reais do servidor, copiadas do terminal.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como o SvelteKit escapa texto e o que o <code>{@html}</code> faz de diferente.</li>
+  <li>Por que inserir HTML de terceiro é a porta dos fundos mais comum da web.</li>
+  <li>O que é CSRF e o que o SvelteKit bloqueia em produção — e não bloqueia em desenvolvimento.</li>
+  <li>Para que servem <code>httpOnly</code>, <code>sameSite</code> e <code>secure</code> num cookie.</li>
+  <li>Por que <code>javascript:</code> num link é perigoso e como recusar.</li>
+  <li>Como o erro <code>server_only_import</code> protege o segredo do banco.</li>
+  <li>O que vaza sem querer: página pré-renderizada, log e mensagem de erro.</li>
+  <li>O que fazer quando o build acusa importação de módulo privado.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a porta da frente, a dos fundos e o cofre</h2>
+
+<p>Toda padaria tem uma porta da frente, que recebe o cliente, e uma dos fundos, que recebe o padeiro às 4h da manhã. A da frente tem vitrine e campainha; a dos fundos tem fechadura e ninguém anuncia o endereço. Quem confunde as duas mantém o estoque aberto para a rua.</p>
+
+<p>Um site tem as mesmas duas portas. A da frente é o que o visitante manda: nome, comentário, número do pedido. A dos fundos é o que só o servidor acessa: banco, chave de API, arquivo de configuração. A regra de ouro é simples de dizer e difícil de cumprir: <strong>tudo o que vem do visitante é suspeito até prova em contrário</strong>.</p>
+
+<p>“Suspeito” não quer dizer que o visitante é má intenção. Quer dizer que o texto que ele digita entra no HTML da página e pode virar marcação, <em>script</em> ou link malicioso. O trabalho de segurança é fazer esse texto entrar como texto, sempre, e deixar o navegador sem instrução nenhuma que ele não deveria executar.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No site</th><th>Quem protege</th></tr>
+<tr><td>Campainha na porta da frente</td><td>o formulário que o visitante envia</td><td>validação e CSRF</td></tr>
+<tr><td>Fechadura da porta dos fundos</td><td>rotas que exigem sessão</td><td>hook <code>handle</code> e <code>error(403)</code></td></tr>
+<tr><td>O cofre com a chave do estoque</td><td>variável privada com senha do banco</td><td><code>$app/env/private</code></td></tr>
+<tr><td>O crachá do funcionário</td><td>cookie de sessão</td><td><code>httpOnly</code>, <code>sameSite</code>, <code>secure</code></td></tr>
+</table>
+</div>
+
+<h2>2. As quatro portas de entrada</h2>
+
+<p>Antes de detalhar cada uma, vale ver o mapa. Um site é atacado por onde recebe dado, e são quatro lugares:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Porta</th><th>Exemplo</th><th>Proteção</th></tr>
+<tr><td>Texto na tela</td><td>comentário do cliente</td><td>escapar sempre; evitar <code>{@html}</code></td></tr>
+<tr><td>Formulário</td><td>login, pedido, contato</td><td>validar no servidor + CSRF do SvelteKit</td></tr>
+<tr><td>Cookie</td><td>sessão do usuário</td><td><code>httpOnly</code>, <code>sameSite</code>, <code>secure</code></td></tr>
+<tr><td>Dependência</td><td>pacote instalado com <code>npm</code></td><td><code>npm audit</code> e pouca dependência</td></tr>
+</table>
+</div>
+
+<p>A quarta porta é a que ninguém lembra: cada pacote instalado é código de outra pessoa rodando na sua máquina e no seu servidor. Não é motivo para não usar biblioteca — é motivo para usar poucas, manter atualizadas e rodar <code>npm audit</code> de vez em quando. O erro mais caro de segurança costuma vir de uma dependência desatualizada, não de um <em>hacker</em> criativo.</p>
+
+<h2>3. Texto que vira HTML: <code>{ }</code> contra <code>{@html}</code></h2>
+
+<p>Aqui está a decisão que mais importa no dia a dia. O Svelte tem duas formas de colocar valor na tela, e só uma delas é segura para texto de terceiro:</p>
+
+<pre class="file" data-file="src/routes/comentarios/+page.svelte">&lt;script&gt;
+	const comentario = '&lt;img src=x onerror="alert(1)"&gt;';
+&lt;/script&gt;
+
+&lt;p&gt;{comentario}&lt;/p&gt;
+&lt;p&gt;{@html comentario}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;&amp;lt;img src=x onerror="alert(1)"&gt;&lt;/p&gt; &lt;p&gt;&lt;img src=x onerror="alert(1)"&gt;&lt;/p&gt;</pre>
+
+<p>A saída mostra as duas personalidades lado a lado. No primeiro parágrafo, as chaves escaparam o texto: o que era <code>&lt;img&gt;</code> virou <code>&amp;lt;img&amp;gt;</code>, e o navegador mostra a marcação como texto, sem criar imagem nenhuma. No segundo, o <code>{@html}</code> injetou o texto cru: agora existe de verdade uma tag <code>img</code> na página, apontando para um endereço inválido e com um atributo <code>onerror</code> — o mesmo truque que roda código na máquina de quem visita.</p>
+
+<dl class="anatomy">
+  <dt>{comentario}</dt><dd>a interpolação normal. Escapa <code>&lt;</code>, <code>&gt;</code>, <code>&amp;</code> e aspas: o valor vira texto, não marcação.</dd>
+  <dt>{@html comentario}</dt><dd>a diretiva que insere HTML cru. O navegador interpreta o conteúdo como tags e atributos.</dd>
+  <dt>onerror="…"</dt><dd>um atributo de evento: o navegador executa o conteúdo quando a imagem falha ao carregar. É por isso que a tag acima não é inofensiva.</dd>
+  <dt>src=x</dt><dd>um endereço que não existe, usado de propósito para acionar o <code>onerror</code>.</dd>
+</dl>
+
+<p>A regra prática cabe numa frase: <code>{@html}</code> é para conteúdo que <em>você</em> escreveu, não para o que o cliente escreveu. Um rodapé com negrito fixo, uma resposta de API confiável com HTML já limpo — esses casos existem. Comentário de visitante, nunca. Se a necessidade for exibir negrito vindo do cliente, o caminho é uma biblioteca de <em>markdown</em> ou de sanitização, que transforma o texto num subconjunto seguro de marcação.</p>
+
+<h2>4. Caixa 1: o comentário que vira tag</h2>
+
+<p>A caixa abaixo mostra o problema em tamanho de brinquedo. Ela recebe texto e joga direto na página com <code>{@html}</code>. Digite uma marcação simples e veja a diferença.</p>
+
+<div class="trysvelte" data-goal="digitar:input=&lt;b&gt;oi&lt;/b&gt;;;outre:&lt;b&gt;oi&lt;/b&gt;">
+<p class="try-task"><strong>Missão:</strong> troque a exibição para que a marcação digitada apareça como <strong>texto</strong>, e não como formatação. Digite <code>&lt;b&gt;oi&lt;/b&gt;</code> no campo: o texto na tela deve conter literalmente <code>&lt;b&gt;oi&lt;/b&gt;</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let texto = $state('');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (texto = e.currentTarget.value)} /&gt;
+&lt;p&gt;{@html texto}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let texto = $state('');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (texto = e.currentTarget.value)} /&gt;
+&lt;p&gt;{texto}&lt;/p&gt;</pre>
+</div>
+
+<p>Com <code>{@html}</code>, o texto digitado vira negrito e o que aparece na tela é só “oi” — a marcação foi interpretada. Sem a diretiva, aparece a marcação como ela foi escrita. Essa diferença é a fronteira entre uma página que mostra o comentário e uma página que executa o comentário.</p>
+
+<h2>5. Formulário e CSRF: o pedido que vem de outro site</h2>
+
+<p>A sigla CSRF significa “falsificação de requisição entre sites”. O ataque é mais simples do que o nome: você está logada na padaria no seu navegador, com o cookie de sessão ativo, e abre um site qualquer. Esse site esconde um formulário que envia POST para <code>https://padariadaana.com.br/entrar?/entrar</code>. O navegador manda o pedido junto com o seu cookie, e o servidor não tem como saber que a intenção não foi sua.</p>
+
+<p>O SvelteKit se protege comparando a origem do pedido com a origem do site. Pedido de formulário com origem diferente recebe 403. A resposta abaixo é do servidor de produção do projeto da Ana, com um POST forjado:</p>
+
+<pre class="term">ana@notebook:~/loja$ curl -s -i -X POST -H 'origin: http://evil.example' -H 'content-type: application/x-www-form-urlencoded' -d 'senha=pao123' 'http://localhost:3000/entrar?/entrar' | head -8
+HTTP/1.1 403 Forbidden
+content-length: 46
+Date: Thu, 26 Nov 2026 17:10:32 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+Cross-site POST form submissions are forbidden</pre>
+
+<p>A mensagem diz exatamente o que aconteceu: “envios de formulário entre sites estão proibidos”. O corpo tem 46 bytes e é texto puro; a ação nem foi executada, então a senha correta não fez login nenhum.</p>
+
+<p>Existe um detalhe que muda o hábito de testar: essa proteção só vale fora do modo de desenvolvimento. No código do SvelteKit, o bloco da checagem começa com uma condição explícita:</p>
+
+<pre class="term">ana@notebook:~/loja$ sed -n 101,103p node_modules/@sveltejs/kit/src/runtime/server/respond.js
+	if (!__SVELTEKIT_DEV__) {
+		const request_origin = request.headers.get('origin');
+		const self_origin = get_self_origin(__SVELTEKIT_PATHS_ORIGIN__, url.origin);</pre>
+
+<p>Em português: “se não estiver em desenvolvimento”. No <code>npm run dev</code>, o mesmo POST forjado passou e a ação rodou. Isso não é falha de segurança do SvelteKit — o servidor de desenvolvimento é seu, na sua máquina. É um aviso para quem testa proteção: teste no build, com <code>node build</code>, e não no <code>dev</code>.</p>
+
+<h2>6. Caixa 2: as três bandeiras do cookie</h2>
+
+<p>O cookie de sessão é o crachá. Um crachá mal feito pode ser lido por <em>script</em> de terceiro, viajar em pedido de outro site ou ir por conexão sem criptografia. A caixa abaixo tem as opções certas no código e escreve “sem proteção” na tela.</p>
+
+<div class="trysvelte" data-goal="outre:httpOnly: sim">
+<p class="try-task"><strong>Missão:</strong> mostre as opções do cookie na tela, no formato <code>cookie: httpOnly: sim · sameSite: lax</code>. O texto precisa conter <code>httpOnly: sim</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	const opcoes = { path: '/', httpOnly: true, sameSite: 'lax' };
+&lt;/script&gt;
+
+&lt;p&gt;cookie: sem proteção&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	const opcoes = { path: '/', httpOnly: true, sameSite: 'lax' };
+&lt;/script&gt;
+
+&lt;p&gt;cookie: httpOnly: {opcoes.httpOnly ? 'sim' : 'não'} · sameSite: {opcoes.sameSite}&lt;/p&gt;</pre>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Opção</th><th>O que faz</th><th>Custo</th></tr>
+<tr><td><code>httpOnly: true</code></td><td>o JavaScript da página não lê o cookie</td><td>se precisar ler no cliente, não dá</td></tr>
+<tr><td><code>sameSite: 'lax'</code></td><td>não envia o cookie em POST de outro site</td><td>links externos ainda funcionam</td></tr>
+<tr><td><code>secure: true</code></td><td>só envia o cookie por HTTPS</td><td>quebra em <code>http://localhost</code></td></tr>
+<tr><td><code>path: '/'</code></td><td>o cookie vale no site inteiro</td><td>vale em toda rota</td></tr>
+<tr><td><code>maxAge</code></td><td>quanto tempo o cookie dura</td><td>dura mais, expõe mais tempo</td></tr>
+</table>
+</div>
+
+<p>O <code>secure: true</code> merece um aviso: em desenvolvimento o endereço é <code>http://localhost</code>, sem o “s”, e o navegador recusa cookie marcado como seguro nesse caso. A solução comum é ligar a bandeira apenas em produção, o que se faz lendo o ambiente — assunto da aula de <code>$env</code>.</p>
+
+<h2>7. Link com <code>javascript:</code> e outras armadilhas</h2>
+
+<p>Um endereço de link não é só um endereço: pode ser um comando. Quando o navegador vê <code>href="javascript:alert(1)"</code>, ele executa o que vem depois dos dois pontos em vez de navegar. Se esse <code>href</code> veio do que o visitante digitou, você acabou de dar a ele execução de código na sua página.</p>
+
+<div class="trysvelte" data-goal="digitar:input=javascript:alert(1);;outre:link: bloqueado">
+<p class="try-task"><strong>Missão:</strong> só aceite destino que comece com <code>/</code>. Digite <code>javascript:alert(1)</code> no campo: o texto deve conter <code>link: bloqueado</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+	let destino = $state('/conta');
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (destino = e.currentTarget.value)} /&gt;
+&lt;p&gt;link: {destino}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+	let destino = $state('/conta');
+	const seguro = $derived(destino.startsWith('/'));
+&lt;/script&gt;
+
+&lt;input oninput={(e) =&gt; (destino = e.currentTarget.value)} /&gt;
+&lt;p&gt;link: {seguro ? destino : 'bloqueado'}&lt;/p&gt;</pre>
+</div>
+
+<p>Vale um cuidado parecido com link externo. Quando um link abre em aba nova — <code>target="_blank"</code> —, a aba aberta ganha acesso limitado à sua página pela propriedade <code>window.opener</code>. O remédio é uma palavra no atributo: <code>rel="noopener"</code>. Navegadores modernos já aplicam esse comportamento por padrão em muitos casos, mas escrever o atributo custa nada e funciona em navegador antigo. É a mesma lógica do cadeado na porta dos fundos: você não conta com a sorte.</p>
+
+<p>Aceitar só caminho que começa com barra é a política mais fechada e a mais segura: limita o destino ao próprio site. Quando link externo é necessário, a validação precisa ser por lista — <code>https://</code> com domínio conhecido — e nunca por “não começa com javascript”. Lista fechada de permitidos envelhece bem; lista de proibidos sempre esquece um caso.</p>
+
+<h2>8. Segredo que não sai do servidor</h2>
+
+<p>A quarta porta é a mais silenciosa. Uma variável privada importada num componente <code>.svelte</code> seria enviada ao navegador junto com o resto do código, e qualquer visitante leria. O SvelteKit trata isso como erro de build, não como aviso:</p>
+
+<pre class="term">Building app
+vite v8.4.0 building client environment for production...
+transforming...
+✓ 196 modules transformed.
+✗ Build failed in 281ms
+error during build:
+Build failed with 1 error:
+
+[plugin vite-plugin-sveltekit-guard]
+SvelteKit error: server_only_import
+Cannot import `$app/env/private` into code that runs in the browser, as this could leak sensitive information.
+
+ src/routes/quebra/+page.svelte imports
+  $app/env/private
+
+If you're only using the import as a type, change it to `import type`.
+https://svelte.dev/e/kit/server_only_import</pre>
+
+<p>O nome do erro é <code>server_only_import</code>, e o plugin que o levanta se chama <code>vite-plugin-sveltekit-guard</code> — “guarda”. A tradução da mensagem: “não dá para importar isso em código que roda no navegador, porque vazaria informação sensível”. A correção é mover a leitura para um <code>+page.server.js</code> e devolver só o que a tela precisa.</p>
+
+<p>O mesmo vale para qualquer coisa que você escreva à mão no componente: uma chave de API em <code>const</code> no <code>&lt;script&gt;</code> de um <code>.svelte</code> vai para o navegador, com ou sem variável de ambiente. Se a chave é secreta, ela não pode estar no arquivo que o cliente baixa.</p>
+
+<h2>9. O que vaza sem querer</h2>
+
+<p>Existem três vazamentos que não dão erro nenhum e por isso passam batido. O primeiro é a página pré-renderizada. No projeto da Ana, o rastreador de links congelou <code>/conta</code> num arquivo de 112 bytes, e ele é servido com status 200:</p>
+
+<pre class="term">ana@notebook:~/loja$ wc -c build/prerendered/conta.html
+112 build/prerendered/conta.html
+ana@notebook:~/loja$ grep -o 'url=[^"]*' build/prerendered/conta.html
+url=/entrar?de=/conta
+ana@notebook:~/loja$ curl -s -D - -o /dev/null http://localhost:3000/conta | head -2
+HTTP/1.1 200 OK
+etag: "7-DYfYF_Azx3mHEh08LY_w65McduCKKcStU7BxjvvLY"</pre>
+
+<p>O segundo é o log. Senha, token e cookie inteiro não podem ir para o arquivo de log, porque o log circula: fica no terminal, no arquivo do servidor e no painel da plataforma. O terceiro é a mensagem de erro. Uma pilha de erro completa na tela conta ao visitante qual biblioteca você usa, em que versão e em que linha está o problema — informação de presente para quem procura falha.</p>
+
+<p>A defesa é a mesma nos três casos: mostrar pouco e registrar muito. O <code>handleError</code> devolve uma frase curta para a tela e escreve o detalhe no terminal. A pasta <code>prerendered</code> é revisada antes de publicar. E o log passa por um filtro que mascara senha, do jeito que a aula de logs mostrou.</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três respostas abaixo são reais. A primeira é do build, a segunda do servidor em produção e a terceira do processo de desenvolvimento.</p>
+
+<div class="cenario">
+<strong>Erro 1 — segredo importado no componente</strong>
+<p>Um <code>.svelte</code> importou <code>$app/env/private</code>. O build para antes de gerar o pacote do cliente, e a mensagem explica o risco.</p>
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+[plugin vite-plugin-sveltekit-guard]
+SvelteKit error: server_only_import
+Cannot import `$app/env/private` into code that runs in the browser, as this could leak sensitive information.
+
+ src/routes/quebra/+page.svelte imports
+  $app/env/private</pre>
+<p>A saída é mover a importação para o <code>+page.server.js</code> e devolver o dado já tratado. Se o valor realmente pode ser público, ele muda de declaração em <code>src/env.js</code> — e passa a ser visível para qualquer visitante, o que é uma decisão de produto, não de código.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — POST de outro site</strong>
+<p>O servidor de produção recusou um formulário com origem estranha. A resposta é 403 e o corpo é uma frase, sem página de erro.</p>
+<pre class="term">HTTP/1.1 403 Forbidden
+content-length: 46
+Date: Thu, 26 Nov 2026 17:10:32 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+Cross-site POST form submissions are forbidden</pre>
+<p>Se esse 403 aparece no seu teste com <code>curl</code> e você não mandou cabeçalho de origem nenhum, o motivo é o mesmo: sem origem, o SvelteKit trata o pedido como suspeito. Basta enviar <code>-H 'origin: http://localhost:3000'</code> para simular o mesmo site. Em navegador, o cabeçalho vai sozinho e o problema não acontece.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — a mesma proteção não vale em desenvolvimento</strong>
+<p>No <code>npm run dev</code>, o POST forjado passou e a ação rodou. O terminal não mostra erro nenhum; o status é 200 e o cookie de sessão é gravado.</p>
+<pre class="term">ana@notebook:~/loja$ curl -s -i -X POST -H 'origin: http://evil.example' -d 'senha=pao123' 'http://localhost:5173/entrar?/entrar' | head -4
+HTTP/1.1 200 OK
+Vary: Origin
+content-type: application/json
+set-cookie: sessao=ana-123; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax</pre>
+<p>Este é o cenário que ensina a testar no lugar certo. A checagem de origem é desligada em desenvolvimento de propósito, para não atrapalhar teste local. Proteção de segurança se confere no build: <code>npm run build</code> e <code>node build</code>, como a aula de deploy mostra.</p>
+</div>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Risco</th><th>Proteção no SvelteKit</th><th>Onde</th></tr>
+<tr><td>HTML de terceiro injetado</td><td>usar <code>{valor}</code> e evitar <code>{@html}</code></td><td>componente</td></tr>
+<tr><td>POST de outro site</td><td>checagem de origem (403)</td><td>automática em produção</td></tr>
+<tr><td>Cookie lido por script</td><td><code>httpOnly: true</code></td><td><code>cookies.set</code></td></tr>
+<tr><td>Segredo no navegador</td><td><code>server_only_import</code> no build</td><td><code>$app/env/private</code></td></tr>
+<tr><td>Link com <code>javascript:</code></td><td>aceitar só caminho interno</td><td>validação no componente</td></tr>
+<tr><td>Erro exposto ao visitante</td><td><code>handleError</code> com mensagem curta</td><td><code>hooks.server.js</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>O que fazer</th></tr>
+<tr><td>conteúdo do cliente com negrito</td><td>converter markdown ou sanitizar</td></tr>
+<tr><td>link vindo de formulário</td><td>aceitar só <code>/…</code> ou lista de domínios</td></tr>
+<tr><td>arquivo confidencial</td><td>não colocar em <code>static</code></td></tr>
+<tr><td>teste de CSRF</td><td>rodar contra <code>node build</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual das duas formas é segura para mostrar um comentário de visitante?</p>
+<label><input type="radio" name="q-sg"> <code>{@html comentario}</code></label>
+<label><input type="radio" name="q-sg"> <code>{comentario}</code>, que escapa a marcação</label>
+<label><input type="radio" name="q-sg"> as duas, porque o Svelte filtra tudo</label>
+<label><input type="radio" name="q-sg"> <code>element.innerHTML = comentario</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que o SvelteKit faz com um POST de formulário cuja origem é outro site, em produção?</p>
+<label><input type="radio" name="q-sg"> executa a ação e avisa no log</label>
+<label><input type="radio" name="q-sg"> redireciona para a página inicial</label>
+<label><input type="radio" name="q-sg"> responde 403 com <code>Cross-site POST form submissions are forbidden</code></label>
+<label><input type="radio" name="q-sg"> apaga o cookie de sessão</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Para que serve <code>httpOnly: true</code> no cookie de sessão?</p>
+<label><input type="radio" name="q-sg"> o JavaScript da página não consegue ler o cookie</label>
+<label><input type="radio" name="q-sg"> o cookie nunca expira</label>
+<label><input type="radio" name="q-sg"> o cookie fica criptografado no disco do cliente</label>
+<label><input type="radio" name="q-sg"> o cookie só funciona em <code>localhost</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">// src/routes/entrar/+page.server.js<br>cookies.set('sessao', 'ana-123', {<br>&nbsp;&nbsp;path: '/',<br>&nbsp;&nbsp;httpOnly: <input data-answer="true">,<br>&nbsp;&nbsp;sameSite: 'lax',<br>&nbsp;&nbsp;maxAge: 60 * 60 * 24<br>});</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Tudo o que vem do visitante é suspeito: texto, formulário, link e cabeçalho.</li>
+  <li><code>{valor}</code> escapa a marcação; <code>{@html valor}</code> insere HTML cru e executa atributos de evento.</li>
+  <li><code>{@html}</code> é para conteúdo próprio, nunca para comentário de terceiro.</li>
+  <li>CSRF é o POST forjado por outro site; o SvelteKit responde 403 com <code>Cross-site POST form submissions are forbidden</code>.</li>
+  <li>A checagem de origem é desligada em desenvolvimento: teste com <code>node build</code>.</li>
+  <li>Cookie de sessão pede <code>httpOnly</code>, <code>sameSite</code> e <code>secure</code> em produção.</li>
+  <li>Link que começa com <code>javascript:</code> executa código; aceite só caminho iniciado por <code>/</code>.</li>
+  <li><code>server_only_import</code> impede que variável privada vaze para o navegador.</li>
+  <li>Página pré-renderizada, log e mensagem de erro podem vazar informação sem aviso.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
