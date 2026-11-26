@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$effect × $derived — calcular não é avisar | Guia Svelte</title>
+<meta name="description" content="$effect ou $derived? A diferença entre calcular um valor e provocar um efeito, com as saídas reais do compilador Svelte 5 e três caixas que rodam no navegador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">$effect × $derived</span></h1>
+
+<p class="intro">A Ana tem duas tarefas na padaria que parecem a mesma e não são: calcular o troco de um cliente e avisar a cozinha de que o pedido saiu. O troco é uma conta: dado o valor pago e o preço, o resultado sai sozinho, sem consequência nenhuma. O aviso é uma ação: alguém precisa ouvir o grito. No Svelte, calcular é <strong>$derived</strong> e agir é <strong>$effect</strong>. Trocar um pelo outro é a confusão mais comum de quem está começando.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que um <code>$derived</code> faz e por que ele não tem efeito colateral.</li>
+  <li>O que um <code>$effect</code> faz e por que ele não devolve valor.</li>
+  <li>Por que usar <code>$effect</code> para calcular deixa a saída do servidor errada.</li>
+  <li>O teste de quatro perguntas para escolher entre os dois.</li>
+  <li>Como <code>$derived.by</code> resolve cálculos de várias linhas.</li>
+  <li>Por que um efeito que acumula entra em ciclo e como o <code>$derived</code> evita isso.</li>
+  <li>Que <code>$derived</code> aceita expressão, não função.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: contar o troco e avisar a cozinha</h2>
+
+<p>O troco da Ana é uma conta determinística. Ela recebe cinquenta reais por uma compra de trinta e dois e cinquenta, e o troco é dezessete e cinquenta. Não importa quantas vezes ela calcule: o resultado é o mesmo, e calcular não muda nada na padaria. É um valor <em>derivado</em> de outros dois.</p>
+
+<p>O aviso para a cozinha é diferente. Dizer "saiu um pão" muda o mundo: alguém pega a assadeira, o forno abre, o cheiro se espalha. Repetir o aviso cinco vezes faz cinco pães. Isso é um <em>efeito</em>: uma ação com consequência fora do cálculo.</p>
+
+<p>No Svelte, a divisão é a mesma e o compilador cobra por ela. <code>$derived</code> cria um valor que se recalcula quando as fontes mudam. Ele não pode escrever em outra variável, não pode chamar rede, não pode mexer no DOM — e é justamente essa restrição que o torna previsível e verificável no servidor. <code>$effect</code> existe para o que sai do componente: rede, armazenamento, foco, título da página, log.</p>
+
+<p>A confusão nasce porque as duas runas "reagem" a mudanças. A pergunta que separa uma da outra não é "reage ou não?", e sim: <strong>o resultado pode ser calculado agora, só com os valores que já tenho?</strong> Se sim, <code>$derived</code>. Se depende de algo externo ou produz consequência, <code>$effect</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Calcular o troco</td><td><code>let troco = $derived(pago - total)</code></td></tr>
+<tr><td>Calcular com várias linhas de conta</td><td><code>let troco = $derived.by(() =&gt; { … })</code></td></tr>
+<tr><td>Avisar a cozinha</td><td><code>$effect(() =&gt; { … })</code></td></tr>
+<tr><td>Anotar o troco num lugar e errar a conta</td><td><code>$effect</code> atribuindo a um valor calculável</td></tr>
+<tr><td>Recalcular toda vez que o preço muda</td><td>o <code>$derived</code> faz sozinho</td></tr>
+</table>
+</div>
+
+<h2>2. O erro clássico: calcular dentro do <code>$effect</code></h2>
+
+<p>Quem aprende <code>$effect</code> primeiro tende a usá-lo para tudo. O componente abaixo parece correto: o efeito lê o preço e escreve o dobro.</p>
+
+<pre class="file" data-file="src/Errado.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let dobro = $state(0);
+
+  $effect(() =&gt; {
+    dobro = preco * 2;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Preço: {preco} Dobro: {dobro}&lt;/p&gt;</pre>
+
+<pre class="out">Preço: 10 Dobro: 0</pre>
+
+<p>Dobro zero. A explicação é a mesma da aula de <code>onMount</code>: efeitos não rodam fora do navegador. Quem gerou esse HTML foi o servidor, e ali o <code>$effect</code> não executa. O visitante recebe <code>Dobro: 0</code> na primeira pintura; só depois o JavaScript chega, o efeito roda e o número vira 20.</p>
+
+<p>O custo disso não é só estético. Numa conexão lenta, o visitante vê zero por um instante. Pior: sem JavaScript — em um leitor de tela antigo, num robô de busca, num teste automatizado — o zero fica para sempre. O valor calculado deveria estar no HTML, e não depender de um efeito que talvez nunca rode.</p>
+
+<p>A mesma conta com <code>$derived</code> não tem esse problema:</p>
+
+<pre class="file" data-file="src/Certo.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let dobro = $derived(preco * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Preço: {preco} Dobro: {dobro}&lt;/p&gt;</pre>
+
+<pre class="out">Preço: 10 Dobro: 20</pre>
+
+<h3>A anatomia do <code>$derived</code></h3>
+
+<dl class="anatomy">
+  <dt>let dobro = $derived(…)</dt><dd>declara um valor calculado. Não é uma função: é o resultado da expressão, recalculado quando alguma fonte muda.</dd>
+  <dt>preco * 2</dt><dd>a conta, na forma de <strong>expressão</strong>. Tudo o que ela lê vira dependência: mudou <code>preco</code>, o valor é recalculado no próximo desenho.</dd>
+  <dt>na tela: {dobro}</dt><dd>a tela lê o derivado como leria qualquer variável. Como o valor é calculado antes do desenho, o HTML sai certo já na primeira pintura.</dd>
+  <dt>sem <code>let</code> na leitura</dt><dd><code>dobro</code> é um valor, não uma função; você escreve <code>{dobro}</code>, e não <code>{dobro()}</code>.</dd>
+</dl>
+
+<p>Duas propriedades fazem o <code>$derived</code> valer a pena: ele é <strong>preguiçoso</strong> (só calcula quando alguém lê o valor, e uma vez por mudança, não a cada linha que o menciona) e é <strong>verificável no servidor</strong>, porque não depende de nada além dos valores. É a diferença entre uma conta e um telefonema.</p>
+
+<div class="tip">
+<strong>O derivado pode ler outro derivado</strong>
+<p>Um <code>$derived</code> pode usar outro sem problema: <code>let comDesconto = $derived(preco * 0.9)</code> e <code>let rotulo = $derived('R$ ' + comDesconto.toFixed(2))</code>. O Svelte organiza a ordem sozinho e não recalcula o que não mudou.</p>
+</div>
+
+<h2>3. O teste de quatro perguntas</h2>
+
+<p>Antes de escrever uma runa, faça quatro perguntas. Elas resolvem a escolha em quase todos os casos, e quando a resposta é "depende", a resposta certa costuma ser <code>$derived</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Pergunta</th><th>Se sim</th><th>Se não</th></tr>
+<tr><td>O resultado pode ser calculado só com valores que já tenho?</td><td><code>$derived</code></td><td>continue</td></tr>
+<tr><td>O resultado precisa aparecer na tela?</td><td><code>$derived</code> (ou <code>$state</code>, se vem de fora)</td><td>continue</td></tr>
+<tr><td>A ação muda algo fora do componente (rede, disco, DOM)?</td><td><code>$effect</code></td><td>continue</td></tr>
+<tr><td>A ação precisa acontecer uma vez, na montagem?</td><td><code>onMount</code></td><td>provavelmente não precisa de runa</td></tr>
+</table>
+</div>
+
+<p>Vale um aviso sobre o caminho contrário. Também é possível calcular com <code>$state</code> mais um evento: guardar o total numa variável e recalculá-lo em cada <code>onclick</code>. Funciona até o dia em que uma mudança de estado acontece por outro caminho — um atalho de teclado, um formulário, um timer — e o total fica desatualizado. O <code>$derived</code> não tem esse furo porque não depende de ninguém lembrar de chamar a conta.</p>
+
+<p>Um detalhe importante: <code>$effect</code> não devolve valor. Se você se pegar escrevendo <code>const x = $effect(…)</code>, o compilador recusa — e a mensagem está na seção 9. Efeito é ação, não resultado.</p>
+
+<h2>4. Experimente: o dobro que não acompanha</h2>
+
+<p>A caixa abaixo guarda o dobro numa variável comum, calculada uma única vez. O botão muda o preço e o dobro fica parado.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^aumentar preço Preço: 11 Dobro: 22$">
+<p class="try-task"><strong>Missão:</strong> clique em <strong>aumentar preço</strong>. O preço vai para 11 e o dobro continua 20. Faça o dobro acompanhar, sem escrever um efeito.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let dobro = preco * 2;
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (preco++)}&gt;aumentar preço&lt;/button&gt;
+&lt;p&gt;Preço: {preco} Dobro: {dobro}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let dobro = $derived(preco * 2);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (preco++)}&gt;aumentar preço&lt;/button&gt;
+&lt;p&gt;Preço: {preco} Dobro: {dobro}&lt;/p&gt;</pre>
+</div>
+
+<p>Uma palavra resolve. A variável comum guarda o número 20 e não tem compromisso com <code>preco</code>; o derivado é recalculado sempre que <code>preco</code> muda. Note que a solução não tem <code>$effect</code>: quem tentar resolver com efeito vai conseguir o mesmo resultado na tela, mas com o custo da seção 2 — HTML inicial errado e trabalho extra em cada mudança.</p>
+
+<h2>5. Cálculo de várias linhas: <code>$derived.by</code></h2>
+
+<p>Uma expressão resolve a maioria dos casos. Quando a conta tem várias linhas, laço ou condicional, a expressão vira um emaranhado. Para isso existe <code>$derived.by</code>, que recebe uma função e usa o valor devolvido.</p>
+
+<pre class="file" data-file="src/By.svelte">&lt;script&gt;
+  let itens = $state([
+    { nome: 'pão', preco: 0.9, qtd: 3 },
+    { nome: 'leite', preco: 4.5, qtd: 1 }
+  ]);
+
+  let total = $derived.by(() =&gt; {
+    let soma = 0;
+    for (const item of itens) {
+      soma += item.preco * item.qtd;
+    }
+    return soma.toFixed(2);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total}&lt;/p&gt;</pre>
+
+<pre class="out">Total: R$ 7.20</pre>
+
+<p>Repare em dois pontos. Primeiro, a função devolve o valor: sem <code>return</code>, o total vira <code>undefined</code> e a tela mostra <code>R$ undefined</code>. Segundo, o <code>toFixed(2)</code> está <em>dentro</em> do derivado: formatar é parte do cálculo, e não uma etapa separada. Se você formatar fora, precisa de outra variável — e cada variável a mais é uma chance de esquecer de atualizar.</p>
+
+<p>O laço dentro do derivado lê <code>itens</code>. Como <code>itens</code> é <code>$state</code>, qualquer mudança na lista (inclusive em <code>qtd</code> de um item, porque o Svelte observa objetos e listas em profundidade) recalcula o total. É aí que o derivado mostra sua força: uma dependência declarada pelo uso, sem lista para manter à mão.</p>
+
+<h2>6. Experimente: função ou expressão</h2>
+
+<p>A segunda armadilha é de digitação e não gera mensagem nenhuma: passar uma função para <code>$derived</code>. O valor guardado passa a ser a própria função, e a tela imprime o código dela.</p>
+
+<div class="trysvelte" data-goal="outre:^Preço: 10 Dobro: 20$">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra <code>Dobro: () =&gt; preco * 2</code>. Faça aparecer o número 20.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let dobro = $derived(() =&gt; preco * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Preço: {preco} Dobro: {dobro}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let dobro = $derived(preco * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Preço: {preco} Dobro: {dobro}&lt;/p&gt;</pre>
+</div>
+
+<p>Duas soluções valem para essa missão. A primeira é tirar a função e deixar a expressão pura, como no componente da seção 2. A segunda é trocar <code>$derived</code> por <code>$derived.by</code>, que existe justamente para receber função — mas aí o <code>return</code> passa a ser obrigatório. Escolher entre as duas é uma questão de tamanho: uma conta de uma linha pede expressão; cinco linhas com laço pedem <code>.by</code>.</p>
+
+<p>Existe uma terceira forma, tentadora e errada: chamar a função na hora, com <code>$derived((() =&gt; preco * 2)())</code>. Funciona, e é o tipo de código que ninguém entende seis meses depois. O guia prefere a forma que o próximo leitor reconhece de imediato.</p>
+
+<h2>7. Experimente: o efeito que acumula</h2>
+
+<p>Este é o acidente mais comum de quem confunde as duas runas: usar <code>$effect</code> para calcular, escrevendo na mesma variável que lê. Cada execução soma de novo, e o Svelte aborta.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^aumentar preço Preço: 11 Dobro: 22$">
+<p class="try-task"><strong>Missão:</strong> o efeito deveria calcular o dobro, mas acumula e entra em ciclo. Troque o cálculo por um derivado.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let dobro = $state(0);
+
+  $effect(() =&gt; {
+    dobro = dobro + preco;
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (preco++)}&gt;aumentar preço&lt;/button&gt;
+&lt;p&gt;Preço: {preco} Dobro: {dobro}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(10);
+  let dobro = $derived(preco * 2);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (preco++)}&gt;aumentar preço&lt;/button&gt;
+&lt;p&gt;Preço: {preco} Dobro: {dobro}&lt;/p&gt;</pre>
+</div>
+
+<p>Vale reparar no que o erro tem de pedagógico. O código inicial não está "quase certo": ele descreve outra coisa. "Some o preço ao dobro atual" é uma instrução de acumulação, e acumular é uma ação — própria de efeito. "O dobro é o preço vezes dois" é uma afirmação sobre um valor — própria de derivado. Quando o seu efeito começa a parecer uma fórmula, é sinal de que a runa está trocada.</p>
+
+<p>O erro do código inicial não é de sintaxe: é de intenção. "Dobro é preco vezes dois" é uma afirmação sobre um valor; um efeito, por definição, não afirma nada — ele faz algo. O derivado afirma, e o Svelte garante que a afirmação continua verdadeira a cada mudança.</p>
+
+<h2>8. Quando o efeito é a resposta certa</h2>
+
+<p>Depois de tanta defesa do derivado, vale ver o outro lado. Existem coisas que simplesmente não podem ser calculadas, e aí o efeito é a ferramenta:</p>
+
+<pre class="file" data-file="src/Titulo.svelte">&lt;script&gt;
+  let pedidos = $state(3);
+
+  $effect(() =&gt; {
+    document.title = `${pedidos} pedido(s) na cozinha`;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Pedidos: {pedidos}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pedidos: 3&lt;/p&gt;</pre>
+
+<p>O título da aba não é um valor do componente: é uma propriedade do documento, fora dele. Não há como "calcular" isso — é preciso <em>escrever</em> lá. O mesmo vale para salvar no <code>localStorage</code>, tocar um som, chamar uma API, mover o foco. Todos são efeitos legítimos, e todos têm a mesma marca: a consequência acontece fora do componente.</p>
+
+<p>A saída do servidor mostra só o parágrafo, e está certa: no servidor não existe aba, não existe <code>document</code>. Efeito bom é aquele que a ausência no servidor não estraga.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Tarefa</th><th>Runa</th><th>Por quê</th></tr>
+<tr><td>dobro, total, média, filtro</td><td><code>$derived</code></td><td>é conta, dá para calcular agora</td></tr>
+<tr><td>mensagem que junta dois valores</td><td><code>$derived</code></td><td>texto também é cálculo</td></tr>
+<tr><td>salvar no <code>localStorage</code></td><td><code>$effect</code></td><td>mexe em algo fora do componente</td></tr>
+<tr><td>título da aba e <code>document.title</code></td><td><code>$effect</code></td><td>propriedade do documento</td></tr>
+<tr><td>buscar dados na rede</td><td><code>$effect</code> ou <code>{#await}</code></td><td>depende de algo externo e demorado</td></tr>
+<tr><td>focar um campo</td><td><code>onMount</code> ou <code>$effect</code></td><td>comando no DOM, não valor</td></tr>
+</table>
+</div>
+
+<h2>9. Conferindo no projeto da Ana</h2>
+
+<p>Há um teste simples para saber em qual mundo você está. Se o valor pudesse ser escrito num papel, calculado com lápis, e continuasse certo para sempre, ele é derivado. Se o cálculo envolve ligar para alguém, acender uma luz ou abrir uma gaveta, é efeito. Essa imagem do papel ajuda porque força a pergunta certa: o que sobra no papel depois que a ação termina?</p>
+
+<p>O servidor de desenvolvimento mostra a diferença na prática: com <code>$derived</code>, o texto já vem certo no HTML; com <code>$effect</code>, ele pisca de 0 para o valor real.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1185 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Para ver o HTML que o servidor entrega, "Exibir código-fonte" no navegador é mais revelador que o inspetor: o inspetor mostra o DOM já corrigido pelo JavaScript, enquanto o fonte mostra o que o visitante recebeu primeiro.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-t2DgRQEB.js  33.85 kB │ gzip: 13.01 kB
+✓ built in 847ms</pre>
+
+<p>Repare que a versão com <code>$derived</code> gera um pacote de 33.85 kB, contra 36 kB das aulas anteriores — o código do componente é menor e o runtime trabalha menos. Menos efeitos significa menos trabalho em cada mudança de estado.</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo foram copiadas da execução real dos componentes quebrados.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>$derived</code> sem parênteses</strong>
+<p>A runa precisa receber a expressão. Sem os parênteses, o compilador não tem o que calcular.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(2);
+  let dobro = $derived;
+&lt;/script&gt;
+
+&lt;p&gt;{dobro}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 3, coluna 14): Cannot use rune without parentheses</pre>
+<p>"Cannot use rune without parentheses" vale para todas as runas: <code>$state</code>, <code>$derived</code> e <code>$props</code> sempre vêm com parênteses, mesmo vazios.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — função em vez de expressão</strong>
+<p>Este é o erro que não quebra nada e publica o código na tela. <code>$derived(() =&gt; …)</code> guarda a função, não o resultado dela.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(2);
+  let dobro = $derived(() =&gt; preco * 2);
+&lt;/script&gt;
+
+&lt;p&gt;{dobro}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;() =&gt; preco * 2&lt;/p&gt;</pre>
+<p>O texto na tela é o próprio código da função. Quando a tela mostrar uma seta e parênteses, o diagnóstico é imediato: alguém passou uma função para <code>$derived</code>. Ou tire os parênteses da função, ou troque por <code>$derived.by</code>, que é a forma feita para receber função.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — guardar o retorno do <code>$effect</code></strong>
+<p>Efeito não devolve valor. Tentar guardar o retorno é o mesmo erro da aula de limpeza, e a mensagem é a mesma.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(10);
+
+  const calcular = $effect(() =&gt; {
+    console.log(preco * 2);
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{preco}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 19): `$effect()` can only be used as an expression statement</pre>
+<p>A tradução: o <code>$effect</code> tem de ser uma linha sozinha. Se você quer um valor, o instrumento é <code>$derived</code>; se quer uma ação, não guarde o retorno — não há o que guardar.</p>
+</div>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Runa</th><th>Recebe</th><th>Devolve</th><th>Roda no servidor?</th></tr>
+<tr><td><code>$derived(expr)</code></td><td>expressão</td><td>valor calculado</td><td><strong>sim</strong></td></tr>
+<tr><td><code>$derived.by(fn)</code></td><td>função com <code>return</code></td><td>valor calculado</td><td><strong>sim</strong></td></tr>
+<tr><td><code>$effect(fn)</code></td><td>função</td><td>nada</td><td>não</td></tr>
+<tr><td><code>$state(valor)</code></td><td>valor inicial</td><td>valor que muda</td><td>sim</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td>HTML inicial com zero ou vazio</td><td>valor calculado dentro de <code>$effect</code></td><td>trocar por <code>$derived</code></td></tr>
+<tr><td>função impressa na tela</td><td><code>$derived(() =&gt; …)</code></td><td><code>$derived(…)</code> ou <code>$derived.by</code></td></tr>
+<tr><td><code>effect_update_depth_exceeded</code></td><td>efeito acumulando no que lê</td><td><code>$derived</code></td></tr>
+<tr><td><code>R$ undefined</code></td><td><code>$derived.by</code> sem <code>return</code></td><td>devolver o valor</td></tr>
+</table>
+</div>
+
+<p>Por fim, uma nota sobre o nome. "Efeito" vem do inglês <em>side effect</em>, efeito colateral: aquilo que a função faz além de devolver um valor. "Derivado" é o que deriva de outro, como o troco deriva do valor pago e do preço. Com esses dois nomes na cabeça, a escolha deixa de ser uma regra decorada e passa a ser uma consequência do que você quer dizer.</p>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Qual é a diferença central entre <code>$derived</code> e <code>$effect</code>?</p>
+<label><input type="radio" name="q1"> o <code>$derived</code> roda no servidor e o <code>$effect</code> também</label>
+<label><input type="radio" name="q1"> o <code>$effect</code> é mais rápido porque roda uma vez só</label>
+<label><input type="radio" name="q1"> o <code>$derived</code> calcula um valor; o <code>$effect</code> provoca uma ação fora do componente</label>
+<label><input type="radio" name="q1"> o <code>$derived</code> guarda estado e o <code>$effect</code> lê estado</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Por que o componente que calcula o dobro dentro do <code>$effect</code> mostra <code>Dobro: 0</code> no HTML gerado?</p>
+<label><input type="radio" name="q1"> porque <code>$state</code> não funciona no servidor</label>
+<label><input type="radio" name="q1"> porque efeitos não rodam na renderização do servidor</label>
+<label><input type="radio" name="q1"> porque <code>preco * 2</code> vale zero</label>
+<label><input type="radio" name="q1"> porque o HTML é gerado antes de o script existir</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Quando usar <code>$derived.by</code> em vez de <code>$derived</code>?</p>
+<label><input type="radio" name="q1"> quando o cálculo tem várias linhas, laço ou condicional</label>
+<label><input type="radio" name="q1"> quando o valor precisa ser assíncrono</label>
+<label><input type="radio" name="q1"> quando o cálculo precisa mexer no DOM</label>
+<label><input type="radio" name="q1"> sempre: <code>$derived</code> sem <code>.by</code> está obsoleto</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let preco = $state(10);<br>let dobro = <input data-answer="$derived(preco * 2)">&nbsp;;<br><br>&lt;p&gt;Preço: {preco} Dobro: {dobro}&lt;/p&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>$derived</code> calcula um valor a partir de outros e roda também no servidor.</li>
+  <li><code>$effect</code> executa uma ação com consequência fora do componente e não roda no servidor.</li>
+  <li>Calcular dentro de <code>$effect</code> deixa o HTML inicial errado e gasta trabalho em cada mudança.</li>
+  <li>O teste de quatro perguntas decide: se dá para calcular agora, use <code>$derived</code>.</li>
+  <li><code>$derived.by(fn)</code> é para cálculos longos, com laço e <code>return</code>.</li>
+  <li><code>$derived</code> recebe expressão; função nele imprime o código na tela.</li>
+  <li>Efeito que acumula no que lê entra em ciclo (<code>effect_update_depth_exceeded</code>).</li>
+  <li><code>$effect</code> não devolve valor: guardar o retorno é erro de compilação.</li>
+  <li>Efeitos legítimos: rede, <code>localStorage</code>, <code>document.title</code>, foco, som.</li>
+  <li>Menos efeitos significam pacote menor e menos trabalho por mudança.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>untrack() — ler um valor sem virar dependência | Guia Svelte</title>
+<meta name="description" content="untrack no Svelte 5: por que toda leitura dentro de $effect vira dependência, como quebrar o ciclo que não termina e qual é o custo de desligar a reatividade.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">untrack()</span></h1>
+
+<p class="intro">A Ana tem um caderno com os preços do mês passado. Ela consulta o caderno para comparar, mas não quer que a consulta vire uma promessa de trabalho: olhar o preço antigo não deve fazer ninguém refazer a conta. Dentro de um <code>$effect</code> acontece algo parecido. Tudo o que o efeito lê vira dependência, inclusive coisas que só estavam ali para serem mostradas. <strong>untrack</strong> é a função que diz "leia este valor, mas não fique de olho nele".</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma <strong>dependência</strong> e por que toda leitura dentro do efeito conta.</li>
+  <li>Por que um efeito que lê o que escreve entra em ciclo.</li>
+  <li>Como <code>untrack(fn)</code> quebra esse ciclo sem parar a reatividade do resto.</li>
+  <li>Quando usar <code>untrack</code> e quando o problema é o desenho do código.</li>
+  <li>O custo de usar <code>untrack</code> no lugar errado: valor congelado.</li>
+  <li>Como contar quantas vezes um efeito rodou sem criar dependência no contador.</li>
+  <li>Como manter um histórico em variável comum e espelhar na tela.</li>
+  <li>Os três erros reais desta aula, com a mensagem copiada do compilador.</li>
+  <li>Por que <code>untrack</code> não aparece na tela gerada no servidor.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: consultar sem acordar o fornecedor</h2>
+
+<p>Na padaria, a Ana tem dois cadernos. O caderno do dia é o que ela usa para trabalhar: quando alguém anota um pedido ali, a cozinha precisa saber. O caderno do mês passado é só consulta: ela abre, compara, fecha, e ninguém na cozinha é avisado. Os dois são cadernos de papel, com a mesma letra e a mesma caneta, mas o efeito de abrir um é diferente do efeito de abrir o outro.</p>
+
+<p>Um <code>$effect</code> funciona assim: ele anota, em segredo, cada variável de estado que lê durante a execução. Essas variáveis viram <strong>dependências</strong> — o efeito promete rodar de novo quando qualquer uma delas mudar. Isso é o que faz a reatividade funcionar: o efeito sabe exatamente do que depende, sem você declarar uma lista.</p>
+
+<p>O problema aparece quando o efeito lê algo que não deveria ser motivo para rodar de novo. Dois casos típicos. No primeiro, o efeito <em>escreve</em> numa variável que ele também <em>lê</em>: cada execução muda o valor, o valor mudado pede outra execução, e o ciclo não termina. No segundo, o efeito precisa consultar um valor só para montar uma mensagem, mas a mudança desse valor não deveria provocar trabalho nenhum.</p>
+
+<p><code>untrack</code> resolve os dois. Ele recebe uma função, executa essa função com o "radar" de dependências desligado e devolve o resultado. Tudo o que for lido lá dentro não vira dependência; tudo o que for lido fora continua valendo. É o caderno do mês passado: você consulta, fecha, e a cozinha nem fica sabendo.</p>
+
+<p>Existe uma segunda imagem que ajuda: a agenda de contatos. Quando a Ana abre a agenda para procurar o telefone do padeiro, ninguém liga para ninguém — mas se ela abrisse a agenda e, ao mesmo tempo, prometesse retornar todas as ligações que aparecessem ali, o dia estaria perdido. A leitura é a mesma; a promessa é que muda. Um efeito registra as leituras e assume o compromisso de rodar de novo quando qualquer uma delas mudar. <code>untrack</code> existe para que você escolha quais leituras entram nesse compromisso.</p>
+
+<p>Guardar essa distinção também evita um mal-entendido comum: reatividade não é "atualizar sempre que qualquer coisa muda". É "atualizar quando a dependência declarada muda". Um componente com dez efeitos e vinte variáveis tem, no máximo, a lista de dependências de cada efeito — não uma varredura da página inteira a cada mudança. É por isso que o Svelte consegue ser preciso e rápido ao mesmo tempo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Anotar no caderno do dia</td><td>escrever numa variável <code>$state</code></td></tr>
+<tr><td>A cozinha ser avisada</td><td>o <code>$effect</code> rodar de novo</td></tr>
+<tr><td>Consultar o caderno do mês passado</td><td><code>untrack(() =&gt; valor)</code></td></tr>
+<tr><td>Ler o preço e não avisar ninguém</td><td>a leitura não entra na lista de dependências</td></tr>
+<tr><td>Deixar de consultar e trabalhar no escuro</td><td><code>untrack</code> no lugar errado: valor congelado</td></tr>
+</table>
+</div>
+
+<h2>2. Toda leitura dentro do efeito conta</h2>
+
+<p>O componente abaixo conta quantas vezes o efeito rodou. O contador é uma variável de tela, e a leitura dele está protegida: sem essa proteção, o efeito se veria mudando o próprio contador e rodaria para sempre.</p>
+
+<pre class="file" data-file="src/Rodadas.svelte">&lt;script&gt;
+  import { untrack } from 'svelte';
+
+  let nome = $state('Ana');
+  let rodadas = $state(0);
+
+  $effect(() =&gt; {
+    const n = nome;
+    rodadas = untrack(() =&gt; rodadas) + 1;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Olá, {nome} — rodadas: {rodadas}&lt;/p&gt;</pre>
+
+<pre class="out">Olá, Ana — rodadas: 0</pre>
+
+<p>O texto mostra <code>rodadas: 0</code> porque efeitos não rodam na renderização fora do navegador. No navegador, a primeira execução do efeito acontece logo depois da montagem e o número vira <code>1</code>; a cada troca de <code>nome</code>, vira <code>2</code>, <code>3</code>, e assim por diante. O contador reflete o trabalho, e não provoca trabalho.</p>
+
+<h3>A anatomia do <code>untrack</code></h3>
+
+<dl class="anatomy">
+  <dt>import { untrack } from 'svelte'</dt><dd>vem da biblioteca, junto de <code>onMount</code> e <code>tick</code>. Não é runa: não começa com cifrão e não precisa de posição especial no arquivo.</dd>
+  <dt>untrack(fn)</dt><dd>recebe uma função de zero argumentos, executa e devolve o que ela devolver. Durante a execução, nenhuma leitura é registrada como dependência.</dd>
+  <dt>() =&gt; rodadas</dt><dd>a leitura protegida. Só o que está dentro desta função fica fora do radar; <code>nome</code>, lido fora dela, continua sendo dependência.</dd>
+  <dt>rodadas = … + 1</dt><dd>a escrita continua normal. <code>untrack</code> protege a leitura, não a atribuição: quem lê <code>rodadas</code> na tela continua sendo avisado.</dd>
+</dl>
+
+<p>Repare no que <code>untrack</code> <em>não</em> faz: ele não impede que a variável mude, não congela valor para sempre e não desliga a reatividade do componente. Ele só decide o que entra na lista de dependências daquele efeito, naquela execução. A tela continua acompanhando <code>rodadas</code>, porque o parágrafo lê a variável normalmente.</p>
+
+<h2>3. O ciclo que não termina</h2>
+
+<p>Sem a proteção, o efeito escreve e lê a mesma variável. O Svelte detecta o laço e interrompe com um erro. O componente abaixo é a versão sem <code>untrack</code>:</p>
+
+<pre class="file" data-file="src/Loop.svelte">&lt;script&gt;
+  let n = $state(0);
+
+  $effect(() =&gt; {
+    n = n + 1;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{n}&lt;/p&gt;</pre>
+
+<pre class="out">0</pre>
+
+<p>Fora do navegador, a saída é inocente: <code>0</code>. O erro só aparece quando o efeito roda de verdade. No navegador, o console mostra <code>Uncaught Error: https://svelte.dev/e/effect_update_depth_exceeded</code> — o nome do erro, <em>effect update depth exceeded</em>, é a descrição exata do problema: a profundidade de atualizações do efeito passou do limite.</p>
+
+<p>Vale entender por que o Svelte não tenta "resolver" isso sozinho. Um efeito que muda o próprio valor não tem solução geral: qualquer número de repetições é plausível, e o resultado seria imprevisível. O limite existe para transformar um travamento da página num erro legível, que aponta o componente e a linha.</p>
+
+<p>Há três saídas possíveis, e escolher a certa é a parte importante:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Saída</th><th>Por quê</th></tr>
+<tr><td>o efeito precisa <em>contar</em> as próprias execuções</td><td><code>untrack</code> na leitura do contador</td><td>o contador é registro, não gatilho</td></tr>
+<tr><td>o valor pode ser calculado a partir de outros</td><td><code>$derived</code></td><td>não há efeito colateral, nada a repetir</td></tr>
+<tr><td>o efeito está escrevendo no que deveria só ler</td><td>repensar o desenho</td><td><code>untrack</code> esconderia o problema</td></tr>
+</table>
+</div>
+
+<p>A terceira linha é a mais comum e a mais ignorada. Muitos ciclos não são falta de <code>untrack</code>: são um efeito fazendo o trabalho de um <code>$derived</code>. Se o valor pode ser calculado, calcule; efeito é para o que sai do componente — rede, armazenamento, foco, log.</p>
+
+<h2>4. Experimente: o contador que quebra o efeito</h2>
+
+<p>A caixa abaixo reproduz o ciclo. O botão deveria trocar o nome e somar uma rodada, mas o componente nem chega a montar.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^trocar nome Olá, Bia — rodadas: 2$">
+<p class="try-task"><strong>Missão:</strong> o efeito quebra com <em>effect update depth exceeded</em> ao ler o contador que ele mesmo escreve. Faça ele montar e mostrar <code>rodadas: 2</code> depois de um clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let rodadas = $state(0);
+
+  $effect(() =&gt; {
+    const n = nome;
+    rodadas = rodadas + 1;
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (nome = nome === 'Ana' ? 'Bia' : 'Ana')}&gt;trocar nome&lt;/button&gt;
+&lt;p&gt;Olá, {nome} — rodadas: {rodadas}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { untrack } from 'svelte';
+
+  let nome = $state('Ana');
+  let rodadas = $state(0);
+
+  $effect(() =&gt; {
+    const n = nome;
+    rodadas = untrack(() =&gt; rodadas) + 1;
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (nome = nome === 'Ana' ? 'Bia' : 'Ana')}&gt;trocar nome&lt;/button&gt;
+&lt;p&gt;Olá, {nome} — rodadas: {rodadas}&lt;/p&gt;</pre>
+</div>
+
+<p>O resultado esperado é <code>rodadas: 2</code> depois de um clique: uma execução na montagem e outra na troca de nome. Se aparecer <code>3</code>, alguma outra leitura entrou na lista; se aparecer <code>1</code>, o efeito não está reagindo ao nome.</p>
+
+<h2>5. Experimente: histórico sem gatilho</h2>
+
+<p>O segundo uso de <code>untrack</code> é o histórico. O efeito registra cada troca de nome, mas lê um "modo" que só serve para a mensagem. Sem a proteção, trocar o modo também acrescenta uma linha no histórico — e o registro deixa de significar "trocas de nome".</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;clique:#modo;;outre:^trocar nome trocar modo: longo registros: Ana · Bia · Ana$">
+<p class="try-task"><strong>Missão:</strong> clique em <strong>trocar nome</strong> duas vezes e depois em <strong>trocar modo</strong>. O histórico deve ter só as trocas de nome: <code>Ana · Bia · Ana</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+  let modo = $state('curto');
+  let log = [];
+  let naTela = $state('');
+
+  $effect(() =&gt; {
+    const n = nome;
+    const m = modo;
+    log.push(n);
+    naTela = log.join(' · ');
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (nome = nome === 'Ana' ? 'Bia' : 'Ana')}&gt;trocar nome&lt;/button&gt;
+&lt;button id="modo" onclick={() =&gt; (modo = modo === 'curto' ? 'longo' : 'curto')}&gt;trocar modo: {modo}&lt;/button&gt;
+&lt;p&gt;registros: {naTela}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { untrack } from 'svelte';
+
+  let nome = $state('Ana');
+  let modo = $state('curto');
+  let log = [];
+  let naTela = $state('');
+
+  $effect(() =&gt; {
+    const n = nome;
+    const m = untrack(() =&gt; modo);
+    log.push(n);
+    naTela = log.join(' · ');
+  });
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (nome = nome === 'Ana' ? 'Bia' : 'Ana')}&gt;trocar nome&lt;/button&gt;
+&lt;button id="modo" onclick={() =&gt; (modo = modo === 'curto' ? 'longo' : 'curto')}&gt;trocar modo: {modo}&lt;/button&gt;
+&lt;p&gt;registros: {naTela}&lt;/p&gt;</pre>
+</div>
+
+<p>O detalhe que faz esse exemplo funcionar é o <code>log</code> ser uma variável comum, e não <code>$state</code>. Se ele fosse reativo, a leitura de <code>log</code> dentro do efeito criaria outra dependência e o histórico voltaria a se repetir. A tela lê <code>naTela</code>, que é <code>$state</code> e é escrita — nunca lida — dentro do efeito, então não gera ciclo.</p>
+
+<p>É um padrão útil e um pouco chato de ler. Sempre que ele aparecer, vale perguntar se o histórico não deveria viver num <strong>store</strong> ou num módulo compartilhado, com o efeito só empurrando dados para lá. O guia tem aulas sobre isso adiante.</p>
+
+<h2>6. O custo: valor congelado</h2>
+
+<p><code>untrack</code> desliga o radar. Usar no lugar errado produz um valor que nunca mais se atualiza, e o sintoma é pior que o ciclo: não há mensagem, só um número parado. O componente abaixo calcula uma soma com <code>untrack</code> dentro do <code>$derived</code>.</p>
+
+<pre class="file" data-file="src/Soma.svelte">&lt;script&gt;
+  import { untrack } from 'svelte';
+
+  let a = $state(1);
+  let b = $state(2);
+  let soma = $derived(untrack(() =&gt; a + b));
+&lt;/script&gt;
+
+&lt;p&gt;{a} + {b} = {soma}&lt;/p&gt;</pre>
+
+<pre class="out">1 + 2 = 3</pre>
+
+<p>A saída parece certa, e é: na primeira execução, a soma é três. O problema vem depois. Quando <code>a</code> muda para 2, o <code>$derived</code> não tem dependência nenhuma — <code>untrack</code> escondeu <code>a</code> e <code>b</code> — então ele nunca recalcula. A tela mostra <code>2 + 2 = 3</code>. Num teste rápido, ninguém nota; num relatório de vendas, é um desastre silencioso.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^somar a 2 \+ 2 = 4$">
+<p class="try-task"><strong>Missão:</strong> a soma mostra <code>2 + 2 = 3</code> depois do clique, porque o <code>$derived</code> está protegido demais. Faça a conta acompanhar: <code>2 + 2 = 4</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  import { untrack } from 'svelte';
+
+  let a = $state(1);
+  let b = $state(2);
+  let soma = $derived(untrack(() =&gt; a + b));
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (a++)}&gt;somar a&lt;/button&gt;
+&lt;p&gt;{a} + {b} = {soma}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let a = $state(1);
+  let b = $state(2);
+  let soma = $derived(a + b);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; (a++)}&gt;somar a&lt;/button&gt;
+&lt;p&gt;{a} + {b} = {soma}&lt;/p&gt;</pre>
+</div>
+
+<p>A solução é remover, não acrescentar. Esse é o teste que separa uso bom de uso ruim: se o valor deve mudar quando a fonte muda, <code>untrack</code> está errado. Se o valor precisa apenas ser consultado naquele instante, está certo.</p>
+
+<h2>7. Onde <code>untrack</code> não é necessário</h2>
+
+<p>Fora de um efeito ou de um derivado, nada é rastreado. Um <code>onclick</code> pode ler quantas variáveis quiser: o clique já aconteceu, e não há lista de dependências a manter. O mesmo vale para o corpo de uma função auxiliar chamada de dentro de um evento.</p>
+
+<pre class="file" data-file="src/Evento.svelte">&lt;script&gt;
+  let a = $state(1);
+  let b = $state(2);
+  let soma = $state(0);
+
+  function calcular() {
+    soma = a + b;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={calcular}&gt;calcular&lt;/button&gt;
+&lt;p&gt;{soma}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;button&gt;calcular&lt;/button&gt; &lt;p&gt;0&lt;/p&gt;</pre>
+
+<p>Não há <code>untrack</code> aqui, e não deve haver: dentro do evento, ler <code>a</code> e <code>b</code> é exatamente o que se espera. Colocar <code>untrack</code> em código de evento é ruído — não muda o comportamento e faz o leitor procurar um problema que não existe.</p>
+
+<p>No template, o rastreamento é ainda mais direto: cada <code>{valor}</code> é uma leitura acompanhada. Se você proteger um valor que aparece na tela, o texto desenha uma vez e não muda mais — o mesmo congelamento da seção 6, só que no HTML em vez do script. O template não tem "gatilho" nem "consulta": tudo o que ele mostra é, por definição, algo que a tela precisa acompanhar.</p>
+
+<p>A regra prática: <strong>só existe dependência dentro de <code>$effect</code>, <code>$derived</code> e do template</strong>. Em template, aliás, o rastreamento é o que faz a tela acompanhar; proteger leituras ali costuma ser um erro. Use <code>untrack</code> na dúvida entre "isto é gatilho" e "isto é consulta", e prefira resolver o desenho quando o efeito estiver escrevendo no que só deveria ler.</p>
+
+<h2>8. Conferindo no projeto da Ana</h2>
+
+<p>O servidor de desenvolvimento mostra o componente funcionando, e é onde o ciclo aparece de verdade, no console do navegador:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 705 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>O build não reclama de <code>untrack</code> nem de ciclo: a verificação é de sintaxe e tipos, não de comportamento em execução. Um componente que trava no navegador pode compilar sem uma única mensagem.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-C06F-qKH.js  36.15 kB │ gzip: 13.89 kB
+✓ built in 2.08s</pre>
+
+<p>Por isso a caixa "Experimente" desta aula é tão útil: ela roda o componente no navegador de verdade e mostra o erro que o build não vê.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram da execução real dos componentes quebrados, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>untrack()</code> sem a função</strong>
+<p>O <code>untrack</code> espera uma função para executar. Sem argumento, ele tenta chamar <code>undefined</code>.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { untrack } from 'svelte';
+
+  let n = $state(1);
+  const valor = untrack();
+&lt;/script&gt;
+
+&lt;p&gt;{valor}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: fn is not a function</pre>
+<p>"fn is not a function" é a mensagem interna do Svelte: <em>fn</em> é o nome do parâmetro que ele esperava. A correção é passar <code>() =&gt; n</code>, e não <code>n</code>: o valor é lido dentro da função, para o radar ser desligado no momento certo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>untrack</code> sem <code>import</code></strong>
+<p>Como <code>onMount</code> e <code>tick</code>, <code>untrack</code> não é palavra da linguagem: é função importada.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let n = $state(1);
+  const valor = untrack(() =&gt; n);
+&lt;/script&gt;
+
+&lt;p&gt;{valor}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: untrack is not defined</pre>
+<p>A mensagem "… is not defined" com um nome do Svelte é quase sempre import faltando. Confira a lista do topo do <code>&lt;script&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — importar do módulo errado</strong>
+<p>O Svelte tem vários submódulos, e <code>svelte/reactivity</code> não exporta <code>untrack</code>. O código compila e quebra ao carregar o módulo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { untrack } from 'svelte/reactivity';
+
+  let n = $state(1);
+  const valor = untrack(() =&gt; n);
+&lt;/script&gt;
+
+&lt;p&gt;{valor}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: The requested module 'svelte/reactivity' does not provide an export named 'untrack'</pre>
+<p>A mensagem diz exatamente o que falta: aquele módulo não tem esse nome. <code>untrack</code>, <code>onMount</code>, <code>tick</code> e <code>createEventDispatcher</code> vêm todos de <code>'svelte'</code>, sem barra e sem sufixo.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Chamada</th><th>Vem de</th><th>O que faz</th></tr>
+<tr><td><code>untrack(fn)</code></td><td><code>'svelte'</code></td><td>executa <code>fn</code> sem registrar dependências e devolve o resultado</td></tr>
+<tr><td><code>$effect(fn)</code></td><td>runa</td><td>rastreia toda leitura feita em <code>fn</code></td></tr>
+<tr><td><code>$derived(expr)</code></td><td>runa</td><td>recalcula quando as leituras de <code>expr</code> mudam</td></tr>
+<tr><td><code>$state(valor)</code></td><td>runa</td><td>fonte de valor observável</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td><code>effect_update_depth_exceeded</code></td><td>efeito lê o que escreve</td><td><code>untrack</code> na leitura ou repensar o efeito</td></tr>
+<tr><td>número na tela nunca muda</td><td><code>untrack</code> em algo que deveria ser dependência</td><td>remover o <code>untrack</code></td></tr>
+<tr><td>efeito roda uma vez e para</td><td>a dependência ficou escondida</td><td>ler o valor fora do <code>untrack</code></td></tr>
+<tr><td><code>untrack is not defined</code></td><td>import ausente</td><td><code>import { untrack } from 'svelte'</code></td></tr>
+</table>
+</div>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que vira dependência de um <code>$effect</code>?</p>
+<label><input type="radio" name="q1"> apenas as variáveis declaradas numa lista de dependências</label>
+<label><input type="radio" name="q1"> apenas as variáveis escritas dentro do efeito</label>
+<label><input type="radio" name="q1"> toda variável de estado lida durante a execução do efeito</label>
+<label><input type="radio" name="q1"> nenhuma: o efeito sempre roda a cada mudança do componente</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Para que serve <code>untrack(() =&gt; valor)</code>?</p>
+<label><input type="radio" name="q1"> para impedir que o valor mude de novo</label>
+<label><input type="radio" name="q1"> para ler o valor sem que ele vire dependência do efeito</label>
+<label><input type="radio" name="q1"> para desligar a reatividade do componente inteiro</label>
+<label><input type="radio" name="q1"> para transformar o valor em texto na tela</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual é o sintoma de usar <code>untrack</code> em algo que deveria ser dependência?</p>
+<label><input type="radio" name="q1"> o valor fica congelado e nunca acompanha a mudança</label>
+<label><input type="radio" name="q1"> o componente entra em ciclo e o console acusa profundidade</label>
+<label><input type="radio" name="q1"> o build falha com <code>is not defined</code></label>
+<label><input type="radio" name="q1"> o CSS do componente sai do escopo</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">$effect(() =&gt; {<br>&nbsp; const n = nome;<br>&nbsp; rodadas = <input data-answer="untrack(() => rodadas)|untrack(() => rodadas) + 1"> + 1;<br>});</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Dentro de <code>$effect</code>, <code>$derived</code> e do template, toda leitura de estado vira dependência.</li>
+  <li>Um efeito que lê o que escreve entra em ciclo e o Svelte aborta com <code>effect_update_depth_exceeded</code>.</li>
+  <li><code>untrack(fn)</code> executa a função sem registrar leituras e devolve o resultado.</li>
+  <li><code>untrack</code> protege a leitura, não a escrita: a tela continua acompanhando o valor.</li>
+  <li>Fora de efeito e derivado não há rastreamento; <code>untrack</code> em evento é ruído.</li>
+  <li>Usar <code>untrack</code> no lugar errado congela o valor sem nenhuma mensagem.</li>
+  <li>Contar execuções de efeito é um uso legítimo: o contador é registro, não gatilho.</li>
+  <li>Histórico em variável comum, espelho em <code>$state</code>, evita ciclo e mantém a tela viva.</li>
+  <li>Efeitos não rodam na renderização fora do navegador: a saída do servidor mostra o valor inicial.</li>
+  <li>Os erros desta aula: <code>untrack()</code> sem função, import ausente e import do módulo errado.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

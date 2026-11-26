@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lendo o Navegador — window, document e navigator sem quebrar | Guia Svelte</title>
+<meta name="description" content="Como ler window, navigator e matchMedia num componente Svelte 5: o que existe no servidor e o que não existe, o atalho svelte:window e os erros reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Lendo o Navegador</span></h1>
+
+<p class="intro">A Ana quer saber três coisas sobre quem entra na padaria: se o cliente prefere luz acesa ou meia-luz, se está conectado o suficiente para ver o cardápio do dia e qual a largura da vitrine para escolher o cartaz. Todas essas respostas estão no navegador, não no componente. Nesta aula você aprende quais são os objetos que guardam essas informações, o que existe e o que não existe quando a página é gerada no servidor, e como ler tudo isso sem quebrar o componente.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O papel de <code>window</code>, <code>document</code> e <code>navigator</code> no componente.</li>
+  <li>Como ler a largura da janela e o idioma do visitante na hora certa.</li>
+  <li>O atalho <code>&lt;svelte:window&gt;</code> para eventos e medidas da janela.</li>
+  <li>Como perguntar ao sistema se o visitante prefere tema escuro.</li>
+  <li>O que <code>navigator.onLine</code> responde e por que ele não é confiável.</li>
+  <li>O que existe no servidor e o que só existe no navegador.</li>
+  <li>Por que o idioma lido fora do <code>onMount</code> muda entre servidor e navegador.</li>
+  <li>Os três erros reais desta aula, com a mensagem copiada do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: ler a rua sem sair do balcão</h2>
+
+<p>A padaria da Ana tem uma janela para a rua. Pela janela, ela descobre coisas que não estão dentro da loja: se está chovendo, quantas pessoas passam, se o dia está claro. O componente tem a mesma janela, e ela se chama <code>window</code>. Do lado de dentro, a loja tem prateleiras, balcão e caderno — no componente, isso é o <code>document</code>: a estrutura da página, com seus elementos e medidas.</p>
+
+<p>Existe ainda uma terceira fonte, mais discreta: o <code>navigator</code>. É o que conta sobre o visitante — idioma, se está conectado, se o aparelho é celular. A Ana usaria isso para decidir se escreve o cartaz em português ou em inglês, ou se mostra o aviso "cardápio do dia indisponível sem internet".</p>
+
+<p>O ponto central da aula não é decorar nomes de propriedades: é entender <strong>onde</strong> essas leituras podem acontecer. Um componente é renderizado duas vezes — uma no servidor, que não tem janela, e outra no navegador, que tem. Ler da janela no lugar errado quebra a primeira; ler no lugar certo é rotina. O lugar certo é o <code>onMount</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>A janela para a rua</td><td><code>window</code>: tamanho, rolagem, preferências</td></tr>
+<tr><td>As prateleiras e o balcão</td><td><code>document</code>: elementos, título, foco</td></tr>
+<tr><td>O que se sabe do cliente</td><td><code>navigator</code>: idioma, conexão</td></tr>
+<tr><td>Perguntar à rua antes de abrir a loja</td><td>ler no topo do script: erro</td></tr>
+<tr><td>Perguntar depois de abrir</td><td>ler dentro de <code>onMount</code></td></tr>
+</table>
+</div>
+
+<h2>2. Os três objetos, um por um</h2>
+
+<p><code>window</code> é o objeto global do navegador. Tudo o que é da janela mora nele: <code>innerWidth</code> e <code>innerHeight</code> (a área visível), <code>scrollY</code> (quanto a página rolou), <code>devicePixelRatio</code> (a densidade da tela), <code>matchMedia</code> (consulta de preferências) e <code>localStorage</code> (o armazenamento, tema da próxima aula).</p>
+
+<p><code>document</code> é a página em si. <code>document.title</code> é o texto da aba, <code>document.activeElement</code> é o elemento com foco, <code>document.querySelector</code> procura um elemento. É o objeto que você quase não precisa usar no Svelte, porque o <code>bind:this</code> e as referências do próprio componente resolvem a maior parte dos casos.</p>
+
+<p>Na prática, o <code>document</code> é o objeto que menos aparece num componente Svelte, e isso é uma boa notícia. O Svelte já sabe onde cada elemento está: o <code>bind:this</code> entrega a referência, o <code>onclick</code> entrega o evento, e o texto da aba tem até um elemento próprio, o <code>&lt;svelte:head&gt;</code>, que escreve no cabeçalho da página. Quando você se pegar procurando elementos com <code>document.querySelector</code>, pare e pergunte se não existe uma forma do próprio componente resolver.</p>
+
+<p><code>navigator</code> descreve o ambiente do visitante. <code>navigator.language</code> é o idioma preferido, <code>navigator.onLine</code> diz se há conexão, <code>navigator.userAgent</code> é a assinatura do navegador — usada com muita parcimônia, porque ela muda e mente com frequência.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Leitura</th><th>Devolve</th><th>Existe no servidor?</th></tr>
+<tr><td><code>window.innerWidth</code></td><td>largura visível em pixels</td><td>não: erro</td></tr>
+<tr><td><code>window.matchMedia('(prefers-color-scheme: dark)')</code></td><td>objeto com <code>matches</code></td><td>não: erro</td></tr>
+<tr><td><code>document.title</code></td><td>texto da aba</td><td>não: erro</td></tr>
+<tr><td><code>navigator.language</code></td><td>idioma, como <code>'pt-BR'</code></td><td><strong>sim</strong>, mas com outro valor</td></tr>
+<tr><td><code>navigator.onLine</code></td><td><code>true</code> ou <code>false</code></td><td><strong>sim</strong>, sempre <code>true</code></td></tr>
+</table>
+</div>
+
+<p>Repare na última linha da tabela e no detalhe da penúltima. O Node tem um <code>navigator</code> próprio, com valores fixos — foi por isso que ele não quebrou no servidor. Isso é pior que um erro, em certo sentido: o código funciona, mas mostra um valor que não é o do visitante. Você vai ver esse caso na seção 11.</p>
+
+<h2>3. Ler na hora certa: <code>onMount</code></h2>
+
+<p>O componente abaixo lê duas informações do visitante: o idioma e a conexão. As duas leituras estão dentro do <code>onMount</code>, e os valores iniciais são declarados no estado.</p>
+
+<pre class="file" data-file="src/Dispositivo.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let idioma = $state('—');
+  let online = $state(false);
+
+  onMount(() =&gt; {
+    idioma = navigator.language;
+    online = navigator.onLine;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Idioma do navegador: {idioma}&lt;/p&gt;
+&lt;p&gt;Conectado: {online ? 'sim' : 'não'}&lt;/p&gt;</pre>
+
+<pre class="out">Idioma do navegador: — Conectado: não</pre>
+
+<p>A saída do servidor mostra os valores iniciais: um traço no lugar do idioma e "não" no lugar da conexão. Não é um defeito: é a informação honesta de que ninguém foi ao navegador perguntar. No navegador, o <code>onMount</code> roda e os dois parágrafos se atualizam — no caso da Ana, para <code>pt-BR</code> e <code>sim</code>.</p>
+
+<h3>A anatomia da leitura</h3>
+
+<dl class="anatomy">
+  <dt>let idioma = $state('—')</dt><dd>o valor de partida, que aparece antes da leitura. Um traço é melhor que uma string vazia: mostra que o dado ainda não chegou, em vez de parecer um erro.</dd>
+  <dt>onMount(() =&gt; { … })</dt><dd>o portão entre os dois ambientes. Tudo o que só existe no navegador fica aqui dentro.</dd>
+  <dt>navigator.language</dt><dd>o idioma preferido do visitante, no formato <code>pt-BR</code>, <code>en-US</code>, <code>es-AR</code>. É uma preferência, não uma certeza.</dd>
+  <dt>navigator.onLine</dt><dd>um booleano que diz se o navegador acha que há conexão. Ele erra: uma rede local sem internet ainda conta como conectada.</dd>
+</dl>
+
+<p>A escolha do valor inicial é uma decisão de produto, não de código. Se o idioma aparece num título importante, começar com "—" pode piscar na tela; talvez valha começar com o português e corrigir depois. Se a conexão decide mostrar um aviso, começar com "não" evita prometer algo que talvez não exista. O guia recomenda o caminho conservador: mostre o menos, prometa o mínimo, atualize quando souber.</p>
+
+<div class="tip">
+<strong>Um <code>onMount</code> para várias leituras</strong>
+<p>Você pode juntar várias leituras do navegador num único <code>onMount</code>. Elas acontecem no mesmo instante e a tela se atualiza uma vez só. Vários <code>onMount</code> no mesmo componente também funcionam, mas dificultam saber em que ordem as coisas acontecem.</p>
+</div>
+
+<h2>4. O atalho <code>&lt;svelte:window&gt;</code></h2>
+
+<p>Existe uma forma curta de pendurar ouvintes na janela: o elemento especial <code>&lt;svelte:window&gt;</code>. Ele não desenha nada na tela; serve para declarar ligações com a janela, e o Svelte cuida de registrar e remover sozinho.</p>
+
+<pre class="file" data-file="src/Janela.svelte">&lt;script&gt;
+  let largura = $state(0);
+
+  function medir() {
+    largura = window.innerWidth;
+  }
+&lt;/script&gt;
+
+&lt;svelte:window onresize={medir} /&gt;
+
+&lt;p&gt;A janela tem {largura} pixels.&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;A janela tem 0 pixels.&lt;/p&gt;</pre>
+
+<p>O texto gerado no servidor mostra zero porque o evento nunca aconteceu ali. No navegador, o parágrafo continua em zero até a primeira vez que a janela for redimensionada — e é aí que aparece a diferença entre <code>svelte:window</code> e <code>onMount</code>. O primeiro escuta; o segundo lê uma vez. Para mostrar a largura atual já na abertura, chame <code>medir()</code> dentro de um <code>onMount</code>, ou use <code>bind:</code>.</p>
+
+<h3>A anatomia do elemento especial</h3>
+
+<dl class="anatomy">
+  <dt>&lt;svelte:window</dt><dd>declara que o componente se liga à janela. Pode haver um só por componente, e ele não aparece no DOM.</dd>
+  <dt>onresize={medir}</dt><dd>um ouvinte do evento <code>resize</code>, escrito com a sintaxe de atributo do Svelte 5. O Svelte registra e remove o ouvinte na montagem e na desmontagem.</dd>
+  <dt>/&gt;</dt><dd>fecha o elemento. Ele não tem conteúdo, então é sempre auto-fechado.</dd>
+  <dt>bind:innerWidth</dt><dd>uma alternativa: <code>&lt;svelte:window bind:innerWidth={largura} /&gt;</code> mantém a variável igual à largura da janela, sem função nenhuma.</dd>
+</dl>
+
+<p>O <code>bind:</code> no <code>svelte:window</code> vale para <code>innerWidth</code>, <code>innerHeight</code>, <code>scrollY</code>, <code>scrollX</code> e <code>online</code>. É a forma mais curta de manter uma medida sincronizada, e a que o guia prefere quando o valor precisa estar certo desde a abertura. O custo é que o valor passa a ser escrito pelo Svelte: você não controla quando ele muda, só lê.</p>
+
+<h2>5. Experimente: a conexão do visitante</h2>
+
+<p>A caixa abaixo mostra a conexão com um valor fixo. Faça o componente perguntar ao navegador, na montagem, e mostrar o valor real.</p>
+
+<div class="trysvelte" data-goal="outre:^Online: sim$">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra <code>Online: não</code> mesmo com internet. Leia <code>navigator.onLine</code> dentro do <code>onMount</code> e mostre o valor.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let online = $state(false);
+&lt;/script&gt;
+
+&lt;p&gt;Online: {online ? 'sim' : 'não'}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let online = $state(false);
+
+  onMount(() =&gt; {
+    online = navigator.onLine;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Online: {online ? 'sim' : 'não'}&lt;/p&gt;</pre>
+</div>
+
+<p>Se você testar essa caixa no celular com o modo avião ligado, o valor muda. É um bom exercício de humildade: o mesmo componente mostra coisas diferentes em aparelhos diferentes, e isso não é bug — é a informação do ambiente sendo lida.</p>
+
+<h2>6. Preferências: <code>matchMedia</code></h2>
+
+<p>Sistemas operacionais e navegadores expõem preferências do usuário em forma de consulta, iguais às do CSS. A mais usada é <code>(prefers-color-scheme: dark)</code>: o visitante escolheu tema escuro no sistema. O componente da Ana pergunta isso na montagem.</p>
+
+<pre class="file" data-file="src/Tema.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let escuro = $state(false);
+
+  onMount(() =&gt; {
+    escuro = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Prefere tema escuro: {escuro ? 'sim' : 'não'}&lt;/p&gt;</pre>
+
+<pre class="out">Prefere tema escuro: não</pre>
+
+<p><code>matchMedia</code> devolve um objeto com a propriedade <code>matches</code>, que é <code>true</code> ou <code>false</code> naquele instante. O objeto também permite escutar mudanças com <code>addEventListener('change', …)</code> — e, como todo ouvinte, precisa ser removido depois. Aqui a leitura é feita uma vez, então não há o que remover.</p>
+
+<div class="trysvelte" data-goal="outre:^Tema: (claro|escuro)$">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra <code>Tema: —</code>. Pergunte ao navegador se ele prefere claro ou escuro, dentro do <code>onMount</code>, e mostre a resposta.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let tema = $state('—');
+&lt;/script&gt;
+
+&lt;p&gt;Tema: {tema}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  import { onMount } from 'svelte';
+
+  let tema = $state('—');
+
+  onMount(() =&gt; {
+    tema = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'escuro' : 'claro';
+  });
+&lt;/script&gt;
+
+&lt;p&gt;Tema: {tema}&lt;/p&gt;</pre>
+</div>
+
+<p>Este site usa exatamente essa ideia para o botão de tema: o valor fica guardado no <code>localStorage</code> e a preferência do sistema entra como padrão. Você vai ver o armazenamento na próxima aula; a leitura, com <code>matchMedia</code>, é a que você acabou de escrever.</p>
+
+<h2>7. Experimente: a largura pela metade do código</h2>
+
+<p>O <code>bind:</code> no <code>svelte:window</code> faz o trabalho de <code>onMount</code> mais ouvinte, em uma linha. A caixa abaixo mostra zero porque ninguém ligou a variável à janela.</p>
+
+<div class="trysvelte" data-goal="outre:^Largura: [1-9][0-9]*$">
+<p class="try-task"><strong>Missão:</strong> a tela mostra <code>Largura: 0</code>. Ligue a variável à largura da janela usando <code>&lt;svelte:window&gt;</code> com <code>bind:innerWidth</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Largura: {largura}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;svelte:window bind:innerWidth={largura} /&gt;
+
+&lt;p&gt;Largura: {largura}&lt;/p&gt;</pre>
+</div>
+
+<p>O número que aparece é a largura da área onde o componente foi montado — não a do seu monitor. É uma distinção que importa: <code>innerWidth</code> é a janela, <code>screen.width</code> é a tela, e as duas discordam com frequência. Para decisões de layout, quem manda é a janela.</p>
+
+<h2>8. O que dá para ler e o que não dá</h2>
+
+<p>Nem toda leitura do navegador é segura, e algumas são caras. Vale conhecer os limites antes de sair medindo tudo.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Leitura</th><th>Custo</th><th>Cuidado</th></tr>
+<tr><td><code>window.innerWidth</code></td><td>baixo</td><td>muda a cada redimensionamento; use <code>bind:</code></td></tr>
+<tr><td><code>document.title</code></td><td>baixo</td><td>é escrita, não leitura: faça num <code>$effect</code></td></tr>
+<tr><td><code>element.offsetHeight</code></td><td>médio</td><td>força o navegador a recalcular o layout</td></tr>
+<tr><td><code>getBoundingClientRect()</code></td><td>médio</td><td>também força layout; evite em laço apertado</td></tr>
+<tr><td><code>navigator.userAgent</code></td><td>baixo</td><td>pode ser falsificado e muda de formato</td></tr>
+</table>
+</div>
+
+<p>Uma leitura que merece apresentação é <code>devicePixelRatio</code>: a razão entre pixels físicos e pixels de CSS. Num monitor comum vale <code>1</code>; num celular moderno costuma valer <code>2</code> ou <code>3</code>. Serve para escolher a resolução de uma imagem: com <code>2</code>, uma foto de 300 pixels de CSS precisa de 600 pixels de arquivo para não sair borrada. O Svelte não muda nada disso — é a mesma conta que você faria em JavaScript puro.</p>
+
+<p>Medir dentro de um laço é o erro de desempenho mais comum. Cada leitura de <code>offsetHeight</code> obriga o navegador a garantir que o layout está atualizado; se você mede, escreve, mede, escreve, o navegador recalcula tudo de novo a cada passo. A receita é ler tudo primeiro, guardar em variáveis, e só depois escrever.</p>
+
+<h2>9. Conferindo no projeto da Ana</h2>
+
+<p>No servidor de desenvolvimento, a página abre com os valores iniciais e se corrige em seguida. É o lugar de testar com o modo avião, com a janela estreita e com o tema do sistema trocado.</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+  VITE v7.3.8  ready in 1045 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Ao testar, vale mudar o ambiente de propósito. Estreite a janela até caber num celular e veja se o texto quebra; ligue o modo escuro do sistema e veja se a leitura acompanha; desligue a rede e veja o que a tela promete. Cada uma dessas variações testa uma leitura diferente desta aula, e nenhuma delas aparece num teste que só abre a página no tamanho padrão.</p>
+
+<p>O build não muda nada no comportamento, mas mostra quanto código você levou junto:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CCR8-1kr.js  33.98 kB │ gzip: 13.08 kB
+✓ built in 1.35s</pre>
+
+<p>Um componente que só lê o navegador custa pouco: as propriedades de <code>window</code> e <code>navigator</code> já existem no navegador, então não há biblioteca nova. O que encarece é trazer uma biblioteca de detecção de dispositivo inteira para ler duas propriedades.</p>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram da execução real dos componentes quebrados.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>window</code> no topo do script</strong>
+<p>O caso mais comum: a leitura parece inofensiva e quebra a renderização fora do navegador.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const escuro = window.matchMedia('(prefers-color-scheme: dark)').matches;
+&lt;/script&gt;
+
+&lt;p&gt;{escuro}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: window is not defined</pre>
+<p>A correção é mover a leitura para dentro de um <code>onMount</code> e guardar o resultado num <code>$state</code>, como no componente da seção 6.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>navigator.language</code> no topo: o erro silencioso</strong>
+<p>Este compila, roda e mostra um valor — só que o valor é do servidor, não do visitante.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const idioma = navigator.language;
+&lt;/script&gt;
+
+&lt;p&gt;Idioma: {idioma}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;Idioma: en-US&lt;/p&gt;</pre>
+<p>O Node tem um objeto <code>navigator</code> próprio, com idioma fixo em <code>en-US</code>. Na tela do visitante brasileiro aparece <code>pt-BR</code>. Quando o servidor entrega um texto e o navegador o substitui por outro, o Svelte avisa no console sobre diferença de hidratação — e o aviso é a pista de que alguma leitura aconteceu fora do <code>onMount</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>screen</code> não existe fora do navegador</strong>
+<p><code>screen</code> é global do navegador, como <code>window</code>. No servidor, o nome simplesmente não existe.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const largura = screen.width;
+&lt;/script&gt;
+
+&lt;p&gt;{largura}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: screen is not defined</pre>
+<p>Vale notar que <code>screen.width</code> é a largura do monitor, não da janela: num notebook de 1920 pixels com o navegador em meia tela, <code>innerWidth</code> vale cerca de 960 e <code>screen.width</code> continua 1920. Para layout, use <code>innerWidth</code>.</p>
+</div>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Objeto</th><th>Leituras úteis</th><th>Onde usar</th></tr>
+<tr><td><code>window</code></td><td><code>innerWidth</code>, <code>innerHeight</code>, <code>scrollY</code>, <code>devicePixelRatio</code>, <code>matchMedia()</code></td><td><code>onMount</code> ou <code>&lt;svelte:window&gt;</code></td></tr>
+<tr><td><code>document</code></td><td><code>title</code>, <code>activeElement</code></td><td><code>$effect</code> para escrever; <code>bind:this</code> para elementos</td></tr>
+<tr><td><code>navigator</code></td><td><code>language</code>, <code>onLine</code></td><td><code>onMount</code></td></tr>
+<tr><td><code>localStorage</code></td><td><code>getItem</code>, <code>setItem</code></td><td><code>onMount</code> para ler</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td><code>window is not defined</code></td><td>leitura no topo do script</td><td>mover para <code>onMount</code></td></tr>
+<tr><td>valor diferente no fonte e na tela</td><td>leitura do navegador sem <code>onMount</code></td><td>mover e usar valor inicial neutro</td></tr>
+<tr><td>a largura nunca atualiza</td><td><code>onMount</code> sem ouvinte de <code>resize</code></td><td><code>bind:innerWidth</code></td></tr>
+<tr><td>layout lento ao medir muitos elementos</td><td>leitura de <code>offsetHeight</code> em laço</td><td>ler tudo antes de escrever</td></tr>
+</table>
+</div>
+
+<p>Um último conselho de ordem prática: guarde as leituras do navegador num só lugar do componente. Quando elas estão espalhadas por três funções e dois efeitos, fica impossível responder "de onde veio este número?" numa revisão. Uma lista de variáveis de estado no topo, um <code>onMount</code> que as preenche e o template que só as mostra — essa é a forma que envelhece bem.</p>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Por que ler <code>window.innerWidth</code> no topo do <code>&lt;script&gt;</code> quebra a renderização?</p>
+<label><input type="radio" name="q1"> porque <code>innerWidth</code> só existe em celulares</label>
+<label><input type="radio" name="q1"> porque fora do navegador não existe objeto <code>window</code></label>
+<label><input type="radio" name="q1"> porque o Svelte proíbe acessar <code>window</code> em qualquer lugar</label>
+<label><input type="radio" name="q1"> porque o valor muda a cada segundo</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual é a vantagem de <code>&lt;svelte:window bind:innerWidth={largura} /&gt;</code>?</p>
+<label><input type="radio" name="q1"> deixa a leitura mais rápida que <code>window.innerWidth</code></label>
+<label><input type="radio" name="q1"> funciona também no servidor</label>
+<label><input type="radio" name="q1"> mantém a variável sincronizada, sem função nem ouvinte escrito à mão</label>
+<label><input type="radio" name="q1"> impede que a janela seja redimensionada</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>matchMedia('(prefers-color-scheme: dark)').matches</code> devolve?</p>
+<label><input type="radio" name="q1"> <code>true</code> se o sistema prefere tema escuro, <code>false</code> caso contrário</label>
+<label><input type="radio" name="q1"> a cor exata usada pelo sistema</label>
+<label><input type="radio" name="q1"> o nome do navegador do visitante</label>
+<label><input type="radio" name="q1"> uma promessa que resolve depois do desenho</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { onMount } from 'svelte';<br>let largura = $state(0);<br><br><input data-answer="onMount(() => { largura = window.innerWidth; });|onMount(() => largura = window.innerWidth);">&nbsp;<br><br>&lt;p&gt;Largura: {largura}&lt;/p&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>window</code> é a janela, <code>document</code> é a página, <code>navigator</code> é o ambiente do visitante.</li>
+  <li>Fora do navegador não existem <code>window</code>, <code>document</code> nem <code>screen</code>.</li>
+  <li>Existe <code>navigator</code> no servidor, com valores fixos: cuidado com o erro silencioso.</li>
+  <li>Leia o navegador dentro de <code>onMount</code> e guarde o resultado em <code>$state</code>.</li>
+  <li><code>&lt;svelte:window&gt;</code> registra e remove ouvintes da janela sozinho.</li>
+  <li><code>bind:innerWidth</code>, <code>bind:scrollY</code> e <code>bind:online</code> sincronizam sem código extra.</li>
+  <li><code>matchMedia</code> responde às preferências do sistema, como o tema escuro.</li>
+  <li><code>navigator.onLine</code> é uma dica, não uma garantia de internet.</li>
+  <li><code>innerWidth</code> é a janela; <code>screen.width</code> é o monitor.</li>
+  <li>Medir em laço força o layout; leia tudo antes de escrever.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
