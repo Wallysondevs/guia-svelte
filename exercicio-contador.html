@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exercício: o Contador — do zero ao placar completo | Guia Svelte</title>
+<meta name="description" content="Exercício guiado de contador no Svelte 5: somar, subtrair sem passar de zero, passo configurável, histórico com each e os erros reais de bloco do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Exercício: o Contador</span></h1>
+
+<p class="intro">Na padaria da Ana existe um placar de giz para contar quantos pães saíram do forno. Cada fornada soma, cada venda tira, e no fim do dia ela zera para começar de novo. O placar é o exercício perfeito para juntar tudo o que você viu até aqui: estado, evento, condição, cálculo e lista. Nesta aula você monta o contador em cinco passos, cada um com uma missão para resolver na caixa.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como montar um contador com somar, subtrair e zerar.</li>
+  <li>Como impedir que o número fique negativo.</li>
+  <li>Como usar uma variável de passo para somar de tantos em tantos.</li>
+  <li>Como mostrar um valor calculado a partir do contador.</li>
+  <li>Como guardar um histórico de cliques numa lista.</li>
+  <li>Como o <code>{#each}</code> exibe a lista na tela.</li>
+  <li>Como o compilador reclama de bloco aberto e de bloco fechado errado.</li>
+  <li>Como testar uma conta no terminal antes de escrever o componente.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o placar de giz</h2>
+
+<p>Um placar de giz tem três operações: somar, subtrair e apagar tudo. Simples assim. A dificuldade não está nas operações, e sim nas regras em volta delas: o número não pode ficar negativo, o passo pode variar, o histórico precisa registrar a ordem, e o total do dia precisa bater com o que foi vendido.</p>
+
+<p>Cada uma dessas regras é uma decisão de projeto, e cada decisão cabe numa função pequena. O contador é um bom exercício porque permite começar com duas linhas e ir acrescentando comportamento sem reescrever o que já funciona. É assim que software cresce na vida real: um passo de cada vez, com o anterior funcionando.</p>
+
+<p>Nesta aula, os cinco passos são cumulativos. O passo 1 é o contador que soma. O passo 2 impede o negativo. O passo 3 permite somar de cinco em cinco. O passo 4 mostra um segundo número calculado. O passo 5 registra o histórico. No fim, você tem o componente completo e sabe explicar cada linha dele.</p>
+
+<p>Contador é o primeiro programa de quase todo mundo que aprende interface, e não é por acaso. Ele tem uma entrada (o clique), um estado (o número) e uma saída (o texto na tela), que são as três peças de qualquer tela interativa. Quem entende o contador entende o esqueleto; o resto é acrescentar regras.</p>
+
+<h2>2. O que o contador precisa fazer</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Regra</th><th>Como se escreve</th><th>Passo</th></tr>
+<tr><td>Somar um</td><td><code>cliques = cliques + 1</code></td><td>1</td></tr>
+<tr><td>Voltar ao zero</td><td><code>cliques = 0</code></td><td>1</td></tr>
+<tr><td>Não descer de zero</td><td><code>if (cliques &gt; 0) { … }</code></td><td>2</td></tr>
+<tr><td>Somar de cinco em cinco</td><td><code>cliques = cliques + passo</code></td><td>3</td></tr>
+<tr><td>Mostrar o dobro</td><td><code>let dobro = $derived(cliques * 2)</code></td><td>4</td></tr>
+<tr><td>Guardar o histórico</td><td><code>historico.push(cliques)</code></td><td>5</td></tr>
+<tr><td>Mostrar o histórico</td><td><code>{#each historico as n}</code></td><td>5</td></tr>
+</table>
+</div>
+
+<p>Repare que a tabela é também um roteiro de testes. Para cada regra existe uma ação e um resultado esperado: clicar em menos com o contador em zero deve deixar zero; clicar duas vezes com passo cinco deve mostrar dez; o histórico deve listar os números na ordem dos cliques. Testar é conferir a tabela, uma linha por vez.</p>
+
+<h2>3. Passo 1: o estado e os botões</h2>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+
+  function somar() {
+    cliques = cliques + 1;
+  }
+
+  function zerar() {
+    cliques = 0;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;
+&lt;button onclick={zerar}&gt;zerar&lt;/button&gt;</pre>
+
+<p>Dois botões, duas funções, um estado. O HTML gerado mostra o número inicial e os rótulos dos botões:</p>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let cliques = $state(0)</dt><dd>o placar. Começa em zero e avisa a tela a cada mudança.</dd>
+  <dt>function somar()</dt><dd>a regra de somar. Não recebe nada porque o passo é fixo neste momento.</dd>
+  <dt>cliques = cliques + 1</dt><dd>lê o valor atual, soma um e grava de volta. O <code>cliques++</code> faz o mesmo em menos letras.</dd>
+  <dt>function zerar()</dt><dd>a regra de limpar. Uma atribuição direta, sem conta.</dd>
+  <dt>onclick={somar}</dt><dd>o nome da função, sem parênteses. O navegador chama no clique, como você viu na aula de handler.</dd>
+</dl>
+
+<p>Esse é o mínimo que funciona. Antes de acrescentar regra, clique nos dois botões e confira: somar aumenta, zerar volta ao zero. Se algo não funcionar aqui, não adianta seguir; os passos seguintes assumem que este está certo.</p>
+
+<h2>4. Passo 2: não descer de zero</h2>
+
+<p>O placar da Ana não pode ficar negativo: não existe fornada de menos um pão. A regra é uma condição dentro da função que subtrai.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+
+  function menos() {
+    if (cliques &gt; 0) {
+      cliques = cliques - 1;
+    }
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button onclick={menos}&gt;-1&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;button&gt;-1&lt;/button&gt;</pre>
+
+<p>A condição <code>if (cliques &gt; 0)</code> só deixa a subtração acontecer quando há o que subtrair. Se o contador está em zero, a função termina sem fazer nada e a tela não muda. Não é erro: é a regra funcionando.</p>
+
+<p>Existe uma segunda forma de escrever a mesma regra, com <code>Math.max</code>. Ela é mais curta e não precisa de <code>if</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log(Math.max(0, 0 - 1), Math.max(0, 3 - 1))"
+0 2</pre>
+
+<p>O <code>Math.max</code> devolve o maior entre os números recebidos. Passando zero e o resultado da subtração, o pior caso é zero. <code>cliques = Math.max(0, cliques - 1)</code> cabe em uma linha e faz a mesma coisa. As duas versões são boas; o <code>if</code> é mais fácil de ler para quem começa, e o <code>Math.max</code> é mais fácil de testar.</p>
+
+<div class="trysvelte" data-goal="clique:#menos;;outre:^Cliques: 0">
+<p class="try-task"><strong>Missão:</strong> o botão <code>-1</code> deixa o contador em <code>-1</code>. Corrija a função para que clicar com o contador em zero mantenha <code>Cliques: 0</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button id="menos" onclick={() =&gt; cliques--}&gt;-1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+
+  function menos() {
+    if (cliques &gt; 0) {
+      cliques = cliques - 1;
+    }
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button id="menos" onclick={menos}&gt;-1&lt;/button&gt;</pre>
+</div>
+
+<p>Depois de resolver, teste também o caminho feliz: some dois e subtraia um. O resultado deve ser um. Uma regra que só é testada no caso limite não prova nada; o comportamento normal precisa continuar funcionando.</p>
+
+<h2>5. Passo 3: o passo configurável</h2>
+
+<p>Nem toda fornada tem o mesmo tamanho. Em vez de somar sempre um, o contador pode somar o valor guardado numa variável de passo. A função muda uma palavra; o botão mostra o valor para quem olha.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let passo = $state(5);
+
+  function somar() {
+    cliques = cliques + passo;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+{passo}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;button&gt;+5&lt;/button&gt;</pre>
+
+<p>O rótulo do botão usa <code>{passo}</code>: o texto acompanha a variável. Se o passo mudar para 10, o botão passa a dizer <code>+10</code> e a função soma 10. Uma decisão de interface embutida no código: mostrar o passo no rótulo evita que a pessoa clique sem saber quanto está somando.</p>
+
+<p>O passo também pode vir de um campo, e aí você usa o que aprendeu na aula de <code>bind:value</code>:</p>
+
+<pre class="file" data-file="src/Painel.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let passo = $state(5);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;input type="number" min="1" max="100" bind:value={passo}&gt;
+&lt;button onclick={() =&gt; (cliques = cliques + passo)}&gt;+{passo}&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;input type="number" min="1" max="100" value="5"/&gt; &lt;button&gt;+5&lt;/button&gt;</pre>
+
+<p>O <code>min</code> e o <code>max</code> limitam o campo na interface, mas não no estado: alguém pode digitar um número fora da faixa e o navegador só marca o campo como inválido. Se o passo precisa mesmo ficar entre 1 e 100, valide na função antes de somar. É a mesma lição da aula de formulários: atributo ajuda, regra garante.</p>
+
+<div class="trysvelte" data-goal="clique:#mais;;clique:#mais;;outre:^Cliques: 10">
+<p class="try-task"><strong>Missão:</strong> o botão diz <code>+5</code>, mas soma um. Faça a função somar o valor de <code>passo</code> para que dois cliques mostrem <code>Cliques: 10</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let passo = $state(5);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button id="mais" onclick={() =&gt; (cliques = cliques + 1)}&gt;+{passo}&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let passo = $state(5);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button id="mais" onclick={() =&gt; (cliques = cliques + passo)}&gt;+{passo}&lt;/button&gt;</pre>
+</div>
+
+<p>Esse erro — rótulo diferente da conta — é mais comum do que parece. A tela promete uma coisa e o código faz outra. O teste do exercício pega exatamente isso: se o botão diz cinco e o número sobe um, a promessa está quebrada.</p>
+
+<p>Há uma lição de projeto aí: o rótulo deve ser calculado a partir do mesmo valor que a conta usa. Quando o botão mostra <code>{passo}</code> e a função soma <code>passo</code>, não existe como os dois discordarem. Quando você escreve "5" à mão no rótulo e "5" à mão na função, os dois podem divergir no dia em que alguém mudar um só.</p>
+
+<h2>6. Passo 4: um valor calculado</h2>
+
+<p>O placar também pode mostrar quantas metades de fornada aquilo representa, ou o dobro de cliques por algum motivo. O importante é que esse segundo número não seja um estado separado: ele vem do primeiro.</p>
+
+<pre class="file" data-file="src/Resumo.svelte">&lt;script&gt;
+  let cliques = $state(3);
+  let dobro = $derived(cliques * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques} · Dobro: {dobro}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 3 · Dobro: 6&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt;</pre>
+
+<p>O <code>$derived</code> recalcula o dobro sempre que <code>cliques</code> muda. Não existe o risco de o dobro ficar desatualizado, porque não existe uma cópia guardada. Se você tivesse escrito <code>let dobro = $state(0)</code>, precisaria lembrar de atualizar o dobro em todas as funções que mexem em cliques — e um dia esqueceria.</p>
+
+<p>Essa é a diferença entre um valor de entrada e um valor de saída. Entrada é o que a pessoa digita ou clica; saída é o que o programa calcula. Misturar os dois é a origem de muitos bugs de placar: o total mostra um número que não corresponde à soma dos itens porque alguém esqueceu de recalcular.</p>
+
+<p>Para três ou mais valores derivados, a regra se mantém: um <code>$derived</code> para cada um. O compilador cuida de recalcular na ordem certa quando a fonte muda. Você só precisa garantir que a fonte seja reativa, ou seja, criada com <code>$state</code>.</p>
+
+<p>Formatação também é papel da exibição, não do estado. Se o placar precisa mostrar <code>03</code> em vez de <code>3</code>, você formata na chave: <code>{String(cliques).padStart(2, '0')}</code>. O estado continua sendo o número 3, porque é com ele que você faz contas. Guardar texto para "ficar bonito" obriga a converter de volta antes de somar, e aí aparecem os <code>"3" + 1 = "31"</code> da vida.</p>
+
+<h2>7. Passo 5: o histórico com <code>{#each}</code></h2>
+
+<p>O placar de giz apaga, mas a Ana quer saber em que ordem os números apareceram. Uma lista guarda o histórico; o bloco <code>{#each}</code> mostra.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let historico = $state([]);
+
+  function somar() {
+    cliques = cliques + 1;
+    historico.push(cliques);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;p&gt;Histórico: {historico.join(', ')}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;p&gt;Histórico: &lt;/p&gt; &lt;button&gt;+1&lt;/button&gt;</pre>
+
+<p>O <code>push</code> acrescenta no fim da lista. Como a lista foi criada com <code>$state</code>, o Svelte percebe a mudança e atualiza o parágrafo. O <code>join(', ')</code> transforma a lista em texto separado por vírgula; sem ele, a lista apareceria colada, sem espaços.</p>
+
+<p>A versão com <code>{#each}</code> é melhor quando você quer um item por linha, com marcador ou estilo próprio:</p>
+
+<pre class="file" data-file="src/Lista.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let historico = $state([]);
+
+  function somar() {
+    cliques = cliques + 1;
+    historico.push(cliques);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;ul&gt;
+  {#each historico as numero}
+    &lt;li&gt;{numero}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;ul&gt;&lt;/ul&gt; &lt;button&gt;+1&lt;/button&gt;</pre>
+
+<p>Com a lista vazia, o bloco não gera item nenhum e o <code>&lt;ul&gt;</code> sai com espaços entre as tags. No navegador, cada clique acrescenta um <code>&lt;li&gt;</code>. Para listas que mudam de ordem, vale dar uma chave a cada item com <code>{#each historico as numero (numero)}</code>; para um histórico que só cresce, o índice já basta.</p>
+
+<p>A chave entre parênteses precisa ser única. No histórico do contador, os números não se repetem, então o próprio número serve. Se dois cliques pudessem gerar o mesmo valor — num contador que volta ao zero, por exemplo —, use o índice: <code>{#each historico as numero, i (i)}</code>. O Svelte recusa a lista com chave repetida e mostra o código <code>each_key_duplicate</code>. Vale saber o nome para reconhecer no console.</p>
+
+<div class="trysvelte" data-goal="clique:#mais;;clique:#mais;;outre:Histórico: 1, 2">
+<p class="try-task"><strong>Missão:</strong> o contador sobe, mas o histórico fica vazio. Registre cada clique na lista para que dois cliques mostrem <code>Histórico: 1, 2</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let historico = $state([]);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;p&gt;Histórico: {historico.join(', ')}&lt;/p&gt;
+&lt;button id="mais" onclick={() =&gt; (cliques = cliques + 1)}&gt;+1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let historico = $state([]);
+
+  function somar() {
+    cliques = cliques + 1;
+    historico.push(cliques);
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;p&gt;Histórico: {historico.join(', ')}&lt;/p&gt;
+&lt;button id="mais" onclick={somar}&gt;+1&lt;/button&gt;</pre>
+</div>
+
+<p>Note a ordem dentro da função: primeiro soma, depois registra. Se você registrasse antes, o histórico guardaria o valor anterior — o primeiro clique gravaria zero. Ordem importa, e é uma das poucas coisas que o compilador não confere para você.</p>
+
+<h2>8. O contador completo</h2>
+
+<p>Juntando os cinco passos, o componente fica assim. Todas as peças já foram vistas; o que muda é a convivência entre elas.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+  let historico = $state([]);
+
+  function somar() {
+    cliques = cliques + 1;
+    historico.push(cliques);
+  }
+
+  function zerar() {
+    cliques = 0;
+    historico = [];
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;p&gt;Histórico: {historico.join(', ')}&lt;/p&gt;
+&lt;button onclick={somar}&gt;+1&lt;/button&gt;
+&lt;button onclick={zerar}&gt;zerar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;p&gt;Histórico: &lt;/p&gt; &lt;button&gt;+1&lt;/button&gt; &lt;button&gt;zerar&lt;/button&gt;</pre>
+
+<p>O <code>zerar</code> agora limpa duas coisas: o contador e o histórico. Se limpasse só o contador, o histórico continuaria mostrando os números antigos e o próximo clique geraria uma sequência estranha. Sempre que você zera um estado, pergunte quais outros estados dependem dele.</p>
+
+<p>O build do componente completo mostra o peso. É o menor dos contadores possíveis e ainda assim um programa de verdade:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-GnMHPOlD.js  36.22 kB │ gzip: 13.96 kB
+✓ built in 1.21s</pre>
+
+<p>Trinta e seis kilobytes, dos quais a maior parte é o motor do Svelte. O seu componente ocupa algumas centenas de bytes. Isso ajuda a entender por que o framework parece "grande" no começo: ele é o pacote inteiro; o que você escreve é uma fração.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — parêntese que não fecha no handler</strong>
+<p>Dentro de uma seta, a expressão precisa terminar antes do fecha-chaves. Um parêntese aberto deixa o compilador esperando o resto do arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; total++&gt;Total: {total}&lt;/button&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 36): Expected token }</pre>
+<p>A linha apontada é o fim do arquivo, porque foi ali que o compilador desistiu de esperar. Sempre que a mensagem falar de <code>}</code>, procure um parêntese ou uma chave sem fechar por perto. Contar os pares resolve mais rápido do que reler o arquivo inteiro.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — bloco aberto e não fechado</strong>
+<p>Todo <code>{#if}</code> precisa do seu <code>{/if}</code>. Sem ele, o bloco fica aberto até o fim do arquivo.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let contador = $state(0);
+&lt;/script&gt;
+
+{#if contador &gt; 0}
+  &lt;p&gt;positivo&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 0): Block was left open</pre>
+<p>"Block was left open" quer dizer "o bloco ficou aberto". A posição é a linha do <code>{#if}</code>, e não a do fim do arquivo — uma diferença útil em relação ao erro anterior. Feche com <code>{/if}</code> e o componente compila.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — bloco fechado com o nome errado</strong>
+<p>Cada tipo de bloco tem o seu fechamento. Fechar um <code>{#if}</code> com <code>{/each}</code> faz o compilador procurar o <code>{#each}</code> que não existe.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+{#if cliques &gt; 0}
+  &lt;p&gt;positivo&lt;/p&gt;
+{/each}</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 2): Expected token if</pre>
+<p>"Expected token if" significa "eu esperava um <code>if</code> aqui". O compilador chegou ao fim do arquivo com um <code>{#if}</code> aberto e um <code>{/each}</code> fechando. A correção é trocar por <code>{/if}</code>. Repare que a mensagem cita o que falta, não o que sobra — e isso vale para qualquer bloco.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operação</th><th>Código</th><th>Cuidado</th></tr>
+<tr><td>somar um</td><td><code>cliques++</code></td><td>só funciona com número</td></tr>
+<tr><td>somar o passo</td><td><code>cliques = cliques + passo</code></td><td>o passo precisa ser número</td></tr>
+<tr><td>não descer de zero</td><td><code>if (cliques &gt; 0)</code> ou <code>Math.max</code></td><td>teste o caso limite</td></tr>
+<tr><td>zerar</td><td><code>cliques = 0</code></td><td>limpe também os estados dependentes</td></tr>
+<tr><td>dobro</td><td><code>$derived(cliques * 2)</code></td><td>nunca guarde em <code>$state</code></td></tr>
+<tr><td>histórico</td><td><code>historico.push(cliques)</code></td><td>registre depois de somar</td></tr>
+<tr><td>mostrar lista</td><td><code>{#each historico as n}</code></td><td>chave quando a ordem muda</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>O contador fica negativo</td><td>falta a condição antes de subtrair</td></tr>
+<tr><td>O botão promete 5 e soma 1</td><td>o handler usa outro valor em vez de <code>passo</code></td></tr>
+<tr><td>O histórico começa em zero</td><td>registrou antes de somar</td></tr>
+<tr><td>O dobro não acompanha</td><td>o dobro é <code>$state</code> em vez de <code>$derived</code></td></tr>
+<tr><td>A tela não atualiza</td><td>a variável foi criada sem <code>$state</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Terminal</th><th>O que mostra</th></tr>
+<tr><td><code>node -e "console.log(Math.max(0, -1))"</code></td><td><code>0</code> — o piso do contador</td></tr>
+<tr><td><code>npm run build</code></td><td>o peso do contador compilado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual é a forma mais direta de impedir que o contador fique negativo?</p>
+<label><input type="radio" name="q1"> usar <code>type="number"</code> no botão</label>
+<label><input type="radio" name="q1"> conferir com <code>if (cliques &gt; 0)</code> antes de subtrair</label>
+<label><input type="radio" name="q1"> criar o estado com <code>$state(1)</code></label>
+<label><input type="radio" name="q1"> deixar o navegador cuidar disso</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">2. O que o <code>{#each}</code> faz no histórico?</p>
+<label><input type="radio" name="q1"> soma os números da lista</label>
+<label><input type="radio" name="q1"> limpa a lista a cada clique</label>
+<label><input type="radio" name="q1"> impede números repetidos</label>
+<label><input type="radio" name="q1"> repete um pedaço de HTML para cada item da lista</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>Block was left open</code> quer dizer?</p>
+<label><input type="radio" name="q1"> um bloco <code>{#if}</code> ou <code>{#each}</code> não foi fechado</label>
+<label><input type="radio" name="q1"> o arquivo está aberto em outro programa</label>
+<label><input type="radio" name="q1"> o estado não foi declarado com <code>$state</code></label>
+<label><input type="radio" name="q1"> o navegador não suporta o bloco</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">function menos() {<br>&nbsp;&nbsp;<input data-answer="if (cliques > 0)|if(cliques > 0)">&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;cliques = cliques - 1;<br>&nbsp;&nbsp;}<br>}<br><br>// o contador não desce de zero</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Contador é estado + funções + botões ligados por <code>onclick</code>.</li>
+  <li><code>cliques++</code> soma um; <code>cliques = cliques - 1</code> subtrai.</li>
+  <li>A condição <code>if (cliques &gt; 0)</code> impede o negativo; <code>Math.max(0, …)</code> faz o mesmo sem <code>if</code>.</li>
+  <li>O passo configurável deixa a função genérica e o rótulo honesto: <code>+{passo}</code>.</li>
+  <li>Valor calculado é <code>$derived</code>; nunca um <code>$state</code> mantido à mão.</li>
+  <li>Histórico é uma lista com <code>push</code>, exibida com <code>join</code> ou <code>{#each}</code>.</li>
+  <li>Zerar o contador exige zerar os estados que dependem dele.</li>
+  <li>Erros desta aula: parêntese aberto, bloco aberto e bloco fechado com o nome errado.</li>
+  <li>Testar é percorrer a tabela de regras: caso normal e caso limite.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

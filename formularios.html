@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formulários e Validação — a ficha de encomenda da Ana | Guia Svelte</title>
+<meta name="description" content="Formulários no Svelte 5: bind em cada campo, onsubmit com preventDefault, required, pattern com chaves e validação no handler, com saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Formulários e Validação</span></h1>
+
+<p class="intro">A Ana recebe encomendas por telefone e anota numa ficha: nome, telefone, o que quer, para quando. Quando a ficha chega incompleta, ela liga de volta — e perde tempo. Um formulário na tela tem o mesmo problema: se o programa aceita qualquer coisa, a Ana descobre o erro tarde demais. Esta aula monta a ficha inteira no Svelte, liga cada campo ao estado, mostra como impedir o recarregamento da página e como recusar o que não serve antes de gravar.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como ligar cada campo da ficha ao seu pedaço de estado.</li>
+  <li>Por que o formulário recarrega a página e como impedir isso.</li>
+  <li>O que <code>evento.preventDefault()</code> faz na prática.</li>
+  <li>Como validar no handler e mostrar uma mensagem de erro.</li>
+  <li>Como usar <code>required</code>, <code>pattern</code> e <code>maxlength</code>.</li>
+  <li>Por que <code>{3}</code> dentro de um atributo vira conta, e como escapar.</li>
+  <li>Como separar os erros por campo em vez de uma mensagem só.</li>
+  <li>Como limpar o formulário depois de enviar.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a ficha de encomenda</h2>
+
+<p>Uma ficha de padaria tem campos com finalidades diferentes. O nome é texto livre e obrigatório. O telefone tem formato conhecido. A data de entrega é uma data. O tipo de pão é uma escolha entre poucos. A observação é texto longo e opcional. Se o programa trata todos como "um texto qualquer", a Ana recebe "asdf" no telefone e "ontem" na data.</p>
+
+<p>Um formulário é a soma de três coisas: os campos, o estado que guarda o que foi digitado e a regra que decide se aquilo serve. No Svelte, os dois primeiros já estão resolvidos pelos bindings das aulas anteriores. O terceiro é o assunto desta aula: validação é o nome dado à conferência feita antes de aceitar.</p>
+
+<p>Existem dois momentos para validar. O primeiro é durante a digitação: avisar que o telefone está incompleto enquanto a pessoa escreve. O segundo é no envio: recusar a ficha inteira se algo essencial falta. Os dois são úteis, e os dois usam as mesmas ferramentas: uma função que olha o estado e decide, e uma parte da tela que mostra o resultado da decisão.</p>
+
+<p>Validar não é desconfiar de quem preenche; é poupar a segunda conversa. A ficha que chega completa na primeira vez resolve o pedido na hora, e a Ana volta para o balcão em vez de voltar para o telefone.</p>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na ficha de papel</th><th>No componente</th></tr>
+<tr><td>O campo "nome"</td><td><code>&lt;input bind:value={nome}&gt;</code></td></tr>
+<tr><td>O campo "telefone"</td><td><code>&lt;input type="tel" bind:value={telefone}&gt;</code></td></tr>
+<tr><td>O campo "observação"</td><td><code>&lt;textarea bind:value={observacao}&gt;</code></td></tr>
+<tr><td>O carimbo "recebido"</td><td><code>function enviar(evento) { … }</code></td></tr>
+<tr><td>A conferência antes de arquivar</td><td><code>if (nome.trim() === '') { … }</code></td></tr>
+<tr><td>O aviso "falta o telefone"</td><td>Uma variável de mensagem mostrada na tela</td></tr>
+</table>
+</div>
+
+<p>Repare que a validação não é um recurso novo do Svelte: é uma função comum com um <code>if</code>. O que o Svelte faz é ligar o resultado à tela. Se a função muda a mensagem, a tela mostra a mensagem nova. Toda a inteligência fica no seu código, e é por isso que vale aprender a escrever condições claras.</p>
+
+<h2>3. O formulário com bind em cada campo</h2>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let email = $state('');
+&lt;/script&gt;
+
+&lt;form&gt;
+  &lt;input bind:value={nome}&gt;
+  &lt;input type="email" bind:value={email}&gt;
+&lt;/form&gt;
+&lt;p&gt;{nome} · {email}&lt;/p&gt;</pre>
+
+<p>Dois campos, dois pedaços de estado, um binding em cada. O HTML gerado não mostra nada de especial: os campos vão vazios e o parágrafo mostra o separador entre dois valores vazios.</p>
+
+<pre class="out">&lt;form&gt;&lt;input value=""/&gt; &lt;input type="email" value=""/&gt;&lt;/form&gt; &lt;p&gt; · &lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;form&gt;</dt><dd>o agrupador. Ele existe para o envio e para a validação nativa do navegador; o binding dos campos funciona com ou sem ele.</dd>
+  <dt>bind:value={nome}</dt><dd>liga o campo ao estado. Cada campo precisa do seu binding e da sua variável.</dd>
+  <dt>type="email"</dt><dd>muda o teclado no celular e liga a validação de formato do navegador. Não muda o tipo do valor: continua string.</dd>
+  <dt>{nome} · {email}</dt><dd>mostra os dois valores. Útil para conferir, e um bom teste de que os bindings estão ligados.</dd>
+</dl>
+
+<p>Uma decisão de projeto: a ficha pode ter um único objeto de estado (<code>let ficha = $state({ nome: '', email: '' })</code>) ou uma variável por campo. As duas funcionam. Uma variável por campo é mais fácil de ler no começo; um objeto agrupa os dados e facilita enviar tudo junto para o servidor. O guia usa variáveis separadas nesta aula e mostra o objeto na aula de projeto.</p>
+
+<h2>4. <code>onsubmit</code> e o recarregamento</h2>
+
+<p>O comportamento padrão do formulário no navegador é enviar os dados para o endereço do <code>action</code> e recarregar a página. Quando o envio é feito por JavaScript, recarregar é exatamente o que você não quer: o estado é perdido e a mensagem de sucesso some. A solução é cancelar o comportamento padrão dentro do handler.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let enviado = $state('');
+
+  function enviar(evento) {
+    evento.preventDefault();
+    enviado = nome;
+  }
+&lt;/script&gt;
+
+&lt;form onsubmit={enviar}&gt;
+  &lt;input bind:value={nome}&gt;
+  &lt;button&gt;enviar&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;Enviado: {enviado}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;form&gt;&lt;input value=""/&gt; &lt;button&gt;enviar&lt;/button&gt;&lt;/form&gt; &lt;p&gt;Enviado: &lt;/p&gt;</pre>
+
+<p>O botão dentro do formulário, sem atributo <code>type</code>, é um botão de envio: clicar nele dispara o evento <code>submit</code> do formulário. Se você quer um botão que não envie — para limpar os campos, por exemplo —, escreva <code>type="button"</code>. Essa distinção é a causa de muitos "meu formulário recarrega sozinho".</p>
+
+<div class="tip">
+<strong>Por que as caixas desta aula usam <code>onclick</code></strong>
+<p>As caixas interativas do guia rodam dentro de um quadro isolado que bloqueia o envio de formulário de propósito: sem essa proteção, um clique poderia navegar para fora da aula. Por isso os exemplos práticos usam um botão <code>type="button"</code> com <code>onclick</code>, que exercita a mesma função de validação. No projeto da Ana, o caminho é o da seção acima: <code>&lt;form onsubmit={enviar}&gt;</code> com <code>evento.preventDefault()</code>.</p>
+</div>
+
+<p>O terminal não tem formulário, mas tem a função que você vai usar para conferir texto vazio. O <code>trim()</code> remove os espaços das pontas, o que evita aceitar um nome feito só de espaços:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log('  ana  '.trim(), '  ana  '.trim().length)"
+ana 3</pre>
+
+<p>Sem <code>trim()</code>, a string <code>"  ana  "</code> teria sete caracteres e passaria em qualquer teste de "não está vazia". Com <code>trim()</code>, o teste vê três e o nome fica limpo. Use <code>trim()</code> sempre que a regra for "precisa ter algo".</p>
+
+<p>O build do projeto com a ficha no arquivo mostra o peso do formulário. É o maior dos componentes vistos até aqui, porque reúne binding, validação e mensagens:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BjWsf4tr.js  37.89 kB │ gzip: 14.62 kB
+✓ built in 1.10s</pre>
+
+<p>Trinta e sete kilobytes e oitenta e nove centésimos para uma ficha com dois campos e validação. O tamanho não cresce na proporção do número de campos, e sim do código que decide o que fazer com eles. Se você adicionar dez campos com o mesmo binding, o peso quase não muda; se adicionar dez regras diferentes, muda.</p>
+
+<p>Uma consequência prática: a validação no cliente deixa a página maior e mais lenta de baixar, mas economiza uma ida ao servidor para cada erro óbvio. Num formulário curto, o ganho é grande. Num formulário com regras que só o servidor conhece, o melhor é validar o básico no cliente e deixar o resto para a resposta do servidor.</p>
+
+<h2>5. Validação antes de enviar</h2>
+
+<p>A validação mais simples é a de campo obrigatório. Se o nome está vazio, o handler grava uma mensagem e para; se não está, segue com o envio.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Erro: informe o nome">
+<p class="try-task"><strong>Missão:</strong> o botão salva mesmo com o campo vazio. Faça o handler recusar o envio e mostrar <code>Erro: informe o nome</code> quando não houver nome.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let mensagem = $state('');
+
+  function salvar() {
+    mensagem = 'Salvo: ' + nome;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{mensagem}&lt;/p&gt;
+&lt;input bind:value={nome}&gt;
+&lt;button type="button" onclick={salvar}&gt;salvar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let mensagem = $state('');
+
+  function salvar() {
+    if (nome.trim() === '') {
+      mensagem = 'Erro: informe o nome';
+      return;
+    }
+    mensagem = 'Salvo: ' + nome;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{mensagem}&lt;/p&gt;
+&lt;input bind:value={nome}&gt;
+&lt;button type="button" onclick={salvar}&gt;salvar&lt;/button&gt;</pre>
+</div>
+
+<p>O <code>return</code> dentro do <code>if</code> é o que faz a função parar ali. Sem ele, a mensagem de erro seria escrita e logo substituída pela de sucesso. É um erro comum: a condição funciona, mas a função continua executando. A regra é simples: quando a validação falha, a função termina naquele ponto.</p>
+
+<p>Repare também que a mensagem é uma variável de estado, não um <code>alert</code>. Mostrar o erro na página é melhor do que interromper a pessoa com uma caixa de diálogo: o texto fica visível enquanto ela corrige o campo, e o leitor de tela anuncia a mudança. Guarde o <code>alert</code> para experimentos rápidos.</p>
+
+<h2>6. <code>required</code>, <code>pattern</code> e o problema das chaves</h2>
+
+<p>O navegador tem validação própria, ligada por atributos do HTML. Ela não substitui a do handler, mas evita ida e volta para os casos óbvios.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let codigo = $state('');
+&lt;/script&gt;
+
+&lt;form&gt;
+  &lt;input required pattern={"[0-9]{3}"} maxlength="3" bind:value={codigo}&gt;
+  &lt;button&gt;enviar&lt;/button&gt;
+&lt;/form&gt;
+&lt;p&gt;Código: {codigo}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;form&gt;&lt;input required="" pattern="[0-9]{3}" maxlength="3" value=""/&gt; &lt;button&gt;enviar&lt;/button&gt;&lt;/form&gt; &lt;p&gt;Código: &lt;/p&gt;</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Atributo</th><th>O que exige</th><th>O que o navegador faz</th></tr>
+<tr><td><code>required</code></td><td>campo preenchido</td><td>avisa que o campo é obrigatório</td></tr>
+<tr><td><code>minlength="3"</code></td><td>pelo menos 3 caracteres</td><td>avisa o mínimo de caracteres</td></tr>
+<tr><td><code>maxlength="10"</code></td><td>no máximo 10 caracteres</td><td>impede digitar além do limite</td></tr>
+<tr><td><code>pattern="[0-9]{3}"</code></td><td>o texto casa com a expressão</td><td>avisa que o formato não confere</td></tr>
+<tr><td><code>type="email"</code></td><td>formato de e-mail</td><td>avisa que falta o @</td></tr>
+<tr><td><code>min="0"</code> / <code>max="10"</code></td><td>faixa de número</td><td>avisa que o valor está fora da faixa</td></tr>
+</table>
+</div>
+
+<p>Aqui aparece uma armadilha do Svelte que vale o preço da aula. As chaves dentro de um atributo são interpretadas como expressão. Escrever <code>pattern="[0-9]{3}"</code> faz o compilador tratar o <code>{3}</code> como um valor e o atributo sai como <code>pattern="[0-9]3"</code>, que não valida três dígitos. As duas saídas corretas são <code>pattern={"[0-9]{3}"}</code> (expressão com string) e <code>pattern="[0-9]&#123;3&#125;"</code> (entidades no lugar das chaves).</p>
+
+<div class="trysvelte" data-goal="digitar:#email=ana;;clique:button;;outre:^E-mail inválido">
+<p class="try-task"><strong>Missão:</strong> o botão aceita qualquer e-mail. Faça o handler recusar texto sem <code>@</code> e mostrar <code>E-mail inválido</code> quando a pessoa digitar <code>ana</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let email = $state('');
+  let mensagem = $state('');
+
+  function salvar() {
+    mensagem = 'Salvo: ' + email;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{mensagem}&lt;/p&gt;
+&lt;input id="email" type="email" bind:value={email}&gt;
+&lt;button type="button" onclick={salvar}&gt;salvar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let email = $state('');
+  let mensagem = $state('');
+
+  function salvar() {
+    if (!email.includes('@')) {
+      mensagem = 'E-mail inválido';
+      return;
+    }
+    mensagem = 'Salvo: ' + email;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{mensagem}&lt;/p&gt;
+&lt;input id="email" type="email" bind:value={email}&gt;
+&lt;button type="button" onclick={salvar}&gt;salvar&lt;/button&gt;</pre>
+</div>
+
+<p>O <code>includes('@')</code> é uma conferência grosseira, e é honesto dizer isso: validação de e-mail de verdade é assunto de servidor, porque qualquer regra no navegador pode ser burlada. A regra do cliente serve para avisar cedo, não para garantir. O servidor confere de novo, sempre — mesmo que o cliente já tenha conferido.</p>
+
+<h2>7. Uma mensagem por campo</h2>
+
+<p>Uma mensagem só para a ficha inteira obriga a pessoa a descobrir qual campo está errado. Uma mensagem por campo resolve o problema, e o custo é pequeno: um pedaço de estado para cada erro.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let telefone = $state('');
+  let erroNome = $state('');
+  let erroTelefone = $state('');
+
+  function validar() {
+    erroNome = nome.trim() === '' ? 'Informe o nome' : '';
+    erroTelefone = telefone.trim().length &lt; 8 ? 'Telefone curto' : '';
+    return !erroNome &amp;&amp; !erroTelefone;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{erroNome} {erroTelefone}&lt;/p&gt;
+&lt;input bind:value={nome}&gt;
+&lt;input bind:value={telefone}&gt;</pre>
+
+<pre class="out">&lt;p&gt;  &lt;/p&gt; &lt;input value=""/&gt; &lt;input value=""/&gt;</pre>
+
+<p>A função devolve <code>true</code> quando tudo passou e <code>false</code> quando algum campo falhou. Quem chama decide o que fazer com esse resultado: parar o envio, destacar o campo, mostrar um resumo. A validação fica em um lugar só, e o handler de envio fica curto.</p>
+
+<p>O <code>&amp;&amp;</code> na última linha é o "e" lógico: a expressão é verdadeira apenas se as duas negações forem verdadeiras, isto é, se não houver erro em nenhum dos dois campos. Esse tipo de expressão é o motivo de a validação ser uma função separada: dá para testá-la sem clicar em nada, e dá para reaproveitá-la em dois botões diferentes.</p>
+
+<p>Uma escolha de interface: mostrar o erro embaixo do campo correspondente, e não num bloco distante. Quem preenche olha para o campo e para a mensagem no mesmo lugar. Se a mensagem fica no topo, a pessoa precisa procurar o que corrigir, e em formulário longo isso cansa. O texto do erro também deve dizer o que fazer, não apenas que algo está errado: "Informe o nome" ajuda; "Campo inválido" não.</p>
+
+<h2>8. Limpar depois de enviar</h2>
+
+<p>Depois de aceitar a ficha, o formulário deve voltar ao estado inicial. Com <code>bind</code>, isso é uma atribuição: o campo acompanha o estado.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let enviado = $state('');
+
+  function enviar() {
+    enviado = nome;
+    nome = '';
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Enviado: {enviado} · Campo: {nome}&lt;/p&gt;
+&lt;input bind:value={nome}&gt;
+&lt;button type="button" onclick={enviar}&gt;enviar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Enviado:  · Campo: &lt;/p&gt; &lt;input value=""/&gt; &lt;button type="button"&gt;enviar&lt;/button&gt;</pre>
+
+<p>A ordem importa: primeiro copie o valor para onde ele deve ficar, depois limpe o campo. Se você limpar antes, o que foi enviado vira vazio. Esse é o tipo de bug que não aparece no primeiro teste, porque o formulário estava vazio; aparece depois de digitar algo e clicar rápido.</p>
+
+<div class="trysvelte" data-goal="digitar:#nome=ana;;clique:button;;outre:^Enviado: ana · Campo: enviar">
+<p class="try-task"><strong>Missão:</strong> depois de enviar, o nome continua no campo. Faça o handler guardar o valor enviado e limpar o campo, para que a tela mostre <code>Enviado: ana · Campo:</code> e o botão.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let enviado = $state('');
+
+  function enviar() {
+    enviado = nome;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Enviado: {enviado} · Campo: {nome}&lt;/p&gt;
+&lt;input id="nome" bind:value={nome}&gt;
+&lt;button type="button" onclick={enviar}&gt;enviar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let enviado = $state('');
+
+  function enviar() {
+    enviado = nome;
+    nome = '';
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Enviado: {enviado} · Campo: {nome}&lt;/p&gt;
+&lt;input id="nome" bind:value={nome}&gt;
+&lt;button type="button" onclick={enviar}&gt;enviar&lt;/button&gt;</pre>
+</div>
+
+<p>Em formulário de verdade, limpar tudo de uma vez também pode ser feito com <code>form.reset()</code>, mas aí o estado do Svelte e o DOM podem sair de sincronia: o campo esvazia e a variável continua com o valor antigo. Com binding, limpar as variáveis é o caminho previsível, porque o estado é a fonte da verdade.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — <code>bind:value</code> no formulário</strong>
+<p>O formulário agrupa campos, mas não tem valor próprio. Quem tem valor são os campos.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let email = $state('');
+&lt;/script&gt;
+
+&lt;form bind:value={email}&gt;
+  &lt;input bind:value={email}&gt;
+&lt;/form&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 6): `bind:value` can only be used with `&lt;input&gt;`, `&lt;textarea&gt;`, `&lt;select&gt;`</pre>
+<p>A mensagem lista os três elementos que aceitam valor. Tire o binding do <code>&lt;form&gt;</code> e deixe no campo. Se a intenção era reagir ao envio, o atributo é <code>onsubmit</code>, não <code>bind:value</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — handler de envio como texto</strong>
+<p>Evento precisa de expressão. Aspas transformam o handler em string e o compilador recusa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let email = $state('');
+
+  function enviar() {
+    alert(email);
+  }
+&lt;/script&gt;
+
+&lt;form onsubmit="enviar"&gt;
+  &lt;input bind:value={email}&gt;
+  &lt;button&gt;enviar&lt;/button&gt;
+&lt;/form&gt;</pre>
+<pre class="out">Erro de compilação (linha 9, coluna 6): Event attribute must be a JavaScript expression, not a string</pre>
+<p>A linha 9 é a do <code>&lt;form&gt;</code>. A correção é <code>onsubmit={enviar}</code>, sem aspas. O mesmo vale para <code>onclick</code>, <code>oninput</code> e qualquer atributo que comece com <code>on</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — parêntese aberto no handler</strong>
+<p>Dentro de uma seta, o parêntese que abre precisa fechar. O compilador aponta a coluna onde a expressão deixou de fazer sentido.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;form onsubmit={() =&gt; enviar(}&gt;
+  &lt;input bind:value={nome}&gt;
+&lt;/form&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 29): Unexpected token</pre>
+<p>"Unexpected token" quer dizer que o compilador encontrou um pedaço de código fora de lugar. Aqui, o fecha-chaves apareceu antes do fecha-parênteses. A dica é fechar o par antes de escrever o conteúdo: <code>() =&gt; enviar()</code>.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Para que serve</th></tr>
+<tr><td><code>&lt;form onsubmit={enviar}&gt;</code></td><td>reagir ao envio sem recarregar</td></tr>
+<tr><td><code>evento.preventDefault()</code></td><td>cancelar o envio padrão do navegador</td></tr>
+<tr><td><code>&lt;button type="button"&gt;</code></td><td>botão que não envia o formulário</td></tr>
+<tr><td><code>nome.trim() === ''</code></td><td>detectar campo vazio, ignorando espaços</td></tr>
+<tr><td><code>required</code></td><td>validação nativa de campo obrigatório</td></tr>
+<tr><td><code>pattern={"[0-9]{3}"}</code></td><td>formato conferido pelo navegador</td></tr>
+<tr><td><code>return</code> dentro do <code>if</code></td><td>parar o handler quando a validação falha</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>A página recarrega ao enviar</td><td>falta <code>preventDefault()</code>, ou o botão é de envio sem handler</td></tr>
+<tr><td>A mensagem de erro some</td><td>a função continua depois do erro; falta <code>return</code></td></tr>
+<tr><td><code>pattern</code> não valida três dígitos</td><td><code>{3}</code> virou expressão; use <code>pattern={"[0-9]{3}"}</code></td></tr>
+<tr><td>O campo limpa e a variável não</td><td>usou <code>form.reset()</code> em vez de limpar o estado</td></tr>
+<tr><td>A validação do cliente passa e o servidor recusa</td><td>o servidor tem regras que o cliente não conhece</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Terminal</th><th>O que mostra</th></tr>
+<tr><td><code>node -e "console.log('  ana  '.trim())"</code></td><td><code>ana</code>, sem espaços nas pontas</td></tr>
+<tr><td><code>npm run build</code></td><td>o peso do projeto com o formulário</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>evento.preventDefault()</code> faz no envio do formulário?</p>
+<label><input type="radio" name="q1"> apaga os campos preenchidos</label>
+<label><input type="radio" name="q1"> impede o envio padrão, que recarregaria a página</label>
+<label><input type="radio" name="q1"> valida o formato dos campos</label>
+<label><input type="radio" name="q1"> envia os dados para o servidor</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">2. Por que <code>pattern="[0-9]{3}"</code> não funciona como esperado?</p>
+<label><input type="radio" name="q1"> porque o navegador não aceita <code>pattern</code></label>
+<label><input type="radio" name="q1"> porque <code>pattern</code> só vale para números</label>
+<label><input type="radio" name="q1"> porque as aspas duplas quebram o atributo</label>
+<label><input type="radio" name="q1"> porque o <code>{3}</code> é lido como expressão; use chaves de expressão ou entidades</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Onde deve ficar a validação de um formulário?</p>
+<label><input type="radio" name="q1"> no cliente para avisar cedo e no servidor para garantir</label>
+<label><input type="radio" name="q1"> só no cliente, porque é mais rápido</label>
+<label><input type="radio" name="q1"> só no HTML, com <code>required</code></label>
+<label><input type="radio" name="q1"> no CSS, com <code>:invalid</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">function enviar(evento) {<br>&nbsp;&nbsp;<input data-answer="evento.preventDefault()">;<br>&nbsp;&nbsp;enviado = nome;<br>}<br><br>// o formulário não recarrega a página</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Formulário é campos + estado + regra de validação; o binding cuida dos dois primeiros.</li>
+  <li><code>&lt;form onsubmit={enviar}&gt;</code> reage ao envio; <code>preventDefault()</code> impede o recarregamento.</li>
+  <li>Um <code>&lt;button&gt;</code> dentro do formulário envia por padrão; <code>type="button"</code> não envia.</li>
+  <li>Valide no handler com <code>if</code> e <code>return</code>: quando falha, a função para.</li>
+  <li>Mostre o erro numa variável de estado, não em <code>alert</code>.</li>
+  <li><code>required</code>, <code>pattern</code> e <code>maxlength</code> dão validação nativa de graça.</li>
+  <li>Chaves dentro de atributo são expressão: <code>pattern="[0-9]{3}"</code> vira <code>[0-9]3</code>.</li>
+  <li>Uma mensagem por campo ajuda mais do que um aviso único no topo.</li>
+  <li>Limpe o estado depois de enviar, guardando antes o valor que precisa sobreviver.</li>
+  <li>Validação de cliente avisa; validação de servidor garante.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

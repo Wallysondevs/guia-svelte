@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bind:this e Medidas — quando o valor vem do elemento | Guia Svelte</title>
+<meta name="description" content="bind:this, bind:clientWidth, bind:innerWidth e bind:naturalWidth no Svelte 5: como pegar o elemento, medir a caixa e ouvir a janela, com a saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">bind:this e Medidas</span></h1>
+
+<p class="intro">A Ana pendurou uma fita métrica na parede para saber se a nova prateleira cabe. Ela não mede a parede no papel: mede a parede de verdade, com o objeto na frente. Programando, acontece o mesmo. Às vezes o valor que você precisa não está no estado nem no campo: está no próprio elemento da página — a largura que ele ocupou, o botão que precisa receber o foco, a janela que mudou de tamanho. Os bindings desta aula buscam esse valor no lugar onde ele nasce.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como guardar um elemento numa variável com <code>bind:this</code>.</li>
+  <li>Por que a variável começa nula e só é preenchida depois de montar.</li>
+  <li>Como medir a largura e a altura de uma caixa com <code>bind:clientWidth</code>.</li>
+  <li>Como ler o tamanho da janela com <code>&lt;svelte:window&gt;</code>.</li>
+  <li>Quais bindings são de leitura e quais aceitam escrita.</li>
+  <li>Como focar um campo a partir de um botão.</li>
+  <li>Por que toda medida vale zero no HTML do servidor.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>O que o Node não tem que o navegador tem.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: medir o objeto, não o desenho</h2>
+
+<p>Existem dois jeitos de saber a largura de uma prateleira. O primeiro é olhar a planta baixa e calcular: trinta centímetros de parede, menos a moldura, menos o espaçamento. O segundo é pegar a fita métrica e medir a prateleira pronta. O primeiro jeito erra quando a parede não é reta; o segundo nunca erra, porque mede o que existe.</p>
+
+<p>No navegador, o HTML é a planta e o elemento montado é a prateleira. Uma <code>&lt;div&gt;</code> pode ocupar 300 pixels numa tela e 180 em outra, dependendo do conteúdo, da fonte e da largura da janela. Nenhuma conta feita no arquivo <code>.svelte</code> acerta os dois casos. Para saber a medida real, você precisa perguntar ao elemento — e para perguntar, precisa ter o elemento na mão.</p>
+
+<p>É para isso que servem os bindings desta aula. <code>bind:this</code> entrega o elemento; <code>bind:clientWidth</code> entrega a largura interna; <code>bind:innerWidth</code>, dentro de <code>&lt;svelte:window&gt;</code>, entrega a largura da janela. Todos começam com um valor provisório e são atualizados quando o navegador tem o que medir.</p>
+
+<p>Existe uma diferença de postura entre calcular e medir. Calcular é decidir antes: "a caixa tem 50% da largura". Medir é perguntar depois: "quanto a caixa ocupou?". Calcular é mais barato e funciona no servidor; medir é mais honesto e só funciona no navegador. O guia usa os dois, cada um no seu momento, e a regra é nunca medir para decidir o que o HTML inicial deve mostrar.</p>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Pegar a prateleira na mão</td><td><code>bind:this={caixa}</code></td></tr>
+<tr><td>Passar a fita métrica na largura</td><td><code>bind:clientWidth={largura}</code></td></tr>
+<tr><td>Medir a altura livre</td><td><code>bind:clientHeight={altura}</code></td></tr>
+<tr><td>Olhar o tamanho da parede inteira</td><td><code>&lt;svelte:window bind:innerWidth&gt;</code></td></tr>
+<tr><td>Saber quanto a parede rolou</td><td><code>&lt;svelte:window bind:scrollY&gt;</code></td></tr>
+<tr><td>Apontar o dedo para o botão</td><td><code>campo.focus()</code> com <code>bind:this</code></td></tr>
+</table>
+</div>
+
+<p>Repare que nenhuma dessas linhas fala de texto digitado. São bindings de <strong>elemento</strong> e de <strong>medida</strong>, não de valor de campo. O prefixo <code>bind:</code> é o mesmo, mas o que vem depois dos dois-pontos muda de natureza: às vezes é um número que o navegador calcula, às vezes é o próprio objeto do DOM.</p>
+
+<p>Uma nota sobre nomes, porque o JavaScript confunde no começo: <code>caixa.tagName</code> devolve <code>"DIV"</code> em maiúsculas, enquanto o seletor CSS <code>div</code> é escrito em minúsculas. O HTML não diferencia maiúsculas de minúsculas em nomes de tag; o DOM devolve em maiúsculas por convenção histórica. Se você comparar <code>tagName === 'div'</code>, a resposta será falsa — use <code>'DIV'</code> ou <code>tagName.toLowerCase()</code>.</p>
+
+<h2>3. <code>bind:this</code>: o elemento na mão</h2>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let caixa = $state(null);
+&lt;/script&gt;
+
+&lt;p&gt;Elemento: {caixa ? caixa.tagName : 'ainda não'}&lt;/p&gt;
+&lt;div bind:this={caixa}&gt;conteúdo&lt;/div&gt;</pre>
+
+<p>A variável começa nula porque, durante a renderização no servidor, o elemento não existe. O compilador gera um HTML sem referência nenhuma; a variável só recebe o elemento depois que o navegador monta a página.</p>
+
+<pre class="out">&lt;p&gt;Elemento: ainda não&lt;/p&gt; &lt;div&gt;conteúdo&lt;/div&gt;</pre>
+
+<dl class="anatomy">
+  <dt>bind:this</dt><dd>o binding do próprio elemento. Não liga valor, não liga marcação: entrega a referência ao nó do DOM.</dd>
+  <dt>{caixa}</dt><dd>precisa começar em <code>null</code>. O <code>null</code> representa "ainda não existe" e evita erro ao acessar propriedades antes da hora.</dd>
+  <dt>caixa.tagName</dt><dd>uma propriedade do elemento. Aqui, o nome da tag em maiúsculas. Poderia ser <code>textContent</code>, <code>offsetWidth</code>, <code>value</code>.</dd>
+  <dt>ainda não</dt><dd>o texto do ramo falso da condicional. É o que o servidor manda, e é o que a pessoa vê antes do JavaScript rodar.</dd>
+</dl>
+
+<p>O uso mais comum de <code>bind:this</code> não é exibir o nome da tag, e sim chamar um método do elemento: <code>focus()</code>, <code>select()</code>, <code>scrollIntoView()</code>, <code>play()</code>. Métodos não são valores; você chama quando precisa. Ter a referência guardada permite chamar de dentro de qualquer handler do componente.</p>
+
+<div class="trysvelte" data-goal="depois:300;;outre:^Botão: Enviar">
+<p class="try-task"><strong>Missão:</strong> a variável <code>botao</code> nunca recebe o elemento, então o parágrafo mostra "nada". Use <code>bind:this</code> para que ele mostre o texto do botão: <code>Botão: Enviar</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let botao = $state(null);
+&lt;/script&gt;
+
+&lt;p&gt;Botão: {botao ? botao.textContent : 'nada'}&lt;/p&gt;
+&lt;button&gt;Enviar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let botao = $state(null);
+&lt;/script&gt;
+
+&lt;p&gt;Botão: {botao ? botao.textContent : 'nada'}&lt;/p&gt;
+&lt;button bind:this={botao}&gt;Enviar&lt;/button&gt;</pre>
+</div>
+
+<p>Se você rodar a caixa e clicar em Verificar imediatamente, pode ser que a medida ainda não tenha chegado. O binding de elemento acontece depois da montagem, e o avaliador espera alguns milissegundos antes de conferir. É o mesmo atraso que a pessoa vê: por um instante, o parágrafo mostra "nada" e depois muda. Esse instante é real e faz parte do comportamento.</p>
+
+<h2>4. Medidas do elemento</h2>
+
+<p>Com o elemento na mão, você poderia ler <code>caixa.clientWidth</code> em um handler. O binding de medida faz isso continuamente, inclusive quando a caixa muda de tamanho por causa de uma fonte, de uma imagem ou da janela.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Largura: {largura}&lt;/p&gt;
+&lt;div bind:clientWidth={largura}&gt;caixa&lt;/div&gt;</pre>
+
+<pre class="out">&lt;p&gt;Largura: 0&lt;/p&gt; &lt;div&gt;caixa&lt;/div&gt;</pre>
+
+<p>No servidor, zero: não há layout para medir. No navegador, a medida chega assim que o elemento entra na tela. Repare que o valor é um número inteiro, em pixels, e que ele é somente leitura: você recebe a medida, não a define. Escrever em <code>largura</code> não muda a largura da caixa.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Binding</th><th>O que mede</th><th>Escreve no elemento?</th></tr>
+<tr><td><code>bind:clientWidth</code></td><td>largura interna, sem borda</td><td>não</td></tr>
+<tr><td><code>bind:clientHeight</code></td><td>altura interna, sem borda</td><td>não</td></tr>
+<tr><td><code>bind:offsetWidth</code></td><td>largura com borda e preenchimento</td><td>não</td></tr>
+<tr><td><code>bind:offsetHeight</code></td><td>altura com borda e preenchimento</td><td>não</td></tr>
+<tr><td><code>bind:naturalWidth</code></td><td>largura original de uma imagem</td><td>não</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="depois:300;;outre:^Largura: [1-9][0-9]*">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra a largura, mas ela nunca sai de zero. Ligue a medida da caixa com <code>bind:clientWidth</code> para aparecer um número maior que zero.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Largura: {largura}&lt;/p&gt;
+&lt;div style="height: 8px"&gt;&lt;/div&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Largura: {largura}&lt;/p&gt;
+&lt;div style="height: 8px" bind:clientWidth={largura}&gt;&lt;/div&gt;</pre>
+</div>
+
+<p>A caixa vazia com altura de oito pixels serve só para existir e ser medida. A largura vem do espaço disponível, que na caixa do guia é a largura do componente. Se você redimensionar a janela, a medida se atualiza — o binding escuta o redimensionamento por você.</p>
+
+<p>Para atualizar a medida sem custo a cada quadro, o Svelte usa um observador de redimensionamento, e não um evento de rolagem. O efeito prático é que a variável muda quando o tamanho muda de verdade, e não em todos os milissegundos. Isso importa numa lista longa: anexar um evento de redimensionamento a cada item seria caro; o observador só avisa quem precisa.</p>
+
+<p>As unidades são sempre pixels, sem <code>px</code> no valor. Se você quer mostrar em centímetros ou em porcentagem, converta na hora de exibir, como em qualquer conta com números. E lembre que a medida é inteira: o navegador arredonda, e 300,7 pixels aparecem como 300.</p>
+
+<h2>5. <code>&lt;svelte:window&gt;</code> e a janela</h2>
+
+<p>Alguns valores não pertencem a nenhum elemento: pertencem à janela do navegador. O tamanho da tela, a posição da rolagem, se a pessoa está online. Para esses existe o elemento especial <code>&lt;svelte:window&gt;</code>, que não aparece no HTML e serve de ponte para os eventos e valores da janela.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;svelte:window bind:innerWidth={largura} /&gt;
+&lt;p&gt;Janela: {largura}px&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Janela: 0px&lt;/p&gt;</pre>
+
+<p>Só o parágrafo sai no HTML. O <code>&lt;svelte:window&gt;</code> desaparece porque não é um elemento da página: é uma instrução de ligação com a janela. No navegador, a variável recebe a largura real e o texto passa a mostrar, por exemplo, <code>800px</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Binding em <code>svelte:window</code></th><th>O que entrega</th></tr>
+<tr><td><code>bind:innerWidth</code></td><td>largura útil da janela, em pixels</td></tr>
+<tr><td><code>bind:innerHeight</code></td><td>altura útil da janela, em pixels</td></tr>
+<tr><td><code>bind:scrollX</code> / <code>bind:scrollY</code></td><td>quanto a página rolou na horizontal / vertical</td></tr>
+<tr><td><code>bind:online</code></td><td><code>true</code> se o navegador está conectado</td></tr>
+<tr><td><code>bind:focused</code></td><td><code>true</code> se a janela está em foco</td></tr>
+<tr><td><code>bind:devicePixelRatio</code></td><td>a densidade de pixels da tela</td></tr>
+</table>
+</div>
+
+<div class="trysvelte" data-goal="depois:300;;outre:^Janela: [1-9][0-9]*px">
+<p class="try-task"><strong>Missão:</strong> o parágrafo deveria mostrar a largura da janela, mas a variável não está ligada a nada. Use <code>&lt;svelte:window bind:innerWidth&gt;</code> para aparecer um número maior que zero antes de <code>px</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;svelte:window /&gt;
+&lt;p&gt;Janela: {largura}px&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;svelte:window bind:innerWidth={largura} /&gt;
+&lt;p&gt;Janela: {largura}px&lt;/p&gt;</pre>
+</div>
+
+<p>Note que a variável precisa existir antes. O binding não cria a variável; ele escreve nela. Se você esquecer o <code>$state(0)</code>, o compilador reclama que não há onde ligar — e a mensagem é a mesma que aparece quando o nome do binding está errado.</p>
+
+<h2>6. Somente leitura × escrita</h2>
+
+<p>Nem todo binding é uma via de mão dupla. Os de medida são só de leitura: o navegador informa, você lê. Os de valor são de escrita: você também pode mudar o estado e o elemento acompanha.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Binding</th><th>Direção</th><th>Quem manda</th></tr>
+<tr><td><code>bind:value</code> em campo</td><td>as duas</td><td>os dois lados</td></tr>
+<tr><td><code>bind:checked</code></td><td>as duas</td><td>os dois lados</td></tr>
+<tr><td><code>bind:clientWidth</code></td><td>só leitura</td><td>o navegador</td></tr>
+<tr><td><code>bind:innerWidth</code></td><td>só leitura</td><td>o navegador</td></tr>
+<tr><td><code>bind:this</code></td><td>só leitura</td><td>o navegador</td></tr>
+</table>
+</div>
+
+<p>Essa diferença explica por que <code>bind:this</code> em constante não faz sentido e por que ninguém tenta escrever numa medida. O compilador conhece as duas famílias e recusa o que não existe: cada elemento tem uma lista de bindings válidos, e a mensagem de erro costuma trazer a lista inteira.</p>
+
+<h2>7. Focar um campo com <code>bind:this</code></h2>
+
+<p>Um exemplo que aparece em toda padaria digital: o botão "buscar" deve colocar o cursor no campo de busca. Sem <code>bind:this</code>, você precisaria de <code>document.querySelector</code> e de um <code>id</code> combinado; com ele, a referência está na variável.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let campo = $state(null);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; campo.focus()}&gt;focar&lt;/button&gt;
+&lt;input bind:this={campo}&gt;</pre>
+
+<pre class="out">&lt;button&gt;focar&lt;/button&gt; &lt;input/&gt;</pre>
+
+<p>O HTML não mostra a ligação, como sempre. No navegador, clicar no botão chama <code>focus()</code> no campo e o cursor aparece dentro dele. Se você clicar antes de o componente montar — o que só acontece em teste automatizado —, <code>campo</code> ainda é <code>null</code> e a chamada quebra com "Cannot read properties of null". A guarda é simples: <code>campo?.focus()</code>, com o ponto de interrogação que só chama se houver objeto.</p>
+
+<p>O mesmo padrão serve para dar play num vídeo, para selecionar o texto de um campo depois de um erro, para rolar até uma seção. Em todos os casos, o que você guarda é o elemento, e o que você chama é um método dele. O binding não sabe o que você vai fazer; ele só entrega o objeto.</p>
+
+<p>Focar um campo é uma melhoria de acessibilidade, não um enfeite. Quem usa teclado ou leitor de tela agradece quando o cursor pula para o lugar certo depois de uma ação. Quem usa mouse agradece porque não precisa mirar de novo. O cuidado é não roubar o foco sem motivo: mover o cursor enquanto a pessoa digita em outro campo atrapalha mais do que ajuda.</p>
+
+<h2>8. No servidor não existe medida</h2>
+
+<p>Esta é a limitação que organiza a aula inteira. O servidor monta o HTML sem navegador: não há tela, não há fonte, não há largura. Por isso toda medida vale zero e todo <code>bind:this</code> vale <code>null</code> no HTML entregue.</p>
+
+<p>O Node, que roda no servidor, também não tem as APIs do navegador. O comando abaixo mostra a diferença de forma direta:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log(typeof document)"
+undefined</pre>
+
+<p><code>document</code> é o objeto que representa a página no navegador. No Node ele não existe, e o <code>typeof</code> devolve <code>undefined</code> em vez de quebrar. Se o seu componente tentar medir durante a renderização do servidor, o valor será provisório; o valor real só chega no navegador, alguns milissegundos depois.</p>
+
+<p>O build do projeto com os dois bindings de medida fica assim:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Cq06SVPV.js  36.55 kB │ gzip: 14.08 kB
+✓ built in 1.63s</pre>
+
+<p>O peso é parecido com o das aulas anteriores. O que muda é o momento em que o valor aparece: no navegador, depois da montagem. Projetar a tela contando com um valor que só existe no cliente é uma decisão consciente — e a página precisa ficar apresentável enquanto o valor não chega. Mostrar <code>0</code> por um instante é aceitável; mostrar "NaN" ou quebrar, não.</p>
+
+<p>Esse instante tem nome no jargão: a página chega pronta do servidor (HTML) e depois "ganha vida" no navegador. Se o valor provisório for muito diferente do valor final, a pessoa vê um pulo. Uma medida que sai de zero para 300 pixels move o texto ao lado. Para evitar o pulo, reserve o espaço com CSS ou mostre um traço até a medida chegar; o importante é saber que o pulo é esperado, e não um bug do binding.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — medida de janela num campo</strong>
+<p><code>bind:innerWidth</code> é da janela, não de um <code>input</code>. Cada binding tem o seu lugar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let n = $state(0);
+&lt;/script&gt;
+
+&lt;input bind:innerWidth={n}&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 7): `bind:innerWidth` can only be used with `&lt;svelte:window&gt;`</pre>
+<p>A mensagem aponta o elemento certo. Troque o <code>&lt;input&gt;</code> por <code>&lt;svelte:window bind:innerWidth={n} /&gt;</code>. Para medir um campo, o binding é <code>bind:clientWidth</code>, ligado ao próprio campo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — medida de elemento na janela</strong>
+<p>O contrário também falha. <code>svelte:window</code> tem uma lista fechada de valores, e a mensagem mostra a lista inteira.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let largura = $state(0);
+&lt;/script&gt;
+
+&lt;svelte:window bind:clientWidth={largura} /&gt;
+&lt;p&gt;{largura}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 15): `bind:clientWidth` is not a valid binding. Possible bindings for &lt;svelte:window&gt; are devicePixelRatio, focused, innerHeight, innerWidth, online, outerHeight, outerWidth, scrollX, scrollY, this</pre>
+<p>É uma das mensagens mais compridas do compilador, e uma das mais úteis: ela lista tudo o que existe. Para a largura útil da janela, use <code>innerWidth</code>; para a altura, <code>innerHeight</code>. <code>clientWidth</code> mede o conteúdo de um elemento, e a janela não é um elemento comum.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — medida de imagem numa caixa</strong>
+<p><code>bind:naturalWidth</code> é a largura original de uma imagem, antes de qualquer CSS. Um <code>div</code> não tem largura natural.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let w = $state(0);
+&lt;/script&gt;
+
+&lt;div bind:naturalWidth={w}&gt;caixa&lt;/div&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 5): `bind:naturalWidth` can only be used with `&lt;img&gt;`</pre>
+<p>Parecido com o erro anterior, mas com uma diferença de conceito: <code>naturalWidth</code> só faz sentido para imagem, porque só a imagem tem uma versão original guardada. Para a largura ocupada na tela, use <code>clientWidth</code> ou <code>offsetWidth</code>.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Binding</th><th>Onde usar</th><th>O que entrega</th></tr>
+<tr><td><code>bind:this</code></td><td>qualquer elemento</td><td>o nó do DOM, depois de montar</td></tr>
+<tr><td><code>bind:clientWidth</code></td><td>qualquer elemento</td><td>largura interna em pixels</td></tr>
+<tr><td><code>bind:clientHeight</code></td><td>qualquer elemento</td><td>altura interna em pixels</td></tr>
+<tr><td><code>bind:offsetWidth</code></td><td>qualquer elemento</td><td>largura com borda e preenchimento</td></tr>
+<tr><td><code>bind:naturalWidth</code></td><td><code>&lt;img&gt;</code></td><td>largura original do arquivo</td></tr>
+<tr><td><code>bind:innerWidth</code></td><td><code>&lt;svelte:window&gt;</code></td><td>largura da janela</td></tr>
+<tr><td><code>bind:scrollY</code></td><td><code>&lt;svelte:window&gt;</code></td><td>rolagem vertical</td></tr>
+<tr><td><code>bind:online</code></td><td><code>&lt;svelte:window&gt;</code></td><td>conexão ativa ou não</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>A medida fica em zero</td><td>o valor só chega no navegador, depois de montar</td></tr>
+<tr><td>"Cannot read properties of null"</td><td>chamou método em <code>bind:this</code> antes da montagem</td></tr>
+<tr><td>O elemento é nulo no HTML</td><td>no servidor não existe DOM</td></tr>
+<tr><td>A medida não atualiza ao redimensionar</td><td>o binding está no elemento errado</td></tr>
+<tr><td>O compilador lista bindings possíveis</td><td>o nome não vale para aquele elemento</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Terminal</th><th>O que mostra</th></tr>
+<tr><td><code>node -e "console.log(typeof document)"</code></td><td><code>undefined</code> — no Node não existe página</td></tr>
+<tr><td><code>npm run build</code></td><td>o peso do projeto com as medidas</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>bind:this={caixa}</code> coloca na variável?</p>
+<label><input type="radio" name="q1"> o texto do elemento</label>
+<label><input type="radio" name="q1"> o próprio elemento do DOM, depois de montar</label>
+<label><input type="radio" name="q1"> a largura do elemento</label>
+<label><input type="radio" name="q1"> o nome da tag em minúsculas</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Qual binding lê a largura útil da janela?</p>
+<label><input type="radio" name="q1"> <code>bind:clientWidth</code> num <code>div</code></label>
+<label><input type="radio" name="q1"> <code>bind:offsetWidth</code> no <code>body</code></label>
+<label><input type="radio" name="q1"> <code>bind:innerWidth</code> em <code>&lt;svelte:window&gt;</code></label>
+<label><input type="radio" name="q1"> <code>bind:naturalWidth</code> numa imagem</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que a medida vale zero no HTML do servidor?</p>
+<label><input type="radio" name="q1"> porque não existe layout para medir antes do navegador</label>
+<label><input type="radio" name="q1"> porque o Svelte apaga as medidas na renderização</label>
+<label><input type="radio" name="q1"> porque o CSS não foi carregado</label>
+<label><input type="radio" name="q1"> porque o binding só funciona com números inteiros</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let caixa = $state(null);<br><br>&lt;button onclick={() =&gt; caixa.textContent = 'oi'}&gt;mudar&lt;/button&gt;<br>&lt;div <input data-answer="bind:this={caixa}">&gt;conteúdo&lt;/div&gt;<br><br>// a variável recebe o elemento depois de montar</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>bind:this</code> entrega o elemento do DOM; a variável começa em <code>null</code>.</li>
+  <li>Com o elemento na mão, dá para chamar métodos como <code>focus()</code> e <code>select()</code>.</li>
+  <li><code>bind:clientWidth</code> e <code>bind:clientHeight</code> medem a parte interna do elemento.</li>
+  <li><code>bind:offsetWidth</code> inclui borda e preenchimento; <code>bind:naturalWidth</code> é só de imagem.</li>
+  <li><code>&lt;svelte:window&gt;</code> liga valores da janela: <code>innerWidth</code>, <code>innerHeight</code>, <code>scrollY</code>, <code>online</code>.</li>
+  <li>Medidas e elementos são somente leitura: o navegador informa, você lê.</li>
+  <li>No servidor não existe layout: medidas valem zero e elementos valem <code>null</code>.</li>
+  <li>Use <code>?.</code> antes de chamar método em elemento que pode ser nulo.</li>
+  <li>Erros desta aula: medida de janela em campo, medida de elemento na janela e medida de imagem em caixa.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

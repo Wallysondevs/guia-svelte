@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quando Não Usar bind — a rua de mão dupla cobra pedágio | Guia Svelte</title>
+<meta name="description" content="Quando trocar bind:value por value + oninput no Svelte 5: formato, validação e valores calculados, com $bindable em componentes e as mensagens reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Quando Não Usar bind</span></h1>
+
+<p class="intro">A Ana tem uma porta de duas folhas no balcão: entra e sai gente o tempo todo, e isso é bom. Mas na porta do estoque ela instalou uma porta de uma folha só, que abre para dentro e tem trava. O <code>bind</code> é a porta de duas folhas: cômodo, rápido, e perigoso quando você precisa controlar quem passa. Esta aula é sobre escolher a porta certa — quando o atalho ajuda e quando ele esconde a regra que você precisa escrever.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que o <code>bind</code> faz que você não vê no código.</li>
+  <li>Como escrever a ligação de duas vias à mão, com <code>value</code> e <code>oninput</code>.</li>
+  <li>Como formatar o valor antes de guardar, recusando o que não serve.</li>
+  <li>Como validar sem deixar o estado receber lixo.</li>
+  <li>Por que valor calculado não deve ser digitado.</li>
+  <li>O que é <code>$bindable</code> e quando ele aparece em componentes.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Uma tabela de decisão para escolher entre atalho e caminho longo.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a porta de duas folhas</h2>
+
+<p>Uma porta de duas folhas é prática: qualquer pessoa entra e sai sem pensar. O problema aparece quando você precisa saber quem passou, em que ordem, com o que nas mãos. A porta não registra nada: ela só abre. Para controlar, você troca por uma porta com trava, câmera e catraca — mais trabalho, mais controle.</p>
+
+<p>O <code>bind:value</code> é a porta de duas folhas. Ele deixa o campo escrever no estado sem passar por nenhuma decisão sua. Isso é exatamente o que você quer quando o valor pode ser guardado como veio: um nome, uma observação, uma quantidade simples. E é exatamente o que você não quer quando o valor precisa de formato, de validação ou de conversão antes de entrar.</p>
+
+<p>A alternativa não é abolir o binding; é usá-lo com critério. O caminho longo — <code>value={x}</code> mais <code>oninput={guardar}</code> — coloca a decisão no meio do caminho. O campo mostra o estado, o handler decide o que fazer com o texto digitado e só depois o estado muda. O custo é mais código; o ganho é controle.</p>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Situação</th><th>Atalho (<code>bind</code>)</th><th>Caminho longo (<code>oninput</code>)</th></tr>
+<tr><td>Nome completo</td><td>serve</td><td>desnecessário</td></tr>
+<tr><td>Telefone só com dígitos</td><td>não filtra nada</td><td>filtra a cada tecla</td></tr>
+<tr><td>E-mail com validação</td><td>aceita qualquer texto</td><td>recusa e avisa</td></tr>
+<tr><td>Preço com duas casas</td><td>aceita <code>1,999</code></td><td>arredonda antes de guardar</td></tr>
+<tr><td>Total da compra</td><td>não se aplica: é calculado</td><td>não se aplica: é <code>$derived</code></td></tr>
+<tr><td>Campo controlado por regra de negócio</td><td>briga com a regra</td><td>a regra decide</td></tr>
+</table>
+</div>
+
+<p>Repare na quinta linha: para valor calculado, nem atalho nem caminho longo. O total não é digitado; ele vem de uma conta. O erro comum é criar um estado para o total e esquecer de atualizá-lo quando o preço muda. A solução é <code>$derived</code>, que recalcula sozinho.</p>
+
+<h2>3. O caminho de ida e volta, escrito à mão</h2>
+
+<p>Para comparar, comece com o equivalente exato do <code>bind:value</code> sem o atalho. O campo recebe o estado e escuta a digitação; o handler lê o campo e grava.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+
+  function guardar(evento) {
+    nome = evento.target.value.trim();
+  }
+&lt;/script&gt;
+
+&lt;input value={nome} oninput={guardar}&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value="Ana"/&gt; &lt;p&gt;Olá, Ana&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>value={nome}</dt><dd>a ida: o estado escreve no campo. Sem isso, o campo não acompanha mudanças feitas por código.</dd>
+  <dt>oninput={guardar}</dt><dd>a volta: cada tecla chama o handler. O nome do evento é o mesmo que você viu na aula de eventos.</dd>
+  <dt>evento.target.value</dt><dd>o texto cru do campo, do jeito que a pessoa digitou, com espaços e tudo.</dd>
+  <dt>.trim()</dt><dd>a decisão que o <code>bind</code> não toma: cortar os espaços das pontas antes de guardar.</dd>
+</dl>
+
+<p>Esse exemplo já mostra a diferença. O <code>bind:value</code> guardaria <code>"  Ana  "</code> com os espaços; o caminho longo guarda <code>"Ana"</code>. Se a Ana digitar o nome com espaço no fim e o programa comparar com o cadastro, a comparação falha por causa de um caractere invisível. Você não vê o problema na tela — o espaço não aparece —, mas o banco de dados vê.</p>
+
+<p>Existe um detalhe de comportamento que muita gente esquece: quando o handler grava um valor diferente do que está no campo, o campo é reescrito. Se você digitar <code>ana</code> e o handler guardar <code>Ana</code>, o cursor pode pular para o fim do texto. Em campos de formatação avançada, isso incomoda; para cortar espaços nas pontas, quase nunca. Guarde a informação para o dia em que o cursor começar a pular.</p>
+
+<h2>4. Quando o valor precisa de formato</h2>
+
+<p>Telefone, CPF, código de barras: campos que aceitam apenas dígitos. O <code>bind:value</code> puro aceita letras, símbolos e o que a pessoa quiser. O handler resolve em uma linha.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let telefone = $state('');
+
+  function guardar(evento) {
+    telefone = evento.target.value.replace(/\D/g, '');
+  }
+&lt;/script&gt;
+
+&lt;input value={telefone} oninput={guardar}&gt;
+&lt;p&gt;Telefone: {telefone}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value=""/&gt; &lt;p&gt;Telefone: &lt;/p&gt;</pre>
+
+<p>O <code>replace(/\D/g, '')</code> troca tudo o que não é dígito por nada. A barra invertida maiúscula <code>\D</code> significa "não é dígito"; o <code>g</code> significa "todas as ocorrências", não só a primeira. O resultado é uma string só com números. No terminal, a mesma conta aparece sem Svelte nenhum:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log('abc123'.replace(/\D/g, ''))"
+123</pre>
+
+<p>Com o handler no lugar, digitar <code>abc123</code> guarda <code>"123"</code> e o campo mostra <code>123</code> na hora. A pessoa vê o filtro funcionando e entende o formato esperado sem precisar de mensagem de erro. É uma validação silenciosa, e das mais eficazes.</p>
+
+<p>O build do projeto com esse handler fica assim. O número de módulos não muda; o tamanho cresce um pouco por causa da função e da expressão regular:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-CoVqj_oV.js  37.33 kB │ gzip: 14.41 kB
+✓ built in 971ms</pre>
+
+<p>Vale comparar com a aula de <code>bind:value</code>: o componente de lá tinha um binding puro e pesava quarenta kilobytes; este tem uma regra e pesa trinta e sete, porque tem menos campos. O tamanho não mede a qualidade da decisão. O que mede é o comportamento quando alguém digita algo inesperado.</p>
+
+<p>Uma observação sobre expressões regulares, que assustam no começo: <code>/\D/g</code> é curto, mas tem duas partes. O <code>D</code> maiúsculo é o complemento de <code>d</code>, que significa dígito; o <code>g</code> manda trocar todas as ocorrências. Existem dezenas de letras com significados parecidos, e você não precisa decorar todas hoje. Precisa saber que dá para filtrar texto e onde procurar quando precisar.</p>
+
+<div class="trysvelte" data-goal="digitar:input=abc123;;outre:^Só números: 123">
+<p class="try-task"><strong>Missão:</strong> o campo guarda tudo o que a pessoa digita. Faça o handler descartar o que não for dígito, para que digitar <code>abc123</code> mostre <code>Só números: 123</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let telefone = $state('');
+&lt;/script&gt;
+
+&lt;p&gt;Só números: {telefone}&lt;/p&gt;
+&lt;input bind:value={telefone}&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let telefone = $state('');
+
+  function guardar(evento) {
+    telefone = evento.target.value.replace(/\D/g, '');
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Só números: {telefone}&lt;/p&gt;
+&lt;input value={telefone} oninput={guardar}&gt;</pre>
+</div>
+
+<p>A solução troca <code>bind:value</code> por <code>value</code> mais <code>oninput</code>. Não é mais difícil; é mais explícito. Quem lê o arquivo vê que existe uma decisão entre a tecla e o estado. Essa visibilidade é o argumento principal a favor do caminho longo quando há regra.</p>
+
+<h2>5. Quando o valor precisa de validação</h2>
+
+<p>Validar não é só recusar no fim: é impedir que o estado receba um valor que não serve. O componente abaixo guarda um nome e só aceita o envio se houver algo de verdade no campo.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let mensagem = $state('');
+
+  function salvar() {
+    if (nome.trim() === '') {
+      mensagem = 'Não salvo: campo vazio';
+      return;
+    }
+    mensagem = 'Salvo: ' + nome;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{mensagem}&lt;/p&gt;
+&lt;input bind:value={nome}&gt;
+&lt;button type="button" onclick={salvar}&gt;salvar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;&lt;/p&gt; &lt;input value=""/&gt; &lt;button type="button"&gt;salvar&lt;/button&gt;</pre>
+
+<p>Aqui o <code>bind</code> continua, porque o valor pode ser guardado como veio. A validação acontece na hora de salvar, não na digitação. Essa combinação é a mais comum em formulários: binding para os campos, validação na ação. O que muda em relação ao uso ingênuo é que a função <em>decide</em> antes de aceitar.</p>
+
+<p>Quando a validação precisa acontecer a cada tecla — senha com regra de tamanho, por exemplo —, o caminho longo volta a ser melhor. Você lê o campo, compara, e grava um estado de erro junto com o texto. O campo passa a mostrar uma mensagem embaixo enquanto a pessoa digita. O custo é mais código e mais estado; o ganho é feedback imediato.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Não salvo: campo vazio">
+<p class="try-task"><strong>Missão:</strong> o botão salva um nome vazio. Faça a função recusar o envio quando não houver nome e mostrar <code>Não salvo: campo vazio</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let mensagem = $state('');
+
+  function salvar() {
+    mensagem = 'Salvo: ' + nome;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{mensagem}&lt;/p&gt;
+&lt;input bind:value={nome}&gt;
+&lt;button type="button" onclick={salvar}&gt;salvar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+  let mensagem = $state('');
+
+  function salvar() {
+    if (nome.trim() === '') {
+      mensagem = 'Não salvo: campo vazio';
+      return;
+    }
+    mensagem = 'Salvo: ' + nome;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;{mensagem}&lt;/p&gt;
+&lt;input bind:value={nome}&gt;
+&lt;button type="button" onclick={salvar}&gt;salvar&lt;/button&gt;</pre>
+</div>
+
+<p>O ponto pedagógico aqui é que <code>bind</code> e validação não são inimigos. O problema não é o binding em si; é usar o binding quando existe uma regra que precisa ser aplicada <em>antes</em> de guardar. Se a regra é aplicada depois, no envio, o binding continua sendo a ferramenta certa.</p>
+
+<h2>6. Valores calculados não se digitam</h2>
+
+<p>O total da compra é o exemplo perfeito de valor que não deve ter <code>bind</code>. Ele não é digitado: é a quantidade multiplicada pelo preço. Se você criar um estado para o total, precisa lembrar de atualizá-lo em todo lugar que muda a quantidade ou o preço. Um dia você esquece.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let quantidade = $state(2);
+  let preco = $state(9.5);
+  let total = $derived(quantidade * preco);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {total.toFixed(2)}&lt;/p&gt;
+&lt;input type="number" bind:value={quantidade}&gt;
+&lt;input type="number" bind:value={preco}&gt;</pre>
+
+<pre class="out">&lt;p&gt;Total: R$ 19.00&lt;/p&gt; &lt;input type="number" value="2"/&gt; &lt;input type="number" value="9.5"/&gt;</pre>
+
+<p>O <code>$derived</code> calcula a partir de <code>quantidade</code> e <code>preco</code> e se atualiza sozinho quando qualquer um dos dois muda. Não existe estado separado para o total, e por isso não existe a chance de ele ficar desatualizado. O valor sai do HTML com duas casas porque o <code>toFixed(2)</code> formata na hora de mostrar.</p>
+
+<p>O contraste é instrutivo: usar <code>bind:value</code> no total permitiria que a pessoa digitasse um valor que não corresponde à conta. Mesmo que o binding funcionasse, o estado passaria a ter duas verdades — o preço digitado e o preço calculado — e uma delas estaria errada. Valores calculados não se digitam; eles se derivam.</p>
+
+<div class="trysvelte" data-goal="digitar:#preco=5;;outre:^Total: 10">
+<p class="try-task"><strong>Missão:</strong> o total é um estado separado que ninguém atualiza. Faça ele acompanhar o preço, de modo que digitar <code>5</code> no campo mostre <code>Total: 10</code> (o dobro do preço).</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0);
+  let total = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;
+&lt;input id="preco" type="number" bind:value={preco}&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0);
+  let total = $derived(preco * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Total: {total}&lt;/p&gt;
+&lt;input id="preco" type="number" bind:value={preco}&gt;</pre>
+</div>
+
+<p>Note que a solução mantém o binding no preço: o preço é digitado, o total é calculado. Cada valor tem o seu papel. O erro não era o binding; era tratar como digitável um valor que só podia ser calculado.</p>
+
+<h2>7. <code>bind</code> em componente: <code>$bindable</code></h2>
+
+<p>Quando o campo está dentro de outro componente, o binding atravessa a fronteira. Para isso, o componente filho precisa declarar que aquela propriedade aceita receber valor de volta. A marca é a runa <code>$bindable</code>.</p>
+
+<pre class="file" data-file="src/Campo.svelte">&lt;script&gt;
+  let { valor = $bindable(0) } = $props();
+&lt;/script&gt;
+
+&lt;input type="number" bind:value={valor}&gt;</pre>
+
+<pre class="out">&lt;input type="number" value="0"/&gt;</pre>
+
+<p>Do lado de quem usa, a chamada é <code>&lt;Campo bind:valor={quantidade} /&gt;</code>. O valor digitado dentro do filho volta para a variável do pai. Sem <code>$bindable</code>, a ligação não funciona: o filho recebe uma cópia do valor e o que ele escrever não volta para o pai. É a mesma ideia do <code>bind:value</code>, agora entre dois arquivos.</p>
+
+<p>O custo é de acoplamento: o filho passa a poder escrever no estado do pai. Em componentes pequenos de formulário, isso é conveniente. Em componentes grandes, é melhor o filho receber o valor e avisar por callback, deixando o pai decidir se aceita. A escolha é a mesma da seção 1: atalho ou controle.</p>
+
+<h2>8. O custo escondido do <code>bind</code></h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O <code>bind</code> esconde…</th><th>Consequência</th></tr>
+<tr><td>o momento em que o estado muda</td><td>depurar exige saber que o campo escreveu</td></tr>
+<tr><td>a regra de formatação</td><td>o estado guarda o texto cru</td></tr>
+<tr><td>a validação</td><td>valor inválido entra no estado e precisa ser tratado depois</td></tr>
+<tr><td>a conversão de tipo</td><td>número vira string sem aviso em campo de texto</td></tr>
+<tr><td>o acoplamento entre componentes</td><td>o filho escreve no pai sem pedir licença</td></tr>
+</table>
+</div>
+
+<p>Nada disso é defeito; é o preço do atalho. O programador experiente não evita o <code>bind</code>: ele sabe quando o preço vale a pena. O iniciante tende a usar sempre o atalho e depois passa horas procurando por que o estado tem um valor que ninguém digitou. Saber que o campo escreve sozinho encurta a busca.</p>
+
+<p>Existe também o custo de teste. Um componente com <code>bind</code> precisa de um navegador para exercitar a digitação; um componente que recebe o valor e chama uma função pode ser testado chamando a função. Quanto mais regra no handler, mais fácil testar sem interface. A aula de testes do Nível 2 volta a esse ponto.</p>
+
+<p>Para fechar a decisão, três perguntas rápidas antes de escrever <code>bind:value</code>. O valor pode ser guardado exatamente como a pessoa digitou? Nenhuma regra precisa rodar antes? Ninguém mais precisa saber que ele mudou? Se as três respostas forem sim, o atalho é a escolha certa. Se qualquer uma for não, escreva o caminho longo e deixe a decisão visível.</p>
+
+<h2>9. Quando dá errado</h2>
+
+<div class="cenario">
+<strong>Erro 1 — <code>$bindable</code> fora de <code>$props</code></strong>
+<p>A runa só existe dentro da desestruturação das propriedades. Solta no script, não tem a que se referir.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let valor = $bindable(0);
+&lt;/script&gt;
+
+&lt;p&gt;{valor}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 14): `$bindable()` can only be used inside a `$props()` declaration</pre>
+<p>A mensagem diz "só pode ser usada dentro de uma declaração <code>$props()</code>". A forma certa é <code>let { valor = $bindable(0) } = $props()</code>. O valor padrão entre parênteses é opcional; sem ele, a propriedade começa indefinida.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — runa sem parênteses</strong>
+<p>Toda runa é uma chamada. Escrever o nome sem os parênteses faz o compilador achar que você quis dizer outra coisa.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { nome = $bindable } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 15): Cannot use rune without parentheses</pre>
+<p>"Não posso usar a runa sem parênteses". A correção é <code>$bindable()</code> ou <code>$bindable(valorPadrao)</code>. O mesmo vale para <code>$state</code>, <code>$derived</code>, <code>$effect</code> e <code>$props</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>bind</code> numa expressão</strong>
+<p>O lado direito do binding precisa ser um lugar onde se grava. Uma transformação como <code>nome.trim()</code> produz um valor novo, sem endereço.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state(' Ana ');
+&lt;/script&gt;
+
+&lt;input bind:value={nome.trim()}&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 7): Can only bind to an Identifier or MemberExpression or a `{get, set}` pair</pre>
+<p>É o caso em que a pessoa quer formatar e tenta fazer isso no binding. Formatar é trabalho de handler: use <code>value={nome}</code> com <code>oninput</code>, como na seção 4. O compilador está dizendo que não existe endereço para gravar o texto que a pessoa digitar.</p>
+</div>
+
+<h2>10. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Se o valor…</th><th>Use</th><th>Porque</th></tr>
+<tr><td>pode ser guardado como veio</td><td><code>bind:value</code></td><td>atalho honesto, sem regra</td></tr>
+<tr><td>precisa de formato</td><td><code>value</code> + <code>oninput</code></td><td>a regra roda antes de gravar</td></tr>
+<tr><td>precisa de validação imediata</td><td><code>value</code> + <code>oninput</code></td><td>dá para mostrar erro enquanto digita</td></tr>
+<tr><td>é calculado a partir de outros</td><td><code>$derived</code></td><td>nunca fica desatualizado</td></tr>
+<tr><td>vem de outro componente</td><td><code>bind:valor</code> + <code>$bindable</code></td><td>o filho precisa declarar que aceita</td></tr>
+<tr><td>é só leitura na tela</td><td><code>value={x}</code></td><td>não há o que gravar</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>O estado tem espaço ou caractere que ninguém digitou</td><td><code>bind</code> guardou o texto cru</td></tr>
+<tr><td>O total não acompanha o preço</td><td>total é <code>$state</code> separado; deveria ser <code>$derived</code></td></tr>
+<tr><td>O cursor pula para o fim</td><td>o handler reescreveu o valor com formato diferente</td></tr>
+<tr><td>O componente filho não compila o binding</td><td>falta <code>$bindable</code> na propriedade</td></tr>
+<tr><td>A validação só aparece no envio</td><td>é assim mesmo se a regra está no handler de envio</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Terminal</th><th>O que mostra</th></tr>
+<tr><td><code>node -e "console.log('abc123'.replace(/\D/g, ''))"</code></td><td><code>123</code> — só os dígitos</td></tr>
+<tr><td><code>node -e "console.log('  ana  '.trim())"</code></td><td><code>ana</code> — sem espaços nas pontas</td></tr>
+<tr><td><code>npm run build</code></td><td>o peso do projeto com a validação</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. Quando o caminho longo (<code>value</code> + <code>oninput</code>) é melhor que <code>bind:value</code>?</p>
+<label><input type="radio" name="q1"> sempre: <code>bind</code> é para iniciantes</label>
+<label><input type="radio" name="q1"> nunca: <code>bind</code> faz tudo o que o handler faz</label>
+<label><input type="radio" name="q1"> quando existe uma regra entre a digitação e o estado</label>
+<label><input type="radio" name="q1"> quando o campo é numérico</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. O que o total da compra deve ser?</p>
+<label><input type="radio" name="q1"> um valor <code>$derived</code> de quantidade e preço</label>
+<label><input type="radio" name="q1"> um <code>$state</code> atualizado em cada handler</label>
+<label><input type="radio" name="q1"> um campo com <code>bind:value</code></label>
+<label><input type="radio" name="q1"> uma constante calculada uma vez</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. O que <code>$bindable</code> permite?</p>
+<label><input type="radio" name="q1"> ligar um <code>input</code> a duas variáveis</label>
+<label><input type="radio" name="q1"> validar a propriedade automaticamente</label>
+<label><input type="radio" name="q1"> calcular a propriedade a partir de outras</label>
+<label><input type="radio" name="q1"> que a propriedade de um componente aceite binding do pai</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let telefone = $state('');<br><br>function guardar(evento) {<br>&nbsp;&nbsp;telefone = evento.target.value.<input data-answer="replace(/\D/g, '')|replace(/[^0-9]/g, '')">;<br>}<br><br>&lt;input value={telefone} oninput={guardar}&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>bind</code> é atalho: o campo escreve no estado sem passar por decisão sua.</li>
+  <li>O caminho longo é <code>value={x}</code> mais <code>oninput={guardar}</code>.</li>
+  <li>Use o caminho longo quando houver formato, conversão ou validação antes de gravar.</li>
+  <li><code>replace(/\D/g, '')</code> deixa só dígitos; <code>trim()</code> corta espaços das pontas.</li>
+  <li>Valor calculado é <code>$derived</code>, nunca <code>$state</code> mantido à mão.</li>
+  <li><code>bind</code> e validação convivem: a regra pode rodar no envio.</li>
+  <li>Em componente, <code>$bindable</code> declara a propriedade que aceita binding do pai.</li>
+  <li>Erros desta aula: <code>$bindable</code> fora de <code>$props</code>, runa sem parênteses e binding em expressão.</li>
+  <li>Se o cursor pula ao digitar, o handler está reescrevendo o valor com outro formato.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
