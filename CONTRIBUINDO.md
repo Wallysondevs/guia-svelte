@@ -162,7 +162,20 @@ Saída de exemplo (é esta a forma do `pre.out`):
 ```
 
 **Regra de fidelidade:** o `pre.out` tem de ser **copiado** da saída do `render.js` — nada de
-escrever à mão "mais ou menos como sai". Onde a lição é sobre comportamento (o que aparece na
+escrever à mão "mais ou menos como sai". O nome do arquivo entra no hash do CSS e na mensagem de
+erro, então repita o da aula: `node tools/render.js tmp/App.svelte --nome src/App.svelte`.
+
+**Conferidor de saídas (use sempre antes de commitar):**
+
+```bash
+node tools/verificar-saidas.js -q SUA-PAGINA.html     # confere cada par pre.file + pre.out
+node tools/verificar-saidas.js --fix SUA-PAGINA.html  # reescreve os pre.out com a saída real
+```
+
+Ele recompila cada `pre.file` com o compilador de verdade e compara com o `pre.out` seguinte: HTML
+contra HTML, texto contra texto, CSS contra CSS, e mensagem de erro contra a mensagem real. `--fix`
+conserta os blocos divergentes — depois **releia o texto ao redor**, porque um número que mudou
+(o hash `svelte-xxxxx`, o número da linha do erro) costuma aparecer citado na prosa também. Onde a lição é sobre comportamento (o que aparece na
 tela), prefira `--texto`; onde é sobre marcação, use o HTML.
 
 ### Terminal (`pre.term`)

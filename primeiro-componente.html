@@ -190,7 +190,9 @@
   }
 &lt;/style&gt;</pre>
 
-<pre class="out">&lt;h2&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;</pre>
+<pre class="out">
+&lt;h2 class="svelte-11u2pyd"&gt;Pão francês&lt;/h2&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;
+</pre>
 
 <div class="table-wrap">
 <table class="ref">
@@ -256,17 +258,19 @@
   }
 &lt;/style&gt;</pre>
 
-<pre class="out">h1.svelte-7mbznn {
-  color: #2e7d32;
-  font-family: system-ui, sans-serif;
-}
-button.svelte-7mbznn {
-  padding: 6px 12px;
-}</pre>
+<pre class="out">
+h1.svelte-1n46o8q {
+    color: #2e7d32;
+    font-family: system-ui, sans-serif;
+  }
+  button.svelte-1n46o8q {
+    padding: 6px 12px;
+  }
+</pre>
 
-<p>Aquele <code>svelte-7mbznn</code> é um selo que o compilador inventou para este componente, e ele também foi colocado nas tags do HTML gerado:</p>
+<p>Aquele <code>svelte-1n46o8q</code> é um selo que o compilador inventou para este componente, e ele também foi colocado nas tags do HTML gerado:</p>
 
-<pre class="out">&lt;h1 class="svelte-7mbznn"&gt;Olá, Ana&lt;/h1&gt; &lt;button class="svelte-7mbznn"&gt;trocar&lt;/button&gt;</pre>
+
 
 <p>É por isso que a regra "todo h1 verde" do <code>Cartao.svelte</code> não pinta os <code>h1</code> do resto do site. Em CSS tradicional isso dá dor de cabeça: nomes de classe inventados à mão, <em>BEM</em>, prefixos, disciplina. Aqui o problema simplesmente não existe — o escopo é do arquivo.</p>
 
@@ -336,8 +340,10 @@ dist/assets/index-D4Bgwu4I.js  33.60 kB │ gzip: 12.93 kB
 
 {#if nome === 'Ana'}
   &lt;p&gt;oi&lt;/p&gt;</pre>
-<pre class="out">Erro de compilação (linha 6, coluna 4): Expected token }</pre>
-<p>"Expected token }" quer dizer "eu esperava uma chave de fechamento aqui". A linha apontada é o fim do arquivo, não o começo do bloco — por isso a dica prática é contar os pares: cada <code>{#if}</code> pede um <code>{/if}</code>, cada <code>{#each}</code> pede um <code>{/each}</code>.</p>
+<pre class="out">
+Erro de compilação (linha 5, coluna 0): Block was left open
+</pre>
+<p>"Block was left open" quer dizer "um bloco ficou aberto". Repare que a linha apontada é a <em>última</em> do arquivo, não o começo do bloco — o compilador só repara que falta o fecho quando o arquivo acaba. A dica prática é contar os pares: cada <code>{#if}</code> pede um <code>{/if}</code>, cada <code>{#each}</code> pede um <code>{/each}</code>, cada <code>{#snippet}</code> pede um <code>{/snippet}</code>.</p>
 </div>
 
 <div class="cenario">
@@ -422,7 +428,7 @@ dist/assets/index-D4Bgwu4I.js  33.60 kB │ gzip: 12.93 kB
   <li><code>let x = $state(valor)</code> cria <strong>estado reativo</strong>: quando muda, a tela muda sozinha.</li>
   <li>Sem <code>$state</code>, a variável existe mas ninguém avisa a tela.</li>
   <li><code>onclick={() =&gt; …}</code> liga o clique a uma função; o nome do evento vai em minúsculas, depois de <code>on</code>.</li>
-  <li>O <code>&lt;style&gt;</code> é escopado: o compilador põe um selo (<code>svelte-7mbznn</code>) nos seletores e nas tags.</li>
+  <li>O <code>&lt;style&gt;</code> é escopado: o compilador põe um selo (<code>svelte-1n46o8q</code>) nos seletores e nas tags.</li>
   <li><code>npm run dev</code> serve em <code>localhost:5173</code>; <code>npm run build</code> gera <code>dist/</code>; <code>npm run preview</code> confere o build.</li>
   <li>Os erros desta aula: <code>$state</code> sem <code>let</code>, bloco aberto sem fechar e variável que não existe.</li>
   <li><code>preco.toFixed(2)</code> formata dinheiro; o valor guardado continua número, o que aparece é texto.</li>

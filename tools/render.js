@@ -38,6 +38,7 @@ async function principal() {
   const querCss = args.includes("--css");
   const querJson = args.includes("--json");
   const querCliente = args.includes("--cliente");
+  const iNome = args.indexOf("--nome");
   const iProps = args.indexOf("--props");
   let props = {};
   if (iProps >= 0) {
@@ -51,7 +52,8 @@ async function principal() {
 
   const { compile } = await import("svelte/compiler");
   const fonte = fs.readFileSync(arq, "utf8");
-  const nome = path.basename(arq);
+  // o nome do arquivo entra no hash do CSS e nas mensagens de erro: use --nome para repetir o da aula
+  const nome = iNome >= 0 ? args[iNome + 1] : path.basename(arq);
 
   let comp;
   try {
