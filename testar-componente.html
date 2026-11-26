@@ -433,7 +433,7 @@ Ignored nodes: comments, script, style
 <label><input type="radio" name="q1"> o <code>fireEvent</code> foi chamado antes do <code>render</code></label>
 <label><input type="radio" name="q1"> o Vitest não foi instalado</label></div>
 
-<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { render, screen } from '@testing-library/svelte';<br>import Cartao from './Cartao.svelte';<br><br>render(Cartao, { titulo: 'Sonho', preco: 2.5 });<br>expect(<input data-answer="screen.getByText('R$ 2.50')">).toBeTruthy();</div></div>
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">import { render, screen } from '@testing-library/svelte';<br>import Cartao from './Cartao.svelte';<br><br>render(Cartao, { titulo: 'Sonho', preco: 2.5 });<br>expect(screen.<input data-answer="getByText">('Sonho')).toBeTruthy();<br>expect(screen.<input data-answer="queryByText">('R$ 9.99')).toBeNull();</div></div>
 
 <hr>
 
