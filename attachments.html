@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attachments — {@attach} e o comportamento com valor | Guia Svelte</title>
+<meta name="description" content="{@attach} no Svelte 5: a expressão que devolve a função, a fábrica com parâmetros, a re-execução quando o valor muda, a limpeza e os erros reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">{@attach}</span></h1>
+
+<p class="intro">Na padaria da Ana, cada etiqueta de preço é um papel colado na prateleira: o valor está escrito nele, e quem lê não precisa perguntar nada. No código dela, a etiqueta é um <code>&lt;p data-valor="3,50"&gt;</code> e o comportamento é uma função que transforma aquele atributo em texto bonito. Com <code>use:</code>, ela escreve <code>use:preco</code> e o Svelte procura a função pelo nome. Só que a Ana quer entregar o comportamento <strong>pronto</strong>, com o valor já combinado — e é aí que entra <code>{@attach}</code>: em vez do nome, você escreve uma <em>expressão</em> que devolve a função.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que <code>{@attach …}</code> faz e por que ele usa uma expressão.</li>
+  <li>A anatomia: o bloco, a função que ele devolve e o <code>node</code>.</li>
+  <li>Attachment escrita na hora, como arrow function, direto no elemento.</li>
+  <li>Ler atributos do próprio elemento com <code>node.dataset</code>.</li>
+  <li>A fábrica que recebe parâmetros e devolve a attachment.</li>
+  <li>Por que a attachment roda de novo quando o valor muda — e a ação não.</li>
+  <li>A função de limpeza devolvida no fim.</li>
+  <li>Attachment em componente: quando funciona e quando não faz nada.</li>
+  <li>Os três erros reais do compilador desta aula.</li>
+  <li><code>{@attach}</code> e <code>use:</code> lado a lado, para escolher.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. O comportamento que vai pronto</h2>
+
+<p>Uma action precisa de nome. Você escreve <code>function preco(node)</code> e pendura <code>use:preco</code> no elemento; para passar um valor, usa <code>use:preco={3.5}</code> e a função recebe esse valor no segundo argumento. É um contrato simples, mas com três peças: o nome, o segundo argumento e o objeto de <code>update</code>.</p>
+
+<p>A attachment faz o mesmo trabalho com outra gramática. Em vez de pedir um nome, ela aceita qualquer <strong>expressão</strong> cujo resultado seja uma função. Essa função recebe o elemento e faz o que tiver de fazer. Nada de segundo argumento, nada de <code>update</code>: se você precisa de um valor, ele entra na expressão por <em>closure</em> — a função já nasce sabendo o valor, porque foi criada com ele dentro.</p>
+
+<pre class="file">&lt;p data-valor="3,50" {@attach preco}&gt;&lt;/p&gt;</pre>
+
+<p>Leia em voz alta: "neste parágrafo, anexe o resultado de <code>preco</code>". A diretiva não é <code>use:</code> — é um bloco, com chaves, como <code>{@html}</code> e <code>{@render}</code>. Isso tem uma consequência prática: o bloco pode aparecer em qualquer lugar onde caberia um atributo, e a expressão pode ser uma chamada de função, um <code>$derived</code>, um item de <code>{#each}</code>, o que você quiser.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No Svelte</th></tr>
+<tr><td>O adesivo com o preço já impresso</td><td><code>{@attach preco}</code></td></tr>
+<tr><td>O adesivo em branco, preenchido na hora</td><td><code>{@attach (node) =&gt; …}</code></td></tr>
+<tr><td>A máquina que imprime adesivos de qualquer cor</td><td><code>function pintar(cor) { return (node) =&gt; … }</code></td></tr>
+<tr><td>Usar a máquina com a cor escolhida</td><td><code>{@attach pintar('verde')}</code></td></tr>
+<tr><td>Descolar o adesivo ao tirar o cartaz</td><td>a função devolvida pela attachment</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. A anatomia de uma attachment</h2>
+
+<p>O exemplo mínimo: uma função que recebe o elemento e escreve um atributo nele.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function marcar(node) {
+    node.title = 'pronto';
+  }
+&lt;/script&gt;
+
+&lt;p {@attach marcar}&gt;pão quentinho&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;pão quentinho&lt;/p&gt;</pre>
+
+<p>A saída do servidor não tem <code>title</code> nenhum. Isso é esperado e é o assunto do item 7: attachment precisa de elemento de verdade, e no servidor não existe elemento. No navegador, o mesmo arquivo entrega <code>&lt;p title="pronto"&gt;pão quentinho&lt;/p&gt;</code>: a função rodou uma vez, quando o parágrafo entrou na página.</p>
+
+<dl class="anatomy">
+  <dt>{@attach marcar}</dt><dd>o bloco. Ele vale para o elemento em que está escrito, como um atributo; pode haver mais de um no mesmo elemento.</dd>
+  <dt>marcar</dt><dd>a expressão. O compilador não sabe o que ela vale; em tempo de execução o Svelte chama o resultado. Se não for uma função, o componente quebra ao montar.</dd>
+  <dt>function marcar(node)</dt><dd>a attachment em si: uma função que recebe o elemento montado. Ela pode escrever atributos, texto, classes e escutar eventos.</dd>
+  <dt>node.title = 'pronto'</dt><dd>o trabalho. Nada aqui é reativo por si: o que a função fizer, fica, até alguém desfazer.</dd>
+</dl>
+
+<p>Repare que não existe <code>update</code> no contrato. Se a attachment precisa de um valor que muda, ela não recebe esse valor por parâmetro — ela <em>lê</em> o valor do componente, e o Svelte reexecuta a attachment quando esse valor muda. É uma diferença de filosofia: a ação pede o valor; a attachment fecha em cima dele.</p>
+
+<hr>
+
+<h2>3. Escrita na hora, sem nome</h2>
+
+<p>Como o bloco aceita qualquer expressão, uma arrow function serve. É o jeito mais direto quando o comportamento é de um elemento só e não vale a pena dar nome a ele:</p>
+
+<pre class="file">&lt;p {@attach (node) =&gt; { node.textContent = node.textContent.toUpperCase(); }}&gt;pão quentinho&lt;/p&gt;</pre>
+
+<p>Essa linha transforma o texto em maiúsculas na montagem. Nada de função no <code>&lt;script&gt;</code>, nada de nome para inventar — e nada de reaproveitamento também: se a segunda etiqueta precisar do mesmo comportamento, você copia a linha. Para um caso único, é a melhor relação tamanho/benefício do guia; para três ou mais, dê nome à função e importe.</p>
+
+<div class="trysvelte" data-goal="outre:^PÃO QUENTINHO$">
+<p class="try-task"><strong>Missão:</strong> a attachment só marca o <code>title</code>; o texto continua em minúsculas. Escreva a attachment na hora, direto no bloco <code>{@attach …}</code>, para o parágrafo mostrar <code>PÃO QUENTINHO</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function marcar(node) {
+    node.title = 'pronto';
+  }
+&lt;/script&gt;
+
+&lt;p {@attach marcar}&gt;pão quentinho&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;p {@attach (node) =&gt; { node.textContent = node.textContent.toUpperCase(); }}&gt;pão quentinho&lt;/p&gt;</pre>
+</div>
+
+<p>O parêntese em volta de <code>node</code> não é enfeite de estilo: ele deixa claro onde a arrow começa dentro do bloco. Sem ele, <code>{@attach node =&gt; …}</code> também funciona, mas fica mais difícil de ler quando a expressão cresce.</p>
+
+<hr>
+
+<h2>4. O nó é o elemento — inclusive os atributos</h2>
+
+<p>O primeiro argumento é o elemento montado, o mesmo que você vê no inspetor. Então a attachment pode <strong>ler</strong> o que o HTML já traz: atributos <code>data-*</code>, <code>href</code>, <code>value</code>, o texto que veio do servidor. Isso permite um padrão útil: a marcação carrega o dado e a attachment só o transforma em algo apresentável.</p>
+
+<pre class="file">&lt;p data-valor="3,50" {@attach preco}&gt;&lt;/p&gt;</pre>
+
+<p>Com <code>function preco(node) { node.textContent = 'R$ ' + node.dataset.valor; }</code>, a etiqueta nasce com o valor no HTML e vira texto formatado no navegador. Se o JavaScript não carregar, o atributo continua ali — feio, mas presente. É a mesma ideia de <code>&lt;progress value="70"&gt;</code>: o dado está na marcação, o enfeite vem depois.</p>
+
+<div class="trysvelte" data-goal="outre:^R\$ 3,50$">
+<p class="try-task"><strong>Missão:</strong> o parágrafo tem <code>data-valor="3,50"</code>, mas a attachment procura outro atributo e escreve <code>R$ null</code>. Leia o atributo certo, pelo <code>node.dataset.valor</code>, para a etiqueta mostrar <code>R$ 3,50</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function preco(node) {
+    node.textContent = 'R$ ' + node.getAttribute('data-preco');
+  }
+&lt;/script&gt;
+
+&lt;p data-valor="3,50" {@attach preco}&gt;&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function preco(node) {
+    node.textContent = 'R$ ' + node.dataset.valor;
+  }
+&lt;/script&gt;
+
+&lt;p data-valor="3,50" {@attach preco}&gt;&lt;/p&gt;</pre>
+</div>
+
+<p>Vale saber a tradução: <code>node.dataset.valor</code> é o mesmo que <code>node.getAttribute('data-valor')</code>, só que sem o prefixo <code>data-</code> e com nome em camelCase para atributos compostos (<code>data-preco-final</code> vira <code>dataset.precoFinal</code>). Quando o atributo não existe, os dois caminhos dão <code>undefined</code> — e é por isso que a versão errada escreve <code>R$ undefined</code> em vez de estourar.</p>
+
+<hr>
+
+<h2>5. Parâmetros: a fábrica</h2>
+
+<p>Este é o ponto em que mais gente tropeça. A attachment não tem segundo argumento. Se você quer passar um valor, escreva uma função que <strong>devolve</strong> a attachment — uma fábrica:</p>
+
+<pre class="file">function pintar(cor) {
+  return (node) =&gt; {
+    node.textContent = cor;
+  };
+}</pre>
+
+<p>Aí o bloco chama a fábrica com o valor e o Svelte anexa o resultado: <code>{@attach pintar('verde')}</code>. Ler a expressão de dentro para fora ajuda: <code>pintar('verde')</code> devolve uma função que já sabe que a cor é verde; o bloco anexa essa função ao parágrafo.</p>
+
+<p>Vale dar nome às duas peças com cuidado: <code>pintar</code> é a <em>fábrica</em>, e o resultado de <code>pintar('verde')</code> é a attachment. Por isso o bloco pode chamar a fábrica à vontade — <code>pintar('verde')</code>, <code>pintar('azul')</code> — que cada chamada produz uma função independente, com o seu próprio valor guardado.</p>
+
+<p>O erro clássico é escrever a attachment com dois parâmetros, como se fosse uma action: <code>function pintar(node, cor)</code> e depois <code>{@attach pintar}</code>. O Svelte chama <code>pintar(node)</code>, o segundo parâmetro chega <code>undefined</code> e o texto sai <code>undefined</code> — sem erro no console, o que torna o diagnóstico mais chato.</p>
+
+<div class="trysvelte" data-goal="outre:^azul verde$;;clique:button;;depois:120;;outre:^azul azul$">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra <code>undefined</code> porque <code>pintar</code> espera dois argumentos. Transforme <code>pintar</code> numa fábrica que recebe a cor e devolve a attachment, e passe <code>pintar(cor)</code> no bloco: o clique em "azul" deve trocar o texto para <code>azul</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cor = $state('verde');
+  function pintar(node, qual) {
+    node.textContent = qual;
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cor = 'azul'}&gt;azul&lt;/button&gt;
+&lt;p {@attach pintar}&gt;&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cor = $state('verde');
+  function pintar(qual) {
+    return (node) =&gt; {
+      node.textContent = qual;
+    };
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cor = 'azul'}&gt;azul&lt;/button&gt;
+&lt;p {@attach pintar(cor)}&gt;&lt;/p&gt;</pre>
+</div>
+
+<p>O clique em "azul" muda <code>cor</code>, que muda a expressão <code>pintar(cor)</code>, que devolve uma função nova — e o Svelte roda a attachment de novo com essa função. Não há <code>update</code>: há reexecução. É o que o item seguinte destrincha.</p>
+
+<hr>
+
+<h2>6. Quando roda, quando roda de novo</h2>
+
+<p>Uma attachment roda quando o elemento é montado. E roda de novo, antes de tudo, quando alguma coisa que ela <em>lê</em> muda. O Svelte rastreia as leituras feitas dentro da função — as mesmas regras de <code>$derived</code> e <code>$effect</code> — e trata a attachment como um efeito que pertence ao elemento.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Momento</th><th>O que acontece</th><th>Observação</th></tr>
+<tr><td>O elemento entra no DOM</td><td>a expressão é avaliada e a attachment roda</td><td>uma vez por elemento</td></tr>
+<tr><td>Um valor lido pela attachment muda</td><td>a limpeza anterior roda e a attachment roda de novo</td><td>sem <code>update</code>: é reexecução</td></tr>
+<tr><td>Um valor lido pela <em>expressão</em> muda</td><td>a expressão é reavaliada e a nova função é anexada</td><td>o caso da fábrica <code>pintar(cor)</code></td></tr>
+<tr><td>O elemento sai do DOM</td><td>a função de limpeza roda</td><td>se você devolveu uma</td></tr>
+<tr><td>O componente é renderizado no servidor</td><td>nada disso</td><td>sem DOM, sem attachment</td></tr>
+</table>
+</div>
+
+<p>Essa reexecução explica por que a attachment pode ler estado diretamente, sem receber por parâmetro: ela é reavaliada quando o estado muda. O preço é que ela precisa ser <em>idempotente</em> — rodar duas vezes não pode duplicar escutas nem somar duas vezes o mesmo valor. Daí o hábito de sempre devolver a limpeza do que foi aberto fora do elemento.</p>
+
+<div class="tip">
+<strong>Cuide do que a attachment lê</strong>
+<p>Se ela lê <code>cor</code> e <code>tamanho</code>, ela roda de novo quando qualquer um dos dois muda. Se ela lê um objeto inteiro, qualquer mudança de propriedade conta. Ler menos é rodar menos.</p>
+</div>
+
+<hr>
+
+<h2>7. A limpeza devolvida</h2>
+
+<p>A attachment pode devolver uma função. Essa função roda quando o elemento sai do DOM — e também antes de cada reexecução. É o lugar de remover escutas, parar timers e desconectar observers:</p>
+
+<pre class="file">export function fora(aoSair) {
+  return (node) =&gt; {
+    const ouvir = (evento) =&gt; {
+      if (!node.contains(evento.target)) aoSair();
+    };
+    document.addEventListener('click', ouvir);
+    return () =&gt; document.removeEventListener('click', ouvir);
+  };
+}</pre>
+
+<p>Três níveis de função, e cada um tem um papel: <code>fora</code> é a fábrica (recebe o que fazer ao sair), a arrow de dentro é a attachment (recebe o elemento e abre a escuta) e a função devolvida é a limpeza. Esse empilhamento é o jeito de dar parâmetros a uma attachment sem quebrar o contrato.</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "return () =>" src/lib/attachments.js
+11:    return () => document.removeEventListener('click', ouvir);</pre>
+
+<p>A linha 11 é a única do arquivo que desfaz alguma coisa, e ela existe porque a linha 9 registrou uma escuta em <code>document</code>. Sem ela, cada montagem do painel deixaria uma escuta pendurada, e o clique fora passaria a fechar três painéis de uma vez.</p>
+
+<p>Só a função conta. Devolver um objeto com <code>update</code> — o formato que a ação usa — não faz a limpeza ser chamada: o Svelte guarda o retorno, e na hora de limpar só chama o que for função. Se você vem de <code>use:</code>, é aqui que a memória atrapalha.</p>
+
+<hr>
+
+<h2>8. No servidor, nada acontece</h2>
+
+<p>Como toda diretiva que mexe no DOM, a attachment não roda na renderização do servidor. A saída mostra só a marcação:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function pintar(cor) {
+    return (node) =&gt; {
+      node.textContent = cor;
+    };
+  }
+  let cor = $state('verde');
+&lt;/script&gt;
+
+&lt;p {@attach pintar(cor)}&gt;&lt;/p&gt;
+&lt;button onclick={() =&gt; cor = 'azul'}&gt;azul&lt;/button&gt;</pre>
+<pre class="out">&lt;p&gt;&lt;/p&gt; &lt;button&gt;azul&lt;/button&gt;</pre>
+
+<p>O parágrafo sai vazio. No navegador ele mostra <code>verde</code> e passa a <code>azul</code> depois do clique — a diferença entre as duas saídas é o assunto desta aula inteira. Para quem testa, isso significa que um teste de HTML do servidor nunca vai ver o texto que a attachment escreveu; para quem publica, significa que o conteúdo essencial não pode depender dela.</p>
+
+<p>E há uma consequência de projeto: a attachment serve ao enfeite e à conveniência (formatação, foco, medida), não ao conteúdo. Se o texto precisa aparecer sem JavaScript, ele vem do template ou dos dados — como a Ana faz com o <code>data-valor</code>, que também funciona como fallback.</p>
+
+<hr>
+
+<h2>9. Attachment em componente</h2>
+
+<p>Aqui aparece a maior diferença em relação ao <code>use:</code>. Diretiva de ação em componente é erro de compilação; <code>{@attach}</code> em componente <em>compila</em>. O compilador transforma o bloco num adereço especial, e o componente só o aplica se repassar os adereços ao seu elemento raiz:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Componente</th><th><code>&lt;Cartao {@attach marcar} /&gt;</code></th></tr>
+<tr><td><code>&lt;p&gt;cartão raiz&lt;/p&gt;</code></td><td>compila; nada acontece — o adereço não chega ao parágrafo</td></tr>
+<tr><td><code>let { ...resto } = $props()</code> + <code>&lt;p {...resto}&gt;</code></td><td>compila e funciona: o adereço é aplicado no parágrafo</td></tr>
+</table>
+</div>
+
+<p>As duas linhas acima foram medidas num projeto real, com o build de produção: no componente que só desenha o seu HTML, o parágrafo final saiu <code>&lt;p&gt;cartao raiz&lt;/p&gt;</code>; no componente que repassa os adereços, saiu <code>&lt;p title="do componente"&gt;cartao raiz&lt;/p&gt;</code>. Nada de erro em nenhum dos casos — o que torna o silêncio perigoso: se a attachment não aparecer, o problema pode ser o componente que não repassa.</p>
+
+<p>O compilador deixa esse mecanismo à vista. Compilando <code>&lt;Cartao {@attach marcar} /&gt;</code> para o navegador, a chamada do componente sai assim:</p>
+
+<pre class="file">Cartao($$anchor, { [$.attachment()]: marcar });</pre>
+
+<p>É um adereço com uma chave especial — não um evento, não um <code>onclick</code>. Quem decide o que fazer com ele é o componente: sem repasse, o adereço fica guardado e ninguém o aplica.</p>
+
+<p>Para o dia a dia, o caminho seguro é o mais chato: envolva o componente num elemento e pendure a attachment nele. <code>&lt;div {@attach marcar}&gt;&lt;Cartao /&gt;&lt;/div&gt;</code> não depende de o componente saber nada sobre adereços.</p>
+
+<hr>
+
+<h2>10. Onde guardar</h2>
+
+<p>Attachment é função, então mora em arquivo comum. No projeto da Ana, as que se repetem ficam em <code>src/lib/attachments.js</code> e são importadas pelas telas:</p>
+
+<pre class="file">export function preco(node) {
+  node.textContent = 'R$ ' + node.dataset.valor;
+}
+
+export function fora(aoSair) {
+  return (node) =&gt; {
+    const ouvir = (evento) =&gt; {
+      if (!node.contains(evento.target)) aoSair();
+    };
+    document.addEventListener('click', ouvir);
+    return () =&gt; document.removeEventListener('click', ouvir);
+  };
+}</pre>
+
+<p>Do outro lado, a etiqueta repete a attachment em duas linhas, cada uma com o seu valor no atributo:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rln "@attach" src
+src/lib/Troco.svelte
+ana@notebook:~/loja$ grep -rn "@attach" src/lib/Troco.svelte
+5:&lt;p data-valor="3,50" {@attach preco}&gt;&lt;/p&gt;
+6:&lt;p data-valor="12,00" {@attach preco}&gt;&lt;/p&gt;</pre>
+
+<p>Duas etiquetas, uma função, nenhum parâmetro passado — o valor vem do HTML de cada uma. Repare que a fábrica <code>fora</code> ficaria assim no uso: <code>&lt;div {@attach fora(() =&gt; aberto = false)}&gt;</code>. A chamada devolve a attachment; a arrow de dentro é o "o que fazer" da padaria.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são do compilador desta versão, copiadas da execução. Todas aparecem antes de a página abrir.</p>
+
+<div class="cenario">
+<strong>Erro 1 — o bloco sem expressão</strong>
+<p>Quem cola o bloco e esquece a função recebe uma reclamação sobre espaço, o que confunde bastante:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function marcar(node) {
+    node.title = 'pronto';
+  }
+&lt;/script&gt;
+
+&lt;p {@attach}&gt;pão quentinho&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 11): Expected whitespace</pre>
+<p>"Esperava um espaço." O compilador quer uma expressão depois de <code>@attach</code> e encontrou a chave de fechamento; a falta de espaço é só o primeiro sintoma. Escreva <code>{@attach marcar}</code> ou <code>{@attach (node) =&gt; …}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — dois valores no bloco</strong>
+<p>A intenção é passar um parâmetro, mas o bloco aceita uma expressão só:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function marcar(node) {
+    node.title = 'pronto';
+  }
+&lt;/script&gt;
+
+&lt;p {@attach marcar 'pronto'}&gt;pão quentinho&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 19): Expected token }</pre>
+<p>"Esperava a chave de fechamento." O compilador leu <code>marcar</code>, achou que a expressão tinha acabado e tropeçou no <code>'pronto'</code>. Para passar valor, use a fábrica: <code>{@attach marcar('pronto')}</code>, com a função devolvendo a attachment.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — attachment no <code>&lt;svelte:head&gt;</code></strong>
+<p>Os elementos especiais do Svelte aceitam só o que faz sentido para eles. O <code>&lt;svelte:head&gt;</code> não aceita atributo nem diretiva:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function marcar(node) {
+    node.title = 'pronto';
+  }
+&lt;/script&gt;
+
+&lt;svelte:head {@attach marcar}&gt;
+  &lt;title&gt;Padaria da Ana&lt;/title&gt;
+&lt;/svelte:head&gt;
+&lt;p&gt;pão quentinho&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 13): `&lt;svelte:head&gt;` cannot have attributes nor directives</pre>
+<p>"<code>&lt;svelte:head&gt;</code> não pode ter atributos nem diretivas." O bloco vai no elemento comum que precisa do comportamento; o <code>&lt;svelte:head&gt;</code> serve para dizer o que vai para o <code>&lt;head&gt;</code>.</p>
+</div>
+
+<hr>
+
+<h2>12. <code>{@attach}</code> ou <code>use:</code>?</h2>
+
+<p>Os dois resolvem o mesmo problema com gramáticas diferentes. A escolha, na prática, é sobre como você quer passar valores e onde o comportamento vai ser usado:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th><code>use:acao</code></th><th><code>{@attach expressão}</code></th></tr>
+<tr><td>O que se escreve</td><td>um nome de função</td><td>uma expressão que devolve função</td></tr>
+<tr><td>Parâmetro</td><td>segundo argumento</td><td>closure, com fábrica</td></tr>
+<tr><td>Atualização</td><td><code>update(valor)</code></td><td>reexecução quando o valor lido muda</td></tr>
+<tr><td>Limpeza</td><td>função devolvida ou <code>destroy</code></td><td>função devolvida</td></tr>
+<tr><td>Em componente</td><td>erro de compilação</td><td>compila; precisa de repasse de adereços</td></tr>
+<tr><td>Quando brilha</td><td>comportamento fixo, reaproveitado por nome</td><td>comportamento montado na hora, com valor embutido</td></tr>
+</table>
+</div>
+
+<p>Se você já escreveu a função e vai usá-la em cinco telas, <code>use:</code> é mais curto de ler. Se o comportamento depende de um valor que está ali do lado, <code>{@attach}</code> evita o segundo argumento e o objeto de atualização. E se o que você quer é só reagir a um clique, nenhum dos dois: <code>onclick</code> basta.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o bloco <code>{@attach …}</code> espera dentro das chaves?</p>
+<label><input type="radio" name="q1"> o nome de um componente</label>
+<label><input type="radio" name="q1"> uma expressão que resulta numa função</label>
+<label><input type="radio" name="q1"> uma string com o nome da diretiva</label>
+<label><input type="radio" name="q1"> um elemento do DOM</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Como passar um valor para uma attachment?</p>
+<label><input type="radio" name="q1"> como segundo argumento da função</label>
+<label><input type="radio" name="q1"> devolvendo um objeto com <code>update</code></label>
+<label><input type="radio" name="q1"> por closure, com uma fábrica como <code>pintar('verde')</code></label>
+<label><input type="radio" name="q1"> não dá: attachment não aceita valor</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que acontece quando um valor lido pela attachment muda?</p>
+<label><input type="radio" name="q1"> a attachment roda de novo, depois da limpeza anterior</label>
+<label><input type="radio" name="q1"> só a limpeza roda</label>
+<label><input type="radio" name="q1"> nada: só ao montar</label>
+<label><input type="radio" name="q1"> o elemento é recriado</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">function pintar(cor) {<br>&nbsp;&nbsp;return (<input data-answer="node">) =&gt; {<br>&nbsp;&nbsp;&nbsp;&nbsp;node.textContent = cor;<br>&nbsp;&nbsp;};<br>}<br><br>&lt;p <input data-answer="{@attach pintar('verde')}">&gt;&lt;/p&gt;<br><br>// a fábrica recebe a cor e devolve a attachment</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>{@attach expressão}</code> anexa ao elemento a função que a expressão devolver.</li>
+  <li>A attachment recebe o elemento montado: pode escrever atributos, texto e classes, e escutar eventos.</li>
+  <li>Uma arrow function serve como attachment escrita na hora, sem nome.</li>
+  <li><code>node.dataset.valor</code> lê o atributo <code>data-valor</code> do próprio elemento.</li>
+  <li>Valores vão por closure: a fábrica <code>function pintar(cor) { return (node) =&gt; … }</code> devolve a attachment.</li>
+  <li>Não existe <code>update</code>: quando um valor lido muda, a attachment roda de novo.</li>
+  <li>Devolver uma função é a limpeza; devolver um objeto com <code>update</code> não faz nada ser chamado.</li>
+  <li>No servidor não há DOM e a attachment não roda: o HTML sai só com a marcação.</li>
+  <li>Em componente compila, mas só funciona se o componente repassar os adereços ao elemento raiz.</li>
+  <li>Os erros desta aula: bloco sem expressão, dois valores no bloco e attachment em <code>&lt;svelte:head&gt;</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
