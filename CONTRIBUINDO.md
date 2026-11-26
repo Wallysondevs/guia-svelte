@@ -126,6 +126,14 @@ Passos da meta, na ordem, separados por `;;`:
 | `digitar:<seletor>=<valor>` | escreve no campo e dispara `input` (use `seletor\|valor` quando o seletor tem `=`, ex.: `digitar:input[type=number]\|42`) |
 | `depois:<ms>` | espera (promessas, transições) |
 
+**`erro:` só vale em `div.cenario`.** Numa caixa `.trysvelte` a mesma meta é cobrada da solução,
+e a solução compila — então uma meta de erro nunca fecharia. Para mostrar falha numa caixa, use
+`out:` com o resultado visível, ou deixe o erro para o cenário (que é uma saída de exemplo, não
+uma meta a cumprir).
+
+**`html:` com comentário:** escreva `&lt;!----&gt;` no `data-goal`. O leitor de HTML da página
+descarta comentários antes de o avaliador ver o atributo, então `html:<!----><h3>` chega truncado.
+
 Exemplos reais:
 
 ```
