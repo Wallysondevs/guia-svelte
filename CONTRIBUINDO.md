@@ -90,6 +90,22 @@ O leitor edita o componente e clica em **Rodar**: o guia compila o código com o
 verdade** (`svelte@5.59.2`) e monta no iframe. **Não é simulação.** A meta (`data-goal`) é conferida
 pelo botão **Verificar**, pelo mesmo avaliador que o testador usa.
 
+**O que o componente pode importar dentro da caixa** (o avaliador troca o endereço sozinho; escreva
+o import normal, como no editor):
+
+| import | exemplos |
+|---|---|
+| `svelte` | `mount`, `tick`, `onMount`, `onDestroy`, `getContext`, `setContext`, `untrack`, `createEventDispatcher` |
+| `svelte/store` | `writable`, `readable`, `derived`, `readonly`, `get`, `toStore` |
+| `svelte/transition` | `fade`, `fly`, `slide`, `scale`, `blur`, `draw` |
+| `svelte/motion` | `tweened`, `spring` |
+| `svelte/easing` | `cubicOut`, `linear`, `elasticOut`, … |
+| `svelte/animate` | `flip` |
+
+`$store` (o cifrão da inscrição automática) funciona dentro da caixa. O que **não** existe ali:
+`$app/*`, `$lib`, `svelte/legacy` com `on:click` em arquivo de runas, e qualquer coisa que dependa
+de rede ou de disco. Se a aula precisa de SvelteKit, mostre a saída como `pre.term`, não como caixa.
+
 ```html
 <div class="trysvelte" data-goal="clique:button;;out:Cliques: 1">
 <p class="try-task"><strong>Missão:</strong> faça o contador começar em 0 e chegar a 1 clique.</p>
