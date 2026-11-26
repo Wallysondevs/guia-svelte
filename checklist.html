@@ -129,7 +129,7 @@ ana@notebook:~/loja/kit$ </pre>
 
 <p>O erro comum é usar o título pelo tamanho da letra. Se o texto precisa ficar menor, o lugar de resolver isso é o CSS, não a tag. O componente abaixo tem dois títulos do mesmo nível — e o segundo deveria ser um subtítulo:</p>
 
-<div class="trysvelte" data-goal="html:<h1>Padaria da Ana</h1> <h2>Pães de hoje</h2> <p>Pão francês e pão de queijo.</p>">
+<div class="trysvelte" data-goal="html:&lt;h1&gt;Padaria da Ana&lt;/h1&gt; &lt;h2&gt;Pães de hoje&lt;/h2&gt; &lt;p&gt;Pão francês e pão de queijo.&lt;/p&gt;">
 <p class="try-task"><strong>Missão:</strong> a página tem dois <code>h1</code>, e o segundo deveria ser um subtítulo. Transforme <em>Pães de hoje</em> no nível seguinte, sem mudar o texto.</p>
 <pre class="script" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
 &lt;h1&gt;Pães de hoje&lt;/h1&gt;
@@ -173,7 +173,7 @@ svelte-check found 0 errors and 1 warning in 1 file</pre>
 
 <p>Botão de ícone tem o mesmo problema por outro caminho. Um botão com <code>×</code> não tem texto útil; o leitor de tela anuncia "x". O nome vai em <code>aria-label</code>:</p>
 
-<div class="trysvelte" data-goal="html:<h1>Padaria da Ana</h1> <button aria-label=&quot;fechar&quot;>×</button>">
+<div class="trysvelte" data-goal="html:&lt;h1&gt;Padaria da Ana&lt;/h1&gt; &lt;button aria-label=&quot;fechar&quot;&gt;×&lt;/button&gt;">
 <p class="try-task"><strong>Missão:</strong> o botão só tem um <code>×</code> e nenhum nome acessível. Dê a ele o nome <em>fechar</em>, do jeito que um leitor de tela anuncia.</p>
 <pre class="script" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
 &lt;button&gt;×&lt;/button&gt;</pre>
@@ -191,7 +191,7 @@ svelte-check found 0 errors and 1 warning in 1 file</pre>
 
 <p>O par é <code>rel="noopener"</code>. Se você também quer que a página nova não saiba de onde veio, acrescente <code>noreferrer</code>. Para link externo em nova aba, o pacote completo é <code>rel="noopener noreferrer"</code>.</p>
 
-<div class="trysvelte" data-goal="html:<h1>Padaria da Ana</h1> <a href=&quot;https://exemplo.com&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;>cardápio do fornecedor</a>">
+<div class="trysvelte" data-goal="html:&lt;h1&gt;Padaria da Ana&lt;/h1&gt; &lt;a href=&quot;https://exemplo.com&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;cardápio do fornecedor&lt;/a&gt;">
 <p class="try-task"><strong>Missão:</strong> o link abre em outra aba e não avisa a nova página que ela não deve mexer na antiga. Acrescente o atributo <code>rel="noopener"</code>.</p>
 <pre class="script" data-file="App.svelte">&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
 &lt;a href="https://exemplo.com" target="_blank"&gt;cardápio do fornecedor&lt;/a&gt;</pre>
