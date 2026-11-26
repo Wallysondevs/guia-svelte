@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Actions — o comportamento colado no elemento | Guia Svelte</title>
+<meta name="description" content="use: no Svelte 5: a função que recebe o elemento, o parâmetro e o update, a limpeza, quando a action roda, por que ela não roda no servidor e os erros reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">use:</span> (actions)</h1>
+
+<p class="intro">A padaria da Ana tem três lugares em que a tela precisa de um empurrãozinho que nada tem a ver com dado novo: o campo do troco tem de abrir com o cursor já dentro, o preço tem de aparecer com vírgula e o painel de encomendas tem de fechar quando ela clica fora dele. Ela já sabe resolver cada um com <code>bind:this</code> e <code>$effect</code>, mas o código é sempre o mesmo — e copiar o mesmo bloco na quarta tela é receita de esquecimento. O Svelte guarda esse tipo de comportamento num lugar só, colado no próprio elemento: a <strong>action</strong>, que se escreve com <code>use:</code>.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma action e por que ela recebe o elemento.</li>
+  <li>A escrever a primeira: <code>function marcar(node)</code> e <code>&lt;p use:marcar&gt;</code>.</li>
+  <li>O segundo argumento e o objeto com <code>update</code>.</li>
+  <li>A função de limpeza devolvida no fim da action.</li>
+  <li>Quando cada pedaço roda: ao montar, ao mudar o parâmetro, ao sair do DOM.</li>
+  <li>Por que a action não roda no servidor e o que isso muda na saída.</li>
+  <li>Guardar as actions num <code>.js</code> e importar em várias telas.</li>
+  <li>Os três erros reais do compilador que aparecem com <code>use:</code>.</li>
+  <li><code>use:</code>, <code>onclick</code> e <code>{@attach}</code> lado a lado.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. Um comportamento colado no elemento</h2>
+
+<p>Até aqui, quase tudo o que a Ana fez foi sobre <strong>dado</strong>: o total da compra, a lista de pães, o nome do cliente. O template mostra o dado e o Svelte mantém a tela em dia. Só que algumas coisas não são dado nenhum. Dar foco a um campo, medir a largura de uma barra, ouvir o clique na página inteira para fechar um painel: isso é conversa direta com o DOM, e o DOM só existe no navegador, depois que o elemento foi criado.</p>
+
+<p>O jeito sem action é guardar o elemento numa variável e mexer nele num <code>$effect</code>:</p>
+
+<pre class="file">&lt;script&gt;
+  let campo = $state();
+
+  $effect(() =&gt; {
+    campo?.focus();
+  });
+&lt;/script&gt;
+
+&lt;input bind:this={campo} /&gt;</pre>
+
+<p>Funciona. E funciona tão bem que você vai repetir esse bloco em cada componente que tiver um campo de troco — e no dia em que precisar de um segundo detalhe (selecionar o texto todo ao focar, por exemplo) vai corrigir em um lugar e esquecer dos outros. Pior: o <code>bind:this</code> exige a variável, o <code>?. </code> exige o guarda, e o <code>$effect</code> roda de novo quando qualquer coisa lida dentro dele mudar. Para um comportamento fixo, é cerimônia demais.</p>
+
+<p>A action junta as três peças numa função só. Você escreve a função, pendura o nome dela no elemento com <code>use:</code> e pronto: o Svelte entrega o elemento para a sua função no momento em que ele entra na tela, e chama a sua função de limpeza quando ele sai. Nada de variável intermediária, nada de <code>$effect</code>.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>O que a Ana precisa</th><th>Como fica com action</th></tr>
+<tr><td>O cursor já dentro do campo do troco</td><td><code>&lt;input use:focar /&gt;</code></td></tr>
+<tr><td>O preço escrito com vírgula</td><td><code>&lt;p use:moeda={preco}&gt;&lt;/p&gt;</code></td></tr>
+<tr><td>O painel que fecha ao clicar fora</td><td><code>&lt;div use:fora={fechar}&gt;</code></td></tr>
+<tr><td>A barra que se ajusta à largura da janela</td><td><code>&lt;div use:largura&gt;</code></td></tr>
+<tr><td>Um atalho de teclado só enquanto a caixa está aberta</td><td><code>&lt;section use:atalho={'s'}&gt;</code></td></tr>
+<tr><td>O elemento que rola sozinho para o fim</td><td><code>&lt;ul use:fim&gt;</code></td></tr>
+</table>
+</div>
+
+<p>Repare no padrão: o nome depois de <code>use:</code> é o nome de uma <strong>função</strong> que você escreveu (ou importou). Não é uma palavra reservada do Svelte, como <code>transition:</code> ou <code>bind:</code>. <code>use:marcar</code> só funciona porque existe uma função chamada <code>marcar</code> no arquivo.</p>
+
+<div class="tip">
+<strong>Action não é componente</strong>
+<p>Uma action não desenha nada, não tem template e não recebe props. Ela é uma função com dois argumentos: o elemento e, opcionalmente, um parâmetro seu. Se você precisa de marcação nova, é componente; se precisa de comportamento num elemento que já existe, é action.</p>
+</div>
+
+<hr>
+
+<h2>2. A anatomia de uma action</h2>
+
+<p>O menor programa desta aula tem uma função que recebe um elemento e escreve nele. O parâmetro opcional chega no segundo argumento:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function graus(node, inicial) {
+    node.textContent = inicial + ' graus';
+    return {
+      update(valor) {
+        node.textContent = valor + ' graus';
+      }
+    };
+  }
+  let temperatura = $state(10);
+&lt;/script&gt;
+
+&lt;p use:graus={temperatura}&gt;&lt;/p&gt;
+&lt;button onclick={() =&gt; temperatura = 20}&gt;esquentar&lt;/button&gt;</pre>
+<pre class="out">&lt;p&gt;&lt;/p&gt; &lt;button&gt;esquentar&lt;/button&gt;</pre>
+
+<p>O parágrafo sai vazio do servidor, e isso não é bug: quem escreve o texto é a action, e action só roda no navegador. No navegador, o mesmo componente mostra <code>10 graus esquentar</code> na hora em que aparece, e depois do clique mostra <code>20 graus esquentar</code>. Guarde essa saída vazia; ela volta no item 7 com nome e sobrenome.</p>
+
+<dl class="anatomy">
+  <dt>function graus(node, inicial)</dt><dd>a action. <code>node</code> é o elemento de verdade, já dentro da página; <code>inicial</code> é o que veio depois do <code>=</code>. Os dois nomes são escolha sua.</dd>
+  <dt>use:graus={temperatura}</dt><dd>a diretiva. O nome depois dos dois-pontos tem de ser o da função; o valor entre chaves é o parâmetro, recalculado a cada mudança de <code>temperatura</code>.</dd>
+  <dt>return { update(valor) { … } }</dt><dd>o contrato de atualização. Toda vez que o parâmetro mudar, o Svelte chama <code>update</code> com o valor novo.</dd>
+  <dt>node.textContent = …</dt><dd>o trabalho em si. Aqui é texto; poderia ser atributo, classe, escuta de evento, medição — qualquer coisa que se faça com um elemento.</dd>
+</dl>
+
+<p>O segundo argumento é opcional de verdade: sem o <code>=</code>, ele chega como <code>undefined</code> e a função continua válida. É por isso que muitas actions se contentam com <code>function focar(node)</code> e mais nada.</p>
+
+<hr>
+
+<h2>3. O nó é o elemento de verdade</h2>
+
+<p>O primeiro argumento não é uma cópia, não é um objeto do Svelte e não é um componente: é o elemento do DOM, o mesmo que apareceria no inspetor do navegador. Tudo o que você faria com <code>document.querySelector</code> você faz com ele: <code>node.focus()</code>, <code>node.title = 'pronto'</code>, <code>node.classList.add('ativo')</code>, <code>node.getBoundingClientRect().width</code>, <code>node.addEventListener('keydown', …)</code>.</p>
+
+<p>Isso também quer dizer que a action pode brigar com o template. Se ela escreve em <code>node.textContent</code> e o template também desenha texto dentro do elemento, o Svelte não fica sabendo da escrita e pode sobrescrevê-la no próximo ciclo. A regra prática: use action para o que o template <em>não</em> faz — atributos, foco, medidas, escutas, formatação de um valor que veio por parâmetro.</p>
+
+<p>E há outra consequência: a action roda uma vez por elemento. Num <code>{#each}</code> com dez itens, dez execuções, cada uma com o seu <code>node</code>. Com <code>{#if}</code>, a action roda de novo a cada vez que o bloco volta a aparecer — o elemento é outro.</p>
+
+<div class="trysvelte" data-goal="outre:montagens: 1$;;clique:button;;clique:button;;depois:120;;outre:montagens: 2$">
+<p class="try-task"><strong>Missão:</strong> o contador de montagens travou em <code>1</code>. A action está pendurada no cabeçalho, que nunca sai da tela. Mova o <code>use:avisar</code> para o parágrafo que entra e sai pelo <code>{#if}</code>, e dois cliques em "abrir/fechar" devem levar o contador a <code>2</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+  let montagens = $state(0);
+  function avisar(node) {
+    montagens += 1;
+  }
+&lt;/script&gt;
+
+&lt;p use:avisar&gt;cabecalho fixo&lt;/p&gt;
+{#if aberto}
+  &lt;p&gt;painel aberto&lt;/p&gt;
+{/if}
+&lt;button onclick={() =&gt; aberto = !aberto}&gt;abrir/fechar&lt;/button&gt;
+&lt;p&gt;montagens: {montagens}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let aberto = $state(true);
+  let montagens = $state(0);
+  function avisar(node) {
+    montagens += 1;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;cabecalho fixo&lt;/p&gt;
+{#if aberto}
+  &lt;p use:avisar&gt;painel aberto&lt;/p&gt;
+{/if}
+&lt;button onclick={() =&gt; aberto = !aberto}&gt;abrir/fechar&lt;/button&gt;
+&lt;p&gt;montagens: {montagens}&lt;/p&gt;</pre>
+</div>
+
+<p>O contador não é enfeite: ele mostra a diferença entre "a action roda quando o parâmetro muda" e "a action roda quando o elemento nasce". Neste caso o parâmetro nem existe, então só a montagem conta.</p>
+
+<hr>
+
+<h2>4. O segundo argumento vira <code>update</code></h2>
+
+<p>Quando o parâmetro muda, o Svelte não chama a sua função de novo: chama o <code>update</code> que ela devolveu. É por isso que a action do item 2 tem dois caminhos para escrever no parágrafo — o do começo, para o primeiro valor, e o do <code>update</code>, para os seguintes. Se você esquecer o <code>update</code>, o primeiro valor fica congelado na tela.</p>
+
+<div class="trysvelte" data-goal="outre:^10 graus;;clique:button;;depois:80;;outre:^20 graus">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra <code>10 graus</code> e não acompanha o botão. Faça a action receber o valor inicial e devolver um <code>update</code> que reescreva o texto, para o clique em "esquentar" mostrar <code>20 graus</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  function graus(node) {
+    node.textContent = '10 graus';
+  }
+  let temperatura = $state(10);
+&lt;/script&gt;
+
+&lt;p use:graus&gt;&lt;/p&gt;
+&lt;button onclick={() =&gt; temperatura = 20}&gt;esquentar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  function graus(node, inicial) {
+    node.textContent = inicial + ' graus';
+    return {
+      update(valor) {
+        node.textContent = valor + ' graus';
+      }
+    };
+  }
+  let temperatura = $state(10);
+&lt;/script&gt;
+
+&lt;p use:graus={temperatura}&gt;&lt;/p&gt;
+&lt;button onclick={() =&gt; temperatura = 20}&gt;esquentar&lt;/button&gt;</pre>
+</div>
+
+<dl class="anatomy">
+  <dt>update(valor)</dt><dd>chamado quando a expressão do parâmetro muda. Recebe o valor novo; o elemento continua o mesmo, então não recrie escutas aqui.</dd>
+  <dt>destroy()</dt><dd>a outra chave do objeto: roda quando o elemento sai do DOM. É equivalente a devolver uma função solta, e o Svelte 5 aceita as duas formas.</dd>
+  <dt>return () =&gt; { … }</dt><dd>a forma curta, que só serve para limpar. Use quando não há <code>update</code>.</dd>
+  <dt>use:graus</dt><dd>sem <code>=</code>, o parâmetro é <code>undefined</code> e o <code>update</code> nunca é chamado: nada muda para ele.</dd>
+</dl>
+
+<p>Um detalhe que morde: o parâmetro é reativo, mas a expressão é avaliada no componente. Se você escrever <code>use:graus={temperatura + 1}</code>, o <code>update</code> recebe o resultado já somado — a action não tem como saber de onde veio. E se escrever um objeto literal, <code>use:moeda={{ valor: preco }}</code>, cada recálculo cria um objeto novo e o <code>update</code> roda de novo; é o comportamento esperado, mas vale lembrar quando a action faz trabalho pesado.</p>
+
+<hr>
+
+<h2>5. A função que a action devolve</h2>
+
+<p>Toda action que abre alguma coisa para fora do elemento precisa fechar essa coisa quando o elemento sai. Escuta em <code>document</code>, <code>setInterval</code>, <code>ResizeObserver</code>, <code>IntersectionObserver</code>: nada disso morre sozinho quando o elemento é removido. O Svelte resolve isso com o retorno da função:</p>
+
+<pre class="file">export function fora(node, aoSair) {
+  const ouvir = (evento) =&gt; {
+    if (!node.contains(evento.target)) aoSair();
+  };
+  document.addEventListener('click', ouvir);
+  return () =&gt; document.removeEventListener('click', ouvir);
+}</pre>
+
+<p>Essa é a action que fecha o painel de encomendas da Ana. Ela guarda a função da escuta numa constante justamente para poder remover exatamente a mesma função depois — <code>removeEventListener</code> exige a mesma referência, e uma arrow function escrita duas vezes não serve. O padrão é sempre esse: cria, guarda, devolve o desfazer.</p>
+
+<p>No projeto da padaria, as duas pontas ficam a duas linhas de distância:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "addEventListener" src
+src/lib/acoes.js:14:  document.addEventListener('click', ouvir);
+ana@notebook:~/loja$ grep -rn "return () =>" src
+src/lib/acoes.js:15:  return () => document.removeEventListener('click', ouvir);</pre>
+
+<p>A linha 14 abre, a linha 15 fecha. Quem esquece a segunda descobre o problema do jeito chato: abre e fecha o painel três vezes, e o clique fora passa a disparar três vezes. O sintoma não é erro no console, é comportamento duplicado — por isso a limpeza é a parte da action que mais merece revisão.</p>
+
+<div class="tip">
+<strong>Nem tudo precisa de limpeza</strong>
+<p>Mudar <code>textContent</code>, um atributo ou uma classe não deixa nada pendurado: quando o elemento sai, aquilo vai junto. Limpeza é para o que você registrou <em>fora</em> do elemento — escutas em <code>window</code> e <code>document</code>, timers, observers, bibliotecas que criaram instâncias próprias.</p>
+</div>
+
+<hr>
+
+<h2>6. Quando cada pedaço roda</h2>
+
+<p>A action tem três momentos, e confundir um com o outro é a origem de quase todo bug de <code>use:</code>:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Momento</th><th>O que roda</th><th>O que costuma ser feito ali</th></tr>
+<tr><td>O elemento entra no DOM</td><td>a função da action</td><td>focar, medir, criar escuta, iniciar timer</td></tr>
+<tr><td>O parâmetro muda</td><td><code>update(valorNovo)</code></td><td>reescrever texto, trocar atributo, recalcular</td></tr>
+<tr><td>O elemento sai do DOM</td><td><code>destroy()</code> ou a função devolvida</td><td>remover escuta, parar timer, desconectar observer</td></tr>
+<tr><td>O componente é renderizado no servidor</td><td>nada</td><td>—</td></tr>
+</table>
+</div>
+
+<p>Repare no que <em>não</em> está na tabela: não existe "a action roda quando um estado qualquer muda". Ela não é um <code>$effect</code>. Se a sua action lê três variáveis e você quer que ela reaja a todas, passe as três como parâmetro — ou escreva um <code>$effect</code>, que é a ferramenta certa para isso.</p>
+
+<div class="trysvelte" data-goal="outre:^azul verde \(1\) rodadas: 1;;clique:button;;depois:80;;outre:^azul azul \(2\) rodadas: 2">
+<p class="try-task"><strong>Missão:</strong> o botão muda a cor, mas o parágrafo continua verde e a contagem fica em <code>1</code>. Acrescente um <code>update</code> na action para que o clique em "azul" mostre <code>azul (2)</code> e o contador chegue a <code>2</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cor = $state('verde');
+  let rodadas = $state(0);
+  function pintar(node, valor) {
+    rodadas += 1;
+    node.textContent = valor + ' (' + rodadas + ')';
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cor = 'azul'}&gt;azul&lt;/button&gt;
+&lt;p use:pintar={cor}&gt;&lt;/p&gt;
+&lt;p&gt;rodadas: {rodadas}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cor = $state('verde');
+  let rodadas = $state(0);
+  function pintar(node, valor) {
+    rodadas += 1;
+    node.textContent = valor + ' (' + rodadas + ')';
+    return {
+      update(novo) {
+        rodadas += 1;
+        node.textContent = novo + ' (' + rodadas + ')';
+      }
+    };
+  }
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; cor = 'azul'}&gt;azul&lt;/button&gt;
+&lt;p use:pintar={cor}&gt;&lt;/p&gt;
+&lt;p&gt;rodadas: {rodadas}&lt;/p&gt;</pre>
+</div>
+
+<p>O contador <code>rodadas</code> é o que prova a diferença: com a action sem <code>update</code>, o número fica parado enquanto a cor do estado muda. É a assinatura do problema — o estado andou, o DOM não.</p>
+
+<hr>
+
+<h2>7. No servidor, nada acontece</h2>
+
+<p>Agora a saída vazia do item 2 faz sentido. Quando o componente é renderizado no servidor, não existe DOM, não existe elemento para entregar à action e, portanto, a função nunca é chamada. O HTML sai com a marcação do template e nada mais:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function marcar(node) {
+    node.title = 'pronto';
+    node.textContent = node.textContent.toUpperCase();
+  }
+&lt;/script&gt;
+
+&lt;p use:marcar&gt;pão quentinho&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;pão quentinho&lt;/p&gt;</pre>
+
+<p>Sem <code>title</code>, sem maiúsculas. No navegador, o mesmo arquivo produz outra coisa: o parágrafo vira <code>&lt;p title="pronto"&gt;PÃO QUENTINHO&lt;/p&gt;</code>, porque aí o elemento existe e a action rodou. As duas saídas estão certas; elas descrevem momentos diferentes.</p>
+
+<p>Isso não é limitação, é a divisão de trabalho do Svelte: o servidor entrega HTML, o navegador entrega comportamento. Também explica por que um teste de página que só olha o HTML do servidor não vê o efeito de nenhuma action — e por que o guia usa caixas interativas quando o assunto é <code>use:</code>, como nas três desta aula.</p>
+
+<p>Se você precisa que o conteúdo exista sem JavaScript (buscadores, impressão, e-mail), ele tem de vir do template ou dos dados, nunca da action. Action é camada de cima: foco, medida, escuta, enfeite.</p>
+
+<hr>
+
+<h2>8. Onde guardar as actions</h2>
+
+<p>Action é função comum, então mora em arquivo comum. No projeto da Ana, as duas actions do dia a dia ficam em <code>src/lib/acoes.js</code> e são importadas pelas telas que precisam delas:</p>
+
+<pre class="file">export function graus(node, inicial) {
+  node.textContent = inicial + ' graus';
+  return {
+    update(valor) {
+      node.textContent = valor + ' graus';
+    }
+  };
+}
+
+export function fora(node, aoSair) {
+  const ouvir = (evento) =&gt; {
+    if (!node.contains(evento.target)) aoSair();
+  };
+  document.addEventListener('click', ouvir);
+  return () =&gt; document.removeEventListener('click', ouvir);
+}</pre>
+
+<p>Do outro lado, cada componente importa o que usa e pendura no elemento. Duas telas, a mesma action, nenhuma linha repetida:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rln "use:" src
+src/lib/Graus.svelte
+src/lib/Forno.svelte
+ana@notebook:~/loja$ ls -1 src/lib
+Aviso.svelte
+Cartao.svelte
+Forno.svelte
+Graus.svelte
+Lista.svelte
+Moldura.svelte
+Painel.svelte
+Titulo.svelte
+acoes.js
+contador.js
+total.js</pre>
+
+<p>O <code>grep -rln</code> lista os arquivos que usam a diretiva; o <code>ls</code> mostra que as actions ficam no mesmo lugar dos componentes, num <code>.js</code> sem template. Uma convenção que ajuda: nomeie actions com verbo no infinitivo (<code>focar</code>, <code>graus</code>, <code>fora</code>, <code>medir</code>) e deixe claro no comentário qual é o parâmetro. Quem lê <code>use:fora={fechar}</code> entende o contrato sem abrir o arquivo.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são do compilador desta versão, copiadas da execução. Todas aparecem antes de a página abrir.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>use:</code> num componente</strong>
+<p>Diretiva de action vale para elementos do DOM, não para componentes. Um componente pode desenhar dez elementos, e o Svelte não saberia qual receber:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+  function focar(node) {
+    node.focus();
+  }
+&lt;/script&gt;
+
+&lt;Cartao use:focar /&gt;</pre>
+<pre class="out">Erro de compilação (linha 8, coluna 8): This type of directive is not valid on components</pre>
+<p>"Este tipo de diretiva não é válido em componentes." A correção é levar a action para dentro do componente, no elemento que deve receber o comportamento — ou envolver o componente num elemento e pendurar a action nele.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — espaço entre <code>use:</code> e o nome</strong>
+<p>Um espaço parece inofensivo, mas encerra a diretiva antes de ela ter nome:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function grudar(node) {
+    node.title = 'pronto';
+  }
+&lt;/script&gt;
+
+&lt;p use: grudar&gt;pão quentinho&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 3): `use:` name cannot be empty</pre>
+<p>"O nome de <code>use:</code> não pode ficar vazio." O compilador leu <code>use:</code> sem nome e parou ali. Tire o espaço: <code>use:grudar</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — action no <code>&lt;svelte:head&gt;</code></strong>
+<p>Os elementos especiais do Svelte aceitam só o que faz sentido para eles. O <code>&lt;svelte:head&gt;</code> recebe os elementos que vão para o <code>&lt;head&gt;</code> e não aceita diretiva nenhuma:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  function focar(node) {
+    node.focus();
+  }
+&lt;/script&gt;
+
+&lt;svelte:head use:focar&gt;
+  &lt;title&gt;Padaria da Ana&lt;/title&gt;
+&lt;/svelte:head&gt;
+&lt;p&gt;pão quentinho&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 7, coluna 13): `&lt;svelte:head&gt;` cannot have attributes nor directives</pre>
+<p>"<code>&lt;svelte:head&gt;</code> não pode ter atributos nem diretivas." Elementos especiais desse tipo servem para dizer onde o conteúdo vai, não para receber comportamento. A action vai no elemento comum que precisa dela.</p>
+</div>
+
+<hr>
+
+<h2>10. <code>use:</code>, <code>onclick</code> e <code>{@attach}</code></h2>
+
+<p>As três ferramentas parecem parentes, e a escolha entre elas é mais simples do que o nome sugere:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ferramenta</th><th>Serve para</th><th>Exemplo</th></tr>
+<tr><td><code>onclick</code>, <code>oninput</code></td><td>reagir a um evento do próprio elemento</td><td><code>&lt;button onclick={somar}&gt;</code></td></tr>
+<tr><td><code>bind:this</code> + <code>$effect</code></td><td>mexer no elemento porque um estado mudou</td><td><code>$effect(() =&gt; barra.style.width = pct)</code></td></tr>
+<tr><td><code>use:acao</code></td><td>instalar um comportamento no elemento, com parâmetro e limpeza</td><td><code>&lt;input use:focar&gt;</code></td></tr>
+<tr><td><code>{@attach fn}</code></td><td>a versão moderna: a própria expressão devolve a função</td><td><code>&lt;input {@attach focar}&gt;</code></td></tr>
+</table>
+</div>
+
+<p><code>{@attach}</code> é o assunto da próxima aula e resolve o mesmo problema por outro caminho: em vez de um nome de função que o Svelte procura no arquivo, você escreve uma expressão que <em>devolve</em> a função de comportamento. Ganha-se poder (dá para passar argumentos com clareza e usar dentro de snippets) e perde-se a forma curta de <code>use:</code>. Para o que a Ana faz — um comportamento fixo, reaproveitado em várias telas — <code>use:</code> continua sendo o caminho mais curto.</p>
+
+<hr>
+
+<h2>11. Antes de escrever a sua</h2>
+
+<p>Um punhado de decisões evita a maior parte dos problemas:</p>
+
+<ul>
+  <li><strong>Um trabalho por action.</strong> <code>fora</code> fecha ao clicar fora; <code>graus</code> escreve a temperatura. Quando o nome precisa de "e", são duas actions.</li>
+  <li><strong>Passe o que a action precisa como parâmetro.</strong> Ela não enxerga as variáveis do componente; se precisa do valor, recebe pelo segundo argumento.</li>
+  <li><strong>Devolva a limpeza sempre que abrir algo fora do elemento.</strong> Escuta, timer e observer sem desfazer são vazamento — e comportamento duplicado.</li>
+  <li><strong>Não escreva onde o template escreve.</strong> Se o texto vem do template, deixe-o lá; use a action para atributos, foco e medidas.</li>
+  <li><strong>Não conte com a action no servidor.</strong> O que precisa existir sem JavaScript tem de vir dos dados.</li>
+  <li><strong>Mantenha o teclado funcionando.</strong> Uma action que torna um <code>&lt;div&gt;</code> clicável precisa também tratar <code>keydown</code> e <code>tabindex</code>; o contrário disso é uma armadilha de acessibilidade.</li>
+  <li><strong>Prefira o simples quando basta.</strong> Se o comportamento é só reagir a um clique, <code>onclick</code> na veia, sem action nenhuma.</li>
+</ul>
+
+<div class="tip">
+<strong>O teste do "e se eu apagar"</strong>
+<p>Apague o <code>use:</code> do elemento e veja o que quebra. Se nada quebrar, a action não está fazendo nada e pode sair. Se quebrar só a conveniência (o cursor não aparece no campo), está no tamanho certo.</p>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que a função de uma action recebe no primeiro argumento?</p>
+<label><input type="radio" name="q1"> as props do componente</label>
+<label><input type="radio" name="q1"> o elemento do DOM em que a diretiva foi escrita</label>
+<label><input type="radio" name="q1"> o objeto <code>$state</code> do arquivo</label>
+<label><input type="radio" name="q1"> um evento de clique</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Quando o <code>update</code> de uma action é chamado?</p>
+<label><input type="radio" name="q1"> a cada quadro da animação</label>
+<label><input type="radio" name="q1"> só quando o elemento sai do DOM</label>
+<label><input type="radio" name="q1"> sempre que o valor do parâmetro muda</label>
+<label><input type="radio" name="q1"> nunca: quem chama é o programador</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que a saída do servidor não mostra o efeito da action?</p>
+<label><input type="radio" name="q1"> porque action só roda quando o elemento é montado no navegador</label>
+<label><input type="radio" name="q1"> porque o compilador remove as actions do código</label>
+<label><input type="radio" name="q1"> porque o servidor não tem CSS</label>
+<label><input type="radio" name="q1"> porque <code>use:</code> é exclusivo de componentes</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">function focar(<input data-answer="node">) {<br>&nbsp;&nbsp;node.focus();<br>}<br><br>&lt;input <input data-answer="use:focar"> /&gt;<br><br>// a action recebe o elemento e coloca o cursor dentro dele</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>use:acao</code> instala um comportamento num elemento do DOM; a ação é uma função que você escreve ou importa.</li>
+  <li>A função recebe <code>(node, parametro)</code>: o elemento de verdade e o valor que veio depois do <code>=</code>.</li>
+  <li>Se a função devolver um objeto com <code>update(valor)</code>, ele roda a cada mudança do parâmetro; <code>destroy()</code> roda quando o elemento sai.</li>
+  <li>Devolver uma função solta é a forma curta de limpeza — equivalente a <code>destroy</code>.</li>
+  <li>A action roda uma vez por elemento: dez itens num <code>{#each}</code> são dez execuções.</li>
+  <li>Action não é <code>$effect</code>: ela não reage a estado que não chegue por parâmetro.</li>
+  <li>No servidor não há DOM e a action não roda: o HTML sai só com o template.</li>
+  <li>Escuta em <code>document</code>, timer e observer precisam de limpeza; texto, atributo e classe não.</li>
+  <li>Os erros desta aula: diretiva em componente, espaço depois de <code>use:</code> e diretiva em <code>&lt;svelte:head&gt;</code>.</li>
+  <li>Para comportamento ligado a evento simples, <code>onclick</code> basta; para a versão moderna com expressão, <code>{@attach}</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
