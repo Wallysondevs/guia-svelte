@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evitando Trabalho Repetido — calcular uma vez e reaproveitar | Guia Svelte</title>
+<meta name="description" content="Cache de $derived contra função no template, $derived.by para contas compridas, formatador criado uma vez e untrack: a conta real de quantas vezes o componente trabalha.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Evitando Trabalho Repetido</span></h1>
+
+<p class="intro">A Ana tem um forno a lenha e um problema de conta: para cada cliente que pergunta o total da compra, ela acende o forno, assa um pão de teste e só então soma os itens do pedido. Funciona, mas o forno não tem nada a ver com a soma. No componente acontece o mesmo quando a mesma conta é feita em dois lugares da tela, ou quando uma ferramenta cara é criada a cada item da lista. Esta aula mostra como calcular uma vez, guardar o resultado e usar quantas vezes precisar — com um contador na tela provando a diferença.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que repetir a mesma conta é caro mesmo quando cada conta é rápida.</li>
+  <li>Como o <code>$derived</code> guarda o resultado e evita o recálculo.</li>
+  <li>Quando a função chamada no template trabalha mais que o necessário.</li>
+  <li>Como usar <code>$derived.by</code> para cálculos de várias linhas.</li>
+  <li>Como criar ferramentas caras — formatador, expressão regular — uma vez só.</li>
+  <li>Como manter o cabeçalho e a lista mostrando o mesmo número.</li>
+  <li>O que <code>untrack</code> faz e quando ele é necessário.</li>
+  <li>O que não pode acontecer dentro de um derivado.</li>
+  <li>Como medir o trabalho com um contador de execuções.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o forno e a soma</h2>
+
+<p>Existe uma diferença entre trabalho <strong>necessário</strong> e trabalho <strong>repetido</strong>. Somar os itens de um pedido é necessário: sem a soma, não há total. Acender o forno para somar é repetido: o forno não participa da conta e poderia muito bem ficar apagado. O programador que não presta atenção faz as duas coisas ao mesmo tempo, e o programa funciona — só que mais devagar.</p>
+
+<p>Em componente, o trabalho repetido aparece de três jeitos. O primeiro é a mesma conta escrita em dois lugares: o cabeçalho conta os achados de um jeito e a lista filtra de outro, e os dois números discordam. O segundo é a ferramenta criada a cada uso: um formatador de dinheiro construído dentro de um laço, uma vez por item. O terceiro é o cálculo que depende de tudo: uma conta que lê cinco estados e é refeita quando qualquer um deles muda, mesmo quando o resultado seria o mesmo.</p>
+
+<p>O Svelte tem uma ferramenta para cada caso, e todas se chamam pelo mesmo nome: <strong>derivado</strong>. Um derivado é um valor calculado a partir de outros, guardado até que uma das fontes mude. O resto desta aula é aprender a usar essa ferramenta sem abusar dela.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No componente</th></tr>
+<tr><td>Acender o forno para somar o pedido</td><td>criar um formatador dentro do laço</td></tr>
+<tr><td>Somar duas vezes o mesmo pedido</td><td>a mesma conta em dois lugares da tela</td></tr>
+<tr><td>Anotar o total no bloquinho</td><td><code>$derived</code> guarda o resultado</td></tr>
+<tr><td>Rasgar a anotação quando o pedido muda</td><td>o derivado se recalcula quando a fonte muda</td></tr>
+<tr><td>Conferir quantas vezes o forno acendeu</td><td>um contador de execuções na tela</td></tr>
+</table>
+</div>
+
+<p>O vocabulário: <em>derivado</em> é o valor calculado a partir de outro; <em>cache</em> é o resultado guardado para não ser refeito; <em>dependência</em> é o dado que, ao mudar, obriga o cálculo a rodar de novo; e <em>contador de execuções</em> é o número que mostra quantas vezes o cálculo aconteceu. Quatro palavras, e a aula inteira é sobre a relação entre elas.</p>
+
+<hr>
+
+<h2>2. O cálculo repetido no template</h2>
+
+<p>Comece com o jeito ingênuo: uma função que soma uma lista fixa, multiplica por um fator que vem do estado e, de brinde, incrementa um contador de execuções. A função é chamada em dois lugares da tela, porque as duas informações são úteis.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const base = [1, 2, 3, 4];
+  const execucoes = { n: 0 };
+
+  let fator = $state(1);
+
+  function somaComFator() {
+    execucoes.n += 1;
+    return base.reduce((a, b) =&gt; a + b, 0) * fator;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;total: {somaComFator()}&lt;/p&gt;
+&lt;p&gt;resumo: {somaComFator()} reais&lt;/p&gt;
+&lt;p&gt;execuções: {execucoes.n} · fator {fator}&lt;/p&gt;
+
+&lt;button onclick={() =&gt; (fator += 1)}&gt;mudar fator&lt;/button&gt;</pre>
+
+<p>O HTML do servidor já mostra o problema: o painel diz que a função rodou duas vezes para produzir o mesmo número.</p>
+
+<pre class="out">&lt;p&gt;total: 10&lt;/p&gt; &lt;p&gt;resumo: 10 reais&lt;/p&gt; &lt;p&gt;execuções: 2 · fator 1&lt;/p&gt; &lt;button&gt;mudar fator&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>const base = [1, 2, 3, 4]</dt><dd>a lista de onde vem a soma. Constante, porque o conteúdo não muda enquanto o componente vive.</dd>
+  <dt>const execucoes = { n: 0 }</dt><dd>o <strong>contador de diagnóstico</strong>. Não é estado: ele não precisa avisar a tela, só ser lido quando a tela já vai desenhar.</dd>
+  <dt>somaComFator()</dt><dd>a função chamada <strong>duas vezes</strong>, uma em cada parágrafo. Cada chamada é trabalho de verdade.</dd>
+  <dt>fator</dt><dd>a <strong>dependência</strong>: quando muda, os dois parágrafos que chamam a função são redesenhados e a função roda de novo.</dd>
+  <dt>{execucoes.n} · fator {fator}</dt><dd>o parágrafo que mostra a contagem. Ele lê <code>fator</code>, então é atualizado junto com os outros.</dd>
+</dl>
+
+<p>Com um clique no botão, o número dobra. É o teste mais honesto que existe: a mesma tela, o mesmo resultado visível, o dobro de trabalho.</p>
+
+<hr>
+
+<h2>3. <code>$derived</code>: calcule uma vez, use quantas quiser</h2>
+
+<p>A correção é transformar a função em valor derivado. A regra do Svelte é esta: um <code>$derived</code> roda no máximo uma vez por mudança de dependência, não importa quantos lugares leiam o resultado. Dez leitores, um cálculo.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const base = [1, 2, 3, 4];
+  const execucoes = { n: 0 };
+
+  let fator = $state(1);
+
+  let total = $derived.by(() =&gt; {
+    execucoes.n += 1;
+    return base.reduce((a, b) =&gt; a + b, 0) * fator;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;total: {total}&lt;/p&gt;
+&lt;p&gt;resumo: {total} reais&lt;/p&gt;
+&lt;p&gt;execuções: {execucoes.n} · fator {fator}&lt;/p&gt;
+
+&lt;button onclick={() =&gt; (fator += 1)}&gt;mudar fator&lt;/button&gt;</pre>
+
+<p>Agora o contador diz uma vez, e não duas:</p>
+
+<pre class="out">&lt;p&gt;total: 10&lt;/p&gt; &lt;p&gt;resumo: 10 reais&lt;/p&gt; &lt;p&gt;execuções: 1 · fator 1&lt;/p&gt; &lt;button&gt;mudar fator&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let total = $derived.by(() =&gt; { … })</dt><dd>o valor passa a ser <strong>calculado e guardado</strong>. O bloco roda quando o Svelte precisa do valor e alguma dependência mudou.</dd>
+  <dt>execucoes.n += 1</dt><dd>a marca de que o cálculo rodou. Repare: a contagem fica <strong>dentro</strong> do derivado, não no template.</dd>
+  <dt>return …</dt><dd>o que o derivado entrega. Todo derivado precisa devolver alguma coisa; sem <code>return</code>, o valor é <code>undefined</code>.</dd>
+  <dt>{total}</dt><dd>as duas leituras usam o mesmo valor guardado. A segunda não recalcula nada.</dd>
+</dl>
+
+<p>No navegador, a diferença fica ainda mais clara: um clique no botão leva o contador de 2 para 4 na versão com função, e de 1 para 2 na versão com derivado. Mesmo resultado na tela, metade do trabalho — e a diferença cresce com o número de lugares que mostram o valor.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:total: 20 resumo: 20 reais execuções: 2 · fator 2 mudar fator">
+<p class="try-task"><strong>Missão:</strong> depois de um clique, o painel mostra <strong>execuções: 4</strong> porque a conta é feita duas vezes. Guarde o resultado num derivado e faça o mesmo clique terminar em <code>execuções: 2</code>, com o total certo.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  const base = [1, 2, 3, 4];
+  const execucoes = { n: 0 };
+
+  let fator = $state(1);
+
+  function somaComFator() {
+    execucoes.n += 1;
+    return base.reduce((a, b) =&gt; a + b, 0) * fator;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;total: {somaComFator()}&lt;/p&gt;
+&lt;p&gt;resumo: {somaComFator()} reais&lt;/p&gt;
+&lt;p&gt;execuções: {execucoes.n} · fator {fator}&lt;/p&gt;
+
+&lt;button onclick={() =&gt; (fator += 1)}&gt;mudar fator&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  const base = [1, 2, 3, 4];
+  const execucoes = { n: 0 };
+
+  let fator = $state(1);
+
+  let total = $derived.by(() =&gt; {
+    execucoes.n += 1;
+    return base.reduce((a, b) =&gt; a + b, 0) * fator;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;total: {total}&lt;/p&gt;
+&lt;p&gt;resumo: {total} reais&lt;/p&gt;
+&lt;p&gt;execuções: {execucoes.n} · fator {fator}&lt;/p&gt;
+
+&lt;button onclick={() =&gt; (fator += 1)}&gt;mudar fator&lt;/button&gt;</pre>
+</div>
+
+<hr>
+
+<h2>4. <code>$derived.by</code> para o cálculo de várias linhas</h2>
+
+<p>Quando o cálculo cabe numa linha, <code>$derived(expressão)</code> é o suficiente. Quando precisa de variáveis intermediárias, laços ou condicionais, o jeito é <code>$derived.by</code>, que recebe uma função e deixa o corpo à vontade.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([
+    { nome: 'Pão francês', preco: 0.9, quantidade: 3 },
+    { nome: 'Bolo de fubá', preco: 12.5, quantidade: 1 }
+  ]);
+
+  let resumo = $derived.by(() =&gt; {
+    const total = itens.reduce((soma, i) =&gt; soma + i.preco * i.quantidade, 0);
+    const maisCaro = [...itens].sort((a, b) =&gt; b.preco - a.preco)[0];
+    return `${itens.length} itens, ${maisCaro.nome} é o mais caro, total R$ ${total.toFixed(2)}`;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{resumo}&lt;/p&gt;</pre>
+
+<p>O resumo sai numa linha, calculado uma vez e lido uma vez:</p>
+
+<pre class="out">&lt;p&gt;2 itens, Bolo de fubá é o mais caro, total R$ 15.20&lt;/p&gt;</pre>
+
+<p>O <code>$derived.by</code> é a forma mais legível para três ou quatro passos. O custo é que o corpo é uma função: quem lê precisa entender que o <code>return</code> é o valor final e que nada depois dele roda. Um erro comum é esquecer o <code>return</code> e receber <code>undefined</code> na tela — o componente desenha, mas o texto some.</p>
+
+<div class="trysvelte" data-goal="out:1 item(ns), total R$ 2.70">
+<p class="try-task"><strong>Missão:</strong> o resumo só conta os itens. Calcule também o total — preço vezes quantidade — e mostre <strong>1 item(ns), total R$ 2.70</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state([{ nome: 'Pão', preco: 0.9, quantidade: 3 }]);
+
+  let resumo = $derived.by(() =&gt; {
+    return `${itens.length} item(ns)`;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{resumo}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state([{ nome: 'Pão', preco: 0.9, quantidade: 3 }]);
+
+  let resumo = $derived.by(() =&gt; {
+    const total = itens.reduce((soma, i) =&gt; soma + i.preco * i.quantidade, 0);
+    return `${itens.length} item(ns), total R$ ${total.toFixed(2)}`;
+  });
+&lt;/script&gt;
+
+&lt;p&gt;{resumo}&lt;/p&gt;</pre>
+</div>
+
+<hr>
+
+<h2>5. Ferramentas caras: crie uma vez</h2>
+
+<p>Algumas coisas em JavaScript são objetos com configuração: o formatador de dinheiro, a expressão regular, o mapa de conversão. Criar um desses é barato uma vez e caro mil vezes. O formatador de moeda, por exemplo, precisa consultar a tabela de idiomas do navegador toda vez que nasce.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const produtos = [
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Bolo de fubá', preco: 12.5 }
+  ];
+
+  function formatar(preco) {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(preco);
+  }
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as p}
+    &lt;li&gt;{p.nome}: {formatar(p.preco)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<p>O resultado na tela é o esperado, com vírgula e símbolo:</p>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Pão francês: R$ 0,90&lt;/li&gt;&lt;li&gt;Bolo de fubá: R$ 12,50&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>O problema não aparece na saída: aparece no custo. Um formatador novo por item, e a lista da Ana tem quarenta. A correção é criar o formatador <strong>fora</strong> do laço, uma vez por componente, e guardar só a função que formata:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const produtos = [
+    { nome: 'Pão francês', preco: 0.9 },
+    { nome: 'Bolo de fubá', preco: 12.5 }
+  ];
+
+  const reais = new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+&lt;/script&gt;
+
+&lt;ul&gt;
+  {#each produtos as p}
+    &lt;li&gt;{p.nome}: {reais.format(p.preco)}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;</pre>
+
+<pre class="out">&lt;ul&gt;&lt;li&gt;Pão francês: R$ 0,90&lt;/li&gt;&lt;li&gt;Bolo de fubá: R$ 12,50&lt;/li&gt;&lt;/ul&gt;</pre>
+
+<p>Os dois HTML são idênticos — é isso que torna esse tipo de desperdício difícil de ver. A diferença está no trabalho: um formatador contra dois, no exemplo de dois produtos; um contra quarenta no catálogo de verdade.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Ferramenta</th><th>Criar dentro do laço</th><th>Criar uma vez</th></tr>
+<tr><td><code>Intl.NumberFormat</code></td><td>consulta a tabela de idiomas por item</td><td>uma consulta por componente</td></tr>
+<tr><td><code>Intl.DateTimeFormat</code></td><td>idem, e a de datas é maior</td><td>idem</td></tr>
+<tr><td><code>new RegExp(…)</code></td><td>compila o padrão por item</td><td>compila uma vez</td></tr>
+<tr><td><code>new Map()</code> preenchido</td><td>recria a tabela por item</td><td>reaproveita a tabela</td></tr>
+<tr><td>lista de opções fixa</td><td>recria o array por item</td><td>declara fora do componente</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>6. A mesma lista em dois lugares</h2>
+
+<p>O caso mais comum de trabalho repetido não é lento, é <strong>errado</strong>. O cabeçalho conta todos os produtos, a lista mostra só os filtrados, e os dois números discordam na tela. O usuário vê "3 achados" acima de duas linhas.</p>
+
+<div class="trysvelte" data-goal="out:2 achado(s) Pão francês Pão de queijo buscar pão">
+<p class="try-task"><strong>Missão:</strong> o cabeçalho conta a lista inteira e diz 3, mas só dois produtos aparecem. Faça o número e a lista saírem do <strong>mesmo</strong> resultado, mostrando <strong>2 achado(s)</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('pão');
+  let produtos = ['Pão francês', 'Bolo de fubá', 'Pão de queijo'];
+&lt;/script&gt;
+
+&lt;p&gt;{produtos.length} achado(s)&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each produtos.filter((p) =&gt; p.toLowerCase().includes(busca)) as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;button onclick={() =&gt; (busca = 'pão')}&gt;buscar pão&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let busca = $state('pão');
+  let produtos = ['Pão francês', 'Bolo de fubá', 'Pão de queijo'];
+  let achados = $derived(produtos.filter((p) =&gt; p.toLowerCase().includes(busca)));
+&lt;/script&gt;
+
+&lt;p&gt;{achados.length} achado(s)&lt;/p&gt;
+
+&lt;ul&gt;
+  {#each achados as p}
+    &lt;li&gt;{p}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+
+&lt;button onclick={() =&gt; (busca = 'pão')}&gt;buscar pão&lt;/button&gt;</pre>
+</div>
+
+<p>A correção resolve duas coisas de uma vez: o número passa a bater com a lista e o filtro roda uma vez só, em vez de uma para o cabeçalho e outra para o <code>{#each}</code>. Quando você se pegar escrevendo a mesma expressão em dois lugares da tela, esse é o sinal: transforme em derivado e leia o derivado nos dois.</p>
+
+<hr>
+
+<h2>7. <code>untrack</code>: ler sem virar dependência</h2>
+
+<p>Um derivado pode ler estado sem querer. Toda leitura de estado dentro do cálculo conta como dependência, mesmo quando o valor lido não deveria obrigar o recálculo. O <code>untrack</code> desliga esse registro para o pedaço de código que ele envolve.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import { untrack } from 'svelte';
+
+  let quantidade = $state(2);
+  const precoUnitario = 4.5;
+
+  let total = $derived(untrack(() =&gt; precoUnitario) * quantidade);
+&lt;/script&gt;
+
+&lt;p&gt;total: R$ {total.toFixed(2)}&lt;/p&gt;
+&lt;button onclick={() =&gt; (quantidade += 1)}&gt;mais um&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;total: R$ 9.00&lt;/p&gt; &lt;button&gt;mais um&lt;/button&gt;</pre>
+
+<p>No exemplo, o preço unitário é constante, então o <code>untrack</code> não muda nada visível — ele só deixa claro que o total depende da quantidade e do preço, nessa ordem. O uso de verdade aparece quando o valor lido é <code>$state</code> e você <em>não</em> quer que ele dispare o cálculo: um contador de visitas lido para exibir, um filtro global lido uma vez na montagem.</p>
+
+<div class="warning">
+<strong><code>untrack</code> é exceção, não regra</strong>
+<p>Se o valor deve atualizar a tela quando muda, ele é dependência e precisa ser rastreado. Usar <code>untrack</code> para "resolver" um recálculo indesejado costuma esconder um problema de desenho: o dado está no lugar errado, ou o estado tem duas fontes. Prefira arrumar a estrutura a silenciar o rastreamento.</p>
+</div>
+
+<hr>
+
+<h2>8. O que não fazer dentro de um derivado</h2>
+
+<p>Derivado é para calcular, não para agir. Escrever estado, chamar <code>fetch</code>, mexer no DOM ou disparar um evento dentro de um derivado transforma o cálculo numa ação — e ação repetida é o começo de um laço. O derivado pode rodar mais de uma vez, em momentos que você não controla; qualquer efeito colateral vai junto.</p>
+
+<p>A regra prática: se o corpo do derivado precisa de <code>await</code>, de <code>setTimeout</code> ou de uma atribuição a <code>$state</code>, ele não é derivado. Use <code>$effect</code> para o que precisa acontecer, e deixe o derivado só com contas. Essa separação é o que torna o cache confiável: um cálculo puro pode ser repetido à vontade sem consequência.</p>
+
+<p>O outro cuidado é a dependência ampla demais. Um derivado que lê a lista inteira é recalculado quando qualquer item muda, mesmo que o resultado mostrado seja o mesmo. Se a conta é pesada, considere derivar primeiro a parte estável — o total por item, por exemplo — e só então juntar. Duas contas pequenas com dependências diferentes trabalham menos que uma conta grande com todas.</p>
+
+<hr>
+
+<h2>9. Medir antes de acreditar</h2>
+
+<p>Contador de execuções é a forma mais barata de provar que o trabalho diminuiu. Ele não precisa ficar na versão final: entra durante a investigação e sai quando a dúvida acaba. O painel de desempenho do navegador mostra o tempo; o contador mostra a causa.</p>
+
+<p>O build confirma que o código não cresceu de forma estranha. O comando é o mesmo de sempre, rodado com o componente de derivado salvo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DBL5rn69.js  36.38 kB │ gzip: 14.07 kB
+✓ built in 1.22s</pre>
+
+<p>E o preview serve a pasta gerada por http, para conferir a versão de produção com o mesmo clique de antes:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run preview
+
+> loja@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>Repare que o tamanho do arquivo não diz nada sobre o número de execuções. Um componente pode ser pequeno e trabalhar demais, ou grande e trabalhar uma vez. São duas medidas diferentes: bytes para baixar, execuções para rodar.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do renderizador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>$derived.by</code> sem função</strong>
+<p>O <code>.by</code> existe justamente para receber uma função. Passar um número ou um valor direto faz o Svelte tentar chamar o que não é chamável.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([1, 2, 3]);
+  let total = $derived.by(42);
+&lt;/script&gt;
+
+&lt;p&gt;{total}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: get_value is not a function</pre>
+<p>"get_value is not a function" é uma mensagem interna, e o nome não ajuda. A tradução: o valor passado para a runa não é uma função. O certo é <code>$derived.by(() =&gt; { … })</code>, com a função inteira dentro dos parênteses.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — chamar o derivado como função</strong>
+<p>Um derivado é um valor, não uma função. Quem escreve <code>{total()}</code> está pedindo para chamar um número.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state([1, 2, 3]);
+  let total = $derived(itens.reduce((a, b) =&gt; a + b, 0));
+&lt;/script&gt;
+
+&lt;p&gt;{total()}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: total(...) is not a function</pre>
+<p>A mensagem aponta a chamada: <code>total(...) is not a function</code>. No template, use <code>{total}</code> sem parênteses. Parênteses só aparecem quando o que está guardado é uma função de verdade.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>reduce</code> no que não é lista</strong>
+<p><code>reduce</code>, <code>filter</code> e <code>map</code> são funções de lista. Um objeto com campos não tem nenhuma delas, e a conta para na hora de desenhar.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state({ a: 1, b: 2 });
+  let total = $derived(itens.reduce((a, b) =&gt; a + b, 0));
+&lt;/script&gt;
+
+&lt;p&gt;{total}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: itens.reduce is not a function</pre>
+<p>"is not a function" de novo, agora apontando o valor errado. Para somar campos de um objeto, use <code>Object.values(itens).reduce(…)</code>, que primeiro transforma os valores em lista.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escreva</th><th>Calcula</th><th>Quando usar</th></tr>
+<tr><td><code>$derived(expressão)</code></td><td>uma expressão de uma linha</td><td>soma, filtro, formatação curta</td></tr>
+<tr><td><code>$derived.by(() =&gt; { … })</code></td><td>um bloco com <code>return</code></td><td>vários passos, variáveis intermediárias</td></tr>
+<tr><td><code>untrack(() =&gt; valor)</code></td><td>lê sem criar dependência</td><td>valor de configuração, leitura única</td></tr>
+<tr><td><code>Intl.NumberFormat</code> fora do laço</td><td>um formatador por componente</td><td>dinheiro, datas, números</td></tr>
+<tr><td>contador em objeto simples</td><td>quantas vezes o cálculo rodou</td><td>investigar, não publicar</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th><th>Correção</th></tr>
+<tr><td>o mesmo número é calculado duas vezes</td><td>função chamada em dois lugares do template</td><td>guardar em <code>$derived</code></td></tr>
+<tr><td>cabeçalho e lista discordam</td><td>cada um filtra por conta própria</td><td>um derivado lido pelos dois</td></tr>
+<tr><td>tela lenta com muitos itens</td><td>ferramenta criada por item</td><td>criar fora do laço</td></tr>
+<tr><td>o derivado devolve nada</td><td>falta <code>return</code> no <code>.by</code></td><td>devolver o valor final</td></tr>
+<tr><td>get_value is not a function</td><td><code>$derived.by</code> sem função</td><td>passar <code>() =&gt; { … }</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que o <code>$derived</code> faz de diferente de uma função chamada no template?</p>
+<label><input type="radio" name="q1"> roda mais vezes, para garantir que o valor está certo</label>
+<label><input type="radio" name="q1"> guarda o resultado e roda no máximo uma vez por mudança de dependência</label>
+<label><input type="radio" name="q1"> impede que o valor seja lido em dois lugares</label>
+<label><input type="radio" name="q1"> transforma o valor em texto</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Quando usar <code>$derived.by</code> em vez de <code>$derived</code>?</p>
+<label><input type="radio" name="q1"> quando o valor é um número</label>
+<label><input type="radio" name="q1"> quando o valor vem de uma propriedade</label>
+<label><input type="radio" name="q1"> quando o cálculo precisa de várias linhas e de um <code>return</code></label>
+<label><input type="radio" name="q1"> quando o valor precisa ser assíncrono</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Por que criar o formatador de dinheiro fora do <code>{#each}</code>?</p>
+<label><input type="radio" name="q1"> para ele nascer uma vez por componente, em vez de uma por item</label>
+<label><input type="radio" name="q1"> porque dentro do <code>{#each}</code> ele formata errado</label>
+<label><input type="radio" name="q1"> porque o compilador recusa a criação dentro do laço</label>
+<label><input type="radio" name="q1"> para o valor virar texto</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">let total = $derived<input data-answer=".by">(() =&gt; {<br>&nbsp;&nbsp;const soma = itens.reduce((a, i) =&gt; a + i.preco, 0);<br>&nbsp;&nbsp;return soma.toFixed(2);<br>});</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Trabalho necessário produz o resultado; trabalho repetido só gasta tempo.</li>
+  <li><code>$derived</code> guarda o resultado e roda no máximo uma vez por mudança de dependência.</li>
+  <li>Função chamada em dois lugares do template roda duas vezes; derivado lido em dois lugares roda uma.</li>
+  <li><code>$derived.by</code> serve para cálculos de várias linhas, com <code>return</code> obrigatório.</li>
+  <li>Formatadores, expressões regulares e tabelas fixas se criam uma vez, fora do laço.</li>
+  <li>Cabeçalho e lista devem sair do mesmo derivado, para os números nunca discordarem.</li>
+  <li><code>untrack</code> lê sem criar dependência, e é exceção — não conserto para todo recálculo.</li>
+  <li>Derivado calcula; não escreve estado, não busca dados, não mexe no DOM.</li>
+  <li>Contador de execuções prova a economia; o painel de desempenho mostra o tempo.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

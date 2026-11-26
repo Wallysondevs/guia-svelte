@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Debounce e Busca — esperar a poeira baixar | Guia Svelte</title>
+<meta name="description" content="Debounce na busca da Ana com setTimeout, clearTimeout e a função de limpeza do $effect: uma pesquisa por palavra digitada, com a saída real do compilador e erros de verdade.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Debounce e Busca</span></h1>
+
+<p class="intro">Toda vez que a Ana digita uma letra no campo de busca da padaria, o sistema corre até a prateleira, procura o produto e volta. Na primeira letra ele ainda está voltando quando a segunda chega; na terceira, há três corridas acontecendo e a resposta que aparece pode ser a da primeira. O nome desse problema é <strong>excesso de trabalho por tecla</strong>, e a cura tem um nome esquisito: <em>debounce</em>. A ideia é simples como a vida no balcão: espere a pessoa terminar de falar antes de sair correndo.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que responder a cada letra digitada é caro e às vezes errado.</li>
+  <li>O que é debounce e o que ele não é.</li>
+  <li>Como usar <code>setTimeout</code> e <code>clearTimeout</code> para esperar.</li>
+  <li>Como fazer o mesmo com <code>$effect</code> e a função de limpeza.</li>
+  <li>Por que a resposta antiga pode chegar depois da nova e como evitar.</li>
+  <li>Debounce contra throttle: duas ideias parecidas com usos diferentes.</li>
+  <li>Que atraso escolher e como o número muda a sensação de velocidade.</li>
+  <li>Cuidados com o campo: foco, cursor e leitores de tela.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: esperar a pessoa terminar a palavra</h2>
+
+<p>Quando alguém pede "pão de queijo" no balcão, a Ana não corre para a cozinha a cada sílaba. Ela espera a frase terminar, confere se é isso mesmo e só então vai. Se ela corresse a cada som, faria quatro viagens para atender um pedido — e voltaria com a coisa errada nas três primeiras.</p>
+
+<p>Um campo de busca sem cuidado faz exatamente isso. Cada tecla dispara uma busca: "p", "pã", "pão". As duas primeiras são inúteis, e a terceira é a única que interessa. Pior: se a busca vai pela rede, as três respostas podem voltar fora de ordem, e a tela termina mostrando o resultado de "p" — o nome bonito disso é <em>condição de corrida</em>.</p>
+
+<p>Debounce é a regra de esperar um tempinho antes de agir. Cada tecla reinicia a contagem: se a pessoa digitar de novo antes do tempo acabar, a busca anterior é cancelada e a contagem começa do zero. Quando ela para de digitar por tempo suficiente, aí sim a busca acontece — uma só, com a palavra inteira.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No balcão</th><th>No componente</th></tr>
+<tr><td>Ouvir a sílaba e já sair correndo</td><td><code>oninput</code> chamando a busca direto</td></tr>
+<tr><td>Esperar a frase terminar</td><td>esperar alguns milissegundos sem nova tecla</td></tr>
+<tr><td>A frase mudou no meio: recomeçar a espera</td><td><code>clearTimeout</code> e um <code>setTimeout</code> novo</td></tr>
+<tr><td>Ninguém falou mais nada: ir</td><td>o temporizador termina e a busca roda</td></tr>
+<tr><td>Um pedido, uma viagem</td><td>uma busca por palavra digitada</td></tr>
+</table>
+</div>
+
+<p>O vocabulário: <em>temporizador</em> é o relógio que conta até um horário e chama uma função; <em>atraso</em> ou <em>espera</em> é quanto tempo ele conta; <em>limpar</em> é cancelar um temporizador antes de ele disparar; e <em>debounce</em> é o padrão inteiro — cancelar e reagendar a cada tecla. Quatro palavras, um conceito só.</p>
+
+<hr>
+
+<h2>2. A busca que responde a cada letra</h2>
+
+<p>Comece pelo jeito direto. O termo é estado, os produtos são uma constante, e um <code>$derived</code> recalcula a lista de achados a cada mudança no termo. Enquanto a busca é local, feita na memória, isso é rápido e honesto: não há rede, não há espera, e mostrar o resultado a cada letra dá até prazer.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const produtos = ['Pão francês', 'Pão de queijo', 'Bolo de fubá'];
+  let termo = $state('pão');
+  let achados = $derived(
+    produtos.filter((p) =&gt; p.toLowerCase().includes(termo.toLowerCase()))
+  );
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;p&gt;{achados.length} achado(s) para "{termo}"&lt;/p&gt;</pre>
+
+<p>Com o termo começando em "pão", o HTML já sai com a resposta pronta:</p>
+
+<pre class="out">&lt;input value="pão" placeholder="buscar"/&gt; &lt;p&gt;2 achado(s) para "pão"&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let termo = $state('pão')</dt><dd>o texto digitado é <strong>estado</strong>: muda a cada tecla e a tela acompanha.</dd>
+  <dt>bind:value={termo}</dt><dd>liga o campo ao estado nos dois sentidos. O valor inicial aparece no campo, e o que a pessoa digita entra no estado.</dd>
+  <dt>$derived(…)</dt><dd>a lista de achados é <strong>calculada</strong>. Cada mudança no termo refaz o filtro; a tela nunca fica com a lista velha.</dd>
+  <dt>includes(termo.toLowerCase())</dt><dd>a condição da busca, com minúsculas dos dois lados para "Pão" e "pão" darem no mesmo lugar.</dd>
+  <dt>{achados.length}</dt><dd>mostrar a contagem ajuda a pessoa a saber se a busca encontrou algo, antes mesmo de ler a lista.</dd>
+</dl>
+
+<p>O <code>bind:value</code> é a única peça que muda de comportamento quando a busca deixa de ser local. Com a lista na memória, cada letra é uma conta de microssegundos. Com a lista no servidor, cada letra é uma viagem de rede — e aí o problema desta aula aparece de verdade.</p>
+
+<hr>
+
+<h2>3. Esperar a poeira baixar</h2>
+
+<p>A receita do debounce cabe em três linhas. Primeiro, guarde o identificador do temporizador numa variável. Segundo, antes de criar um novo, cancele o anterior com <code>clearTimeout</code>. Terceiro, crie o novo com <code>setTimeout</code>, com o atraso escolhido.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let termo = $state('');
+  let buscado = $state('');
+  let buscas = $state(0);
+  let relogio;
+
+  function aoDigitar(evento) {
+    termo = evento.target.value;
+    clearTimeout(relogio);
+    relogio = setTimeout(() =&gt; {
+      buscado = termo;
+      buscas += 1;
+    }, 300);
+  }
+&lt;/script&gt;
+
+&lt;input value={termo} oninput={aoDigitar} placeholder="buscar" /&gt;
+&lt;p&gt;buscas: {buscas} · termo buscado: "{buscado}"&lt;/p&gt;</pre>
+
+<p>A saída do servidor mostra o estado inicial, sem busca nenhuma — ninguém digitou ainda:</p>
+
+<pre class="out">&lt;input value="" placeholder="buscar"/&gt; &lt;p&gt;buscas: 0 · termo buscado: ""&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>let relogio</dt><dd>o <strong>identificador</strong> do temporizador pendente. Não é estado: ele não aparece na tela, então não precisa avisar ninguém quando muda.</dd>
+  <dt>clearTimeout(relogio)</dt><dd>cancela o temporizador anterior, se existir. Cancelar um número que não existe não dá erro: a função simplesmente não faz nada.</dd>
+  <dt>setTimeout(f, 300)</dt><dd>marca <code>f</code> para rodar daqui a 300 ms e devolve um número que identifica esse agendamento.</dd>
+  <dt>() =&gt; { buscado = termo; }</dt><dd>o trabalho que só roda <strong>depois</strong> da espera. Aqui ele lê o termo do momento em que a função roda, não do momento em que foi agendada.</dd>
+  <dt>evento.target.value</dt><dd>o texto atual do campo. É o valor de agora, mesmo que o estado demore um instante para acompanhar.</dd>
+</dl>
+
+<div class="trysvelte" data-goal="digitar:input=p;;digitar:input=pã;;digitar:input=pão;;depois:500;;out:buscas: 1">
+<p class="try-task"><strong>Missão:</strong> o contador sobe a cada tecla: digitar "p", "pã" e "pão" dá <strong>3 buscas</strong>. Faça a busca esperar 300 ms sem nova tecla e o mesmo teste terminar em <strong>buscas: 1</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let buscas = $state(0);
+&lt;/script&gt;
+
+&lt;input oninput={() =&gt; (buscas += 1)} placeholder="buscar" /&gt;
+&lt;p&gt;buscas: {buscas}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let buscas = $state(0);
+  let relogio;
+
+  function aoDigitar() {
+    clearTimeout(relogio);
+    relogio = setTimeout(() =&gt; (buscas += 1), 300);
+  }
+&lt;/script&gt;
+
+&lt;input oninput={aoDigitar} placeholder="buscar" /&gt;
+&lt;p&gt;buscas: {buscas}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que o campo ficou sem <code>bind:value</code> na solução: quem lê o texto é <code>evento.target.value</code>. As duas formas funcionam, e a diferença aparece na seção 7 — usar <code>bind</code> junto com o temporizador cria um estado a mais para sincronizar, e estado a mais é oportunidade de erro.</p>
+
+<hr>
+
+<h2>4. O mesmo com <code>$effect</code> e a função de limpeza</h2>
+
+<p>Existe um jeito mais declarativo de fazer a mesma coisa: em vez de reagir ao evento, reagir à <em>mudança do estado</em>. O <code>$effect</code> roda quando o termo muda, agenda a busca, e devolve uma <strong>função de limpeza</strong> que o Svelte chama antes da próxima execução e quando o componente sai da tela.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let termo = $state('');
+  let buscado = $state('');
+  let buscas = $state(0);
+
+  $effect(() =&gt; {
+    const atual = termo;
+    const relogio = setTimeout(() =&gt; {
+      buscado = atual;
+      buscas += 1;
+    }, 300);
+    return () =&gt; clearTimeout(relogio);
+  });
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;p&gt;buscas: {buscas} · termo buscado: "{buscado}"&lt;/p&gt;</pre>
+
+<pre class="out">&lt;input value="" placeholder="buscar"/&gt; &lt;p&gt;buscas: 0 · termo buscado: ""&lt;/p&gt;</pre>
+
+<p>A função de limpeza é a peça que faz o debounce funcionar: cada execução do efeito cancela o temporizador da execução anterior. Sem ela, cada tecla deixa um temporizador vivo, e todos disparam — o mesmo problema do começo, só que agora escondido dentro de um efeito.</p>
+
+<div class="warning">
+<strong>O efeito precisa ler o que ele observa</strong>
+<p>O <code>$effect</code> só reage ao que ele lê <em>durante a execução</em>. A linha <code>const atual = termo</code> existe para isso: ela lê o estado e registra a dependência. Se você tirar essa linha e usar apenas o valor dentro do <code>setTimeout</code>, a leitura acontece fora do rastreamento e o efeito roda uma vez só, na montagem.</p>
+</div>
+
+<div class="trysvelte" data-goal="digitar:input=p;;digitar:input=pã;;digitar:input=pão;;depois:500;;out:buscas: 1">
+<p class="try-task"><strong>Missão:</strong> o efeito agenda um temporizador por tecla e o contador chega a <strong>4 buscas</strong> (uma da montagem e três das letras). Devolva a função de limpeza certa e faça o teste terminar em <strong>buscas: 1</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let termo = $state('');
+  let buscas = $state(0);
+
+  $effect(() =&gt; {
+    const atual = termo;
+    setTimeout(() =&gt; (buscas += 1), 300);
+  });
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;p&gt;buscas: {buscas}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let termo = $state('');
+  let buscas = $state(0);
+
+  $effect(() =&gt; {
+    const atual = termo;
+    const relogio = setTimeout(() =&gt; (buscas += 1), 300);
+    return () =&gt; clearTimeout(relogio);
+  });
+&lt;/script&gt;
+
+&lt;input bind:value={termo} placeholder="buscar" /&gt;
+&lt;p&gt;buscas: {buscas}&lt;/p&gt;</pre>
+</div>
+
+<p>Qual das duas formas usar? A do evento é mais fácil de explicar e de testar: o temporizador nasce e morre dentro de uma função. A do efeito acompanha qualquer mudança no estado, inclusive as que não vieram do teclado — um botão "limpar", um link que preenche a busca, um valor restaurado da memória. Se a busca pode mudar por vários caminhos, o efeito é o lugar certo.</p>
+
+<hr>
+
+<h2>5. A resposta antiga que chega depois</h2>
+
+<p>Existe um caso em que atrasar não é economia, é correção. Imagine que a busca de "p" seja lenta (o índice é grande) e a de "pão" seja rápida. Sem cancelamento, a resposta de "pão" chega primeiro e a de "p" chega depois e sobrescreve a tela com o resultado errado. A pessoa vê resultado de uma busca que ela já abandonou.</p>
+
+<p>O <code>clearTimeout</code> resolve o caso quando o atraso é seu. Quando a busca já saiu para a rede e não dá mais para cancelar o temporizador, a ferramenta é o <code>AbortController</code>: cada busca leva um controlador, e a nova busca chama <code>abort()</code> na anterior. O <code>fetch</code> abortado rejeita com um erro que você ignora de propósito, porque ele não é falha — é cancelamento.</p>
+
+<div class="trysvelte" data-goal="digitar:input=p;;digitar:input=pão;;depois:600;;out:resultado: &quot;pão&quot;">
+<p class="try-task"><strong>Missão:</strong> a busca curta demora 400 ms e a longa 100 ms, e a antiga sobrescreve a nova. Faça a última digitada vencer: o teste termina com <strong>resultado: "pão"</strong>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let resultado = $state('');
+
+  function aoDigitar(evento) {
+    const valor = evento.target.value;
+    const atraso = valor.length &lt;= 1 ? 400 : 100;
+    setTimeout(() =&gt; (resultado = valor), atraso);
+  }
+&lt;/script&gt;
+
+&lt;input oninput={aoDigitar} placeholder="buscar" /&gt;
+&lt;p&gt;resultado: "{resultado}"&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let resultado = $state('');
+  let relogio;
+
+  function aoDigitar(evento) {
+    const valor = evento.target.value;
+    const atraso = valor.length &lt;= 1 ? 400 : 100;
+    clearTimeout(relogio);
+    relogio = setTimeout(() =&gt; (resultado = valor), atraso);
+  }
+&lt;/script&gt;
+
+&lt;input oninput={aoDigitar} placeholder="buscar" /&gt;
+&lt;p&gt;resultado: "{resultado}"&lt;/p&gt;</pre>
+</div>
+
+<p>O mesmo problema, com rede, se chama <em>last write wins</em> — a última escrita vence. A solução é a mesma em espírito: dar identidade a cada pedido e ignorar a resposta que não corresponde ao pedido mais recente.</p>
+
+<hr>
+
+<h2>6. Debounce, throttle e nenhum dos dois</h2>
+
+<p>Debounce espera o silêncio. Throttle (acelerador) faz o contrário: garante que a função rode no máximo uma vez a cada intervalo, mesmo que os eventos continuem chegando. Os dois economizam trabalho, com efeitos diferentes na tela.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Padrão</th><th>Quando roda</th><th>Bom para</th></tr>
+<tr><td>Sem nada</td><td>a cada evento</td><td>busca local, filtro na memória</td></tr>
+<tr><td>Debounce</td><td>depois de um silêncio de N ms</td><td>busca com rede, validação de formulário</td></tr>
+<tr><td>Throttle</td><td>no máximo uma vez a cada N ms</td><td>rolagem, movimento do mouse, redimensionar</td></tr>
+<tr><td>Leading debounce</td><td>na primeira tecla, e ignora o resto por N ms</td><td>botão que não pode repetir o clique</td></tr>
+</table>
+</div>
+
+<p>O erro comum é usar debounce onde precisava de throttle. Numa rolagem, debounce só dispara quando a pessoa para de rolar — e uma barra de progresso que só atualiza no fim é quase inútil. Numa busca, throttle dispara no meio da palavra — o problema que você queria evitar. A pergunta que decide: você quer o valor <strong>final</strong> ou quer uma amostra <strong>regular</strong> durante o movimento?</p>
+
+<hr>
+
+<h2>7. Que atraso escolher</h2>
+
+<p>Não existe número certo, existe número justificável. Abaixo de 100 ms, o debounce quase não economiza nada: a pessoa não consegue digitar duas letras nesse intervalo. Acima de 500 ms, a pausa é sentida como lentidão. A faixa útil fica entre 200 e 400 ms, e 300 ms é o meio da faixa.</p>
+
+<p>O número depende do custo da busca. Uma consulta local de 2 ms não precisa de debounce nenhum; uma chamada de rede de 200 ms precisa, e o atraso pode ser maior porque a viagem já demora. O que não muda é a regra de ouro: <strong>o atraso é uma promessa</strong>. Se você escolhe 300 ms, a busca não pode demorar 800 — o debounce esconde a espera que você controla, não a que você não controla.</p>
+
+<p>Uma forma honesta de escolher é medir. Coloque um contador de buscas na tela, digite uma palavra de dez letras e veja quantas buscas aconteceram com e sem o debounce. Sem ele, dez; com ele, uma. A diferença é o trabalho que a sua máquina e a rede deixaram de fazer.</p>
+
+<p>Para sentir o efeito no projeto da Ana, o servidor de desenvolvimento mostra em qual porta ele subiu. Quando a 5173 já está ocupada por outro projeto, o Vite escolhe a próxima livre e avisa:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+Port 5173 is in use, trying another one...
+Port 5174 is in use, trying another one...
+
+  VITE v7.3.8  ready in 453 ms
+
+  ➜  Local:   http://localhost:5175/
+  ➜  Network: use --host to expose</pre>
+
+<p>Essas linhas são reais e é bom conhecê-las: se o endereço na tela não for o que você esperava, é porque outra coisa estava usando a porta. O servidor não quebrou; ele só mudou de casa.</p>
+
+<hr>
+
+<h2>8. Cuidados com o campo</h2>
+
+<p>Debounce mexe com o tempo, e o tempo mexe com a sensação de quem digita. Três cuidados evitam a maioria das reclamações. O primeiro: não recrie o campo. Se o elemento do <code>input</code> for recriado a cada mudança, o cursor volta para o começo e o foco se perde. Isso acontece quando o campo está dentro de um bloco condicional que muda de posição.</p>
+
+<p>O segundo: cuide do texto que a pessoa já digitou. Debounce atrasa a <em>busca</em>, nunca o <em>valor do campo</em>. O campo precisa mostrar cada letra na hora; o que espera é a consulta. Na solução da seção 3, isso está garantido porque o campo é o dono do próprio texto e o estado só recebe o resultado depois.</p>
+
+<p>O terceiro: acessibilidade. Quem usa leitor de tela precisa saber que a lista mudou. Uma região com <code>aria-live="polite"</code> anuncia o resultado novo; sem ela, a pessoa ouve o mesmo silêncio de antes. E o contador de resultados — "2 achados" — é a informação mais útil que a tela pode dar nesse momento.</p>
+
+<hr>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador e do renderizador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — ligar o campo a uma constante</strong>
+<p>O campo precisa escrever no estado, e uma constante não aceita escrita. O compilador percebe e recusa antes de qualquer execução.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  const termo = '';
+&lt;/script&gt;
+
+&lt;input bind:value={termo} /&gt;
+&lt;p&gt;{termo}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 7): Cannot bind to constant</pre>
+<p>"Cannot bind to constant" quer dizer "não posso ligar a uma constante". Troque <code>const</code> por <code>let</code> e acrescente <code>$state</code>, e o campo volta a funcionar: <code>let termo = $state('')</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — nome da função com minúscula errada</strong>
+<p>O JavaScript diferencia maiúsculas de minúsculas. <code>setTimeout</code> tem um "T" grande no meio, e escrever tudo minúsculo cria uma função que não existe.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let buscas = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{settimeout(() =&gt; buscas++, 300)}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: settimeout is not defined</pre>
+<p>"is not defined" é o recado de que o nome não existe naquele lugar. Aqui o erro aparece na renderização porque a chamada está dentro do HTML; no <code>&lt;script&gt;</code>, apareceria na hora do clique.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>window</code> no servidor</strong>
+<p><code>setTimeout</code> é global: existe no navegador e no Node. <code>window</code> é só do navegador, e usá-lo no corpo do script quebra a renderização do servidor.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let buscas = $state(0);
+  let relogio = window.setTimeout(() =&gt; (buscas += 1), 300);
+&lt;/script&gt;
+
+&lt;p&gt;buscas: {buscas}&lt;/p&gt;</pre>
+<pre class="out">Erro ao renderizar: window is not defined</pre>
+<p>"window is not defined" é a mensagem que mais aparece para quem esquece que o componente roda nos dois lugares. Para temporizadores, use <code>setTimeout</code> sem o prefixo; para o resto, mova a chamada para um <code>$effect</code>.</p>
+</div>
+
+<hr>
+
+<h2>10. O debounce que não cancela nada</h2>
+
+<p>Existe uma armadilha silenciosa: criar o temporizador dentro de uma função que é chamada de novo, mas guardar o identificador numa variável local. A cada chamada nasce uma variável nova, o <code>clearTimeout</code> sempre recebe <code>undefined</code> e nenhum temporizador é cancelado. O código parece certo e não faz nada.</p>
+
+<p>A correção é declarar o identificador <strong>fora</strong> da função, no corpo do <code>&lt;script&gt;</code>, para todas as chamadas enxergarem o mesmo. No exemplo da seção 3, <code>let relogio;</code> está lá em cima, e é por isso que funciona. Esse é o tipo de erro que o compilador não vê: ele não sabe que a sua intenção era compartilhar a variável.</p>
+
+<p>Outra armadilha é limpar o temporizador no lugar errado. Limpar na montagem do componente não cancela a busca da última tecla; limpar no evento, antes de criar o novo, cancela. A ordem — <code>clearTimeout</code> primeiro, <code>setTimeout</code> depois — não é estilo: é a diferença entre cancelar o anterior e cancelar o novo.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Escreva</th><th>Faz</th></tr>
+<tr><td><code>setTimeout(f, ms)</code></td><td>agenda <code>f</code> para daqui a <code>ms</code> milissegundos; devolve o identificador</td></tr>
+<tr><td><code>clearTimeout(id)</code></td><td>cancela o agendamento; sem efeito se ele já rodou</td></tr>
+<tr><td><code>$effect(() =&gt; { … return limpeza; })</code></td><td>roda quando as dependências mudam e chama a limpeza antes da próxima</td></tr>
+<tr><td><code>bind:value={termo}</code></td><td>liga o campo ao estado nos dois sentidos</td></tr>
+<tr><td><code>evento.target.value</code></td><td>o texto atual do campo que disparou o evento</td></tr>
+<tr><td><code>aria-live="polite"</code></td><td>anuncia a mudança para leitores de tela</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que aconteceu</th><th>Como resolver</th></tr>
+<tr><td>Cannot bind to constant</td><td><code>bind:value</code> numa constante</td><td><code>let termo = $state('')</code></td></tr>
+<tr><td>settimeout is not defined</td><td>nome com maiúscula errada</td><td><code>setTimeout</code></td></tr>
+<tr><td>window is not defined</td><td>API do navegador no servidor</td><td>usar a versão global ou mover para um efeito</td></tr>
+<tr><td>debounce não cancela nada</td><td>identificador declarado dentro da função</td><td>declarar fora, no topo do script</td></tr>
+<tr><td>resultado antigo aparece por último</td><td>respostas fora de ordem</td><td><code>clearTimeout</code> ou <code>AbortController</code></td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-DfzmLFUG.js  36.73 kB │ gzip: 14.22 kB
+✓ built in 1.75s</pre>
+
+<p>O arquivo com hash muda quando o conteúdo muda; o número de módulos continua o mesmo porque o componente continua sendo um. O debounce não deixa o site menor — ele deixa o site mais educado com a rede.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que o <code>clearTimeout(relogio)</code> faz antes de criar um novo temporizador?</p>
+<label><input type="radio" name="q1"> apaga o texto do campo</label>
+<label><input type="radio" name="q1"> reinicia o contador de buscas</label>
+<label><input type="radio" name="q1"> cancela o agendamento anterior, para ele não disparar</label>
+<label><input type="radio" name="q1"> muda a cor do campo</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Qual é a diferença entre debounce e throttle?</p>
+<label><input type="radio" name="q1"> debounce roda a cada evento; throttle espera o silêncio</label>
+<label><input type="radio" name="q1"> debounce espera o silêncio; throttle roda no máximo uma vez por intervalo</label>
+<label><input type="radio" name="q1"> os dois são iguais, só mudam o nome</label>
+<label><input type="radio" name="q1"> throttle só funciona com teclado</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Para que serve a função devolvida pelo <code>$effect</code>?</p>
+<label><input type="radio" name="q1"> para limpar o que a execução anterior criou, antes da próxima</label>
+<label><input type="radio" name="q1"> para desenhar a tela mais rápido</label>
+<label><input type="radio" name="q1"> para declarar as dependências do efeito</label>
+<label><input type="radio" name="q1"> para cancelar o evento de input</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">function aoDigitar(evento) {<br>&nbsp;&nbsp;termo = evento.target.value;<br>&nbsp;&nbsp;<input data-answer="clearTimeout">(relogio);<br>&nbsp;&nbsp;relogio = setTimeout(() =&gt; buscar(termo), 300);<br>}</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Sem debounce, cada tecla dispara uma busca — e a resposta antiga pode chegar por último.</li>
+  <li>Debounce espera um silêncio de N milissegundos antes de agir.</li>
+  <li>A receita: <code>clearTimeout(relogio)</code> e depois <code>relogio = setTimeout(…)</code>.</li>
+  <li>O identificador do temporizador fica fora da função, para todas as chamadas verem o mesmo.</li>
+  <li>Com <code>$effect</code>, a função de limpeza faz o papel do <code>clearTimeout</code>.</li>
+  <li>O efeito precisa ler o estado durante a execução para registrar a dependência.</li>
+  <li>Throttle é para amostras regulares; debounce é para o valor final.</li>
+  <li>Atrasos entre 200 e 400 ms; 300 ms é um meio de faixa defensável.</li>
+  <li>Debounce atrasa a busca, nunca o texto do campo.</li>
+  <li><code>AbortController</code> cancela a busca que já saiu para a rede.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

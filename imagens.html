@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imagens e Mídia — a foto que não quebra a tela | Guia Svelte</title>
+<meta name="description" content="Imagens em Svelte 5: src dinâmico, alt, width e height, loading lazy, srcset, picture, galeria que troca no clique e vídeo com legenda, com a saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Imagens e Mídia</span></h1>
+
+<p class="intro">A Ana quer trocar o quadro de preços por um catálogo com foto: cada produto com a imagem do pão, do bolo, da broa. O sobrinho avisou que imagem é a parte mais cara de uma página e que dá para fazer tudo errado com muita facilidade — foto gigante baixada no celular, tela pulando enquanto carrega, imagem sem descrição para quem não vê. Esta aula mostra o contrário: a foto que chega no tamanho certo, ocupa o lugar dela desde o primeiro instante e continua fazendo sentido quando não carrega.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como colocar uma imagem com <code>&lt;img&gt;</code> e por que ela não tem tag de fechamento.</li>
+  <li>O que o <code>alt</code> faz e quando ele pode ficar vazio.</li>
+  <li>Por que <code>width</code> e <code>height</code> evitam a tela pular.</li>
+  <li>Como adiar a imagem que está longe da tela com <code>loading="lazy"</code>.</li>
+  <li>Como oferecer arquivos de tamanhos diferentes com <code>srcset</code> e <code>picture</code>.</li>
+  <li>Como trocar a foto no clique, com o estado mandando no <code>src</code>.</li>
+  <li>Como mostrar um espaço reservado quando o produto não tem foto.</li>
+  <li>Como embutir vídeo com <code>controls</code>, <code>poster</code> e legenda.</li>
+  <li>Como recortar a imagem com <code>object-fit</code>.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a foto é a parte mais pesada da página</h2>
+
+<p>Um texto de mil palavras pesa alguns milhares de bytes. Uma foto de celular pesa milhões. Numa página com dez produtos, são dez fotos — e é por isso que imagem é o primeiro lugar onde uma página fica lenta. A Ana não precisa de foto de doze megapixels para mostrar um pão numa caixa de duzentos pixels; precisa da foto certa no tamanho certo.</p>
+
+<p>Existe uma segunda diferença em relação ao texto: a imagem tem <strong>dimensões</strong>. Enquanto ela não chega, o navegador não sabe que espaço reservar; quando chega, empurra tudo para baixo e a pessoa perde a linha em que estava lendo. Reservar o espaço antes é o que os atributos <code>width</code> e <code>height</code> fazem.</p>
+
+<p>E existe a terceira: a imagem pode não carregar. Rede ruim, arquivo renomeado, caminho errado. Quando isso acontece, o que sobra na tela é o <code>alt</code> — o texto que descreve a imagem. Numa padaria, é a diferença entre "foto do pão francês" e um retângulo cinza com um ícone quebrado.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No catálogo impresso</th><th>No componente</th></tr>
+<tr><td>A foto colada na página</td><td><code>&lt;img src="pao.jpg" alt="Pão francês"&gt;</code></td></tr>
+<tr><td>A legenda embaixo da foto</td><td><code>&lt;figcaption&gt;</code> dentro de <code>&lt;figure&gt;</code></td></tr>
+<tr><td>A moldura com tamanho fixo</td><td><code>width</code> e <code>height</code></td></tr>
+<tr><td>A foto que só é impressa na página 30</td><td><code>loading="lazy"</code></td></tr>
+<tr><td>A versão grande para a vitrine e a pequena para o folheto</td><td><code>srcset</code> e <code>picture</code></td></tr>
+<tr><td>O texto embaixo, para quem não vê a foto</td><td><code>alt</code></td></tr>
+</table>
+</div>
+
+<p>O vocabulário: <em>origem</em> é o endereço do arquivo; <em>texto alternativo</em> é o <code>alt</code>; <em>proporção</em> é a relação entre largura e altura; <em>recorte</em> é o que o CSS faz quando a imagem não cabe no espaço. Quatro palavras que resolvem a maior parte dos problemas de imagem.</p>
+
+<hr>
+
+<h2>2. Uma foto com legenda</h2>
+
+<p>A tag de imagem é uma das poucas do HTML que não têm fechamento. Ela carrega o endereço no <code>src</code> e a descrição no <code>alt</code>, e termina ali. Para a legenda, existe um par de tags feito para isso: <code>figure</code> em volta e <code>figcaption</code> embaixo.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let produto = { nome: 'Pão francês', preco: 0.9, foto: 'pao.jpg' };
+&lt;/script&gt;
+
+&lt;figure&gt;
+  &lt;img src={produto.foto} alt={produto.nome} width="240" height="160" /&gt;
+  &lt;figcaption&gt;{produto.nome} — R$ {produto.preco.toFixed(2)}&lt;/figcaption&gt;
+&lt;/figure&gt;</pre>
+
+<p>O HTML gerado mantém os atributos na ordem em que você escreveu e fecha a imagem sozinha:</p>
+
+<pre class="out">&lt;figure&gt;&lt;img src="pao.jpg" alt="Pão francês" width="240" height="160"/&gt; &lt;figcaption&gt;Pão francês — R$ 0.90&lt;/figcaption&gt;&lt;/figure&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;figure&gt;</dt><dd>a <strong>moldura</strong> da imagem com a legenda. Serve para o navegador e para leitores de tela entenderem que os dois andam juntos.</dd>
+  <dt>src={produto.foto}</dt><dd>o endereço vem do estado. Sem aspas em volta das chaves: o valor é JavaScript, e o resultado vira texto.</dd>
+  <dt>alt={produto.nome}</dt><dd>o <strong>texto alternativo</strong>. Aparece se a imagem falhar, é lido por leitores de tela e é o que o Google mostra no resultado de busca.</dd>
+  <dt>width="240" height="160"</dt><dd>o tamanho em pixels. O navegador reserva esse espaço antes de a imagem chegar e a página não pula.</dd>
+  <dt>&lt;figcaption&gt;</dt><dd>a <strong>legenda visível</strong>. Diferente do <code>alt</code>, ela aparece sempre — e não deve repetir palavra por palavra o que o <code>alt</code> diz.</dd>
+</dl>
+
+<p>O <code>alt</code> não é enfeite nem espaço para palavra-chave. Ele responde à pergunta "o que esta imagem mostra que importa aqui?". Numa foto de produto, o nome do produto basta. Numa foto decorativa — um arabesco no canto —, o certo é <code>alt=""</code>, vazio: o leitor de tela pula a imagem em vez de anunciar algo inútil.</p>
+
+<div class="warning">
+<strong>O compilador avisa quando falta o <code>alt</code></strong>
+<p>Se você esquecer, a compilação termina com <code>a11y_missing_attribute (linha 1): `&lt;img&gt;` element should have an alt attribute</code> e o endereço <code>https://svelte.dev/e/a11y_missing_attribute</code>. É aviso, não erro: a página aparece, e a imagem fica invisível para quem depende de leitor de tela. Trate como erro.</p>
+</div>
+
+<hr>
+
+<h2>3. O endereço que vem do estado</h2>
+
+<p>Como o <code>src</code> aceita uma expressão, trocar de foto é trocar de valor. Não existe nada de especial em imagem no Svelte: ela é um atributo como <code>class</code> ou <code>value</code>, e a regra é a mesma — quando o estado muda, o atributo muda.</p>
+
+<p>Um cuidado com o caminho do arquivo: se ele começa com barra, o endereço é absoluto a partir da raiz do site; se começa sem barra, é relativo à página. No projeto da Ana, as fotos moram em <code>public/</code>, que é servida na raiz. Por isso o caminho escrito no estado é <code>'pao.jpg'</code> e não <code>'../public/pao.jpg'</code>: quem organiza essa correspondência é o Vite, não você.</p>
+
+<p>O segundo cuidado é o texto alternativo quando a foto muda. Se o <code>alt</code> ficar fixo em "Pão francês" e a foto passar a ser do bolo, quem usa leitor de tela ouve a informação errada. O <code>alt</code> acompanha o estado, como no exemplo da seção 2, em que ele lê <code>produto.nome</code>.</p>
+
+<hr>
+
+<h2>4. Reservar o espaço: <code>width</code>, <code>height</code> e o carregamento</h2>
+
+<p>Os dois atributos de tamanho não são sobre o tamanho final na tela — o CSS manda nisso. Eles são sobre a <strong>proporção</strong>. Com largura e altura declaradas, o navegador calcula a proporção e reserva o espaço mesmo antes de baixar o arquivo. Sem eles, o texto embaixo é empurrado quando a foto chega.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;img
+  src="balcao.jpg"
+  alt="O balcão da padaria às sete da manhã"
+  width="800"
+  height="450"
+  loading="lazy"
+  decoding="async"
+/&gt;</pre>
+
+<pre class="out">&lt;img src="balcao.jpg" alt="O balcão da padaria às sete da manhã" width="800" height="450" loading="lazy" decoding="async"/&gt;</pre>
+
+<dl class="anatomy">
+  <dt>width="800" height="450"</dt><dd>a proporção 16:9. O CSS pode reduzir para 320 pixels de largura; a proporção reservada continua a mesma.</dd>
+  <dt>loading="lazy"</dt><dd>o navegador só baixa a imagem quando ela se aproxima da área visível. Economiza dados em página longa.</dd>
+  <dt>decoding="async"</dt><dd>permite decodificar a imagem fora do caminho crítico, sem segurar o desenho do texto ao redor.</dd>
+  <dt>alt="O balcão…"</dt><dd>descreve a cena, não o arquivo. "balcao.jpg" não ajuda ninguém.</dd>
+</dl>
+
+<p>Existe uma exceção importante para o <code>loading="lazy"</code>: a imagem principal, aquela que aparece no topo e é a primeira coisa que a pessoa vê. Adiar o download dela atrasa justamente o que deveria ser rápido. A recomendação prática é simples: <code>lazy</code> nas imagens que ficam abaixo da primeira tela, nada nas do topo.</p>
+
+<div class="trysvelte" data-goal="out:Pão francês — R$ 0.90">
+<p class="try-task"><strong>Missão:</strong> a legenda diz "foto do produto". Use os dados do objeto para a legenda mostrar <strong>Pão francês — R$ 0.90</strong>, com duas casas no preço.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let produto = { nome: 'Pão francês', preco: 0.9 };
+&lt;/script&gt;
+
+&lt;figure&gt;
+  &lt;img src="pao.jpg" alt={produto.nome} width="240" height="160" /&gt;
+  &lt;figcaption&gt;foto do produto&lt;/figcaption&gt;
+&lt;/figure&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let produto = { nome: 'Pão francês', preco: 0.9 };
+&lt;/script&gt;
+
+&lt;figure&gt;
+  &lt;img src="pao.jpg" alt={produto.nome} width="240" height="160" /&gt;
+  &lt;figcaption&gt;{produto.nome} — R$ {produto.preco.toFixed(2)}&lt;/figcaption&gt;
+&lt;/figure&gt;</pre>
+</div>
+
+<p>A legenda usa o mesmo objeto que o <code>alt</code>, e é isso que mantém as duas informações coerentes. Quando a legenda e o <code>alt</code> são escritos à mão em lugares diferentes, um dia eles discordam — e a pessoa com leitor de tela é a única que percebe.</p>
+
+<hr>
+
+<h2>5. A foto do tamanho da tela: <code>srcset</code> e <code>picture</code></h2>
+
+<p>Uma foto de 1600 pixels de largura é desperdício num celular de 400. O atributo <code>srcset</code> oferece várias versões e deixa o navegador escolher, com base no tamanho da tela e na qualidade da conexão. É a única forma de servir a versão pequena para quem precisa dela.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;picture&gt;
+  &lt;source media="(min-width: 800px)" srcset="balcao-grande.jpg" /&gt;
+  &lt;img src="balcao.jpg" alt="O balcão da padaria" width="400" height="225" /&gt;
+&lt;/picture&gt;</pre>
+
+<p>O <code>picture</code> com <code>source</code> é o irmão mais forte do <code>srcset</code>: ele troca o arquivo conforme uma condição de mídia, o que serve para <em>enquadramentos</em> diferentes, não só tamanhos.</p>
+
+<pre class="out">&lt;picture&gt;&lt;source media="(min-width: 800px)" srcset="balcao-grande.jpg"/&gt; &lt;img src="balcao.jpg" alt="O balcão da padaria" width="400" height="225"/&gt;&lt;/picture&gt;</pre>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Recurso</th><th>Para que serve</th><th>Troque quando</th></tr>
+<tr><td><code>srcset</code> + <code>sizes</code></td><td>mesma cena em tamanhos diferentes</td><td>a tela é pequena ou a conexão é lenta</td></tr>
+<tr><td><code>picture</code> + <code>source media</code></td><td>enquadramentos diferentes por largura</td><td>o layout muda de coluna para linha</td></tr>
+<tr><td><code>source type</code></td><td>formatos novos com alternativa antiga</td><td>o navegador não aceita <code>avif</code> ou <code>webp</code></td></tr>
+<tr><td><code>loading="lazy"</code></td><td>adiar o download</td><td>a imagem está abaixo da primeira tela</td></tr>
+</table>
+</div>
+
+<p>O custo desses atributos é de manutenção: cada versão nova do arquivo precisa ser gerada e nomeada. Numa padaria com dez produtos, vale a pena; num site com mil fotos, isso é trabalho de uma ferramenta de build, não de digitação.</p>
+
+<hr>
+
+<h2>6. A galeria: trocar a foto no clique</h2>
+
+<p>Com o estado mandando no <code>src</code>, uma galeria é uma lista de fotos mais um número que diz qual está aberta. O botão só muda esse número; o resto da tela se redesenha porque depende dele.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let fotos = $state([
+    { nome: 'Pão francês', arquivo: 'pao.jpg' },
+    { nome: 'Bolo de fubá', arquivo: 'bolo.jpg' }
+  ]);
+  let atual = $state(0);
+&lt;/script&gt;
+
+&lt;figure&gt;
+  &lt;img src={fotos[atual].arquivo} alt={fotos[atual].nome} width="240" height="160" /&gt;
+  &lt;figcaption&gt;{fotos[atual].nome}&lt;/figcaption&gt;
+&lt;/figure&gt;
+
+&lt;div&gt;
+  {#each fotos as foto, i}
+    &lt;button onclick={() =&gt; (atual = i)}&gt;{foto.nome}&lt;/button&gt;
+  {/each}
+&lt;/div&gt;</pre>
+
+<p>Na primeira renderização, o índice zero mostra a primeira foto e as duas opções:</p>
+
+<pre class="out">&lt;figure&gt;&lt;img src="pao.jpg" alt="Pão francês" width="240" height="160"/&gt; &lt;figcaption&gt;Pão francês&lt;/figcaption&gt;&lt;/figure&gt; &lt;div&gt;&lt;button&gt;Pão francês&lt;/button&gt;&lt;button&gt;Bolo de fubá&lt;/button&gt;&lt;/div&gt;</pre>
+
+<div class="trysvelte" data-goal="clique:.bolo;;outre:^Bolo de fubá">
+<p class="try-task"><strong>Missão:</strong> os botões não fazem nada. Faça o botão <strong>Bolo de fubá</strong> trocar a foto e o título para o bolo — o teste clica nele e espera ver "Bolo de fubá" no começo da tela.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let fotos = ['Pão francês', 'Bolo de fubá'];
+  let atual = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{fotos[atual]}&lt;/p&gt;
+&lt;button&gt;Pão francês&lt;/button&gt;
+&lt;button class="bolo"&gt;Bolo de fubá&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let fotos = ['Pão francês', 'Bolo de fubá'];
+  let atual = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;{fotos[atual]}&lt;/p&gt;
+&lt;button onclick={() =&gt; (atual = 0)}&gt;Pão francês&lt;/button&gt;
+&lt;button class="bolo" onclick={() =&gt; (atual = 1)}&gt;Bolo de fubá&lt;/button&gt;</pre>
+</div>
+
+<p>Quando a galeria cresce, vale guardar o índice em vez do objeto: o número é pequeno, é fácil de comparar e não fica velho quando a lista de fotos é trocada por outra. O objeto guardado apontaria para uma foto que talvez não exista mais.</p>
+
+<hr>
+
+<h2>7. Quando não há foto: o espaço reservado</h2>
+
+<p>Todo catálogo tem produto sem foto. O componente precisa decidir o que mostrar nesse caso, e a decisão é uma condição: se o endereço existe, desenhe a imagem; se não, desenhe um lugar reservado com o nome do produto. Sem essa condição, a tela mostra o ícone de imagem quebrada — que é pior do que um retângulo cinza com a palavra "sem foto".</p>
+
+<div class="trysvelte" data-goal="out:Pão francês sem foto Bolo de fubá">
+<p class="try-task"><strong>Missão:</strong> o bolo não tem foto e a tela fica com um espaço vazio. Mostre a palavra <strong>sem foto</strong> no lugar da imagem, mantendo os nomes dos produtos.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let fotos = $state([
+    { nome: 'Pão francês', arquivo: 'pao.jpg' },
+    { nome: 'Bolo de fubá', arquivo: '' }
+  ]);
+&lt;/script&gt;
+
+{#each fotos as foto}
+  &lt;img src={foto.arquivo} alt={foto.nome} width="120" height="80" /&gt;
+  &lt;p&gt;{foto.nome}&lt;/p&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let fotos = $state([
+    { nome: 'Pão francês', arquivo: 'pao.jpg' },
+    { nome: 'Bolo de fubá', arquivo: '' }
+  ]);
+&lt;/script&gt;
+
+{#each fotos as foto}
+  {#if foto.arquivo}
+    &lt;img src={foto.arquivo} alt={foto.nome} width="120" height="80" /&gt;
+  {:else}
+    &lt;p&gt;sem foto&lt;/p&gt;
+  {/if}
+  &lt;p&gt;{foto.nome}&lt;/p&gt;
+{/each}</pre>
+</div>
+
+<p>Há duas formas de reservar o espaço, e as duas são defensáveis. A primeira é desenhar um <code>div</code> com as mesmas medidas da imagem, para o layout não mudar. A segunda é usar uma imagem de verdade, um arquivo pequeno com o desenho de "sem foto", e deixar o <code>alt</code> explicar. A primeira é mais barata; a segunda é mais bonita. O que não vale é deixar o <code>src</code> vazio e esperar que o navegador resolva.</p>
+
+<hr>
+
+<h2>8. Vídeo e legenda</h2>
+
+<p>Vídeo é uma tag com filhos: <code>video</code> por fora, <code>source</code> para cada formato e <code>track</code> para as legendas. Os controles só aparecem se você pedir com <code>controls</code>, e o <code>poster</code> é a imagem que fica no lugar antes do play.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;video controls width="320" poster="capa.jpg"&gt;
+  &lt;source src="forno.mp4" type="video/mp4" /&gt;
+  &lt;track kind="captions" src="legendas.vtt" srclang="pt" label="Português" /&gt;
+&lt;/video&gt;</pre>
+
+<pre class="out">&lt;video controls="" width="320" poster="capa.jpg"&gt;&lt;source src="forno.mp4" type="video/mp4"/&gt; &lt;track kind="captions" src="legendas.vtt" srclang="pt" label="Português"/&gt;&lt;/video&gt;</pre>
+
+<p>Repare em dois detalhes do HTML gerado. O primeiro: <code>controls</code> virou um atributo vazio, porque é um atributo de liga e desliga — a presença já significa "sim". O segundo: o <code>source</code> tem <code>type</code>, e é isso que permite ao navegador escolher o formato que ele sabe tocar em vez de baixar o primeiro e desistir.</p>
+
+<p>A legenda não é opcional quando o vídeo tem fala. O <code>track</code> com <code>kind="captions"</code> aponta para um arquivo <code>.vtt</code> com o texto e os tempos; sem ele, quem não ouve fica de fora — e quem assiste no ônibus também. O <code>poster</code> também merece o mesmo cuidado do <code>alt</code>: é a única coisa que a pessoa vê antes de decidir dar play.</p>
+
+<hr>
+
+<h2>9. Recorte: <code>object-fit</code></h2>
+
+<p>Imagem de tamanhos diferentes numa grade de cartões iguais precisa de recorte. O CSS resolve com <code>object-fit</code>: <code>cover</code> preenche o espaço e corta o que sobra; <code>contain</code> mostra a imagem inteira e deixa faixas vazias; <code>fill</code> estica e distorce. Para foto de produto, <code>cover</code> costuma ser a escolha.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;img class="foto" src="pao.jpg" alt="Pão francês" width="240" height="160" /&gt;
+
+&lt;style&gt;
+  .foto {
+    object-fit: cover;
+    border-radius: 8px;
+  }
+&lt;/style&gt;</pre>
+
+<p>O compilador acrescenta o selo do componente no seletor, como em qualquer CSS escopado:</p>
+
+<pre class="out">.foto.svelte-1n46o8q {
+    object-fit: cover;
+    border-radius: 8px;
+  }</pre>
+
+<p>O <code>cover</code> sozinho não define de que lado corta. Quando importa mostrar o centro do pão e não a borda da bandeja, use <code>object-position</code> com dois valores, como <code>center</code> ou <code>50% 30%</code>. E lembre que o recorte depende da proporção declarada em <code>width</code> e <code>height</code>: mudar a proporção muda o que sobra na tela.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador e do renderizador desta versão, copiadas como estão.</p>
+
+<div class="cenario">
+<strong>Erro 1 — fechar uma tag que não tem fechamento</strong>
+<p><code>img</code>, <code>br</code>, <code>input</code> e <code>meta</code> são elementos vazios: não têm conteúdo e não aceitam tag de fechamento. Quem vem do XML escreve <code>&lt;/img&gt;</code> por hábito e leva o erro.</p>
+<pre class="file" data-file="src/App.svelte">&lt;img src="pao.jpg" alt="Pão francês"&gt;&lt;/img&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 37): Void elements cannot have children or closing tags</pre>
+<p>A tradução: "elementos vazios não podem ter filhos nem tag de fechamento". Apague o <code>&lt;/img&gt;</code> e o arquivo compila. Se você quiser a imagem dentro de algo, use <code>figure</code> por fora.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — tag com maiúscula vira componente</strong>
+<p>No Svelte, tag que começa com maiúscula é um <em>componente</em>, não uma tag do HTML. <code>&lt;Image&gt;</code> faz o compilador procurar um componente chamado <code>Image</code> — e não existe nenhum importado.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let foto = 'pao.jpg';
+&lt;/script&gt;
+
+&lt;Image src={foto} alt="Pão francês" /&gt;</pre>
+<pre class="out">Erro ao renderizar: Image is not defined</pre>
+<p>"Image is not defined" quer dizer "esse componente não foi importado". A correção é escrever a tag em minúsculas: <code>&lt;img&gt;</code>. A maiúscula é reservada para componentes seus, como <code>&lt;CartaoProduto /&gt;</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — variável que não existe no <code>src</code></strong>
+<p>O <code>src</code> aponta para <code>foto.nome</code>, mas a variável declarada no script é <code>nome</code>. O compilador não tem como adivinhar a intenção e a renderização para.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = 'Pão francês';
+&lt;/script&gt;
+
+&lt;img src={foto.nome} alt={nome} /&gt;</pre>
+<pre class="out">Erro ao renderizar: foto is not defined</pre>
+<p>"foto is not defined" é o recado de nome desconhecido. Para este caso, o certo é <code>src="pao.jpg"</code> ou declarar o objeto <code>foto</code> no script. Confira letra por letra: <code>foto</code>, <code>fotos</code> e <code>Foto</code> são três nomes diferentes.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Atributo</th><th>Para que serve</th><th>Valor comum</th></tr>
+<tr><td><code>src</code></td><td>o endereço do arquivo</td><td><code>'pao.jpg'</code></td></tr>
+<tr><td><code>alt</code></td><td>descrição para quem não vê</td><td>o nome do produto, ou <code>""</code> se é enfeite</td></tr>
+<tr><td><code>width</code> / <code>height</code></td><td>reservar a proporção antes do download</td><td><code>800</code> / <code>450</code></td></tr>
+<tr><td><code>loading</code></td><td>adiar o download do que está longe</td><td><code>"lazy"</code></td></tr>
+<tr><td><code>decoding</code></td><td>decodificar sem segurar a página</td><td><code>"async"</code></td></tr>
+<tr><td><code>srcset</code></td><td>oferecer versões de tamanhos diferentes</td><td><code>'pao-400.jpg 400w, pao-800.jpg 800w'</code></td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Mensagem</th><th>O que aconteceu</th><th>Como resolver</th></tr>
+<tr><td>Void elements cannot have children or closing tags</td><td><code>&lt;/img&gt;</code> no fim</td><td>apagar a tag de fechamento</td></tr>
+<tr><td>Image is not defined</td><td>tag com maiúscula sem import</td><td><code>&lt;img&gt;</code> em minúsculas</td></tr>
+<tr><td>foto is not defined</td><td>nome que não foi declarado</td><td>conferir o nome da variável</td></tr>
+<tr><td>a11y_missing_attribute</td><td>imagem sem <code>alt</code></td><td>escrever a descrição</td></tr>
+<tr><td>a página pula ao carregar</td><td>falta <code>width</code> e <code>height</code></td><td>declarar a proporção</td></tr>
+</table>
+</div>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 111 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-BwSSaIGw.js  42.33 kB │ gzip: 16.31 kB
+✓ built in 1.48s</pre>
+
+<p>O arquivo JavaScript não carrega as fotos: ele carrega os endereços. As imagens ficam em <code>public/</code> e são baixadas uma a uma, quando a página pede. É por isso que o tamanho do build continua pequeno mesmo com um catálogo cheio de fotos.</p>
+
+<p>Quando a Ana abre o servidor de desenvolvimento, ele avisa em qual porta subiu. Nesta máquina havia outros dois projetos rodando, e o Vite escolheu a próxima livre:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run dev
+
+> loja@0.0.1 dev
+> vite
+
+Port 5173 is in use, trying another one...
+Port 5174 is in use, trying another one...
+Port 5175 is in use, trying another one...
+
+  VITE v7.3.8  ready in 571 ms
+
+  ➜  Local:   http://localhost:5176/
+  ➜  Network: use --host to expose</pre>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Para que servem os atributos <code>width</code> e <code>height</code> numa imagem?</p>
+<label><input type="radio" name="q1"> para definir o tamanho final na tela, sempre</label>
+<label><input type="radio" name="q1"> para o navegador reservar o espaço e a página não pular</label>
+<label><input type="radio" name="q1"> para acelerar o download do arquivo</label>
+<label><input type="radio" name="q1"> para permitir que a imagem seja clicada</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Quando o <code>alt</code> pode ficar vazio?</p>
+<label><input type="radio" name="q1"> nunca, ele é obrigatório em toda imagem</label>
+<label><input type="radio" name="q1"> quando a imagem é grande</label>
+<label><input type="radio" name="q1"> quando a imagem é puramente decorativa</label>
+<label><input type="radio" name="q1"> quando o arquivo é <code>.png</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que <code>loading="lazy"</code> faz?</p>
+<label><input type="radio" name="q1"> adia o download até a imagem se aproximar da área visível</label>
+<label><input type="radio" name="q1"> comprime a imagem no servidor</label>
+<label><input type="radio" name="q1"> mostra a imagem em preto e branco até o clique</label>
+<label><input type="radio" name="q1"> impede que a imagem seja lida por leitores de tela</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;figure&gt;<br>&nbsp;&nbsp;&lt;img src="pao.jpg" <input data-answer="alt">="Pão francês" width="240" height="160" /&gt;<br>&nbsp;&nbsp;&lt;figcaption&gt;Pão francês&lt;/figcaption&gt;<br>&lt;/figure&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>&lt;img&gt;</code> é elemento vazio: tem <code>src</code> e <code>alt</code>, e não tem tag de fechamento.</li>
+  <li>O <code>alt</code> descreve a imagem; vazio é o certo para imagem decorativa.</li>
+  <li><code>width</code> e <code>height</code> reservam a proporção e evitam o pulo no carregamento.</li>
+  <li><code>loading="lazy"</code> adia o download — mas não na imagem principal do topo.</li>
+  <li><code>srcset</code> e <code>picture</code> oferecem versões diferentes para telas diferentes.</li>
+  <li>O <code>src</code> aceita expressão, então trocar de foto é trocar de estado.</li>
+  <li>Produto sem foto merece um lugar reservado com palavras, não um ícone quebrado.</li>
+  <li>Vídeo pede <code>controls</code>, <code>poster</code> e <code>track</code> para as legendas.</li>
+  <li><code>object-fit: cover</code> recorta sem distorcer; a proporção vem dos atributos.</li>
+  <li>Tag com maiúscula é componente, não HTML: <code>&lt;Image&gt;</code> não é <code>&lt;img&gt;</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
