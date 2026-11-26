@@ -404,11 +404,18 @@ https://svelte.dev/e/kit/invalid_export_location
 <p>Quando o trabalho está pronto, o comando de build gera a versão de produção. O SvelteKit compila cada <code>.svelte</code>, cada <code>load</code> e cada endpoint, e escreve tudo em <code>.svelte-kit/output</code>:</p>
 
 <pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
 vite v8.4.0 building ssr environment for production...
-✓ 111 modules transformed.
-.svelte-kit/output/client/_app/immutable/nodes/2.BbzvQ0UI.js        0.64 kB │ gzip:  0.33 kB
-.svelte-kit/output/client/_app/immutable/nodes/4.CwBTaD_m.js        0.70 kB │ gzip:  0.45 kB
-✓ built in 566ms
+transforming...
+✓ 159 modules transformed.
+rendering chunks...
+computing gzip size...
+.svelte-kit/output/server/.vite/manifest.json                             6.84 kB │ gzip:  0.80 kB
+.svelte-kit/output/server/entries/pages/painel/_page.server.js            0.27 kB │ gzip:  0.21 kB │ map:   0.45 kB
+✓ built in 460ms
 
 Run npm run preview to preview your production build locally.
 
