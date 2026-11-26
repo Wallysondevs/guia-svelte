@@ -113,7 +113,7 @@
   <dt>icons</dt><dd>a lista de imagens. O Chrome pede 192×192 e 512×512 em PNG; o <code>purpose: "maskable"</code> permite que o Android recorte o ícone em círculo sem cortar o desenho.</dd>
 </dl>
 
-<p>Repare no que o manifest <strong>não</strong> faz: ele não guarda arquivo nenhum para uso offline. Quem guarda é o service worker. O manifest só descreve o app para o sistema operacional. Essa divisão confunde muita gente no começo, e separá-la mentalmente economiza horas de depuração.</p>
+<p>Repare no que o manifest <strong>não</strong> faz: ele não guarda arquivo nenhum para uso offline. Quem guarda é o service worker. O manifest só descreve o app para o sistema operacional.</p>
 
 <div class="tip">
 <strong>Ícone maskable não é enfeite</strong>
@@ -128,7 +128,7 @@
 
 <p>Na instalação, você aproveita para buscar e guardar os arquivos que quer ter à mão. Se qualquer download falhar, a instalação inteira falha e o service worker antigo continua no comando — o que é uma proteção, não um defeito. Na ativação, você apaga os caches de versões anteriores. No dia a dia, cada requisição <code>GET</code> passa pelo evento <code>fetch</code>, e é ali que você escolhe entre rede e cache.</p>
 
-<p>O detalhe que mais causa erro: o service worker <strong>não</strong> tem <code>window</code>, <code>document</code> nem <code>localStorage</code>. Quem escreve <code>document.querySelector</code> ali recebe uma mensagem de erro no console do próprio service worker, numa aba separada das ferramentas da página. O objeto global dele é <code>self</code>.</p>
+<p>O service worker <strong>não</strong> tem <code>window</code>, <code>document</code> nem <code>localStorage</code>. Quem escreve <code>document.querySelector</code> ali recebe um erro no console do próprio worker, numa aba separada das ferramentas da página. O objeto global dele é <code>self</code>.</p>
 
 <h3>A anatomia do ciclo de vida</h3>
 
