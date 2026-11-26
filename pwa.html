@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PWA — o site que abre sem internet | Guia Svelte</title>
+<meta name="description" content="Manifest, service worker e cache no SvelteKit 3: como a padaria da Ana vira um app instalável, o que o build gera e os erros reais dessa transformação.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>SvelteKit · <span class="hl">PWA</span></h1>
+
+<p class="intro">A Ana descobriu que a cliente abre o site da padaria no celular, no ponto de ônibus, e fica olhando uma tela de erro quando a internet cai. O cardápio e o telefone poderiam continuar ali mesmo sem rede. Um <strong>PWA</strong> (aplicativo web progressivo) é isso: um site comum que ganha um cartão de identidade, um trabalhador de plantão e uma cópia dos arquivos dentro do aparelho. Nesta aula você monta as três peças no projeto SvelteKit da Ana — e vê o que o compilador e o terminal respondem de verdade.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que separa um site comum de um PWA instalável.</li>
+  <li>Como escrever o <code>manifest.webmanifest</code> e o que cada campo muda na tela inicial.</li>
+  <li>O que é um <strong>service worker</strong> e por que ele roda fora da página.</li>
+  <li>Como o SvelteKit 3 monta o service worker com <code>$app/manifest</code> e <code>$app/env</code>.</li>
+  <li>O que o <code>npm run build</code> gera e o tipo certo que o servidor precisa devolver.</li>
+  <li>As três estratégias de cache e o custo de cada uma.</li>
+  <li>Como uma versão nova chega sem prender a Ana no cache velho.</li>
+  <li>Por que ler <code>navigator.onLine</code> no servidor dá a resposta errada.</li>
+  <li>Os erros reais desta aula, com a mensagem copiada do terminal.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o cartaz que continua na parede</h2>
+
+<p>Todo domingo a Ana pendura um cartaz na porta com o cardápio do dia. Se a luz acabar, o cartaz continua lá: ele não depende de tomada nem de internet. O site dela faz o contrário. Cada visita precisa buscar o HTML no servidor, depois o CSS, depois o JavaScript, e se qualquer uma dessas buscas falhar a tela fica vazia. A cliente que chega sem sinal não vê nem o telefone da padaria.</p>
+
+<p>Um PWA resolve esse problema com uma ideia simples: na primeira visita, o site guarda uma cópia dos próprios arquivos dentro do navegador. Nas visitas seguintes, ele pode responder do bolso antes de tentar a rede. O cartaz passa a morar no aparelho. O ganho não é só a economia de dados — é a tela abrir em meio segundo e continuar útil no elevador, no metrô e no fundo da loja.</p>
+
+<p>O custo existe e precisa ser dito: você passa a ser responsável por <em>quando</em> a cópia é atualizada. Um service worker mal configurado serve a versão de ontem por semanas, e a Ana jura que mudou o preço. O resto desta aula é aprender a usar esse bolso sem perder a mão do que está lá dentro.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No PWA</th></tr>
+<tr><td>O cartaz na porta</td><td>O <code>manifest.webmanifest</code> com nome, cor e ícone</td></tr>
+<tr><td>O funcionário que fica depois do expediente</td><td>O <strong>service worker</strong>, que roda em segundo plano</td></tr>
+<tr><td>A caixa onde ficam as cópias dos cartazes</td><td>O <strong>Cache Storage</strong>, com um nome por versão</td></tr>
+<tr><td>A placa "abrimos sem luz"</td><td>A página que responde quando não há rede</td></tr>
+<tr><td>Trocar o cartaz velho pelo novo</td><td>O evento <code>activate</code>, que apaga o cache antigo</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>2. As três peças de um PWA</h2>
+
+<p>PWA não é uma biblioteca nem um comando mágico. É um conjunto de três peças que o navegador reconhece:</p>
+
+<p><strong>Primeira peça: manifest.</strong> Um arquivo JSON que diz o nome do app, a cor da barra, o ícone que vai para a tela inicial e o endereço em que ele começa. Sem manifest, o navegador oferece "adicionar à tela inicial" como um favor; com manifest, ele mostra o ícone certo e abre sem a barra de endereço.</p>
+
+<p><strong>Segunda peça: service worker.</strong> Um arquivo JavaScript que o navegador instala e mantém vivo mesmo quando a aba está fechada. Ele não tem acesso ao HTML, não tem <code>document</code> e não vê a tela. O que ele vê são eventos: instalou, ativou, chegou uma requisição. É ele que decide se a resposta vem da rede ou do cache.</p>
+
+<p><strong>Terceira peça: HTTPS.</strong> Service worker só funciona em endereço seguro, porque ele intercepta tudo o que o site pede. A exceção é <code>localhost</code>, que o navegador trata como seguro para você poder desenvolver. Publicar um PWA em HTTP é publicar um PWA que não instala — a lição de <a href="deploy.html">Build e Deploy</a> já cuida do endereço; aqui cuidamos dos arquivos.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Peça</th><th>Arquivo no projeto</th><th>Quem executa</th><th>Sem ela</th></tr>
+<tr><td>Manifest</td><td><code>static/manifest.webmanifest</code></td><td>O navegador, na hora de instalar</td><td>O app instala como atalho comum</td></tr>
+<tr><td>Service worker</td><td><code>src/service-worker.js</code></td><td>Uma thread separada da página</td><td>Sem cópia local: sempre depende da rede</td></tr>
+<tr><td>HTTPS</td><td>o endereço de publicação</td><td>O navegador</td><td>O service worker nem é registrado</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>3. O manifest: o cartão de identidade do app</h2>
+
+<p>O manifest é um arquivo de texto com extensão <code>.webmanifest</code>, guardado em <code>static/</code>. Tudo o que está em <code>static</code> é copiado para o build sem passar pelo compilador — é exatamente o que um arquivo de configuração precisa. Comece pelo da padaria:</p>
+
+
+<pre class="file" data-file="static/manifest.webmanifest">{
+  "name": "Padaria da Ana",
+  "short_name": "Padaria",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fffdf7",
+  "theme_color": "#2e7d32",
+  "icons": [
+    { "src": "/icons/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icone-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/mascara-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}</pre>
+
+<p>O nome do arquivo não é obrigatório, mas o navegador prefere <code>.webmanifest</code> ao <code>.json</code> porque o tipo MIME é registrado. O conteúdo, sim, tem regras: JSON válido, sem comentários, sem vírgula sobrando no último item. Um erro de vírgula faz o navegador ignorar o manifest inteiro e não avisar na tela.</p>
+
+<h3>A anatomia do manifest</h3>
+
+<dl class="anatomy">
+  <dt>name e short_name</dt><dd><code>name</code> é o nome comprido, que aparece na instalação; <code>short_name</code> é o que cabe embaixo do ícone na tela inicial. Se o segundo faltar, o navegador corta o primeiro.</dd>
+  <dt>start_url e scope</dt><dd><code>start_url</code> é a página que abre ao tocar no ícone; <code>scope</code> é o território que o app controla. Os dois começam com <code>/</code> porque o app é o site inteiro.</dd>
+  <dt>display</dt><dd>como a janela aparece. <code>standalone</code> esconde a barra de endereço e mantém os botões do sistema; <code>browser</code> é uma aba comum; <code>fullscreen</code> esconde tudo, e é raro querer isso.</dd>
+  <dt>theme_color e background_color</dt><dd>a primeira pinta a barra de status; a segunda é o fundo enquanto o app carrega. Use as mesmas cores do CSS, senão a abertura pisca em branco.</dd>
+  <dt>icons</dt><dd>a lista de imagens. O Chrome pede 192×192 e 512×512 em PNG; o <code>purpose: "maskable"</code> permite que o Android recorte o ícone em círculo sem cortar o desenho.</dd>
+</dl>
+
+<p>Repare no que o manifest <strong>não</strong> faz: ele não guarda arquivo nenhum para uso offline. Quem guarda é o service worker. O manifest só descreve o app para o sistema operacional. Essa divisão confunde muita gente no começo, e separá-la mentalmente economiza horas de depuração.</p>
+
+<div class="tip">
+<strong>Ícone maskable não é enfeite</strong>
+<p>No Android, o ícone é recortado em círculo, quadrado arredondado ou gota, conforme o fabricante. Um ícone <code>maskable</code> reserva uma margem de segurança de 10% em volta do desenho. Sem ela, o pão da Ana perde a casca no recorte — literalmente.</p>
+</div>
+
+<hr>
+
+<h2>4. O service worker: quem fica de plantão</h2>
+
+<p>O service worker é um arquivo JavaScript com um ciclo de vida próprio. Ele nasce quando o navegador registra o arquivo, passa por uma fase de instalação, espera a vez e só então assume o controle das páginas. Entender essa ordem é o que separa um cache que funciona de um cache que serve lixo.</p>
+
+<p>Na instalação, você aproveita para buscar e guardar os arquivos que quer ter à mão. Se qualquer download falhar, a instalação inteira falha e o service worker antigo continua no comando — o que é uma proteção, não um defeito. Na ativação, você apaga os caches de versões anteriores. No dia a dia, cada requisição <code>GET</code> passa pelo evento <code>fetch</code>, e é ali que você escolhe entre rede e cache.</p>
+
+<p>O detalhe que mais causa erro: o service worker <strong>não</strong> tem <code>window</code>, <code>document</code> nem <code>localStorage</code>. Quem escreve <code>document.querySelector</code> ali recebe uma mensagem de erro no console do próprio service worker, numa aba separada das ferramentas da página. O objeto global dele é <code>self</code>.</p>
+
+<h3>A anatomia do ciclo de vida</h3>
+
+<dl class="anatomy">
+  <dt>install</dt><dd>roda uma vez, quando o arquivo é novo ou mudou. É o lugar de abrir o cache e baixar a lista de arquivos. Se um <code>addAll</code> falhar, a instalação é descartada.</dd>
+  <dt>activate</dt><dd>roda quando o service worker novo assume. É o lugar de apagar caches com nome antigo — e de chamar <code>clients.claim()</code>, se você quiser controlar abas já abertas.</dd>
+  <dt>fetch</dt><dd>roda a cada requisição da página. Você pode responder do cache, buscar na rede, ou as duas coisas. Requisições <code>POST</code> não entram no Cache Storage.</dd>
+  <dt>self</dt><dd>o equivalente ao <code>window</code> dentro do worker. Os eventos são registrados nele, e não no <code>document</code>.</dd>
+</dl>
+
+<hr>
+
+<h2>5. O service worker no SvelteKit 3</h2>
+
+<p>O SvelteKit tem um lugar reservado para esse arquivo: <code>src/service-worker.js</code>. Se ele existir, o build compila e publica, e o próprio Kit registra o worker na primeira visita em produção. Você não escreve a chamada de <code>register</code>; só escreve o worker.</p>
+
+<p>A versão 3 do Kit aposentou o módulo <code>$service-worker</code>, que os tutoriais antigos mostram. No lugar dele existem dois módulos: <code>$app/manifest</code>, que entrega as listas de arquivos, e <code>$app/env</code>, que entrega a versão do build. O worker da padaria fica assim:</p>
+
+
+<pre class="file" data-file="src/service-worker.js">import { assets, immutable, prerendered } from '$app/manifest';
+import { version } from '$app/env';
+
+const CACHE = `padaria-${version}`;
+const ARQUIVOS = [
+  ...assets.map((arquivo) =&gt; arquivo.path),
+  ...immutable.map((arquivo) =&gt; arquivo.path),
+  ...prerendered.map((arquivo) =&gt; arquivo.path)
+];
+
+self.addEventListener('install', (evento) =&gt; {
+  evento.waitUntil(
+    caches.open(CACHE).then((cache) =&gt; cache.addAll(ARQUIVOS))
+  );
+});
+
+self.addEventListener('activate', (evento) =&gt; {
+  evento.waitUntil(
+    caches.keys().then((chaves) =&gt;
+      Promise.all(
+        chaves.filter((chave) =&gt; chave !== CACHE).map((chave) =&gt; caches.delete(chave))
+      )
+    )
+  );
+});
+
+self.addEventListener('fetch', (evento) =&gt; {
+  if (evento.request.method !== 'GET') return;
+
+  evento.respondWith(
+    caches.match(evento.request).then((guardado) =&gt; guardado ?? fetch(evento.request))
+  );
+});</pre>
+
+<p>Cada linha dessa tem uma razão. <code>assets</code> são os arquivos de <code>static/</code> — o manifest, os ícones, o <code>robots.txt</code>. <code>immutable</code> são os arquivos gerados pelo Vite, com hash no nome, que nunca mudam de conteúdo. <code>prerendered</code> são as páginas que o build já deixou prontas em HTML. Juntar as três listas é juntar tudo o que pode ser guardado sem medo de ficar velho.</p>
+
+<p>O nome do cache carrega <code>version</code>, que muda a cada build. É esse detalhe que faz a atualização funcionar: cache novo, nome novo; o antigo é apagado na ativação. Se você usar um nome fixo, como <code>"padaria"</code>, o cache de hoje e o de amanhã se misturam e o navegador pode continuar entregando o arquivo de ontem.</p>
+
+<div class="warning">
+<strong>O service worker não é compilado como componente</strong>
+<p>Ele é um arquivo JavaScript separado, com o seu próprio ambiente de build. Por isso as runas (<code>$state</code>, <code>$derived</code>) não existem ali, e as variáveis de ambiente do servidor também não. O que você pode importar é o que o Kit marca como seguro para worker.</p>
+</div>
+
+<hr>
+
+<h2>6. Ligando o manifest e conferindo o tipo</h2>
+
+<p>O manifest precisa ser anunciado no <code>app.html</code>, o molde de todas as páginas. O caminho usa <code>%sveltekit.assets%</code> para funcionar também quando o site é publicado numa subpasta:</p>
+
+
+<pre class="file" data-file="src/app.html">&lt;!doctype html&gt;
+&lt;html lang="pt-BR"&gt;
+  &lt;head&gt;
+    &lt;meta charset="utf-8" /&gt;
+    &lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;
+    &lt;link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" /&gt;
+    &lt;meta name="theme-color" content="#2e7d32" /&gt;
+    %sveltekit.head%
+  &lt;/head&gt;
+  &lt;body data-sveltekit-preload-data="hover"&gt;
+    &lt;div style="display: contents"&gt;%sveltekit.body%&lt;/div&gt;
+  &lt;/body&gt;
+&lt;/html&gt;</pre>
+
+<p>Depois do build, o teste é olhar o que o servidor devolve. O tipo do manifest precisa ser <code>application/manifest+json</code>; se vier <code>text/html</code>, o navegador tratou o arquivo como página e o manifest não vale. O service worker precisa vir como JavaScript:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ curl -sI localhost:4173/manifest.webmanifest
+HTTP/1.1 200 OK
+content-length: 334
+content-type: application/manifest+json
+
+ana@notebook:~/loja/kit$ curl -sI localhost:4173/service-worker.js
+HTTP/1.1 200 OK
+content-length: 1527
+content-type: text/javascript</pre>
+
+<p>A resposta tem <code>200</code> e o tipo certo nas duas linhas. Se o seu resultado for <code>404</code>, o arquivo está no lugar errado: <code>static/</code> é copiado, <code>src/</code> é compilado. Um manifest dentro de <code>src/</code> não vira arquivo público, e a página pede por algo que não existe.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Padaria da Ana Instalado! O cardápio abre sem internet.">
+<p class="try-task"><strong>Missão:</strong> o app já está instalado, então o botão de instalar não existe. Faça o contrário: comece sem instalar, mostre o botão e, depois do clique, troque o aviso por <em>Instalado! O cardápio abre sem internet.</em></p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let instalado = $state(true);
+&lt;/script&gt;
+
+&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+
+{#if instalado}
+  &lt;p&gt;Instalado! O cardápio abre sem internet.&lt;/p&gt;
+{:else}
+  &lt;p&gt;Instale o app para ver o cardápio offline.&lt;/p&gt;
+{/if}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let instalado = $state(false);
+&lt;/script&gt;
+
+&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+
+{#if instalado}
+  &lt;p&gt;Instalado! O cardápio abre sem internet.&lt;/p&gt;
+{:else}
+  &lt;button onclick={() =&gt; (instalado = true)}&gt;Instalar&lt;/button&gt;
+{/if}</pre>
+</div>
+
+<p>A caixa é o pedaço de interface que o manifest promete: ou o botão de instalar, ou o aviso de que o app já está no aparelho. O manifest não decide isso sozinho — o evento <code>beforeinstallprompt</code> avisa quando o navegador permite instalar, e o seu componente guarda a resposta. A lógica é a mesma de qualquer estado: um valor que muda e um trecho de tela que depende dele.</p>
+
+<hr>
+
+<h2>7. As três estratégias de cache</h2>
+
+<p>Guardar arquivo é fácil; decidir <em>qual</em> arquivo guardar e por quanto tempo é o trabalho de verdade. Existem três receitas que resolvem quase todos os casos, e elas têm custos diferentes:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Estratégia</th><th>Como funciona</th><th>Bom para</th><th>Custo</th></tr>
+<tr><td><strong>Cache primeiro</strong></td><td>procura no cache; se não achar, vai à rede e guarda</td><td>ícones, fontes, CSS e JS com hash</td><td>a atualização só aparece no próximo build</td></tr>
+<tr><td><strong>Rede primeiro</strong></td><td>tenta a rede; se falhar, usa o cache</td><td>HTML, cardápio, preço do dia</td><td>mais lento no 3G; offline depende do cache antigo</td></tr>
+<tr><td><strong>Rede e cache juntos</strong></td><td>responde do cache e atualiza em segundo plano</td><td>listas que mudam pouco</td><td>a tela mostra o dado velho por um instante</td></tr>
+</table>
+</div>
+
+<p>O erro clássico é usar cache primeiro para tudo. O HTML fica preso na primeira visita, e a Ana muda o preço no servidor sem entender por que o celular dela continua mostrando o valor antigo. A regra prática: <strong>arquivo com hash pode vir do cache para sempre; página e dado de servidor precisam passar pela rede primeiro</strong>.</p>
+
+<p>No worker da seção 5, o <code>fetch</code> faz cache primeiro para tudo. É um começo didático, não uma configuração de produção. Para o cardápio, o certo é tentar a rede e cair no cache quando ela falhar. A diferença cabe em poucas linhas, e o custo é o tempo de espera quando a rede está lenta.</p>
+
+<div class="trysvelte" data-goal="out:Padaria da Ana simular queda Pão quentinho às 6h.;;clique:button;;out:Padaria da Ana simular queda Você está offline. O cardápio continua. Pão quentinho às 6h.">
+<p class="try-task"><strong>Missão:</strong> a faixa de offline aparece mesmo com a internet funcionando. Deixe o aviso escondido no começo e mostre-o só depois de clicar em <em>simular queda</em> — e esconda de novo no segundo clique.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let offline = $state(false);
+&lt;/script&gt;
+
+&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;button onclick={() =&gt; (offline = !offline)}&gt;simular queda&lt;/button&gt;
+&lt;p&gt;Você está offline. O cardápio continua.&lt;/p&gt;
+&lt;p&gt;Pão quentinho às 6h.&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let offline = $state(false);
+&lt;/script&gt;
+
+&lt;h1&gt;Padaria da Ana&lt;/h1&gt;
+&lt;button onclick={() =&gt; (offline = !offline)}&gt;simular queda&lt;/button&gt;
+{#if offline}
+  &lt;p&gt;Você está offline. O cardápio continua.&lt;/p&gt;
+{/if}
+&lt;p&gt;Pão quentinho às 6h.&lt;/p&gt;</pre>
+</div>
+
+<p>A caixa simula o que o evento <code>offline</code> do navegador faria: muda um estado e a tela reage. No app de verdade, esse estado começaria falso e seria ligado por <code>window.addEventListener('offline', ...)</code> — mas com um cuidado: no servidor não existe janela, então esse ouvinte precisa ser registrado depois da montagem, e não no topo do arquivo.</p>
+
+<hr>
+
+<h2>8. A versão nova e o cache velho</h2>
+
+<p>Quando a Ana publica um preço novo, o build gera um <code>version</code> novo, o navegador baixa o service worker novo, e ele fica em espera. A versão em espera só assume quando todas as abas antigas fecham — ou quando o seu código chama <code>self.skipWaiting()</code>. Cada escolha tem um preço:</p>
+
+<p>Sem <code>skipWaiting</code>, a Ana vê o preço antigo até fechar todas as abas do site. Com <code>skipWaiting</code>, a próxima navegação já pega o código novo, mas uma aba aberta no meio de um formulário pode receber um JavaScript diferente do que ela carregou. A saída mais educada é avisar: "há uma versão nova, recarregue quando puder".</p>
+
+<p>O aviso se apoia em dois eventos. <code>registration.updatefound</code> dispara quando o navegador encontra um worker novo; <code>registration.waiting</code> é o worker que está pronto e esperando. O botão do aviso chama <code>waiting.postMessage({ tipo: 'assumir' })</code>, e o worker responde com <code>skipWaiting</code> e <code>clients.claim</code>. É comunicação entre duas threads, e por isso usa <code>postMessage</code>, não uma variável compartilhada.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;out:Cache: 2 de 3 · faltam 1 baixar um">
+<p class="try-task"><strong>Missão:</strong> baixe dois arquivos e o contador deve dizer <code>Cache: 2 de 3 · faltam 1</code>. Hoje o número que falta não acompanha o que já foi guardado.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let guardados = $state(0);
+  const total = 3;
+  let faltam = guardados;
+&lt;/script&gt;
+
+&lt;p&gt;Cache: {guardados} de {total} · faltam {faltam}&lt;/p&gt;
+&lt;button onclick={() =&gt; (guardados++)}&gt;baixar um&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let guardados = $state(0);
+  const total = 3;
+  let faltam = $derived(total - guardados);
+&lt;/script&gt;
+
+&lt;p&gt;Cache: {guardados} de {total} · faltam {faltam}&lt;/p&gt;
+&lt;button onclick={() =&gt; (guardados++)}&gt;baixar um&lt;/button&gt;</pre>
+</div>
+
+<p>O <code>$derived</code> é o mesmo mecanismo que você usaria para mostrar "faltam X arquivos" na tela de atualização: o valor não é guardado, ele é calculado a partir do que mudou. A regra vale para qualquer contador de progresso: guarde o que aconteceu, calcule o que falta.</p>
+
+<hr>
+
+<h2>9. O build de verdade: onde o worker aparece</h2>
+
+<p>O service worker não é um arquivo que você vê no editor e pronto. O Kit o compila numa etapa separada do build, e o terminal mostra essa etapa com um nome próprio. Rode na pasta do projeto:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run build 2>&1 | tail -12
+rendering chunks...
+computing gzip size...
+.svelte-kit/output/client/.vite/service-worker-manifest.json  0.15 kB │ gzip: 0.10 kB
+.svelte-kit/output/client/service-worker.js                   1.52 kB │ gzip: 0.64 kB
+
+✓ built in 29ms
+
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-auto
+Could not detect a supported production environment. See https://svelte.dev/docs/kit/adapters to learn how to configure your app for the platform of your choosing
+✔ done</pre>
+
+<p>Três linhas dessa saída importam. <code>Building service worker</code> é a etapa separada, que só existe porque o projeto tem o arquivo. <code>service-worker.js 1.52 kB</code> é o arquivo final, publicado na raiz do site. E <code>✓ built in 29ms</code> é o tempo do worker: rápido porque ele não carrega o Svelte inteiro, só as listas de caminhos.</p>
+
+<p>O padrão do SvelteKit é registrar o worker automaticamente em produção. Em desenvolvimento, o registro fica desligado para você não brigar com cache enquanto edita. Se precisar conferir o comportamento real, use <code>npm run preview</code>, que serve o build:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run preview
+
+> kit@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose</pre>
+
+<p>A porta <code>4173</code> é a do preview, diferente da <code>5173</code> do desenvolvimento. As duas podem ficar ligadas ao mesmo tempo, e é comum confundir. Para o PWA, use sempre a <code>4173</code>: o service worker só existe no build.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram de execuções reais neste projeto. A primeira é a que mais aparece em quem copiou um tutorial antigo; a segunda é uma armadilha silenciosa, que não gera erro nenhum; a terceira é um caminho de arquivo.</p>
+
+<div class="cenario">
+<strong>Erro 1 — o módulo <code>$service-worker</code> não existe mais</strong>
+<p>Este é o exemplo da documentação antiga, com <code>build</code>, <code>files</code> e <code>version</code>. No SvelteKit 3 o build recusa o import e diz exatamente o que usar no lugar.</p>
+<pre class="term">ana@notebook:~/loja/kit$ npm run build 2>&1 | grep -A14 "Building service worker"
+Building service worker
+vite v8.4.0 building serviceWorker environment for production...
+transforming...
+✓ 2 modules transformed.
+✗ Build failed in 21ms
+error during build:
+Build failed with 1 error:
+
+[plugin vite-plugin-sveltekit-guard]
+Error: Errored while resolving "$service-worker" in `this.resolve`.
+Caused by:
+  [plugin vite-plugin-sveltekit-setup]
+  SvelteKit error: module_removed_service_worker
+  `$service-worker` has been removed. Use `immutable`, `assets` and `prerendered` from `$app/manifest`, `version` from `$app/env`, and `resolve(...)` from `$app/paths` instead: https://svelte.dev/docs/kit/$service-worker
+  https://svelte.dev/e/kit/module_removed_service_worker</pre>
+<p>A mensagem é longa, mas o começo dela é o resumo: <code>module_removed_service_worker</code>. A tradução é "este módulo foi removido". Troque <code>build</code> por <code>immutable</code>, <code>files</code> por <code>assets</code>, e <code>version</code> por <code>import { version } from '$app/env'</code>. O <code>prerendered</code> entra se você tiver páginas pré-renderizadas.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>navigator.onLine</code> no servidor</strong>
+<p>Este não quebra o build. A página abre, o servidor renderiza, e o texto chega errado: o servidor não tem a menor ideia de como está a internet do celular da cliente.</p>
+<pre class="file" data-file="src/routes/estado/+page.svelte">&lt;script&gt;
+  let online = $state(navigator.onLine);
+&lt;/script&gt;
+
+&lt;p&gt;{online ? 'Você está online' : 'Você está offline'}&lt;/p&gt;</pre>
+<pre class="out">&lt;p&gt;Você está offline&lt;/p&gt;</pre>
+<p>O <code>navigator</code> existe no Node 22, mas o campo <code>onLine</code> não: ele vale <code>undefined</code>, que em condição vira falso. O resultado é a frase "Você está offline" numa página que está online. No navegador, a hidratação corrige o texto um instante depois — e a cliente vê a frase piscar. A correção é começar com <code>false</code> e ler o valor real dentro de um <code>$effect</code> ou de <code>onMount</code>, que só rodam no navegador.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — manifest no lugar errado</strong>
+<p>Se o arquivo ficar em <code>src/</code> em vez de <code>static/</code>, o build passa, mas o endereço devolve 404. O teste com <code>curl</code> mostra o código e o tipo:</p>
+<pre class="term">ana@notebook:~/loja/kit$ curl -sI localhost:4173/manifest.webmanifest.json
+HTTP/1.1 404 Not Found
+content-length: 4932
+content-type: text/html
+x-sveltekit-page: true</pre>
+<p>Repare no <code>content-type: text/html</code>: o servidor devolveu a página de erro do SvelteKit, não o manifest. O caminho público de um arquivo estático é o mesmo nome que ele tem dentro de <code>static/</code>. Mover o arquivo para a pasta certa resolve, sem mexer em configuração nenhuma.</p>
+</div>
+
+<hr>
+
+<h2>11. O aviso do <code>jsconfig.json</code></h2>
+
+<p>Tem um aviso que aparece no build e não impede nada, mas assusta. Ele nasce porque o service worker usa tipos de navegador que o checador de tipos do projeto não conhece, e o Kit pede para excluí-lo da checagem:</p>
+
+
+<pre class="term">ana@notebook:~/loja/kit$ npm run build 2>&1 | head -8
+
+> kit@0.0.1 build
+> vite build
+
+tsconfig_invalid
+Found issues while validating `jsconfig.json`:
+  - "src/service-worker" should be added to the "exclude" array
+https://svelte.dev/e/kit/tsconfig_invalid</pre>
+
+<p>A mensagem manda adicionar <code>"src/service-worker"</code> ao <code>exclude</code>, mas o valor que silencia o aviso neste projeto é com a extensão: <code>"src/service-worker.js"</code>. O arquivo <code>jsconfig.json</code> fica assim:</p>
+
+<pre class="file" data-file="jsconfig.json">{
+	"extends": "$app/tsconfig",
+	"compilerOptions": {
+		"strict": true
+	},
+	"include": ["src", "vite.config.ts"],
+	"exclude": ["src/service-worker.js"]
+}</pre>
+
+<p>Depois disso, <code>npm run build</code> segue sem a linha <code>tsconfig_invalid</code>. É um ajuste de ferramenta, não de comportamento: o worker já funcionava antes. Vale fazer para o terminal ficar limpo e para uma mensagem de verdade não se perder no meio do ruído.</p>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Arquivo</th><th>Para que serve</th><th>Obrigatório?</th></tr>
+<tr><td><code>static/manifest.webmanifest</code></td><td>nome, ícone, cor e modo de abertura do app</td><td>sim, para instalar</td></tr>
+<tr><td><code>src/service-worker.js</code></td><td>cache e respostas offline</td><td>sim, para funcionar sem rede</td></tr>
+<tr><td><code>src/app.html</code></td><td>liga o manifest e a cor do tema</td><td>sim, uma linha</td></tr>
+<tr><td><code>static/icons/*.png</code></td><td>ícones de 192, 512 e maskable</td><td>sim, para o ícone certo</td></tr>
+<tr><td><code>jsconfig.json</code></td><td>exclui o worker da checagem de tipos</td><td>não, só silencia aviso</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No SvelteKit 3</th><th>O que entrega</th></tr>
+<tr><td><code>import { assets } from '$app/manifest'</code></td><td>arquivos de <code>static/</code>, cada um com <code>.path</code></td></tr>
+<tr><td><code>import { immutable } from '$app/manifest'</code></td><td>arquivos gerados com hash no nome</td></tr>
+<tr><td><code>import { prerendered } from '$app/manifest'</code></td><td>páginas que o build deixou em HTML</td></tr>
+<tr><td><code>import { version } from '$app/env'</code></td><td>a versão do build, que muda a cada publicação</td></tr>
+<tr><td><code>self.skipWaiting()</code></td><td>o worker novo assume sem esperar as abas fecharem</td></tr>
+<tr><td><code>self.clients.claim()</code></td><td>o worker passa a controlar abas já abertas</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Para conferir</th><th>Onde olhar</th></tr>
+<tr><td>O manifest foi lido?</td><td>DevTools → Application → Manifest</td></tr>
+<tr><td>O worker está ativo?</td><td>DevTools → Application → Service Workers</td></tr>
+<tr><td>O que está no cache?</td><td>DevTools → Application → Cache Storage</td></tr>
+<tr><td>Funciona sem rede?</td><td>DevTools → Network → Offline, depois recarregar</td></tr>
+<tr><td>O tipo está certo?</td><td><code>curl -sI localhost:4173/manifest.webmanifest</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual arquivo descreve o nome, o ícone e a cor do app para o sistema operacional?</p>
+<label><input type="radio" name="q1"> o <code>src/service-worker.js</code></label>
+<label><input type="radio" name="q1"> o <code>src/app.html</code></label>
+<label><input type="radio" name="q1"> o <code>static/manifest.webmanifest</code></label>
+<label><input type="radio" name="q1"> o <code>vite.config.js</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Por que o service worker não pode usar <code>document.querySelector</code>?</p>
+<label><input type="radio" name="q1"> porque o SvelteKit remove essa função do build</label>
+<label><input type="radio" name="q1"> porque o cache não aceita seletores CSS</label>
+<label><input type="radio" name="q1"> porque o arquivo precisa ser TypeScript</label>
+<label><input type="radio" name="q1"> porque ele roda fora da página, numa thread sem DOM</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que faz o cache da versão antiga ser apagado?</p>
+<label><input type="radio" name="q1"> o evento <code>activate</code>, que compara os nomes e chama <code>caches.delete</code></label>
+<label><input type="radio" name="q1"> o <code>npm run build</code>, que limpa o navegador</label>
+<label><input type="radio" name="q1"> o manifest, quando muda o <code>theme_color</code></label>
+<label><input type="radio" name="q1"> o próprio navegador, sozinho, a cada 24 horas</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">const CACHE = `padaria-${<input data-answer="version">}`;<br><br>// o nome do cache muda a cada build,<br>// para o arquivo de ontem não se misturar com o de hoje</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>PWA é um site com <strong>manifest</strong>, <strong>service worker</strong> e HTTPS — três peças, não uma biblioteca.</li>
+  <li>O manifest fica em <code>static/</code>, porque ali nada é compilado; o tipo certo é <code>application/manifest+json</code>.</li>
+  <li>O service worker fica em <code>src/service-worker.js</code> e roda numa thread sem DOM.</li>
+  <li>No SvelteKit 3, <code>$service-worker</code> saiu: use <code>$app/manifest</code> para as listas e <code>$app/env</code> para a versão.</li>
+  <li>O build compila o worker numa etapa separada e publica <code>service-worker.js</code> na raiz.</li>
+  <li>Cache primeiro serve arquivo com hash; rede primeiro serve HTML e dado que muda.</li>
+  <li>O nome do cache leva a versão do build; o <code>activate</code> apaga os nomes antigos.</li>
+  <li><code>navigator.onLine</code> no servidor vale <code>undefined</code> e faz a página chegar dizendo "offline".</li>
+  <li>Sem HTTPS (fora do <code>localhost</code>) o navegador nem registra o worker.</li>
+  <li>Confira com o DevTools em Application e com <code>curl -sI</code> no manifest e no worker.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
