@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slots e Snippets — a moldura que aceita qualquer conteúdo | Guia Svelte</title>
+<meta name="description" content="Do slot do Svelte 4 ao snippet do Svelte 5: children, {@render}, parâmetros e conteúdo padrão, com a saída real do compilador e a mensagem do aviso de slot.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Slots e Snippets</span></h1>
+
+<p class="intro">A Ana comprou molduras de madeira para pendurar os avisos da padaria. A moldura é sempre a mesma; o papel de dentro muda: hoje é o preço do pão, amanhã é o horário de funcionamento, depois é o aviso de feriado. Ela não compra uma moldura nova para cada aviso — ela compra a moldura uma vez e troca o papel. No Svelte, a moldura é um componente e o papel é o <strong>conteúdo</strong> que quem usa o componente passa de fora. A ferramenta mudou de nome no Svelte 5: o antigo <code>&lt;slot&gt;</code> virou <code>{@render}</code> com snippets.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Como um componente recebe conteúdo de fora com a prop <code>children</code>.</li>
+  <li>O que é um <code>{#snippet}</code> e como desenhá-lo com <code>{@render}</code>.</li>
+  <li>Passar um snippet como parâmetro de outro snippet — o padrão de moldura.</li>
+  <li>Parâmetros com valor padrão dentro de um snippet.</li>
+  <li>Como era o <code>&lt;slot&gt;</code> no Svelte 4 e por que ele saiu de cena.</li>
+  <li>Mostrar um conteúdo alternativo quando o pai não manda nada.</li>
+  <li>Reaproveitar o mesmo snippet dentro de uma lista.</li>
+  <li>Os três avisos e erros reais desta aula, com o texto do compilador.</li>
+  <li>O que o terminal mostra ao procurar <code>{@render}</code> no projeto.</li>
+  <li>Quando vale um snippet e quando vale um componente separado.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a moldura que aceita qualquer foto</h2>
+
+<p>Um componente que aceita conteúdo funciona como a moldura da Ana: ele decide a forma — a borda, o espaçamento, o lugar na parede — e deixa o miolo por conta de quem usa. Quem escreve a moldura não faz ideia do que vai dentro; quem coloca o papel não precisa saber como a moldura foi feita.</p>
+
+<p>Isso resolve um problema real de composição. Sem essa ferramenta, toda vez que você quisesse um cartão com um título diferente, precisaria de uma prop para o título, outra para o subtítulo, outra para o botão, outra para o rodapé. Em pouco tempo o componente tem dez props e nenhuma flexibilidade: quem quiser um cartão com uma tabela dentro, não consegue.</p>
+
+<p>Com conteúdo de fora, o componente entrega o espaço e o pai entrega o que quiser — texto, imagem, lista, outro componente. A fronteira fica clara: o componente cuida do <em>onde</em>, o pai cuida do <em>quê</em>.</p>
+
+<p>No Svelte 4 esse espaço se chamava <code>&lt;slot&gt;</code>. No Svelte 5 ele virou uma prop chamada <code>children</code>, que carrega um <strong>snippet</strong> — um pedaço de marcação com nome, que se desenha com <code>{@render}</code>. A ideia é a mesma; a mecânica é mais explícita, e é isso que esta aula destrincha.</p>
+
+<hr>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No Svelte</th></tr>
+<tr><td>A moldura de madeira</td><td>o componente com <code>children</code></td></tr>
+<tr><td>O papel que vai dentro</td><td>o conteúdo entre as tags: <code>&lt;Moldura&gt;…&lt;/Moldura&gt;</code></td></tr>
+<tr><td>O lugar onde o papel encaixa</td><td><code>{@render children()}</code></td></tr>
+<tr><td>Uma etiqueta com nome, guardada na gaveta</td><td><code>{#snippet Nome()}…{/snippet}</code></td></tr>
+<tr><td>Pegar a etiqueta e colar na parede</td><td><code>{@render Nome()}</code></td></tr>
+<tr><td>O encaixe antigo, de madeira mais grossa</td><td><code>&lt;slot&gt;</code> — em desuso</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>3. <code>children</code>: o conteúdo que vem de fora</h2>
+
+<p>Quando alguém escreve conteúdo entre as tags de um componente, o Svelte entrega esse conteúdo numa prop especial chamada <code>children</code>. O componente declara a prop com <code>$props()</code> e desenha com <code>{@render}</code>:</p>
+
+<pre class="file" data-file="src/lib/Moldura.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;section class="moldura"&gt;
+  {@render children()}
+&lt;/section&gt;</pre>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Moldura from './Moldura.svelte';
+&lt;/script&gt;
+
+&lt;Moldura&gt;
+  &lt;p&gt;Pão francês&lt;/p&gt;
+&lt;/Moldura&gt;</pre>
+
+<p>Três observações sobre esse par de arquivos. Primeiro: <code>children</code> não é uma palavra reservada; é só o nome convencional da prop que recebe o conteúdo. Segundo: o conteúdo é desenhado <strong>onde</strong> você colocar o <code>{@render}</code> — antes, depois, dentro de um <code>{#if}</code>, tanto faz. Terceiro: o que está entre as tags é avaliado no <strong>contexto do pai</strong>, então pode usar as variáveis de quem escreveu, não as da moldura.</p>
+
+<p>Essa última parte é a que confunde. Se o pai tem uma variável <code>preco</code>, o conteúdo entre as tags enxerga <code>preco</code>. A moldura não enxerga — a não ser que receba por prop. É a mesma regra de escopo de qualquer função.</p>
+
+<hr>
+
+<h2>4. O mesmo padrão num arquivo só</h2>
+
+<p>Dá para fazer moldura sem criar componente: um snippet que recebe outro snippet faz o papel. O conteúdo entra como parâmetro e é desenhado no meio da marcação:</p>
+
+<pre class="file" data-file="src/App.svelte">{#snippet Moldura(conteudo)}
+  &lt;section class="moldura"&gt;{@render conteudo()}&lt;/section&gt;
+{/snippet}
+
+{#snippet Texto()}
+  &lt;p&gt;Pão francês&lt;/p&gt;
+{/snippet}
+
+{@render Moldura(Texto)}</pre>
+
+<pre class="out">&lt;section class="moldura"&gt;&lt;p&gt;Pão francês&lt;/p&gt;&lt;/section&gt;</pre>
+
+<dl class="anatomy">
+  <dt>{#snippet Moldura(conteudo)}</dt><dd>declara um pedaço de marcação com nome e parâmetros. Não desenha nada sozinho: só existe quando alguém chama.</dd>
+  <dt>{@render conteudo()}</dt><dd>desenha o snippet que chegou no parâmetro. A chamada com parênteses é obrigatória.</dd>
+  <dt>{@render Moldura(Texto)}</dt><dd>passa o snippet <code>Texto</code> como argumento. Quem desenha é a moldura, no lugar que ela escolheu.</dd>
+  <dt>a saída</dt><dd>a marcação da moldura por fora, a marcação do conteúdo por dentro — a mesma composição do componente com <code>children</code>.</dd>
+</dl>
+
+<p>Um efeito colateral útil: como o snippet é avaliado no contexto de quem desenha, a marcação de dentro acompanha o estado de fora. Se o pai tiver um contador e o texto do snippet usar esse contador, cada mudança redesenha o trecho — sem prop, sem evento, sem nada. A moldura não precisa saber que o conteúdo mudou; ela só chama a função de novo, e a função lê o estado atual.</p>
+
+<p>É exatamente o que a moldura-componente faz, com uma diferença de custo: o snippet vive no arquivo, então não tem script, não tem props, não tem estilo próprio. Para uma variação de layout, é o caminho mais barato.</p>
+
+<div class="trysvelte" data-goal="out:Pão francês">
+<p class="try-task"><strong>Missão:</strong> a moldura recebe o texto mas esqueceu de desenhá-lo, e a tela fica vazia. Faça o conteúdo aparecer dentro da moldura.</p>
+<pre class="script" data-file="App.svelte">{#snippet Moldura(conteudo)}
+  &lt;div class="moldura"&gt;&lt;/div&gt;
+{/snippet}
+
+{#snippet Texto()}
+  &lt;p&gt;Pão francês&lt;/p&gt;
+{/snippet}
+
+{@render Moldura(Texto)}</pre>
+<pre class="solucao" data-file="App.svelte">{#snippet Moldura(conteudo)}
+  &lt;div class="moldura"&gt;{@render conteudo()}&lt;/div&gt;
+{/snippet}
+
+{#snippet Texto()}
+  &lt;p&gt;Pão francês&lt;/p&gt;
+{/snippet}
+
+{@render Moldura(Texto)}</pre>
+</div>
+
+<p>A missão tem uma linha de solução e ensina o essencial: receber um snippet não é desenhá-lo. O parâmetro é uma função; sem a chamada, ela nunca roda.</p>
+
+<hr>
+
+<h2>5. <code>{#snippet}</code> com parâmetros</h2>
+
+<p>Um snippet aceita quantos parâmetros você quiser, e eles funcionam como parâmetros de função — inclusive com valor padrão:</p>
+
+<pre class="file" data-file="src/App.svelte">{#snippet Cartao(titulo, preco)}
+  &lt;div&gt;
+    &lt;h3&gt;{titulo}&lt;/h3&gt;
+    &lt;p&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+  &lt;/div&gt;
+{/snippet}
+
+{@render Cartao('Pão francês', 0.9)}</pre>
+
+<pre class="out">&lt;div&gt;&lt;h3&gt;Pão francês&lt;/h3&gt; &lt;p&gt;R$ 0.90&lt;/p&gt;&lt;/div&gt;</pre>
+
+<p>Repare que o snippet não é um componente: ele não tem estado próprio, não tem <code>$props</code>, não tem ciclo de vida. Ele é uma função que devolve marcação, avaliada no contexto de quem a chama. Isso é uma vantagem — menos cerimônia — e um limite: se precisar de estado isolado por instância, use um componente de verdade.</p>
+
+<div class="trysvelte" data-goal="out:Pão">
+<p class="try-task"><strong>Missão:</strong> o snippet espera um título e o <code>{@render}</code> não passa nada, então o parágrafo sai vazio. Passe <code>Pão</code> como argumento.</p>
+<pre class="script" data-file="App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+{@render Cartao()}</pre>
+<pre class="solucao" data-file="App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+{@render Cartao('Pão')}</pre>
+</div>
+
+<p>Um detalhe que economiza código: o snippet declara o valor padrão no parâmetro, como qualquer função. Sem argumento, o padrão entra em ação:</p>
+
+<pre class="file" data-file="src/App.svelte">{#snippet Cartao(titulo = 'sem título')}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+{@render Cartao()}</pre>
+
+<pre class="out">&lt;p&gt;sem título&lt;/p&gt;</pre>
+
+<p>Isso substitui, com menos código, o antigo conteúdo padrão do <code>&lt;slot&gt;</code> — aquele texto que aparecia quando ninguém passava nada.</p>
+
+<hr>
+
+<h2>6. <code>children</code> pode vir vazio</h2>
+
+<p>Um componente que desenha <code>children</code> sem conferir quebra quando ninguém passa conteúdo. A prop vem <code>undefined</code> e o <code>{@render}</code> tenta chamar algo que não é função. A solução é perguntar antes:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+{#if children}
+  {@render children()}
+{:else}
+  &lt;p&gt;sem conteúdo&lt;/p&gt;
+{/if}</pre>
+
+<pre class="out">&lt;p&gt;sem conteúdo&lt;/p&gt;</pre>
+
+<div class="warning">
+<strong>Um espaço em branco já é conteúdo</strong>
+<p>Se o pai escrever a tag do componente em três linhas com o conteúdo no meio, o <code>children</code> existe — mesmo que o conteúdo seja só espaço. Só quando não há <em>nada</em> entre as tags é que a prop fica <code>undefined</code>. Por isso um componente que depende de <code>children</code> precisa sempre do <code>{#if}</code>: a diferença entre "veio vazio" e "não veio" é invisível na leitura do arquivo e aparece na tela.</p>
+</div>
+
+<p>O <code>{#if children}</code> é a forma curta de perguntar "veio conteúdo?". Se o pai escrever qualquer coisa entre as tags, a prop existe e o ramo de cima roda. Note que um espaço em branco entre as tags já conta como conteúdo — motivo pelo qual o componente pode considerar que veio algo quando você jurava que não veio nada.</p>
+
+<hr>
+
+<h2>7. Vários conteúdos com nome</h2>
+
+<p>A moldura de um conteúdo só resolve metade dos casos. Um cartão de verdade tem título, corpo e às vezes um rodapé — três pedaços diferentes que quem usa o componente quer preencher à vontade. A solução continua sendo prop, só que agora a prop carrega um snippet com nome:</p>
+
+<pre class="file" data-file="src/lib/Cartao.svelte">&lt;script&gt;
+  let { titulo, children } = $props();
+&lt;/script&gt;
+
+&lt;h3&gt;{@render titulo()}&lt;/h3&gt;
+&lt;div&gt;{@render children()}&lt;/div&gt;</pre>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+&lt;/script&gt;
+
+&lt;Cartao&gt;
+  {#snippet titulo()}&lt;strong&gt;Pão francês&lt;/strong&gt;{/snippet}
+  &lt;p&gt;R$ 0,90&lt;/p&gt;
+&lt;/Cartao&gt;</pre>
+
+<p>Duas coisas aconteceram. A primeira: <code>{#snippet titulo()}</code> escrito <strong>dentro</strong> da tag do componente vira a prop <code>titulo</code> — não precisa de <code>topo={...}</code> nem de atributo especial. A segunda: o que ficou solto entre as tags continua sendo o <code>children</code>. Nomes diferentes, props diferentes.</p>
+
+<p>Num arquivo só, o mesmo efeito se escreve passando dois snippets como argumentos de uma moldura:</p>
+
+<pre class="file" data-file="src/App.svelte">{#snippet Cabecalho()}
+  &lt;strong&gt;Pão francês&lt;/strong&gt;
+{/snippet}
+
+{#snippet Corpo()}
+  &lt;p&gt;R$ 0,90&lt;/p&gt;
+{/snippet}
+
+{#snippet Cartao(titulo, corpo)}
+  &lt;h3&gt;{@render titulo()}&lt;/h3&gt;
+  &lt;div&gt;{@render corpo()}&lt;/div&gt;
+{/snippet}
+
+{@render Cartao(Cabecalho, Corpo)}</pre>
+
+<pre class="out">&lt;h3&gt;&lt;strong&gt;Pão francês&lt;/strong&gt;&lt;/h3&gt; &lt;div&gt;&lt;p&gt;R$ 0,90&lt;/p&gt;&lt;/div&gt;</pre>
+
+<p>Vale reparar na ordem: a moldura declara os parâmetros <strong>na ordem em que recebe</strong>. Inverter a chamada — <code>Cartao(Corpo, Cabecalho)</code> — não dá erro nenhum: o título vira o corpo e o corpo vira o título, e a tela mostra tudo trocado. Quando muitos parâmetros assim se parecem, é sinal de que o componente deveria receber um objeto com nomes em vez de posições.</p>
+
+<hr>
+
+<h2>8. <code>&lt;slot&gt;</code>: como era no Svelte 4</h2>
+
+<p>Quem lê tutoriais antigos encontra <code>&lt;slot /&gt;</code>. Ele funcionava bem, mas tinha problemas: não se sabia o que era um slot olhando o script, não dava para passar vários conteúdos com nome sem uma sintaxe própria, e o conteúdo não podia ser passado como valor. O Svelte 5 trocou tudo por snippets, que são funções — e funções se passam, se guardam e se desenham onde quiser.</p>
+
+<pre class="file">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;slot /&gt;</pre>
+
+<pre class="out">aviso: slot_element_deprecated (linha 5): Using `&lt;slot&gt;` to render parent content is deprecated. Use `{@render ...}` tags instead
+https://svelte.dev/e/slot_element_deprecated</pre>
+
+<p>A tradução: "usar <code>&lt;slot&gt;</code> para desenhar o conteúdo do pai está em desuso; use tags <code>{@render ...}</code>". O aviso aparece porque o componente usa runas (<code>$state</code>) — ou seja, está no modo novo. O código ainda compila e funciona, mas o aviso é o recado de que a tradução é para ontem.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Svelte 4</th><th>Svelte 5</th></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td><code>{@render children()}</code></td></tr>
+<tr><td><code>&lt;slot&gt;texto&lt;/slot&gt;</code></td><td><code>{#if children}{@render children()}{:else}texto{/if}</code></td></tr>
+<tr><td><code>&lt;slot name="topo" /&gt;</code></td><td>uma prop com o snippet: <code>{@render topo()}</code></td></tr>
+<tr><td><code>&lt;div slot="topo"&gt;…&lt;/div&gt;</code></td><td><code>{#snippet topo()}…{/snippet}</code> passado como prop</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>9. Reaproveitar um snippet numa lista</h2>
+
+<p>Como snippet é função, ele combina com <code>{#each}</code>: um snippet, vários itens. É o jeito mais direto de manter a marcação de um item num lugar só:</p>
+
+<div class="trysvelte" data-goal="out:Pão Bolo">
+<p class="try-task"><strong>Missão:</strong> a lista tem dois pedidos e só o primeiro aparece. Desenhe o cartão dentro do <code>{#each}</code> para os dois aparecerem.</p>
+<pre class="script" data-file="App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+&lt;script&gt;
+  let pedidos = ['Pão', 'Bolo'];
+&lt;/script&gt;
+
+{@render Cartao(pedidos[0])}
+{#each pedidos as pedido}
+  &lt;span&gt;&lt;/span&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+&lt;script&gt;
+  let pedidos = ['Pão', 'Bolo'];
+&lt;/script&gt;
+
+{#each pedidos as pedido}
+  {@render Cartao(pedido)}
+{/each}</pre>
+</div>
+
+<p>A diferença é de posição: o <code>{@render}</code> precisa estar <strong>dentro</strong> do bloco que repete. Fora dele, roda uma vez; dentro, roda uma vez por item. Vale para <code>{#each}</code>, <code>{#if}</code> e <code>{#await}</code> — em todos, o que está dentro roda quantas vezes o bloco rodar.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são reais e vêm da execução: uma da compilação e duas da renderização. O aviso do <code>&lt;slot&gt;</code> ficou na seção 8, porque é aviso e não erro.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>{@render}</code> sem chamada</strong>
+<p>O <code>{@render}</code> só aceita <strong>chamada de função</strong>. Passar o snippet pelo nome, sem parênteses, é recusado:</p>
+<pre class="file" data-file="src/App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+{@render Cartao}</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 9): `{@render ...}` tags can only contain call expressions</pre>
+<p>"As tags <code>{@render ...}</code> só podem conter expressões de chamada." A correção é acrescentar os parênteses: <code>{@render Cartao()}</code>. E repare na posição: linha 5, coluna 9 — o começo exato do bloco.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — desenhar <code>children</code> quando ele não veio</strong>
+<p>Este é o erro mais comum de quem está começando com <code>children</code>. O componente compila e quebra na hora de desenhar, se o pai não passar conteúdo:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let { children } = $props();
+&lt;/script&gt;
+
+&lt;section&gt;
+  {@render children()}
+&lt;/section&gt;</pre>
+<pre class="out">Erro ao renderizar: children is not a function</pre>
+<p>"<code>children</code> não é uma função." Quando ninguém escreve nada entre as tags, a prop não existe e vale <code>undefined</code>. A correção é o <code>{#if children}</code> da seção 6, com um <code>{:else}</code> que diga o que fazer sem conteúdo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — tratar o snippet como objeto</strong>
+<p>Snippet é função, não é um objeto com pedaços dentro. Tentar pegar "o título do cartão" com ponto quebra na hora de desenhar:</p>
+<pre class="file" data-file="src/App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+{@render Cartao.titulo()}</pre>
+<pre class="out">Erro ao renderizar: Cartao.titulo is not a function</pre>
+<p>"<code>Cartao.titulo</code> não é uma função." O snippet inteiro é <code>Cartao</code>; o parâmetro <code>titulo</code> só existe <em>dentro</em> dele, no momento em que ele roda. Para passar o título, o caminho é o argumento: <code>{@render Cartao('Pão')}</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Snippet × componente: qual escolher</h2>
+
+<p>Os dois desenham marcação, e a escolha entre eles não é de gosto: é de fronteira.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th></th><th>Snippet</th><th>Componente</th></tr>
+<tr><td>Onde vive</td><td>dentro de um arquivo <code>.svelte</code></td><td>num arquivo próprio</td></tr>
+<tr><td>Tem estado próprio</td><td>não: usa o estado de quem o desenha</td><td>sim, um por instância</td></tr>
+<tr><td>Tem <code>$props</code></td><td>não: recebe parâmetros comuns</td><td>sim</td></tr>
+<tr><td>Tem estilo próprio</td><td>não: usa o estilo do arquivo</td><td>sim, com escopo</td></tr>
+<tr><td>Pode ser passado como valor</td><td>sim, é uma função</td><td>sim, é um valor importado</td></tr>
+<tr><td>Bom para</td><td>variações de layout, itens de lista, conteúdo de fora</td><td>peças independentes, reutilizadas em telas diferentes</td></tr>
+</table>
+</div>
+
+<p>Tem também a questão de teste. Um componente separado pode ser montado sozinho num teste, com props de mentira, e conferido sem a tela toda. Um snippet não: ele só existe dentro do arquivo que o declara, então o teste precisa montar a tela inteira. Se o pedaço tem regra de negócio, isso pesa a favor do componente; se é só marcação, o snippet é mais barato dos dois lados.</p>
+
+<p>Uma regra que funciona na prática: se o pedaço precisa de estado que sobrevive a mudanças de tela, ou se aparece em mais de um arquivo, vire componente. Se é uma variação de marcação dentro da mesma tela, fique no snippet.</p>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintaxe</th><th>O que faz</th></tr>
+<tr><td><code>{#snippet Nome(a, b)}…{/snippet}</code></td><td>declara um pedaço de marcação com parâmetros</td></tr>
+<tr><td><code>{@render Nome(x, y)}</code></td><td>desenha o snippet com argumentos</td></tr>
+<tr><td><code>let { children } = $props()</code></td><td>recebe o conteúdo escrito entre as tags</td></tr>
+<tr><td><code>{@render children()}</code></td><td>desenha esse conteúdo no lugar escolhido</td></tr>
+<tr><td><code>{:else}</code> no <code>{#if children}</code></td><td>conteúdo alternativo quando o pai não manda nada</td></tr>
+<tr><td><code>&lt;slot /&gt;</code></td><td>forma antiga, em desuso</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td><code>{@render ...} tags can only contain call expressions</code></td><td>faltaram os parênteses na chamada</td></tr>
+<tr><td><code>children is not a function</code></td><td>o pai não passou conteúdo e falta o <code>{#if}</code></td></tr>
+<tr><td>o conteúdo aparece no lugar errado</td><td>o <code>{@render}</code> está fora do bloco que repete</td></tr>
+<tr><td>aviso <code>slot_element_deprecated</code></td><td>ainda usa <code>&lt;slot&gt;</code> com runas</td></tr>
+</table>
+</div>
+
+<p>No projeto da Ana, a moldura é um componente e o terminal mostra onde o conteúdo entra:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "@render" src
+src/lib/Moldura.svelte:6:  {@render children()}</pre>
+
+<p>Uma linha, uma responsabilidade: é ali que o papel entra na moldura. E o build confirma que o componente novo entrou no pacote:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 116 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-B3FLhpK9.js  42.58 kB │ gzip: 16.34 kB
+✓ built in 2.71s</pre>
+
+<p>Eram 115 módulos antes da moldura; agora são 116. O tamanho quase não mudou — 42,58 kB contra 42,26 kB —, porque uma moldura com um <code>{@render}</code> é pouca coisa. É esse o ponto da aula: compor conteúdo custa barato quando a ferramenta é a certa.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Qual prop recebe o conteúdo escrito entre as tags de um componente no Svelte 5?</p>
+<label><input type="radio" name="q1"> <code>slot</code></label>
+<label><input type="radio" name="q1"> <code>children</code></label>
+<label><input type="radio" name="q1"> <code>content</code></label>
+<label><input type="radio" name="q1"> <code>$slot</code></label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. O que <code>{@render Cartao}</code> faz, sem parênteses?</p>
+<label><input type="radio" name="q1"> nada: o compilador recusa, porque só aceita chamada de função</label>
+<label><input type="radio" name="q1"> desenha o snippet normalmente</label>
+<label><input type="radio" name="q1"> desenha o snippet sem parâmetros</label>
+<label><input type="radio" name="q1"> mostra o texto "Cartao" na tela</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">3. Um snippet pode ter estado próprio?</p>
+<label><input type="radio" name="q1"> sim, cada <code>{@render}</code> cria um estado</label>
+<label><input type="radio" name="q1"> sim, desde que use <code>$state</code> dentro dele</label>
+<label><input type="radio" name="q1"> não: ele usa o estado de quem o desenha; para estado isolado, use um componente</label>
+<label><input type="radio" name="q1"> não, e por isso snippets não aceitam parâmetros</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;let { <input data-answer="children"> } = $props();<br>&lt;/script&gt;<br><br>&lt;section&gt;<br>&nbsp;&nbsp;{<input data-answer="@render children()">}<br>&lt;/section&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Um componente recebe conteúdo de fora pela prop <code>children</code>, declarada com <code>$props()</code>.</li>
+  <li>O conteúdo é desenhado com <code>{@render children()}</code>, no lugar que o componente escolher.</li>
+  <li><code>{#snippet Nome()}</code> declara um pedaço de marcação com nome; <code>{@render Nome()}</code> desenha.</li>
+  <li>A chamada com parênteses é obrigatória: <code>{@render Cartao}</code> não compila.</li>
+  <li>Snippets aceitam parâmetros comuns, inclusive com valor padrão.</li>
+  <li>Um snippet pode receber outro snippet como parâmetro — é assim que se faz moldura sem criar componente.</li>
+  <li><code>children</code> vale <code>undefined</code> quando o pai não manda nada; use <code>{#if}</code> e <code>{:else}</code>.</li>
+  <li><code>&lt;slot&gt;</code> é a forma antiga; com runas, o compilador avisa <code>slot_element_deprecated</code>.</li>
+  <li>Snippet não tem estado próprio: ele vive no estado de quem desenha. Estado isolado pede componente.</li>
+  <li>O que está dentro de <code>{#each}</code> roda por item; fora, roda uma vez.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

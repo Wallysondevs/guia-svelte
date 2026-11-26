@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estado Compartilhado — o bloco module do arquivo .svelte | Guia Svelte</title>
+<meta name="description" content="O bloco script module no Svelte 5: estado compartilhado entre instâncias, $state e $derived no módulo, o que pode e o que não pode ficar lá, com saída real do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Estado Compartilhado</span></h1>
+
+<p class="intro">A Ana comprou um caderno novo para a padaria e escreveu na capa: "abre às seis". O caderno fica na prateleira, e todo funcionário que precisa do horário olha a capa — não existe uma capa por pessoa. O arquivo <code>.svelte</code> tem um lugar igual a essa capa: o bloco <code>&lt;script module&gt;</code>, que roda <strong>uma vez</strong> para o arquivo inteiro, enquanto o <code>&lt;script&gt;</code> comum roda uma vez por componente na tela. Esta aula é sobre essa diferença — e sobre o estado que vive na capa do caderno em vez de viver na mão de cada um.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é o bloco <code>&lt;script module&gt;</code> e quando ele roda.</li>
+  <li>A diferença entre o script de módulo e o script da instância.</li>
+  <li>Exportar constantes e funções do módulo para outros arquivos.</li>
+  <li>Guardar estado no módulo com <code>$state</code> — e o que muda com isso.</li>
+  <li>Usar <code>$derived</code> no módulo para uma conta compartilhada.</li>
+  <li>Por que todas as instâncias do arquivo leem o mesmo valor.</li>
+  <li>O que <strong>não</strong> pode morar no módulo: <code>$props</code>, contexto e DOM.</li>
+  <li>Como o módulo aparece no terminal e no build do Vite.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>Quando o estado de módulo é a resposta certa e quando é armadilha.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o caderno do arquivo, não da pessoa</h2>
+
+<p>Um componente pode aparecer várias vezes na tela. O placar da vitrine, o cartão de cada produto, o aviso de cada pedido: todos são o mesmo arquivo montado várias vezes. Cada montagem é uma <strong>instância</strong>, com as suas próprias variáveis. Se o cartão guarda "quantas vezes eu fui clicado", cada cartão tem o seu número — e isso quase sempre é o que você quer.</p>
+
+<p>Mas às vezes o número não é do cartão: é do arquivo. "Quantos cartões existem", "qual é o horário de abertura da loja", "quantas visitas o site recebeu nesta sessão". Esse tipo de valor não pertence a nenhuma instância; pertence ao arquivo. No Svelte, o lugar dele é o bloco <code>&lt;script module&gt;</code>.</p>
+
+<p>A diferença é a mesma entre o caderno na prateleira e a agenda no bolso. A agenda é sua: cada funcionário tem a sua, e escrever nela não muda a do colega. O caderno na prateleira é de todos: quem escreve na capa muda o que todo mundo lê. O bloco de módulo é a prateleira; o script comum é o bolso.</p>
+
+<p>E existe uma consequência que surpreende no começo: o código do módulo roda <em>antes</em> de qualquer componente existir, uma vez só. Se você colocar um <code>console.log</code> lá, ele aparece uma vez, mesmo que a tela mostre dez cartões. No script comum, apareceria dez vezes.</p>
+
+<hr>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na padaria</th><th>No arquivo <code>.svelte</code></th></tr>
+<tr><td>A capa do caderno na prateleira</td><td><code>&lt;script module&gt;</code></td></tr>
+<tr><td>A agenda no bolso de cada funcionário</td><td><code>&lt;script&gt;</code></td></tr>
+<tr><td>O horário escrito na capa, igual para todos</td><td>uma constante do módulo</td></tr>
+<tr><td>O número de pedidos do dia, que todos veem</td><td><code>let pedidos = $state(0)</code> no módulo</td></tr>
+<tr><td>A anotação pessoal de cada um</td><td><code>let rascunho = $state('')</code> na instância</td></tr>
+<tr><td>Uma instrução afixada na parede</td><td>uma função exportada pelo módulo</td></tr>
+</table>
+</div>
+
+<p>Repare que o mesmo arquivo pode ter os dois blocos, e frequentemente tem: o módulo guarda o que é do arquivo, o script comum guarda o que é da instância. A ordem no arquivo não importa para o JavaScript — os dois convivem no mesmo módulo compilado —, mas o guia escreve o bloco de módulo primeiro, porque é ele que roda primeiro.</p>
+
+<hr>
+
+<h2>3. O bloco <code>&lt;script module&gt;</code></h2>
+
+<p>Para criar um bloco de módulo, basta escrever <code>module</code> depois da palavra <code>script</code>:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Cliques: 0&lt;/p&gt; &lt;button&gt;+1&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;script module&gt;</dt><dd>o bloco que roda <strong>uma vez por arquivo</strong>, antes de qualquer instância. Não é o mesmo que <code>&lt;script&gt;</code>: os dois podem existir no mesmo arquivo.</dd>
+  <dt>let cliques</dt><dd>a variável vive no módulo compilado, não na instância. Todas as instâncias do componente leem a mesma.</dd>
+  <dt>$state(0)</dt><dd>a runa continua valendo aqui: o valor é reativo e a tela acompanha quando ele muda.</dd>
+  <dt>{cliques}</dt><dd>no HTML, o nome do módulo é usado como qualquer outro. Não precisa de prop nem de import.</dd>
+</dl>
+
+<p>O ponto que mais confunde: <code>$state</code> no módulo funciona, mas o valor <strong>não é recriado</strong> a cada instância. Se a tela mostrar três componentes deste arquivo e alguém clicar em um, os três mostram <code>1</code>. É estado compartilhado de verdade, sem store e sem contexto.</p>
+
+<div class="tip">
+<strong>Svelte 4 escrevia diferente</strong>
+<p>Você pode encontrar em projetos antigos <code>&lt;script context="module"&gt;</code>. As duas formas ainda compilam nesta versão, mas a atual é <code>&lt;script module&gt;</code> — mais curta e a única que aparece na documentação nova.</p>
+</div>
+
+<hr>
+
+<h2>4. O que o módulo pode exportar</h2>
+
+<p>O bloco de módulo aceita <code>export</code>, e é isso que o transforma em lugar de coisas compartilhadas entre <em>arquivos</em>: constantes, funções, stores, tipos. Quem importar o componente recebe essas exportações do módulo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  export const ABERTURA = '06:00';
+  export function precoComDesconto(preco) {
+    return preco * 0.9;
+  }
+&lt;/script&gt;
+
+&lt;p&gt;Abre às {ABERTURA} · pão com desconto: R$ {precoComDesconto(0.9).toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;Abre às 06:00 · pão com desconto: R$ 0.81&lt;/p&gt;</pre>
+
+<p>Não é preciso exportar para usar dentro do próprio arquivo: o HTML enxerga tudo o que está no módulo. O <code>export</code> serve para quem está fora — por exemplo, um teste que quer conferir a regra de desconto sem desenhar o componente, ou outro componente que precisa da mesma constante.</p>
+
+<p>Quem importa o componente recebe as duas coisas no mesmo import. Um arquivo de teste pode fazer <code>import App, { precoComDesconto } from './App.svelte'</code> e chamar a regra sem montar nada na tela — o que é ótimo, porque testar função é dez vezes mais rápido que testar tela.</p>
+
+<p>Esse é o uso mais seguro do módulo: <strong>constantes e funções puras</strong>. Elas não têm estado, não mudam com o tempo e não dependem de nada que só existe no navegador. Regra de negócio em função pura no módulo é fácil de ler, de testar e de mover para outro arquivo quando crescer.</p>
+
+<hr>
+
+<h2>5. Os dois blocos no mesmo arquivo</h2>
+
+<p>Agora os dois lado a lado. O módulo guarda o que é do arquivo; o script comum guarda o que é da instância:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let contador = $state(0);
+&lt;/script&gt;
+
+&lt;script module&gt;
+  let visitas = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;contador: {contador} · visitas: {visitas}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;contador: 0 · visitas: 0&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;script&gt;</dt><dd>roda uma vez por instância. <code>contador</code> nasce em zero em cada componente montado.</dd>
+  <dt>&lt;script module&gt;</dt><dd>roda uma vez por arquivo. <code>visitas</code> existe antes do primeiro componente e sobrevive a todos.</dd>
+  <dt>os dois juntos</dt><dd>o compilador gera um único módulo JavaScript com as duas partes; o que muda é <em>quando</em> cada parte roda.</dd>
+</dl>
+
+<p>Cuidado com uma armadilha de leitura: os dois blocos compartilham o mesmo escopo de módulo no JavaScript final. Se você declarar <code>let visitas</code> nos dois, o compilador reclama de nome duplicado. Nomes diferentes, papéis diferentes.</p>
+
+<hr>
+
+<h2>6. Estado de módulo: <code>$state</code> fora da instância</h2>
+
+<p>O detalhe que decide tudo é este: sem <code>$state</code>, uma variável de módulo é só uma variável. Ela guarda o valor, muda quando alguém escreve, e a tela não fica sabendo de nada. Com <code>$state</code>, a mudança avisa todo mundo que está lendo.</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Cliques: 1 +1">
+<p class="try-task"><strong>Missão:</strong> o contador mora no bloco de módulo, mas o clique não muda a tela. Faça o estado do módulo ser reativo para o clique mostrar <code>Cliques: 1</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script module&gt;
+  let cliques = 0;
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script module&gt;
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+</div>
+
+<p>A missão mostra o essencial em uma linha: o módulo não é reativo por natureza, ele é reativo quando o valor é criado com <code>$state</code>. E, ao contrário do que acontece na instância, esse <code>$state</code> é único — não existe "o cliques deste cartão" e "o cliques daquele cartão", existe um.</p>
+
+<hr>
+
+<h2>7. <code>$derived</code> no módulo</h2>
+
+<p>Contas também funcionam no módulo, e pela mesma regra: <code>$derived</code> recalcula; uma variável comum calcula uma vez e congela. Como o valor de base é do módulo, a conta é compartilhada por todas as instâncias:</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:^Cliques: 1 · dobro: 2">
+<p class="try-task"><strong>Missão:</strong> o dobro foi calculado uma vez, no carregamento, e ficou em <code>0</code>. Faça a conta do módulo acompanhar o contador para o clique mostrar <code>Cliques: 1 · dobro: 2</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script module&gt;
+  let cliques = $state(0);
+  let dobro = cliques * 2;
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques} · dobro: {dobro}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script module&gt;
+  let cliques = $state(0);
+  const dobro = $derived(cliques * 2);
+&lt;/script&gt;
+
+&lt;p&gt;Cliques: {cliques} · dobro: {dobro}&lt;/p&gt;
+&lt;button onclick={() =&gt; cliques++}&gt;+1&lt;/button&gt;</pre>
+</div>
+
+<p>Uma conta de módulo é útil quando ela é cara e o resultado interessa a todas as instâncias — o total do carrinho, por exemplo. É uma péssima ideia quando cada instância tem os seus próprios dados, porque aí a conta não teria como saber de quem está falando.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  let a = $state(1);
+  let b = $derived(a * 2);
+&lt;/script&gt;
+
+&lt;p&gt;{a} {b}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;1 2&lt;/p&gt;</pre>
+
+<p>Esse é o menor exemplo possível de estado e conta no módulo, e ele deixa uma coisa clara: o compilador não reclama de runas no bloco de módulo. O que ele não aceita lá são as runas que dependem de um componente — <code>$props</code> e as funções de contexto. A próxima seção é sobre isso.</p>
+
+<hr>
+
+<h2>8. Uma cópia para todos, ou uma por instância?</h2>
+
+<p>Esta é a decisão que você vai tomar em cada componente. A tabela abaixo resume o comportamento real, medido nesta versão:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Onde a variável está</th><th>Quantas cópias existem</th><th>A tela acompanha?</th></tr>
+<tr><td><code>let x = $state(0)</code> no <code>&lt;script&gt;</code></td><td>uma por instância</td><td>sim, em cada instância</td></tr>
+<tr><td><code>let x = $state(0)</code> no módulo</td><td>uma para o arquivo</td><td>sim, em todas as instâncias</td></tr>
+<tr><td><code>let x = 0</code> no <code>&lt;script&gt;</code></td><td>uma por instância</td><td>não</td></tr>
+<tr><td><code>let x = 0</code> no módulo</td><td>uma para o arquivo</td><td>não</td></tr>
+<tr><td><code>const X = '06:00'</code> no módulo</td><td>uma constante</td><td>não muda, então não precisa</td></tr>
+</table>
+</div>
+
+<p>Um jeito de sentir a diferença sem abrir dois arquivos é ter dois lugares na tela lendo o mesmo módulo, cada um com o seu botão. Com estado de instância (aqui simulado por uma lista de contadores), cada botão mexe no seu número; com estado de módulo, os dois botões mexem no mesmo:</p>
+
+<div class="trysvelte" data-goal="clique:button;;out:Caixa 1: 1 +1 Caixa 2: 1 +1">
+<p class="try-task"><strong>Missão:</strong> cada caixa tem o seu contador e elas vivem discordando. Mova o contador para o bloco <code>&lt;script module&gt;</code> para um clique valer nas duas caixas.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let contadores = $state([0, 0]);
+&lt;/script&gt;
+
+{#each contadores as c, i}
+  &lt;p&gt;Caixa {i + 1}: {c}&lt;/p&gt;
+  &lt;button onclick={() =&gt; contadores[i]++}&gt;+1&lt;/button&gt;
+{/each}</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script module&gt;
+  let total = $state(0);
+&lt;/script&gt;
+
+{#each [1, 2] as n}
+  &lt;p&gt;Caixa {n}: {total}&lt;/p&gt;
+  &lt;button onclick={() =&gt; total++}&gt;+1&lt;/button&gt;
+{/each}</pre>
+</div>
+
+<p>No projeto da Ana, a mesma coisa acontece com <strong>instâncias de verdade</strong>: dois <code>&lt;Cartao /&gt;</code> na página leem o mesmo <code>total</code> do módulo. A regra é sempre a mesma — o módulo tem um valor, as instâncias têm outro —, e é por isso que o estado de módulo é a forma mais simples de compartilhar algo entre cópias do mesmo componente.</p>
+
+<div class="warning">
+<strong>Estado de módulo não é estado global de projeto</strong>
+<p>Ele vale para <strong>um arquivo</strong>. Outro componente, em outro arquivo, não enxerga a variável do módulo de <code>Cartao.svelte</code> — a não ser que ela seja exportada e importada, e aí você já está montando um store na mão. Para valor que atravessa arquivos, o caminho continua sendo um módulo <code>.js</code> com <code>writable</code>.</p>
+</div>
+
+<hr>
+
+<h2>9. O que não pode morar no módulo</h2>
+
+<p>O bloco de módulo roda antes de existir componente. Tudo o que depende de uma instância fica de fora:</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Item</th><th>Pode no módulo?</th><th>Por quê</th></tr>
+<tr><td><code>$state</code>, <code>$derived</code></td><td>sim</td><td>não dependem de instância</td></tr>
+<tr><td><code>$props()</code></td><td><strong>não</strong></td><td>props são de uma instância específica</td></tr>
+<tr><td><code>setContext</code>, <code>getContext</code></td><td><strong>não</strong></td><td>contexto é por instância, precisa de um componente para pendurar o recado</td></tr>
+<tr><td><code>onMount</code>, <code>onDestroy</code></td><td><strong>não</strong></td><td>são ganchos do ciclo de vida de um componente</td></tr>
+<tr><td><code>document</code>, <code>window</code></td><td>com cuidado</td><td>no servidor essas variáveis não existem; o módulo roda também lá</td></tr>
+<tr><td><code>export const</code>, <code>export function</code></td><td>sim</td><td>é justamente para isso que o bloco existe</td></tr>
+</table>
+</div>
+
+<p>A última linha da parte "não pode" é a que mais dá dor de cabeça em produção. O código do módulo roda no servidor também, e lá não existe <code>window</code> nem <code>document</code>. Um <code>localStorage.getItem</code> no módulo derruba a renderização inteira. Se precisar do navegador, faça dentro de <code>onMount</code> ou de um <code>$effect</code>, que só rodam no cliente.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo são do compilador desta versão, copiadas da execução.</p>
+
+<div class="cenario">
+<strong>Erro 1 — <code>$props()</code> no módulo</strong>
+<p>Props pertencem a uma instância, e o módulo não tem instância. O compilador recusa:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  let { nome } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{nome}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 17): `$props()` can only be used at the top level of components as a variable declaration initializer</pre>
+<p>"<code>$props()</code> só pode ser usado no nível de cima dos componentes, como inicializador de declaração de variável." Traduzindo: mova a linha para o <code>&lt;script&gt;</code> comum. Se o valor precisa valer para o arquivo inteiro, ele não é prop — é configuração do módulo.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — dois blocos de módulo</strong>
+<p>Cada arquivo pode ter <strong>um</strong> <code>&lt;script&gt;</code> e <strong>um</strong> <code>&lt;script module&gt;</code>. O segundo bloco de módulo é recusado, mesmo que as variáveis tenham nomes diferentes:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  export const x = 1;
+&lt;/script&gt;
+&lt;script module&gt;
+  export const y = 2;
+&lt;/script&gt;
+&lt;p&gt;{x}{y}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 4, coluna 0): A component can have a single top-level `&lt;script&gt;` element and/or a single top-level `&lt;script module&gt;` element</pre>
+<p>"Um componente pode ter um único elemento <code>&lt;script&gt;</code> de nível de cima e/ou um único <code>&lt;script module&gt;</code>." A correção é juntar os dois blocos num só. Repare na posição: linha 4, coluna 0 — exatamente onde começa o segundo bloco.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — <code>export default</code> no módulo</strong>
+<p>O componente já é a exportação padrão do arquivo. Tentar exportar outro <code>default</code> pelo módulo colide com ele:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script module&gt;
+  export default function x() {}
+&lt;/script&gt;
+
+&lt;p&gt;ok&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 2): A component cannot have a default export</pre>
+<p>"Um componente não pode ter exportação padrão." Use exportações com nome — <code>export const</code>, <code>export function</code> —, que são justamente as que outro arquivo importa com <code>{ chaves }</code>.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Bloco</th><th>Quando roda</th><th>Guarda</th></tr>
+<tr><td><code>&lt;script module&gt;</code></td><td>uma vez por arquivo, antes das instâncias</td><td>constantes, funções, estado compartilhado, stores do arquivo</td></tr>
+<tr><td><code>&lt;script&gt;</code></td><td>uma vez por instância</td><td>estado da instância, props, contexto, ciclo de vida</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Quero…</th><th>Onde declarar</th></tr>
+<tr><td>um horário de abertura igual para todos</td><td><code>export const</code> no módulo</td></tr>
+<tr><td>uma função de desconto testável</td><td><code>export function</code> no módulo</td></tr>
+<tr><td>contar quantas instâncias existem</td><td><code>$state</code> no módulo</td></tr>
+<tr><td>guardar o texto que o usuário digitou naquele cartão</td><td><code>$state</code> na instância</td></tr>
+<tr><td>receber um valor do componente pai</td><td><code>$props()</code> na instância</td></tr>
+<tr><td>compartilhar entre arquivos diferentes</td><td>store num módulo <code>.js</code></td></tr>
+</table>
+</div>
+
+<p>Para achar os arquivos que têm bloco de módulo, o terminal resolve em uma linha. O <code>-l</code> manda o <code>grep</code> imprimir só o nome do arquivo, sem a linha:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rln "script module" src
+src/App.svelte</pre>
+
+<p>Um único arquivo tem bloco de módulo no projeto da Ana. Para ver o que ele guarda, procure pelo nome exportado:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "ABERTURA" src
+src/App.svelte:2:  export const ABERTURA = '06:00';
+src/App.svelte:9:<h1>Padaria da Ana — abre às {ABERTURA}</h1></pre>
+
+<p>Duas linhas, dois papéis: a linha 2 escreve a constante no módulo, a linha 9 usa o valor no HTML. É esse par que você procura quando um valor "aparece do nada" num componente.</p>
+
+<p>E o build mostra o outro lado: o bloco de módulo não vira um arquivo separado. Ele entra no mesmo módulo JavaScript do componente, e o Vite conta o componente como um módulo só. Aqui o projeto da Ana depois de ganhar o <code>&lt;script module&gt;</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 114 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-Wp7VCmVn.js  39.62 kB │ gzip: 15.30 kB
+✓ built in 1.78s</pre>
+
+<p>Cento e quatorze módulos, o mesmo número de antes do bloco de módulo: o <code>&lt;script module&gt;</code> não acrescenta arquivo nenhum. O que mudou foi o conteúdo do <code>App.svelte</code> compilado — e o tamanho final, que subiu porque o componente agora importa o store do total.</p>
+
+<hr>
+
+<h2>12. O módulo no servidor: uma vez por processo</h2>
+
+<p>Existe uma consequência do "roda uma vez" que só aparece quando o componente é renderizado no servidor. Numa aplicação com SvelteKit, o servidor carrega o módulo do componente <strong>uma vez</strong> e reaproveita esse mesmo módulo para todas as requisições. O <code>$state</code> do módulo, portanto, é compartilhado entre usuários diferentes durante a vida do processo.</p>
+
+<p>Para um contador de cliques que só existe no navegador, isso não faz diferença: o módulo do servidor morre antes de qualquer clique. Para dados de usuário — nome, carrinho, sessão —, é um vazamento: o carrinho de uma pessoa poderia aparecer para outra. A regra prática é curta: <strong>nunca guarde dado de usuário em estado de módulo</strong>. Use props, contexto ou store, que têm o tempo de vida certo.</p>
+
+<p>O que sobra de bom para o módulo é exatamente o que não muda por usuário: constantes de configuração, tabelas fixas, funções puras e caches de coisas públicas. Tudo o que é "o mesmo para todos, para sempre" cabe bem ali. Tudo o que é "meu, agora" não cabe.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>No módulo, pode ficar</th><th>No módulo, não pode ficar</th></tr>
+<tr><td>horário de abertura, lista de estados, tabela de preços</td><td>nome do cliente, carrinho, sessão, formulário em edição</td></tr>
+<tr><td>função pura de desconto, formatador de dinheiro</td><td>resultado de uma consulta que depende de quem está logado</td></tr>
+<tr><td>contador de quantas vezes o componente foi montado no navegador</td><td>contador de visitas do site inteiro (isso é do servidor, não do componente)</td></tr>
+</table>
+</div>
+
+<p>Guardadas essas fronteiras, o bloco de módulo é a ferramenta mais barata que existe para compartilhar algo entre cópias do mesmo componente: uma tag, uma runa, nenhum arquivo novo.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. Quantas vezes o código de <code>&lt;script module&gt;</code> roda?</p>
+<label><input type="radio" name="q1"> uma vez por instância montada</label>
+<label><input type="radio" name="q1"> uma vez por arquivo, antes das instâncias</label>
+<label><input type="radio" name="q1"> a cada clique que muda estado</label>
+<label><input type="radio" name="q1"> duas vezes: uma no servidor e outra no cliente, sempre</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. Uma variável <code>let x = $state(0)</code> no bloco de módulo…</p>
+<label><input type="radio" name="q1"> é recusada pelo compilador</label>
+<label><input type="radio" name="q1"> existe em uma cópia por instância</label>
+<label><input type="radio" name="q1"> existe uma só para o arquivo, e a tela acompanha as mudanças</label>
+<label><input type="radio" name="q1"> existe uma só, mas a tela não acompanha</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Qual destas runas ou funções <strong>não</strong> pode ser usada no bloco de módulo?</p>
+<label><input type="radio" name="q1"> <code>$props()</code></label>
+<label><input type="radio" name="q1"> <code>$state()</code></label>
+<label><input type="radio" name="q1"> <code>$derived()</code></label>
+<label><input type="radio" name="q1"> <code>export const</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script <input data-answer="module">&gt;<br>&nbsp;&nbsp;export const ABERTURA = '06:00';<br>&lt;/script&gt;<br><br>&lt;p&gt;Abre às {ABERTURA}&lt;/p&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>&lt;script module&gt;</code> roda <strong>uma vez por arquivo</strong>; <code>&lt;script&gt;</code> roda uma vez por instância.</li>
+  <li>O módulo guarda o que é do arquivo: constantes, funções, estado compartilhado e stores.</li>
+  <li><code>export const</code> e <code>export function</code> no módulo ficam disponíveis para quem importa o componente.</li>
+  <li><code>$state</code> no módulo cria <strong>um</strong> valor reativo para todas as instâncias do arquivo.</li>
+  <li><code>$derived</code> no módulo recalcula a conta compartilhada; uma variável comum congela no primeiro valor.</li>
+  <li><code>$props</code>, contexto e ganchos de ciclo de vida não podem morar no módulo.</li>
+  <li>O módulo roda no servidor também: <code>window</code> e <code>document</code> ali quebram a renderização.</li>
+  <li>Um arquivo aceita um <code>&lt;script&gt;</code> e um <code>&lt;script module&gt;</code>, no máximo.</li>
+  <li>Estado de módulo vale para um arquivo; para atravessar arquivos, use um store num <code>.js</code>.</li>
+  <li>Os erros desta aula: <code>$props()</code> no módulo, dois blocos de módulo e <code>export default</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

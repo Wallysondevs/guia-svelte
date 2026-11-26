@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Componentes Dinâmicos — escolher o que desenhar na hora | Guia Svelte</title>
+<meta name="description" content="Componente numa variável, svelte:element para tags dinâmicas e {@render} com snippets: o que muda no Svelte 5, com saída real do compilador e três caixas que rodam.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Componentes Dinâmicos</span></h1>
+
+<p class="intro">A Ana tem dois cartões impressos para a vitrine: o normal, com o preço cheio, e o de promoção, com o preço riscado. Ela não imprime os dois toda manhã — ela <em>escolhe</em> qual pendurar, conforme o dia. Na tela é a mesma ideia: às vezes o componente que aparece depende de um valor, e esse valor só é conhecido quando a página já está rodando. No Svelte 5 isso ficou mais simples do que era: um componente pode morar numa variável, e um elemento pode trocar de tag sozinho.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Trocar a <strong>tag</strong> de um elemento em tempo de execução com <code>&lt;svelte:element&gt;</code>.</li>
+  <li>O que acontece com tag vazia, tag desconhecida e tag inválida.</li>
+  <li>Guardar um componente numa variável e desenhá-lo com <code>&lt;Atual /&gt;</code>.</li>
+  <li>Passar props para o componente que está na variável.</li>
+  <li>Escolher <strong>conteúdo</strong> com <code>{@render}</code> e uma variável de snippet.</li>
+  <li>Por que <code>&lt;svelte:component&gt;</code> ficou para trás e o que usar no lugar.</li>
+  <li>Proteger a tela quando a escolha ainda é vazia.</li>
+  <li>Os três erros reais desta aula, com a mensagem do compilador.</li>
+  <li>O que o terminal mostra ao procurar tags dinâmicas no projeto.</li>
+  <li>Quando escolher tag, quando escolher conteúdo e quando escolher componente.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o cartão que muda de forma</h2>
+
+<p>Todo texto na tela tem uma <strong>tag</strong> em volta: um título é <code>h1</code> ou <code>h2</code>, um parágrafo é <code>p</code>, um item de lista é <code>li</code>. Na maioria das vezes a tag é fixa, porque o papel do texto na página não muda. Mas existem casos em que muda: um mesmo componente de "título de seção" pode ser usado como <code>h1</code> na capa e como <code>h2</code> dentro de um bloco, para a página não ter dois títulos principais.</p>
+
+<p>Antes de o Svelte ter tags dinâmicas, a saída era escrever o mesmo HTML três vezes dentro de um <code>{#if}</code>. Funciona e é ruim: o conteúdo aparece duplicado, e mudar uma classe exige lembrar dos três lugares. O <code>&lt;svelte:element&gt;</code> resolve isso deixando a tag vir de uma variável — um lugar só para o conteúdo, um valor para a forma.</p>
+
+<p>Existe um segundo tipo de escolha, mais profundo: não é a forma do texto, é o <strong>componente inteiro</strong> que aparece. O cartão normal e o cartão de promoção têm marcações diferentes, props diferentes, talvez comportamentos diferentes. Ali a variável não guarda uma tag; guarda um componente. E o Svelte 5 permite isso sem nenhum componente especial, só escrevendo o nome da variável com maiúscula.</p>
+
+<p>A terceira forma é a mais nova e a mais usada no dia a dia: escolher um <strong>pedaço de conteúdo</strong> — um snippet — e desenhá-lo com <code>{@render}</code>. Serve para quando as duas opções são parecidas e não valem um arquivo cada.</p>
+
+<hr>
+
+<h2>2. No dia a dia × no componente</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Na vitrine</th><th>No Svelte</th></tr>
+<tr><td>Trocar a moldura do cartaz, mantendo o texto</td><td><code>&lt;svelte:element this={tag}&gt;</code></td></tr>
+<tr><td>Pendurar o cartaz de promoção em vez do normal</td><td><code>&lt;Atual /&gt;</code>, com o componente numa variável</td></tr>
+<tr><td>Trocar só uma frase do cartaz</td><td><code>{@render escolhido()}</code></td></tr>
+<tr><td>Escanear o cartaz e não ter o que pendurar</td><td>tag vazia: o elemento não é desenhado</td></tr>
+<tr><td>Um cartaz com nome errado no estoque</td><td><code>Atual is not a function</code></td></tr>
+<tr><td>A etiqueta velha que ninguém usa mais</td><td><code>&lt;svelte:component&gt;</code>, em desuso</td></tr>
+</table>
+</div>
+
+<p>As três primeiras linhas são as ferramentas. As três últimas são os problemas que aparecem quando uma delas é usada no lugar da outra.</p>
+
+<hr>
+
+<h2>3. <code>&lt;svelte:element&gt;</code>: a tag vinda de um valor</h2>
+
+<p>A sintaxe é uma tag só, com o atributo <code>this</code> apontando para a variável que guarda o nome do elemento:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tag = $state('h2');
+&lt;/script&gt;
+
+&lt;svelte:element this={tag} class="titulo"&gt;Pão francês&lt;/svelte:element&gt;
+&lt;button onclick={() =&gt; tag = 'p'}&gt;virar p&lt;/button&gt;</pre>
+
+<pre class="out">&lt;h2 class="titulo"&gt;Pão francês&lt;/h2&gt; &lt;button&gt;virar p&lt;/button&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&lt;svelte:element&gt;</dt><dd>um elemento que decide o próprio nome em tempo de execução. Não é um componente: é uma tag com nome variável.</dd>
+  <dt>this={tag}</dt><dd>a expressão que devolve o nome. Pode ser uma variável, um item de lista, uma função — desde que resulte em texto.</dd>
+  <dt>class="titulo"</dt><dd>os outros atributos funcionam normalmente. Se o atributo não existir na tag escolhida, ele fica no HTML do mesmo jeito.</dd>
+  <dt>Pão francês</dt><dd>o conteúdo é o mesmo para qualquer tag. É justamente por isso que ele não se repete no código.</dd>
+</dl>
+
+<p>No navegador, o clique troca o <code>h2</code> por um <code>p</code> sem perder o texto: o Svelte desmonta o elemento antigo e monta o novo com os mesmos atributos e o mesmo conteúdo. A saída acima é a do servidor, antes de qualquer clique — o compilador não sabe qual tag vai estar lá quando a página abrir, então ele desenha a que o estado inicial aponta.</p>
+
+<p>Trocar a tag não é trocar um atributo: é trocar o elemento. O Svelte desmonta o <code>h2</code> inteiro e monta um <code>p</code> novo com o mesmo conteúdo. Para texto isso é invisível, mas tem um efeito colateral que vale saber: se o elemento tinha foco (um campo de formulário, por exemplo), ele perde o foco, porque é outro elemento no DOM. Se você precisa apenas mudar a aparência e manter o mesmo elemento, use <code>class:</code> em vez de <code>svelte:element</code>.</p>
+
+<div class="tip">
+<strong>Use para títulos, listas e botões</strong>
+<p>O caso clássico é o título de seção que muda de nível. O segundo caso é o link que às vezes é botão: <code>&lt;svelte:element this={temLink ? 'a' : 'button'}&gt;</code>. Nos dois, o ganho é ter o conteúdo escrito uma vez só.</p>
+</div>
+
+<hr>
+
+<h2>4. Quando a tag é vazia ou inválida</h2>
+
+<p>Duas armadilhas rondam o <code>this</code>. A primeira: se o valor for <code>null</code> ou uma string vazia, o elemento simplesmente <strong>não é desenhado</strong>. Nada de erro, nada de aviso — some o elemento e o conteúdo com ele:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tag = $state(null);
+&lt;/script&gt;
+
+&lt;svelte:element this={tag}&gt;sumiu&lt;/svelte:element&gt;
+&lt;p&gt;depois&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;depois&lt;/p&gt;</pre>
+
+<p>A segunda armadilha: um nome que não é um elemento válido do HTML. Um nome desconhecido mas plausível, como <code>minha-tag</code>, é aceito — o navegador desenha um elemento personalizado, sem estilo e sem comportamento:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tag = $state('minha-tag');
+&lt;/script&gt;
+
+&lt;svelte:element this={tag}&gt;oi&lt;/svelte:element&gt;</pre>
+
+<pre class="out">&lt;minha-tag&gt;oi&lt;/minha-tag&gt;</pre>
+
+<p>Já um nome que <em>não pode</em> ser elemento — começando com número, por exemplo — derruba a renderização com uma mensagem própria, que aparece na seção 10. A diferença entre os dois casos é a gramática do HTML: nome de elemento não pode começar com dígito.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Valor de <code>this</code></th><th>O que acontece</th></tr>
+<tr><td><code>'h2'</code>, <code>'p'</code>, <code>'a'</code></td><td>o elemento normal, com os atributos e o conteúdo</td></tr>
+<tr><td><code>null</code> ou <code>''</code></td><td>nada é desenhado, sem erro</td></tr>
+<tr><td><code>'minha-tag'</code></td><td>elemento personalizado, aceito pelo navegador</td></tr>
+<tr><td><code>'2colunas'</code></td><td>erro: nome de elemento inválido</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>5. O componente numa variável</h2>
+
+<p>Para escolher entre componentes inteiros, o caminho é guardar o <strong>próprio componente</strong> numa variável e usar a variável como se fosse uma tag. Componentes importados são valores: dá para guardá-los, passá-los como prop e trocá-los.</p>
+
+<pre class="file" data-file="src/lib/Cartao.svelte">&lt;script&gt;
+  let { titulo } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{titulo}&lt;/p&gt;</pre>
+
+<pre class="file" data-file="src/lib/Promo.svelte">&lt;script&gt;
+  let { titulo } = $props();
+&lt;/script&gt;
+
+&lt;p&gt;{titulo} (promoção)&lt;/p&gt;</pre>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+  import Promo from './Promo.svelte';
+
+  let Atual = $state(Cartao);
+&lt;/script&gt;
+
+&lt;Atual titulo="Pão francês" /&gt;
+&lt;button onclick={() =&gt; Atual = Atual === Cartao ? Promo : Cartao}&gt;trocar&lt;/button&gt;</pre>
+
+<p>Três detalhes fazem esse código funcionar. Primeiro: o nome da variável começa com <strong>maiúscula</strong> — é assim que o compilador sabe que <code>&lt;Atual /&gt;</code> é um componente e não uma tag desconhecida do HTML. Segundo: a variável é <code>$state</code>, porque ela muda. Terceiro: as props funcionam normalmente, porque o componente escolhido recebe tudo o que está escrito na tag.</p>
+
+<p>Para saber qual componente está na variável, compare com a referência: <code>Atual === Cartao</code>. Componentes importados são objetos únicos, então a comparação é segura — diferente de comparar texto, que sempre tem o risco de uma letra diferente.</p>
+
+<div class="warning">
+<strong>Minúscula muda tudo</strong>
+<p><code>&lt;Atual /&gt;</code> é o seu componente. <code>&lt;atual /&gt;</code> é uma tag HTML chamada <code>atual</code>, que o navegador desenha como um elemento vazio e sem estilo. O erro não dá mensagem: a tela fica em branco. Se um componente dinâmico "não aparece", a primeira coisa a conferir é a maiúscula.</p>
+</div>
+
+<hr>
+
+<h2>6. <code>{@render}</code> com uma variável: o conteúdo escolhido</h2>
+
+<p>Nem toda escolha merece um arquivo. Se as duas opções são parecidas e vivem no mesmo componente, um <strong>snippet</strong> resolve: ele é um pedaço de marcação com nome, e o nome pode ficar numa variável. O <code>{@render}</code> desenha o que a variável apontar.</p>
+
+<pre class="file" data-file="src/App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+{#snippet Promo(titulo)}
+  &lt;p&gt;{titulo} (promoção)&lt;/p&gt;
+{/snippet}
+
+&lt;script&gt;
+  let Mostrar = $state(Cartao);
+&lt;/script&gt;
+
+{@render Mostrar('Pão francês')}
+&lt;button onclick={() =&gt; Mostrar = Mostrar === Cartao ? Promo : Cartao}&gt;trocar&lt;/button&gt;</pre>
+
+<pre class="out">&lt;p&gt;Pão francês&lt;/p&gt; &lt;button&gt;trocar&lt;/button&gt;</pre>
+
+<p>A saída é idêntica à da seção anterior, o que é o ponto: para o leitor da tela, tanto faz se a escolha foi entre componentes ou entre snippets. A diferença está no custo. Componente é um arquivo, com o seu script e a sua fronteira; snippet é uma função dentro do mesmo arquivo. Escolha componente quando as opções crescem sozinhas; escolha snippet quando são duas variações de uma coisa só.</p>
+
+<p>Há um ganho escondido no snippet: como o código está no mesmo arquivo, as variáveis do componente estão no escopo. Um snippet consegue ler o estado da tela sem receber prop nenhuma; um componente separado precisaria de prop para tudo. É por isso que variações pequenas de layout costumam ficar em snippets e só as peças realmente independentes viram arquivo.</p>
+
+<p>Repare que o snippet aceita parâmetros — <code>Mostrar('Pão francês')</code> passa o título. Isso é o que permite usar o mesmo snippet em vários lugares com valores diferentes, e é o assunto da aula de snippets.</p>
+
+<div class="trysvelte" data-goal="clique:button;;clique:button;;out:Pão francês trocar">
+<p class="try-task"><strong>Missão:</strong> o botão leva para a promoção e não volta mais. Faça ele <strong>alternar</strong>: um clique mostra a promoção, outro volta ao cartão normal.</p>
+<pre class="script" data-file="App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+{#snippet Promo(titulo)}
+  &lt;p&gt;{titulo} (promoção)&lt;/p&gt;
+{/snippet}
+
+&lt;script&gt;
+  let Mostrar = $state(Cartao);
+&lt;/script&gt;
+
+{@render Mostrar('Pão francês')}
+&lt;button onclick={() =&gt; Mostrar = Promo}&gt;trocar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;{titulo}&lt;/p&gt;
+{/snippet}
+
+{#snippet Promo(titulo)}
+  &lt;p&gt;{titulo} (promoção)&lt;/p&gt;
+{/snippet}
+
+&lt;script&gt;
+  let Mostrar = $state(Cartao);
+&lt;/script&gt;
+
+{@render Mostrar('Pão francês')}
+&lt;button onclick={() =&gt; Mostrar = Mostrar === Cartao ? Promo : Cartao}&gt;trocar&lt;/button&gt;</pre>
+</div>
+
+<p>A solução troca a atribuição fixa por uma comparação: "se estou mostrando o cartão, mostre a promoção; senão, volte". É o mesmo padrão de alternância da aula do primeiro componente, agora com conteúdo em vez de texto.</p>
+
+<hr>
+
+<h2>7. <code>&lt;svelte:component&gt;</code> ficou para trás</h2>
+
+<p>Se você procurar o assunto em tutoriais antigos, vai encontrar <code>&lt;svelte:component this={Atual} /&gt;</code>. Ele existia porque, no Svelte 4, um componente numa variável precisava ser desembrulhado por essa tag. No Svelte 5, componentes já são dinâmicos por padrão, e a tag antiga virou um aviso:</p>
+
+<pre class="file">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+
+  let Atual = $state(Cartao);
+&lt;/script&gt;
+
+&lt;svelte:component this={Atual} titulo="Pão" /&gt;</pre>
+
+<pre class="out">aviso: svelte_component_deprecated (linha 7): `&lt;svelte:component&gt;` is deprecated in runes mode — components are dynamic by default
+https://svelte.dev/e/svelte_component_deprecated</pre>
+
+<p>A tradução: "está em desuso no modo runas — componentes já são dinâmicos por padrão". Não é erro; o código compila e funciona. Mas quem lê o arquivo vê uma tag que não serve para nada, e a documentação nova já não a menciona. Se encontrar num projeto, a troca é apagar a tag e usar a variável direto: <code>&lt;Atual titulo="Pão" /&gt;</code>.</p>
+
+<div class="note">
+<strong>Três escolhas, três ferramentas</strong>
+<ul>
+  <li><strong>Forma</strong> muda, conteúdo é o mesmo: <code>&lt;svelte:element&gt;</code>.</li>
+  <li><strong>Componente inteiro</strong> muda: variável com maiúscula, <code>&lt;Atual /&gt;</code>.</li>
+  <li><strong>Pedaço de conteúdo</strong> muda: variável de snippet, <code>{@render}</code>.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>8. Props e atributos no que é dinâmico</h2>
+
+<p>Um componente dinâmico recebe props como qualquer outro. O cuidado é não passar prop que o componente escolhido não conhece — ele recebe assim mesmo, e o valor fica sem uso. Uma forma comum de resolver é ter um objeto de props e espalhá-lo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+
+  let Atual = $state(Cartao);
+  let props = $derived({ titulo: 'Pão francês', preco: 0.9 });
+&lt;/script&gt;
+
+&lt;Atual {...props} /&gt;</pre>
+
+<p>Os três pontinhos espalham as propriedades do objeto como atributos. Se amanhã a variável <code>Atual</code> apontar para outro componente que também aceita <code>titulo</code> e <code>preco</code>, nada muda em quem chama. É a mesma ideia dos três pontinhos de listas, agora com nomes.</p>
+
+<p>Com <code>&lt;svelte:element&gt;</code> a história é outra: os atributos vão para o HTML, sem validação. Passar <code>href</code> quando a tag é <code>p</code> produz um atributo <code>href</code> num parágrafo — inofensivo, mas errado. Não há como o compilador saber, porque a tag só existe em tempo de execução.</p>
+
+<hr>
+
+<h2>9. Proteger a tela quando a escolha é vazia</h2>
+
+<p>As duas armadilhas desta aula têm a mesma cura: perguntar antes de desenhar. Uma escolha pode ser <code>null</code>, uma tag pode ser <code>''</code>, e nos dois casos o Svelte não reclama — só não desenha. Quem garante que a tela não fique em branco é você, com <code>{#if}</code> e um <code>{:else}</code> que explique a situação:</p>
+
+<div class="trysvelte" data-goal="out:aviso: sem tag trocar">
+<p class="try-task"><strong>Missão:</strong> a tag chega vazia e o aviso desaparece da tela. Faça aparecer <code>aviso: sem tag</code> quando não houver tag para desenhar.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let tag = $state('');
+&lt;/script&gt;
+
+&lt;svelte:element this={tag}&gt;Pão francês&lt;/svelte:element&gt;
+&lt;button onclick={() =&gt; tag = 'p'}&gt;trocar&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let tag = $state('');
+&lt;/script&gt;
+
+{#if tag}
+  &lt;svelte:element this={tag}&gt;Pão francês&lt;/svelte:element&gt;
+{:else}
+  &lt;p&gt;aviso: sem tag&lt;/p&gt;
+{/if}
+&lt;button onclick={() =&gt; tag = 'p'}&gt;trocar&lt;/button&gt;</pre>
+</div>
+
+<p>O mesmo vale para o conteúdo escolhido: uma variável de snippet que ainda não recebeu valor não desenha nada. Um estado vazio explícito — "escolha um cartão" — é melhor que uma área em branco, porque diz ao leitor que a tela está funcionando:</p>
+
+<div class="trysvelte" data-goal="out:escolha um cartão escolher">
+<p class="try-task"><strong>Missão:</strong> antes de escolher, a área do cartão fica vazia e a tela parece quebrada. Mostre <code>escolha um cartão</code> enquanto nada foi escolhido.</p>
+<pre class="script" data-file="App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;Cartão: {titulo}&lt;/p&gt;
+{/snippet}
+
+&lt;script&gt;
+  let Mostrar = $state(null);
+&lt;/script&gt;
+
+{#if Mostrar}
+  {@render Mostrar('Pão francês')}
+{/if}
+&lt;button onclick={() =&gt; Mostrar = Cartao}&gt;escolher&lt;/button&gt;</pre>
+<pre class="solucao" data-file="App.svelte">{#snippet Cartao(titulo)}
+  &lt;p&gt;Cartão: {titulo}&lt;/p&gt;
+{/snippet}
+
+&lt;script&gt;
+  let Mostrar = $state(null);
+&lt;/script&gt;
+
+{#if Mostrar}
+  {@render Mostrar('Pão francês')}
+{:else}
+  &lt;p&gt;escolha um cartão&lt;/p&gt;
+{/if}
+&lt;button onclick={() =&gt; Mostrar = Cartao}&gt;escolher&lt;/button&gt;</pre>
+</div>
+
+<p>Repare que a solução não precisa mudar o botão: ele já atribuía o snippet certo. O que faltava era o caminho do "ainda não". Esse é o tipo de detalhe que separa uma tela que funciona de uma tela que parece quebrada no primeiro segundo.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As mensagens abaixo são reais. A primeira e a terceira vêm do renderizador; a segunda é um aviso do compilador, não um erro.</p>
+
+<div class="cenario">
+<strong>Erro 1 — a variável não é um componente</strong>
+<p>Guardar texto numa variável e usá-la como tag com maiúscula faz o Svelte tentar chamar aquele valor como função:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let Atual = $state('p');
+&lt;/script&gt;
+
+&lt;Atual /&gt;</pre>
+<pre class="out">Erro ao renderizar: Atual is not a function</pre>
+<p>"<code>Atual</code> não é uma função." Componentes, no fundo, são funções — e uma string não é. A correção é guardar o componente importado, nunca o nome dele em texto: <code>let Atual = $state(Cartao)</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — nome de elemento inválido</strong>
+<p>Nome de elemento HTML não pode começar com dígito. O Svelte avisa e não desenha o elemento:</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let tag = $state('2colunas');
+&lt;/script&gt;
+
+&lt;svelte:element this={tag}&gt;oi&lt;/svelte:element&gt;</pre>
+<pre class="out">Erro ao renderizar: dynamic_element_invalid_tag
+`&lt;svelte:element this="2colunas"&gt;` is not a valid element name — the element will not be rendered
+https://svelte.dev/e/dynamic_element_invalid_tag</pre>
+<p>A mensagem vem em três linhas: o código do erro, a explicação com o nome que falhou, e o endereço da documentação. "<em>não é um nome de elemento válido — o elemento não será renderizado</em>". Se a tag vem de dados do usuário, valide antes: uma lista de tags permitidas resolve mais rápido do que adivinhar.</p>
+</div>
+
+<div class="cenario">
+<strong>Aviso — a tag antiga</strong>
+<p>Este não é erro e o componente funciona. É o compilador dizendo que <code>&lt;svelte:component&gt;</code> não é mais necessário:</p>
+<pre class="file">&lt;script&gt;
+  import Cartao from './Cartao.svelte';
+
+  let Atual = $state(Cartao);
+&lt;/script&gt;
+
+&lt;svelte:component this={Atual} titulo="Pão" /&gt;</pre>
+<pre class="out">aviso: svelte_component_deprecated (linha 7): `&lt;svelte:component&gt;` is deprecated in runes mode — components are dynamic by default</pre>
+<p>A correção é de uma linha: apague <code>&lt;svelte:component this={Atual} /&gt;</code> e escreva <code>&lt;Atual /&gt;</code>. O aviso aparece no terminal durante o desenvolvimento e não entra no build final, mas código sem aviso é código mais fácil de ler.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintaxe</th><th>Escolhe</th><th>O valor guardado é</th></tr>
+<tr><td><code>&lt;svelte:element this={x}&gt;</code></td><td>a tag do elemento</td><td>texto: <code>'h2'</code>, <code>'p'</code></td></tr>
+<tr><td><code>&lt;Atual /&gt;</code></td><td>o componente inteiro</td><td>o componente importado</td></tr>
+<tr><td><code>{@render escolhido()}</code></td><td>um pedaço de conteúdo</td><td>um snippet do arquivo</td></tr>
+<tr><td><code>&lt;svelte:component&gt;</code></td><td>o componente inteiro</td><td>em desuso: use a variável direto</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Sintoma</th><th>Causa provável</th></tr>
+<tr><td>elemento some sem erro</td><td><code>this</code> vale <code>null</code> ou <code>''</code></td></tr>
+<tr><td>tag esquisita no HTML</td><td>nome desconhecido, aceito como elemento personalizado</td></tr>
+<tr><td><code>Atual is not a function</code></td><td>a variável guarda texto em vez de componente</td></tr>
+<tr><td>componente não aparece e não dá erro</td><td>tag escrita em minúscula: <code>&lt;atual /&gt;</code></td></tr>
+<tr><td>área vazia no primeiro segundo</td><td>falta o <code>{:else}</code> do estado vazio</td></tr>
+</table>
+</div>
+
+<p>No projeto da Ana, a tag dinâmica mora num componente pequeno, reaproveitado como título em vários tamanhos. O terminal acha todos os usos de uma vez:</p>
+
+<pre class="term">ana@notebook:~/loja$ grep -rn "svelte:element" src
+src/lib/Titulo.svelte:5:<svelte:element this={nivel}>{texto}</svelte:element></pre>
+
+<p>Um arquivo só, e é o que se espera: a tag dinâmica é uma ferramenta de dentro de um componente, não uma coisa espalhada pelo projeto. O build confirma que esse componente entrou no pacote:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+&gt; loja@0.0.1 build
+&gt; vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 115 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                 0.25 kB │ gzip:  0.19 kB
+dist/assets/index-B9oeVa5K.js  42.26 kB │ gzip: 16.21 kB
+✓ built in 1.17s</pre>
+
+<p>Eram 114 módulos; com o componente novo, 115. O tamanho subiu de 39,62 kB para 42,26 kB porque o <code>Titulo.svelte</code> trouxe o próprio código e as próprias regras de estilo para dentro do pacote.</p>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que <code>&lt;svelte:element this={tag}&gt;</code> escolhe?</p>
+<label><input type="radio" name="q1"> qual componente será desenhado</label>
+<label><input type="radio" name="q1"> qual trecho de texto aparece</label>
+<label><input type="radio" name="q1"> qual tag HTML envolve o conteúdo</label>
+<label><input type="radio" name="q1"> qual folha de estilo é aplicada</label></div>
+
+<div class="mc" data-answer="2"><p class="mc-q">2. Por que o nome da variável de um componente dinâmico precisa começar com maiúscula?</p>
+<label><input type="radio" name="q1"> porque o JavaScript exige maiúscula em funções</label>
+<label><input type="radio" name="q1"> porque é assim que o compilador distingue um componente de uma tag do HTML</label>
+<label><input type="radio" name="q1"> porque o CSS não aceita minúsculas</label>
+<label><input type="radio" name="q1"> porque sem maiúscula o componente não compila</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. O que acontece com <code>&lt;svelte:element this={''}&gt;</code>?</p>
+<label><input type="radio" name="q1"> nada é desenhado, sem erro</label>
+<label><input type="radio" name="q1"> aparece um erro de compilação</label>
+<label><input type="radio" name="q1"> o elemento vira uma <code>div</code></label>
+<label><input type="radio" name="q1"> o conteúdo aparece sem tag</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;script&gt;<br>&nbsp;&nbsp;let nivel = <input data-answer="$state('h2')">;<br>&lt;/script&gt;<br><br>&lt;svelte:element <input data-answer="this={nivel}"> class="titulo"&gt;Pão francês&lt;/svelte:element&gt;</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li><code>&lt;svelte:element this={x}&gt;</code> troca a <strong>tag</strong> em tempo de execução, mantendo atributos e conteúdo.</li>
+  <li>Uma tag <code>null</code> ou <code>''</code> não desenha nada e não avisa; nome inválido derruba a renderização.</li>
+  <li>Componentes são valores: dá para guardá-los numa variável e desenhar com <code>&lt;Atual /&gt;</code>.</li>
+  <li>Maiúscula no nome é o que separa um componente de uma tag HTML — em minúscula, a tela fica vazia sem erro.</li>
+  <li><code>{@render escolhido()}</code> desenha o snippet que a variável apontar, com parâmetros.</li>
+  <li><code>&lt;svelte:component&gt;</code> está em desuso no Svelte 5: componentes já são dinâmicos por padrão.</li>
+  <li>Props funcionam no componente dinâmico; os três pontinhos espalham um objeto de props.</li>
+  <li>Tag, componente e snippet resolvem problemas diferentes: forma, peça inteira e pedaço de conteúdo.</li>
+  <li>Sempre ofereça um estado vazio explícito com <code>{:else}</code> em vez de deixar a área em branco.</li>
+  <li>Os casos desta aula: <code>Atual is not a function</code>, <code>dynamic_element_invalid_tag</code> e o aviso <code>svelte_component_deprecated</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
