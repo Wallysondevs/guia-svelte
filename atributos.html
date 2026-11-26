@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atributos Dinâmicos — valores que vêm do estado | Guia Svelte</title>
+<meta name="description" content="Atributos com expressão no Svelte: booleanos, atributos que somem quando o valor é falso, class e style como texto, spread de props e o aviso de alt.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Atributos Dinâmicos</span></h1>
+
+<p class="intro">Na padaria da Ana, cada caixa tem uma etiqueta: "pão francês", "500 g", "validade 12/03". A etiqueta não é o pão, mas sem ela ninguém sabe o que tem dentro. No HTML, o atributo é essa etiqueta: fica dentro da tag, ao lado do nome do elemento, e diz algo sobre ele. A diferença é que a etiqueta da Ana é escrita à mão uma vez, e a do componente pode vir de um valor que muda. Nesta aula você aprende a colocar valor de estado dentro de atributo — e o que o Svelte faz quando esse valor é falso ou não existe.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>A diferença entre atributo com valor fixo e atributo com expressão.</li>
+  <li>Quando as aspas são obrigatórias e quando podem sair.</li>
+  <li>O que são atributos booleanos e por que <code>disabled</code> não tem valor.</li>
+  <li>O que acontece quando o valor é <code>false</code>, <code>null</code> ou <code>undefined</code>.</li>
+  <li>Por que <code>checked="false"</code> marca a caixa em vez de desmarcar.</li>
+  <li><code>class</code> e <code>style</code> como texto, e a armadilha do objeto no <code>style</code>.</li>
+  <li>Como espalhar vários atributos de uma vez com <code>{...props}</code>.</li>
+  <li>Por que eventos como <code>onclick</code> não são atributos comuns.</li>
+  <li>O aviso de acessibilidade do <code>&lt;img&gt;</code> sem <code>alt</code>.</li>
+  <li>Os três casos desta aula que compilam e mesmo assim estão errados.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a etiqueta na caixa</h2>
+
+<p>Um elemento HTML tem três partes: o nome, os atributos e o conteúdo. Em <code>&lt;a href="/cardapio"&gt;cardápio&lt;/a&gt;</code>, o nome é <code>a</code>, o atributo é <code>href</code> com valor <code>/cardapio</code>, e o conteúdo é o texto "cardápio". O atributo nunca aparece na tela: ele instrui o navegador. O conteúdo é o que o cliente lê.</p>
+
+<p>Essa separação confunde no começo, porque os dois parecem "coisas escritas na tag". Mas o atributo tem função: <code>href</code> diz para onde o link leva, <code>src</code> diz qual imagem carregar, <code>disabled</code> diz que o botão não pode ser clicado. Se você apagar o valor do atributo, o comportamento muda; se apagar o conteúdo, o texto some mas o comportamento fica.</p>
+
+<p>Até aqui, nada de novo em relação ao HTML que existe desde os anos 1990. A novidade do Svelte é poder escrever um valor de estado no lugar do valor fixo, e o compilador cuidar da atualização. Quando o estado muda, o atributo muda — e você não escreve <code>setAttribute</code> em lugar nenhum.</p>
+
+<hr>
+
+<h2>2. Valor fixo × valor de estado</h2>
+
+<p>Um atributo com valor fixo usa aspas e texto. Um atributo ligado ao estado usa chaves e uma expressão. Os dois podem conviver na mesma tag, e a diferença é só o sinal:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let ativo = $state(true);
+  let preco = $state(0.9);
+  let id = $state('pao');
+&lt;/script&gt;
+
+&lt;button disabled={ativo}&gt;comprar&lt;/button&gt;
+&lt;button disabled={!ativo}&gt;pagar&lt;/button&gt;
+&lt;p data-preco={preco} id="preco-{id}"&gt;R$ {preco.toFixed(2)}&lt;/p&gt;
+&lt;input tabindex={0} value={preco} /&gt;</pre>
+
+<pre class="out">&lt;button disabled=""&gt;comprar&lt;/button&gt; &lt;button&gt;pagar&lt;/button&gt; &lt;p data-preco="0.9" id="preco-pao"&gt;R$ 0.90&lt;/p&gt; &lt;input tabindex="0" value="0.9"/&gt;</pre>
+
+<p>Quatro coisas para observar. Primeiro: o botão com <code>disabled={ativo}</code> saiu com <code>disabled=""</code> — atributo presente, valor vazio. Segundo: o segundo botão, com <code>disabled={!ativo}</code>, saiu sem o atributo nenhum. Terceiro: <code>data-preco</code> recebeu o número como texto, e o <code>id</code> misturou texto fixo com valor entre chaves. Quarto: <code>tabindex={0}</code> virou <code>tabindex="0"</code>, porque no HTML todo atributo é texto.</p>
+
+<dl class="anatomy">
+  <dt>disabled</dt><dd>o <strong>nome</strong> do atributo. Tem de existir no elemento: <code>disabled</code> vale em <code>button</code>, <code>input</code> e <code>select</code>, e não vale em <code>div</code>.</dd>
+  <dt>=</dt><dd>o sinal que liga o nome ao <strong>valor</strong>. Em HTML, atributo sem valor é permitido; em Svelte, você sempre liga a uma expressão.</dd>
+  <dt>{ }</dt><dd>as <strong>chaves</strong> dizem que o valor vem do JavaScript. Sem elas, o compilador entende texto literal.</dd>
+  <dt>!ativo</dt><dd>a <strong>expressão</strong>. Pode ser uma variável, uma negação, uma comparação ou uma chamada de função.</dd>
+</dl>
+
+<p>Essa última parte é a chave para entender o resto: o HTML não tem tipos. <code>0.9</code> e <code>"0.9"</code> chegam iguais ao navegador. Quem dá sentido ao valor é o elemento: para <code>input</code>, o navegador interpreta <code>value</code> como texto; para <code>disabled</code>, interpreta a presença do atributo como "desabilitado", independentemente do valor.</p>
+
+<hr>
+
+<h2>3. Aspas: quando são obrigatórias</h2>
+
+<p>Se o valor do atributo é só uma expressão, as aspas podem sair: <code>disabled={ativo}</code> é a forma preferida. Se o valor mistura texto e expressão, as aspas são obrigatórias: <code>id="preco-{id}"</code>. Escrever <code>id=preco-{id}</code> sem aspas quebra o arquivo, com uma mensagem comprida que explica a regra.</p>
+
+<p>A regra é fácil de lembrar: chaves sozinhas dispensam aspas; chaves no meio de texto pedem aspas. O compilador não tem como saber onde termina o texto e começa o valor quando não há aspas, então ele recusa em vez de adivinhar.</p>
+
+<p>Dentro das aspas, o texto é texto: acentos, espaços e pontuação valem como estão. O valor da expressão é escapado na hora de virar atributo, como vimos na aula de escape — inclusive aspas dentro do valor, que seriam um problema se não fossem escapadas.</p>
+
+<hr>
+
+<h2>4. Atributos booleanos</h2>
+
+<p>Alguns atributos não têm valor: a presença deles já significa "sim". <code>disabled</code>, <code>checked</code>, <code>readonly</code>, <code>required</code>, <code>selected</code>, <code>multiple</code> e <code>autofocus</code> são assim. Em HTML puro, você escreve <code>disabled</code> ou <code>disabled=""</code>; no Svelte, você escreve <code>disabled={expressão}</code>, e o compilador decide se coloca ou tira o atributo.</p>
+
+<p>O código gerado mostra que ele não escreve o atributo como texto: escreve a propriedade do elemento.</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "const {compile}=require('svelte/compiler');console.log(compile(require('fs').readFileSync('src/App.svelte','utf8'),{generate:'client',filename:'src/App.svelte'}).js.code)"
+import 'svelte/internal/init-operations';
+import 'svelte/internal/disclose-version';
+import * as $ from 'svelte/internal/client';
+
+var root = $.from_html(`<button>comprar</button>`);
+
+export default function App($$anchor) {
+	let ativo = true;
+	var button = root();
+
+	button.disabled = ativo;
+	$.append($$anchor, button);
+}</pre>
+
+<p><code>button.disabled = ativo</code> é uma propriedade do DOM, que aceita verdadeiro ou falso. É por isso que <code>disabled={false}</code> faz o atributo sumir, enquanto <code>disabled="false"</code> mantém o botão desabilitado: a string "false" é verdadeira em HTML, porque o atributo existe. Guarde essa diferença — ela é a origem de muitos bugs silenciosos.</p>
+
+<hr>
+
+<h2>5. Quando o valor é falso, nulo ou vazio</h2>
+
+<p>O Svelte remove o atributo quando o valor é <code>false</code>, <code>null</code> ou <code>undefined</code>. Isso vale para qualquer atributo, não só os booleanos. Uma âncora sem endereço, por exemplo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let link = $state(null);
+&lt;/script&gt;
+
+&lt;a href={link}&gt;cardápio&lt;/a&gt;
+&lt;input type="checkbox" checked={false} /&gt;</pre>
+
+<pre class="out">&lt;a&gt;cardápio&lt;/a&gt; &lt;input type="checkbox"/&gt;</pre>
+
+<p>O <code>a</code> ficou sem <code>href</code> e a caixa ficou sem <code>checked</code>. É um comportamento útil: você pode representar "não tem endereço" com <code>null</code> e o HTML sai limpo, sem <code>href="null"</code> nem <code>href="undefined"</code>. Também é um comportamento perigoso: se você esperava que o link funcionasse e o valor ainda não chegou, o link fica inerte sem aviso.</p>
+
+<p>Valor vazio (<code>''</code>) é diferente: ele mantém o atributo com valor vazio. E o número zero também: <code>tabindex={0}</code> aparece, porque zero é um valor válido. A regra é só para <code>false</code>, <code>null</code> e <code>undefined</code>.</p>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Reservas: 0">
+<p class="try-task"><strong>Missão:</strong> sem estoque, o botão ainda reserva. Use o atributo booleano <code>disabled</code> com a condição <code>estoque === 0</code> para impedir o clique, e a tela deve continuar em "Reservas: 0".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let estoque = $state(0);
+  let reservas = $state(0);
+&lt;/script&gt;
+
+&lt;button onclick={() =&gt; reservas++}&gt;reservar&lt;/button&gt;
+&lt;p&gt;Reservas: {reservas}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let estoque = $state(0);
+  let reservas = $state(0);
+&lt;/script&gt;
+
+&lt;button disabled={estoque === 0} onclick={() =&gt; reservas++}&gt;reservar&lt;/button&gt;
+&lt;p&gt;Reservas: {reservas}&lt;/p&gt;</pre>
+</div>
+
+<p>A meta clica no botão e confere que o contador continua em zero. Se o atributo não estiver certo, o clique passa e a reserva acontece. É uma forma de testar comportamento de atributo sem olhar o HTML.</p>
+
+<hr>
+
+<h2>6. Propriedade do DOM × atributo</h2>
+
+<p>Existe uma distinção técnica que explica vários comportamentos estranhos: no navegador, cada elemento tem atributos (o que está escrito no HTML) e propriedades (o que está no objeto JavaScript daquele elemento). Muitas vezes os dois têm o mesmo nome e valores parecidos, mas não são a mesma coisa.</p>
+
+<p>Para atributos conhecidos, como <code>disabled</code>, <code>value</code> e <code>checked</code>, o Svelte escreve a propriedade — como você viu em <code>button.disabled = ativo</code>. Propriedade aceita booleano de verdade, e por isso <code>false</code> desabilita o atributo em vez de escrever a palavra. Já para atributos que o navegador não conhece, como <code>data-preco</code>, ele usa <code>setAttribute</code> e o valor vira texto.</p>
+
+<p>Na prática, isso significa que <code>value</code> de um <code>input</code> se comporta como valor do campo, e não como texto congelado no HTML: quando você digita, a propriedade muda, mas o atributo continua com o valor antigo. É por isso que ler o HTML pelo inspetor às vezes mostra um valor diferente do que está na tela — e é mais uma razão para não confiar no HTML gerado como se fosse o código-fonte.</p>
+
+<p>Para quem está começando, a regra é simples: use o atributo que o elemento conhece, com o tipo que ele espera. Booleano para booleanos, texto para texto, número para número — e não tente inventar atributo para guardar dado. Para dado, use <code>data-*</code>, que é o lugar combinado para isso.</p>
+
+<h2>7. <code>class</code> e <code>style</code> são texto</h2>
+
+<p>Os dois atributos que mais aparecem no dia a dia são <code>class</code> e <code>style</code>, e os dois recebem texto. Uma classe é uma palavra (ou várias, separadas por espaço); um estilo é uma lista de propriedades CSS separadas por ponto e vírgula. Você pode montar os dois com chaves e texto:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cor = $state('green');
+&lt;/script&gt;
+
+&lt;p style="color: {cor}; padding: 4px"&gt;pão&lt;/p&gt;
+&lt;p style={ { color: cor, padding: '4px' } }&gt;bolo&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p style="color: green; padding: 4px"&gt;pão&lt;/p&gt; &lt;p style="[object Object]"&gt;bolo&lt;/p&gt;</pre>
+
+<p>O primeiro parágrafo saiu certo. O segundo, que tentou passar um objeto, virou <code>[object Object]</code> — a conversão padrão de objeto para texto em JavaScript. Nada de erro, nada de aviso: só um estilo que não funciona. Para estilo dinâmico existe a diretiva <code>style:</code>, com aula própria; para classe condicional existe <code>class:</code>, também com aula própria.</p>
+
+<p>Com <code>class</code>, a mesma regra: é texto. <code>class="preco {cor}"</code> funciona e junta as palavras; <code>class={cor}</code> funciona e usa o valor sozinho. O que não funciona é passar objeto ou lista — o resultado seria <code>[object Object]</code> ou palavras coladas por vírgula.</p>
+
+<div class="trysvelte" data-goal="digitar:input=Ana;;outre:^Olá, Ana">
+<p class="try-task"><strong>Missão:</strong> o campo tem <code>value={nome}</code>, mas digitar não muda o estado. Acrescente o evento <code>oninput</code> que copia o valor do campo para <code>nome</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;input value={nome} /&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let nome = $state('');
+&lt;/script&gt;
+
+&lt;input value={nome} oninput={(e) =&gt; (nome = e.currentTarget.value)} /&gt;
+&lt;p&gt;Olá, {nome}&lt;/p&gt;</pre>
+</div>
+
+<p>Aqui está a diferença entre atributo e evento. <code>value</code> é uma via de mão única: o estado manda no campo, mas o campo não manda no estado. Para a via de volta, é preciso escutar <code>oninput</code> e atualizar o estado. Quando as duas vias existem, o campo e o texto ficam sincronizados — e é isso que a diretiva <code>bind:value</code> faz em uma linha, com aula própria mais adiante.</p>
+
+<hr>
+
+<h2>8. Espalhar vários atributos: <code>{...props}</code></h2>
+
+<p>Quando você tem um objeto com vários atributos, pode espalhá-lo na tag com três pontos. Cada chave do objeto vira um atributo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let props = $state({ type: 'text', placeholder: 'nome' });
+&lt;/script&gt;
+
+&lt;input {...props} /&gt;
+&lt;input type="text" placeholder={props.placeholder} /&gt;</pre>
+
+<pre class="out">&lt;input type="text" placeholder="nome"/&gt; &lt;input type="text" placeholder="nome"/&gt;</pre>
+
+<p>As duas linhas produzem o mesmo HTML. A primeira é mais curta e serve quando o objeto é grande ou vem pronto de outro lugar; a segunda é mais explícita e serve quando você quer deixar claro quais atributos importam. O custo do spread é que o leitor não vê a lista de atributos na tag: precisa saber o que tem no objeto.</p>
+
+<p>Atributos fixos podem conviver com o espalhamento. Se o objeto tiver a mesma chave de um atributo escrito na tag, o último vence — então a ordem importa. Para quem está começando, prefira o explícito e use spread quando o objeto vier de um componente pai, assunto do Nível 2.</p>
+
+<hr>
+
+<h2>9. Eventos não são atributos comuns</h2>
+
+<p><code>onclick</code>, <code>oninput</code>, <code>onsubmit</code> e companhia parecem atributos, mas não são: O valor deles precisa ser uma função, e o compilador liga essa função ao evento do navegador. Escrever o código dentro de aspas não funciona — é o erro que vimos na aula de erros de compilação, e vale repetir a regra: evento em chaves, com função.</p>
+
+<p>A diferença aparece no código compilado: um atributo comum vira <code>elemento.atributo = valor</code>; um evento vira <code>elemento.addEventListener</code>. São mecanismos diferentes, com custos diferentes. O evento fica registrado e é chamado muitas vezes; o atributo é aplicado quando muda.</p>
+
+<p>Existe ainda uma confusão de nomes: o atributo HTML se chama <code>onclick</code> em minúsculas, mas a propriedade do DOM se chama <code>onclick</code> também. No Svelte 5, os dois são escritos do mesmo jeito, e o compilador decide o que fazer pelo tipo de valor: função vira evento; texto vira erro. Não existe <code>on:click</code> nas aulas deste guia — essa é a forma antiga, que ainda compila com aviso de depreciação e vai sair em versões futuras.</p>
+
+<p>Uma consequência prática: não use atributo para "chamar uma função". <code>onclick={() => soma()}</code> é evento; <code>value={soma()}</code> é atributo e chama a função a cada desenho — o que pode ser caro ou até criar um laço. Se o valor depende de uma conta, calcule antes; se depende de um clique, use evento.</p>
+
+<hr>
+
+<h2>10. Acessibilidade: o <code>alt</code> que falta</h2>
+
+<p>Alguns atributos não mudam o visual, mas mudam quem consegue usar a página. O mais conhecido é <code>alt</code>, o texto alternativo de uma imagem, lido por leitores de tela e mostrado quando a imagem não carrega. O compilador avisa quando ele falta:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;img src="pao.jpg"&gt;</pre>
+
+<pre class="out">&lt;img src="pao.jpg"/&gt;</pre>
+
+<p>E, junto com a saída, vem o aviso:</p>
+
+<pre class="out">aviso: a11y_missing_attribute (linha 1): `&lt;img&gt;` element should have an alt attribute
+https://svelte.dev/e/a11y_missing_attribute</pre>
+
+<p>Para listar os avisos de um arquivo sem abrir o navegador, dá para pedir só os códigos:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "const {compile}=require('svelte/compiler');const r=compile(require('fs').readFileSync('src/App.svelte','utf8'),{filename:'src/App.svelte'});console.log(r.warnings.map(w=>w.code).join('\n'))"
+a11y_missing_attribute</pre>
+
+<p>A correção é simples: <code>alt="pão francês na vitrine"</code> quando a imagem tem conteúdo informativo, ou <code>alt=""</code> quando ela é só decoração. O valor vazio é uma escolha consciente: diz ao leitor de tela "pode pular". O que não vale é esquecer — e o aviso existe para lembrar.</p>
+
+<hr>
+
+<h2>11. Quando dá errado</h2>
+
+<p>Os três casos abaixo são reais. O primeiro é erro de compilação; os outros dois compilam e produzem HTML errado, que é pior, porque não aparece no terminal.</p>
+
+<div class="cenario">
+<strong>Erro 1 — valor com expressão sem aspas</strong>
+<p>A tag mistura texto e chaves sem aspas. O compilador não sabe onde termina o texto.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('Ana');
+&lt;/script&gt;
+
+&lt;h1 class=titulo{nome}&gt;oi&lt;/h1&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 4): Attribute values containing `{...}` must be enclosed in quote marks, unless the value only contains the expression</pre>
+<p>A mensagem diz exatamente a regra: valor com <code>{...}</code> precisa de aspas, a não ser que o valor seja só a expressão. Escreva <code>class="titulo {nome}"</code> ou <code>class={nome}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>"false"</code> entre aspas</strong>
+<p>Como string, "false" é um valor presente. Para o HTML, o atributo existe e o botão está desabilitado.</p>
+<pre class="file" data-file="src/App.svelte">&lt;input type="checkbox" checked="false" /&gt;
+&lt;button disabled="false"&gt;comprar&lt;/button&gt;</pre>
+<pre class="out">&lt;input type="checkbox" checked="false"/&gt; &lt;button disabled="false"&gt;comprar&lt;/button&gt;</pre>
+<p>O navegador marca a caixa e desabilita o botão, porque em HTML o que conta é a presença do atributo. Use chaves: <code>checked={false}</code> e <code>disabled={false}</code>, e os dois desaparecem.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — atributo que não existe naquele elemento</strong>
+<p><code>disabled</code> e <code>href</code> não fazem sentido em uma <code>div</code>. O compilador não reclama: ele só escreve os atributos.</p>
+<pre class="file" data-file="src/App.svelte">&lt;div disabled href="/cardapio"&gt;cardápio&lt;/div&gt;</pre>
+<pre class="out">&lt;div disabled="" href="/cardapio"&gt;cardápio&lt;/div&gt;</pre>
+<p>O resultado é uma div que parece um link desabilitado e não é nem uma coisa nem outra. Atributo pertence ao elemento: para link, <code>a</code>; para botão desabilitado, <code>button</code>. Quando algo "não funciona" sem dar erro, confira se o atributo existe no elemento usado.</p>
+</div>
+
+<div class="trysvelte" data-goal="clique:button;;outre:Cliques: 1">
+<p class="try-task"><strong>Missão:</strong> o botão está sempre desabilitado, porque o atributo <code>disabled</code> foi escrito sozinho. Ligue-o ao estado com <code>disabled={!ativo}</code>, para que o clique conte.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let ativo = $state(true);
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button disabled onclick={() =&gt; cliques++}&gt;somar&lt;/button&gt;
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let ativo = $state(true);
+  let cliques = $state(0);
+&lt;/script&gt;
+
+&lt;button disabled={!ativo} onclick={() =&gt; cliques++}&gt;somar&lt;/button&gt;
+&lt;p&gt;Cliques: {cliques}&lt;/p&gt;</pre>
+</div>
+
+<p>Com <code>ativo</code> valendo verdadeiro, <code>!ativo</code> vale falso, e o atributo some. O botão volta a responder e o contador sobe para 1 — exatamente o que a meta confere.</p>
+
+<hr>
+
+<h2>12. Referência rápida</h2>
+
+<p>Os formatos de atributo que você vai encontrar e o que cada valor faz.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Exemplo</th><th>Resultado</th></tr>
+<tr><td>valor fixo</td><td><code>type="text"</code></td><td>atributo com texto</td></tr>
+<tr><td>expressão sozinha</td><td><code>disabled={ativo}</code></td><td>atributo presente ou ausente</td></tr>
+<tr><td>texto com expressão</td><td><code>id="preco-{id}"</code></td><td>texto montado</td></tr>
+<tr><td>espalhamento</td><td><code>{...props}</code></td><td>um atributo por chave do objeto</td></tr>
+<tr><td>valor nulo</td><td><code>href={null}</code></td><td>atributo ausente</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Atributo</th><th>Tipo</th><th>Cuidado</th></tr>
+<tr><td><code>disabled</code></td><td>booleano</td><td><code>"false"</code> ainda desabilita</td></tr>
+<tr><td><code>checked</code></td><td>booleano</td><td><code>"false"</code> ainda marca</td></tr>
+<tr><td><code>class</code></td><td>texto</td><td>objeto vira <code>[object Object]</code></td></tr>
+<tr><td><code>style</code></td><td>texto</td><td>objeto vira <code>[object Object]</code></td></tr>
+<tr><td><code>alt</code></td><td>texto</td><td>obrigatório em <code>img</code>: o compilador avisa</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="3"><p class="mc-q">1. O que <code>disabled={false}</code> produz no HTML?</p>
+<label><input type="radio" name="q1"> <code>disabled="false"</code></label>
+<label><input type="radio" name="q1"> um erro de compilação</label>
+<label><input type="radio" name="q1"> nenhum atributo: o botão fica habilitado</label>
+<label><input type="radio" name="q1"> <code>disabled</code> sem valor, mas desabilitado</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">2. Por que <code>class=titulo{nome}</code> não compila?</p>
+<label><input type="radio" name="q1"> porque valor que mistura texto e expressão precisa de aspas</label>
+<label><input type="radio" name="q1"> porque <code>class</code> não aceita expressão</label>
+<label><input type="radio" name="q1"> porque falta o ponto e vírgula</label>
+<label><input type="radio" name="q1"> porque <code>nome</code> é palavra reservada</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">3. O que aparece na tela quando o atributo <code>style</code> recebe um objeto?</p>
+<label><input type="radio" name="q1"> o estilo é aplicado normalmente</label>
+<label><input type="radio" name="q1"> um erro de compilação</label>
+<label><input type="radio" name="q1"> nada: o parágrafo desaparece</label>
+<label><input type="radio" name="q1"> o estilo não é aplicado; o HTML mostra <code>[object Object]</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;button <input data-answer="disabled={ativo}|disabled={ ativo }">&gt;comprar&lt;/button&gt;<br><br>// quando ativo for verdadeiro, o botão fica desabilitado</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Atributo é a etiqueta do elemento e não aparece na tela.</li>
+  <li>Valor fixo usa aspas; valor de estado usa chaves.</li>
+  <li>Texto com expressão exige aspas: <code>id="preco-{id}"</code>.</li>
+  <li>Atributos booleanos usam a presença: <code>disabled={condição}</code>.</li>
+  <li><code>false</code>, <code>null</code> e <code>undefined</code> removem o atributo.</li>
+  <li>String <code>"false"</code> mantém o atributo: o botão continua desabilitado.</li>
+  <li><code>class</code> e <code>style</code> são texto; objeto vira <code>[object Object]</code>.</li>
+  <li><code>{...props}</code> espalha um objeto em vários atributos.</li>
+  <li><code>onclick</code> é evento, não atributo: recebe função.</li>
+  <li>O compilador avisa quando falta <code>alt</code> em uma imagem.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

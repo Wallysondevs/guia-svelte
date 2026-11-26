@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>class: e Estilo por Condição — a classe que entra e sai | Guia Svelte</title>
+<meta name="description" content="A diretiva class: do Svelte: classe condicional, forma abreviada, combinação com class fixa, o que o compilador gera e o style: para estilo pontual.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">class: e Estilo por Condição</span></h1>
+
+<p class="intro">A Ana usa etiquetas coloridas nos potes da cozinha: verde para o que está pronto, amarelo para o que está acabando. A etiqueta não muda o conteúdo do pote — muda o que ela vê de longe e o que os funcionários entendem sem abrir. Em CSS, a classe é essa etiqueta, e o Svelte tem uma diretiva para colar e descolar a etiqueta conforme uma condição: <code>class:verde={acabando}</code>. Nesta aula você aprende a ligar e desligar classes, o que o compilador gera por baixo e quando vale usar estilo direto.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma classe e por que ela é a etiqueta do CSS.</li>
+  <li>A forma abreviada <code>class:verde</code>, que usa a variável de mesmo nome.</li>
+  <li>A forma completa <code>class:verde={condição}</code>.</li>
+  <li>Como combinar uma classe fixa com várias condicionais.</li>
+  <li>O que o compilador gera: <code>$.set_class</code> com um objeto de classes.</li>
+  <li>Como a classe condicional convive com o CSS escopado do componente.</li>
+  <li>Quando usar <code>class={expressão}</code> em vez da diretiva.</li>
+  <li>A diretiva <code>style:</code> para um ajuste pontual.</li>
+  <li>Os erros reais: valor vazio, valor entre aspas e nome de classe ausente.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a etiqueta que muda de cor</h2>
+
+<p>Na padaria da Ana, cada pote tem uma etiqueta com o nome do conteúdo. Alguns potes ganham uma segunda etiqueta, colorida, que muda conforme a situação: verde quando está cheio, amarela quando está acabando. A segunda etiqueta não tem texto novo, não muda o pote, não muda o conteúdo — muda a leitura de quem passa.</p>
+
+<p>Em CSS, a classe é a etiqueta: um nome que aparece no atributo <code>class</code> e que as regras de estilo procuram. Um elemento pode ter várias classes, separadas por espaço. Quem decide quais regras valem é a combinação de classes, não a ordem em que aparecem.</p>
+
+<p>A diferença no Svelte é que a etiqueta pode ser colada e descolada por uma condição, sem você escrever a lista de classes à mão. A diretiva <code>class:</code> faz isso com uma sintaxe curta e um comportamento previsível: se a condição é verdadeira, a classe entra; se é falsa, a classe sai.</p>
+
+<hr>
+
+<h2>2. A forma abreviada: <code>class:verde</code></h2>
+
+<p>Quando a variável tem o mesmo nome da classe, você pode omitir o valor. O compilador entende que a condição é a própria variável:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let ativo = $state(true);
+  let grande = $state(false);
+&lt;/script&gt;
+
+&lt;p class:verde={ativo} class:grande={grande}&gt;pão&lt;/p&gt;
+
+&lt;style&gt;
+  .verde { color: #2e7d32; }
+  .grande { font-size: 24px; }
+&lt;/style&gt;</pre>
+
+<pre class="out">&lt;p class="svelte-1n46o8q verde"&gt;pão&lt;/p&gt;</pre>
+
+<p>A saída tem duas classes: <code>svelte-1n46o8q</code>, o selo do escopo que o compilador colocou, e <code>verde</code>, a classe que a condição liberou. <code>grande</code> não apareceu porque a variável vale falso. Não há <code>class="svelte-1n46o8q"</code> vazia sobrando: o atributo é montado com o que vale.</p>
+
+<p>As três partes da diretiva, uma por uma:</p>
+
+<dl class="anatomy">
+  <dt>class:</dt><dd>o <strong>prefixo</strong> que avisa o Svelte de que aquilo não é um atributo comum. Tudo o que vem depois dos dois-pontos é nome de classe.</dd>
+  <dt>verde</dt><dd>o <strong>nome da classe</strong>, escrito sem ponto. No CSS ele aparece como <code>.verde</code>, com ponto; no HTML e na diretiva, sem. É a mesma palavra nos dois lugares.</dd>
+  <dt>={condição}</dt><dd>o <strong>valor</strong>, opcional. Sem ele, o Svelte procura uma variável com o mesmo nome da classe e usa o valor dela. Com ele, usa a expressão que você escreveu.</dd>
+</dl>
+
+<p>Quando o valor não é escrito, a regra é simples: existe uma variável com o mesmo nome, e ela decide. Por isso <code>class:verde</code> só funciona se houver um <code>verde</code> no script — se não houver, o compilador reclama que o nome não existe, do mesmo jeito que reclamaria de <code>{verde}</code> solto no HTML.</p>
+
+<p>Vale saber o que conta como verdadeiro. O Svelte usa a regra do JavaScript: são falsos <code>false</code>, <code>0</code>, a string vazia <code>''</code>, <code>null</code> e <code>undefined</code>. Todo o resto é verdadeiro — inclusive a string <code>'false'</code>, que é texto e não o valor falso. Esse detalhe já confundiu muita gente: uma variável que veio de um campo de formulário chega como texto, e <code>'false'</code> liga a classe.</p>
+
+<div class="trysvelte" data-goal='html:<p class="verde">pão</p>'>
+<p class="try-task"><strong>Missão:</strong> o parágrafo tem a classe <code>destaque</code>, mas a etiqueta certa é <code>verde</code> e ela deve ser condicional. Use a forma abreviada <code>class:verde</code> — sem chaves, sem valor — para o HTML gerado ficar com <code>class="verde"</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let verde = $state(true);
+&lt;/script&gt;
+
+&lt;p class="destaque"&gt;pão&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let verde = $state(true);
+&lt;/script&gt;
+
+&lt;p class:verde&gt;pão&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que a solução não tem <code>=</code> nem chaves: só o nome da classe. Se você escrevesse <code>class:verde={verde}</code>, o resultado seria idêntico — a forma longa é o que a abreviada significa. Escolha uma e mantenha o estilo no arquivo inteiro; misturar as duas formas na mesma página só dificulta a leitura de quem vem depois.</p>
+
+<p>O limite da forma abreviada aparece quando a condição não cabe no nome de uma variável. Uma comparação, uma negação, uma chamada de função: nada disso tem nome de classe. Para esses casos existem as chaves, que é o assunto do próximo capítulo.</p>
+
+<hr>
+
+<h2>3. A forma completa: <code>class:verde={condição}</code></h2>
+
+<p>Com chaves, o valor pode ser qualquer expressão que resulte em verdadeiro ou falso: uma comparação, uma negação, uma chamada de função. É o caso mais comum no dia a dia:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(2.5);
+&lt;/script&gt;
+
+&lt;p class:caro={preco &gt; 2}&gt;R$ {preco.toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p class="caro"&gt;R$ 2.50&lt;/p&gt;</pre>
+
+<p>O HTML gerado mostra a classe <code>caro</code> no elemento, porque 2.5 é maior que 2. O preço aparece como <code>R$ 2.50</code> por causa do <code>toFixed(2)</code>, que fixa duas casas decimais. Se o preço caísse para 1.9, a classe sumiria do atributo e o texto ficaria <code>R$ 1.90</code>.</p>
+
+<p>Aqui a classe <code>caro</code> entra quando o preço passa de 2. Se o preço mudar para 1.90, a classe sai e a etiqueta muda sozinha. Você não escreve <code>if</code> nem manipula o atributo: descreve a condição e o Svelte cuida do resto.</p>
+
+<p>Uma coisa que a diretiva <em>não</em> faz é calcular o estilo. Ela só liga e desliga a classe; quem pinta é o CSS. Isso parece detalhe e é o que mantém o componente legível: a regra visual fica no bloco <code>&lt;style&gt;</code>, e a condição fica no HTML. Quando alguém quiser mudar a cor do "caro", mexe no CSS; quando quiser mudar o limite, mexe na condição.</p>
+
+<hr>
+
+<h2>4. Combinando classe fixa e condicional</h2>
+
+<p>Você pode ter uma classe que sempre existe e outra que aparece conforme a situação. Basta usar os dois atributos na mesma tag:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let caro = $state(true);
+&lt;/script&gt;
+
+&lt;p class="preco" class:destaque={caro}&gt;R$ 2&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p class="preco destaque"&gt;R$ 2&lt;/p&gt;</pre>
+
+<p>O resultado é <code>class="preco destaque"</code>: a classe fixa vem primeiro, a condicional é acrescentada. Se <code>caro</code> fosse falso, sobraria só <code>preco</code>. Essa mistura é a forma mais comum de usar a diretiva, porque quase todo elemento já tem uma classe base.</p>
+
+<p>Ordem das classes no atributo não muda o resultado visual, mas ajuda na leitura: coloque primeiro a classe que identifica o componente, depois as condicionais. E tome cuidado com duas fontes de verdade — se a classe fixa também for controlada por uma variável, você terá o mesmo nome em dois lugares e um deles vai vencer sem aviso.</p>
+
+<div class="trysvelte" data-goal='html:<p class="preco destaque">R$ 2</p>'>
+<p class="try-task"><strong>Missão:</strong> o parágrafo tem a classe fixa <code>preco</code> e precisa receber <code>destaque</code> quando <code>caro</code> for verdadeiro. Use a diretiva <code>class:destaque={caro}</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let caro = $state(true);
+&lt;/script&gt;
+
+&lt;p class="preco"&gt;R$ 2&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let caro = $state(true);
+&lt;/script&gt;
+
+&lt;p class="preco" class:destaque={caro}&gt;R$ 2&lt;/p&gt;</pre>
+</div>
+
+<p>A meta desta caixa confere o HTML gerado, e não o texto: é a única forma de verificar que a classe entrou. Repare que o HTML esperado é exatamente <code>&lt;p class="preco destaque"&gt;R$ 2&lt;/p&gt;</code>, com as duas classes na ordem em que o compilador as escreve.</p>
+
+<hr>
+
+<h2>5. O que o compilador gera</h2>
+
+<p>A diretiva não vira uma lista de <code>if</code> no seu código. O compilador gera uma chamada só, com um objeto que descreve as classes condicionais:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "const {compile}=require('svelte/compiler');console.log(compile(require('fs').readFileSync('src/App.svelte','utf8'),{generate:'client',filename:'src/App.svelte'}).js.code)"
+import 'svelte/internal/init-operations';
+import 'svelte/internal/disclose-version';
+import * as $ from 'svelte/internal/client';
+
+var root = $.from_html(`<p>pão</p>`);
+
+export default function App($$anchor) {
+	let ativo = true;
+	let grande = false;
+	var p = root();
+
+	$.set_class(p, 1, 'svelte-1n46o8q', null, {}, { verde: ativo, grande });
+	$.append($$anchor, p);
+}</pre>
+
+<p>A linha importante é <code>$.set_class(p, 1, 'svelte-1n46o8q', null, {}, { verde: ativo, grande })</code>. O último argumento é o mapa de classes condicionais: <code>verde</code> vale <code>ativo</code>, <code>grande</code> vale <code>grande</code>. O motor percorre esse mapa e liga as classes cujo valor é verdadeiro. Como o estado nunca muda neste exemplo, o compilador até simplificou os valores para constantes.</p>
+
+<p>O <code>1</code> e o <code>'svelte-1n46o8q'</code> são o selo do escopo. Eles aparecem porque o componente tem <code>&lt;style&gt;</code>: o motor precisa manter a classe do selo junto com as condicionais, sem nunca removê-la. Se o componente não tivesse estilo, essa parte seria diferente.</p>
+
+<hr>
+
+<h2>6. A classe condicional e o CSS escopado</h2>
+
+<p>O bloco de estilo do componente é escopado, e as classes que você usa nele também recebem o selo. O CSS gerado para o exemplo anterior:</p>
+
+<pre class="out">.verde.svelte-1n46o8q { color: #2e7d32; }
+  .grande.svelte-1n46o8q { font-size: 24px; }</pre>
+
+<p>Repare na forma: <code>.verde.svelte-1n46o8q</code> significa "elemento que tem a classe <code>verde</code> <em>e</em> o selo". É por isso que a classe condicional funciona: no HTML gerado, o elemento recebe os dois quando a condição é verdadeira, e a regra encontra exatamente ele.</p>
+
+<p>Depois do build, o CSS vira um arquivo comprimido com o mesmo conteúdo, e o seletor continua com o selo:</p>
+
+<pre class="term">ana@notebook:~/loja$ npm run build
+
+> loja@0.0.1 build
+> vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 112 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/index-YDJsU4ia.css   0.08 kB │ gzip:  0.08 kB
+dist/assets/index-CttOzGMv.js   34.26 kB │ gzip: 13.23 kB
+✓ built in 1.07s</pre>
+
+<pre class="term">ana@notebook:~/loja$ cat dist/assets/index-YDJsU4ia.css
+.verde.svelte-1n46o8q{color:#2e7d32}.grande.svelte-1n46o8q{font-size:24px}</pre>
+
+<p>Repare também no que <em>não</em> aparece: o selo não é escrito no bloco de estilo por você. Você escreve <code>.verde</code> e o compilador acrescenta <code>.svelte-1n46o8q</code>. Fazer isso à mão, além de trabalhoso, daria errado na primeira vez que o arquivo fosse renomeado — o hash muda com o caminho do arquivo, e a aula sobre erros de compilação mostra isso acontecendo.</p>
+
+<p>Uma consequência prática: classe condicional que não existe no bloco de estilo não pinta nada. Ela aparece no HTML, mas nenhuma regra a usa — e o compilador avisa com <code>css_unused_selector</code> quando é o contrário, isto é, quando uma regra do estilo nunca encontra elemento. Nos dois casos, o sintoma é o mesmo: a tela não muda, e o problema está na ligação entre a classe e a regra.</p>
+
+<hr>
+
+<h2>7. <code>class={expressão}</code> em vez da diretiva</h2>
+
+<p>A diretiva é conveniente para uma classe condicional. Quando a lista de classes é montada como texto — por exemplo, com uma função que devolve a lista inteira —, o atributo comum com chaves resolve:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cor = $state('green');
+&lt;/script&gt;
+
+&lt;p class="preco {cor}"&gt;R$ 2&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p class="preco green"&gt;R$ 2&lt;/p&gt;</pre>
+
+<p>Aqui a classe vem de uma variável que contém o nome, e o texto fixo <code>preco</code> convive com ele. Funciona, mas exige disciplina: se <code>cor</code> vier vazia, sobra um espaço no atributo; se vier com espaços, viram duas classes. A diretiva não tem esse problema porque trabalha com nomes, não com texto.</p>
+
+<p>Existe uma diferença de comportamento que vale conhecer. Na diretiva, o Svelte guarda o nome da classe como um identificador e liga ou desliga sem tocar no resto do atributo. No atributo comum com chaves, todo o texto é recalculado quando qualquer pedaço muda. Para o navegador o resultado é parecido; para quem depura, a diretiva é mais previsível, porque cada classe tem um nome e um lugar só.</p>
+
+<p>A regra que o guia usa: uma ou duas classes condicionais, use <code>class:</code>; lista dinâmica que vem pronta de uma função ou de um objeto, use <code>class={...}</code>. E nunca os dois para a mesma classe — o resultado fica imprevisível e difícil de depurar.</p>
+
+<hr>
+
+<h2>8. <code>style:</code> para um ajuste pontual</h2>
+
+<p>Existe uma diretiva irmã, para quando você precisa mudar uma propriedade de estilo direto no elemento, sem criar uma classe. Ela se chama <code>style:</code> e recebe o nome da propriedade CSS:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let cor = $state('green');
+&lt;/script&gt;
+
+&lt;p style:color={cor} style:padding="4px"&gt;pão&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p style="color: green; padding: 4px;"&gt;pão&lt;/p&gt;</pre>
+
+<p>Duas diretivas na mesma tag geram um único atributo <code>style</code>, com as propriedades separadas por ponto e vírgula — inclusive o ponto e vírgula final. Se o valor for nulo ou falso, a propriedade é removida. Se você escrever <code>style:color</code> sem valor e existir uma variável <code>color</code>, a forma abreviada funciona como na classe.</p>
+
+<p>O custo do <code>style:</code> é que o estilo sai do bloco <code>&lt;style&gt;</code> e vai para o HTML, onde é mais difícil de achar depois. Use para o que realmente é dinâmico e pontual: uma cor que vem de configuração, uma largura calculada, uma posição de arraste. Para o resto, classe — de preferência condicional.</p>
+
+<div class="trysvelte" data-goal='html:<p style="color: green;">pão</p>'>
+<p class="try-task"><strong>Missão:</strong> o parágrafo não tem estilo nenhum. Use a diretiva <code>style:color={cor}</code> para que o HTML gerado fique com <code>style="color: green;"</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let cor = $state('green');
+&lt;/script&gt;
+
+&lt;p&gt;pão&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let cor = $state('green');
+&lt;/script&gt;
+
+&lt;p style:color={cor}&gt;pão&lt;/p&gt;</pre>
+</div>
+
+<p>A meta confere o atributo <code>style</code> no HTML, com o ponto e vírgula que o compilador acrescenta. Se você escrevesse <code>style="color: {cor}"</code> — o atributo comum — o resultado seria parecido, mas sem o ponto e vírgula final, e a conferência falharia. Detalhe bobo que obriga a olhar a saída real em vez de adivinhar.</p>
+
+<hr>
+
+<h2>9. Quando a classe não aparece</h2>
+
+<p>O sintoma mais comum com <code>class:</code> é a classe não aparecer. Três causas cobrem quase todos os casos. A primeira: a condição é falsa sem você perceber — um <code>undefined</code>, uma string vazia, um zero. Vale imprimir o valor na tela por um instante para conferir, ou usar uma comparação explícita.</p>
+
+<p>A segunda: a classe aparece no HTML, mas não há regra para ela. Confira se o nome está escrito igual nos dois lugares — <code>verde</code> no HTML e <code>.verde</code> no CSS. O compilador não sabe que você queria outra coisa; ele só liga e desliga o nome que você deu.</p>
+
+<p>A terceira: a regra existe, mas perde na disputa de especificidade. Uma regra com <code>!important</code> em outro lugar vence a sua, e a cor não muda. Para investigar, abra o inspetor do navegador e veja quais regras estão riscadas — as riscadas são as que perderam. É mais rápido do que tentar adivinhar.</p>
+
+<p>Quando duas regras do mesmo componente disputam o mesmo elemento, quem vence é a que aparece depois no bloco de estilo, desde que a especificidade seja igual. Duas classes no mesmo seletor, como <code>.preco.destaque</code>, vencem uma classe sozinha. Saber disso evita a tentação de espalhar <code>!important</code> pelo arquivo — sinal de que a ordem das regras precisa de atenção, não de força.</p>
+
+<p>Existe ainda o caso de a classe ser removida pelo próprio Svelte: se você usa <code>class:verde</code> e também escreve <code>class="verde"</code> fixo na mesma tag, o compilador pode ficar com as duas fontes de verdade e o resultado depende da ordem. Não misture: escolha uma.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão. Todas são erros de sintaxe da diretiva, e nenhuma é óbvia na primeira leitura.</p>
+
+<div class="cenario">
+<strong>Erro 1 — valor vazio entre chaves</strong>
+<p>As chaves existem, mas não têm expressão dentro. O compilador esperava um valor.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let ativo = $state(true);
+&lt;/script&gt;
+
+&lt;p class:verde={}&gt;pão&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 16): Unexpected token</pre>
+<p>Apague as chaves e use a forma abreviada, ou coloque uma expressão: <code>class:verde={ativo}</code>. Chaves vazias costumam sobrar de uma edição pela metade.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — valor entre aspas</strong>
+<p>A diretiva espera uma expressão JavaScript, não texto. Com aspas, o compilador recusa e diz exatamente o que queria.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let ativo = $state(true);
+&lt;/script&gt;
+
+&lt;p class:verde="sim"&gt;pão&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 16): Directive value must be a JavaScript expression enclosed in curly braces</pre>
+<p>A tradução é "o valor da diretiva precisa ser uma expressão JavaScript entre chaves". Escreva <code>class:verde={ativo}</code> ou <code>class:verde={true}</code> — e lembre de que <code>"sim"</code> seria verdadeiro de qualquer forma, então a aspa só atrapalhava.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — nome da classe ausente</strong>
+<p>Os dois-pontos ficaram sem nome depois. Não existe classe anônima.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let ativo = $state(true);
+&lt;/script&gt;
+
+&lt;p class:={ativo}&gt;pão&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 3): `class:` name cannot be empty</pre>
+<p>Escreva o nome: <code>class:verde={ativo}</code>. A posição aponta o dois-pontos, que é onde o compilador percebeu que faltava o nome.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>As formas da diretiva e o que cada uma faz.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>Efeito</th><th>Quando usar</th></tr>
+<tr><td><code>class:verde</code></td><td>usa a variável <code>verde</code> como condição</td><td>nome da variável igual ao da classe</td></tr>
+<tr><td><code>class:verde={ativo}</code></td><td>liga quando <code>ativo</code> é verdadeiro</td><td>caso geral</td></tr>
+<tr><td><code>class:caro={preco &gt; 2}</code></td><td>liga conforme uma comparação</td><td>condição calculada na hora</td></tr>
+<tr><td><code>class="preco"</code> + <code>class:destaque={x}</code></td><td>classe fixa mais condicional</td><td>elemento com classe base</td></tr>
+<tr><td><code>class={lista}</code></td><td>usa o texto como lista de classes</td><td>lista pronta, vinda de fora</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Diretiva</th><th>Para que serve</th><th>Gera no HTML</th></tr>
+<tr><td><code>class:nome</code></td><td>liga e desliga uma classe</td><td><code>class="… nome"</code></td></tr>
+<tr><td><code>style:propriedade</code></td><td>aplica uma propriedade CSS pontual</td><td><code>style="propriedade: valor;"</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>class:verde={ativo}</code> faz quando <code>ativo</code> é falso?</p>
+<label><input type="radio" name="q1"> escreve <code>class="verde"</code> com valor falso</label>
+<label><input type="radio" name="q1"> não coloca a classe <code>verde</code> no elemento</label>
+<label><input type="radio" name="q1"> dá erro de compilação</label>
+<label><input type="radio" name="q1"> coloca <code>class="verde falso"</code></label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">2. O que o compilador gera para as classes condicionais?</p>
+<label><input type="radio" name="q1"> vários <code>if</code> no HTML</label>
+<label><input type="radio" name="q1"> um arquivo CSS separado por componente</label>
+<label><input type="radio" name="q1"> uma chamada como <code>$.set_class</code> com um objeto de classes</label>
+<label><input type="radio" name="q1"> nada: o navegador resolve sozinho</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Para que serve <code>style:color={cor}</code>?</p>
+<label><input type="radio" name="q1"> aplicar a propriedade CSS <code>color</code> direto no elemento, com valor do estado</label>
+<label><input type="radio" name="q1"> criar uma classe chamada <code>color</code></label>
+<label><input type="radio" name="q1"> trocar a cor de todos os elementos da página</label>
+<label><input type="radio" name="q1"> importar um arquivo CSS externo</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;p class="preco" <input data-answer="class:destaque={caro}">&gt;R$ 2&lt;/p&gt;<br><br>// a classe destaque entra quando caro for verdadeiro</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Classe é a etiqueta que o CSS procura; um elemento pode ter várias.</li>
+  <li><code>class:verde</code> usa a variável de mesmo nome como condição.</li>
+  <li><code>class:verde={condição}</code> é a forma completa, com expressão.</li>
+  <li>A classe fixa convive com as condicionais: <code>class="preco" class:destaque={caro}</code>.</li>
+  <li>O compilador gera <code>$.set_class</code> com um objeto de classes.</li>
+  <li>Com CSS escopado, a classe ganha o selo: <code>.verde.svelte-1n46o8q</code>.</li>
+  <li><code>class={lista}</code> serve para listas prontas; não misture com a diretiva na mesma classe.</li>
+  <li><code>style:propriedade={valor}</code> aplica estilo pontual e aceita a forma abreviada.</li>
+  <li>Os erros desta aula: chaves vazias, valor entre aspas e nome de classe ausente.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

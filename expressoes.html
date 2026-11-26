@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expressões { } — contas, texto e comparações | Guia Svelte</title>
+<meta name="description" content="O que entra nas chaves do Svelte: contas, texto, comparações, condicional, listas e objetos, com saídas reais do compilador e os erros mais comuns de expressão.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Expressões { }</span></h1>
+
+<p class="intro">A Ana escreve no quadro "PÃO — R$ 0,90" e, quando quer o preço de três pães, faz a conta de cabeça e escreve o resultado embaixo. Se o preço muda, ela refaz a conta. No componente, o buraco entre chaves é justamente o lugar onde a conta fica: você escreve a <em>operação</em>, não o resultado, e o compilador calcula na hora de montar a tela. Nesta aula você aprende o que pode entrar nesse buraco, o que não pode e por que isso importa.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>O que é uma expressão e por que ela cabe nas chaves.</li>
+  <li>As quatro operações, o resto da divisão e o que o <code>+</code> faz com texto.</li>
+  <li>Como juntar texto e valores com <code>+</code> e com template literal.</li>
+  <li>Comparações (<code>&gt;</code>, <code>&lt;</code>, <code>===</code>) e o resultado verdadeiro/falso.</li>
+  <li>A expressão condicional <code>condição ? um : outro</code>.</li>
+  <li>Como acessar item de lista, propriedade de objeto e o tamanho de cada um.</li>
+  <li>Métodos de texto como <code>toUpperCase</code> e <code>slice</code>.</li>
+  <li>Como formatar dinheiro com <code>toFixed</code> e com <code>toLocaleString</code>.</li>
+  <li>O que não é expressão e por isso quebra as chaves.</li>
+  <li>Quando vale calcular no HTML e quando vale calcular antes.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: o buraco no quadro</h2>
+
+<p>Pense no quadro de avisos da padaria com um espaço em branco: "PÃO — R$ ____". O espaço é um buraco, e o que entra nele é sempre um valor: noventa centavos, um real e vinte, o preço de hoje. O buraco não aceita uma ordem ("apague o preço antigo") nem uma regra ("todo preço tem duas casas"): aceita um valor.</p>
+
+<p>No Svelte, as chaves <code>{ }</code> são esse buraco. O que você escreve dentro tem de produzir um valor — um número, um texto, verdadeiro ou falso, uma lista, um objeto. Se produzir valor, aparece na tela; se não produzir, o compilador reclama ou ignora.</p>
+
+<p>Essa diferença entre <em>produzir um valor</em> e <em>fazer uma coisa</em> é a base de tudo. Em programação, o primeiro tipo de código se chama <strong>expressão</strong> e o segundo, <strong>instrução</strong>. <code>2 + 2</code> é expressão (vale 4). "Guarde 4 numa variável" é instrução. As chaves do HTML só aceitam o primeiro tipo.</p>
+
+<hr>
+
+<h2>2. Aritmética: as quatro operações e o resto</h2>
+
+<p>O caso mais simples é a conta. Os operadores são os mesmos da calculadora, com dois a mais: <code>%</code> para o resto da divisão e <code>**</code> para potência. Dentro das chaves, a conta é feita na hora de montar a tela.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let quantidade = $state(3);
+&lt;/script&gt;
+
+&lt;p&gt;{preco * quantidade}&lt;/p&gt;
+&lt;p&gt;{(preco * quantidade).toFixed(2)}&lt;/p&gt;
+&lt;p&gt;R$ {(preco * quantidade).toFixed(2)}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;2.7&lt;/p&gt; &lt;p&gt;2.70&lt;/p&gt; &lt;p&gt;R$ 2.70&lt;/p&gt;</pre>
+
+<p>Três parágrafos, três resultados. O primeiro mostra o número cru: <code>2.7</code>, com ponto e sem a segunda casa. O segundo passa o resultado por <code>toFixed(2)</code>, que devolve texto com duas casas: <code>2.70</code>. O terceiro é só uma etiqueta na frente do segundo. Nenhuma das contas foi feita por você — todas foram escritas como operação e calculadas pelo navegador.</p>
+
+<dl class="anatomy">
+  <dt>( )</dt><dd>os <strong>parênteses</strong> dizem por onde começar. Sem eles, o método depois do ponto se aplicaria só ao último valor da conta.</dd>
+  <dt>preco * quantidade</dt><dd>a <strong>operação</strong> propriamente dita: dois valores e um operador. É o que produz o número.</dd>
+  <dt>.toFixed</dt><dd>o <strong>método</strong>, chamado com ponto. Ele pertence ao número que veio da conta, não à variável.</dd>
+  <dt>(2)</dt><dd>o <strong>argumento</strong>: quantas casas decimais você quer. O método devolve texto formatado.</dd>
+</dl>
+
+<p>A precedência é a da matemática: multiplicação antes de soma, parênteses primeiro. <code>2 + 3 * 4</code> vale 14, não 20. Na dúvida, ponha parênteses: eles não custam nada e evitam a leitura errada — inclusive a sua, seis meses depois.</p>
+
+<hr>
+
+<h2>3. O <code>+</code> que cola texto</h2>
+
+<p>O operador <code>+</code> tem dois empregos: somar números e juntar textos. O JavaScript escolhe pelo tipo dos valores, e a escolha surpreende. O teste abaixo mostra os três casos de uma vez:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log(1 + 1, '1' + 1, '1' - 1)"
+2 11 0</pre>
+
+<p>Leia com calma. <code>1 + 1</code> deu <code>2</code>: dois números somam. <code>'1' + 1</code> deu <code>11</code>: como o primeiro é texto, o segundo é colado nele — não é onze, é a string "11". E <code>'1' - 1</code> deu <code>0</code>: o <code>-</code> não existe para texto, então o JavaScript converte para número e subtrai.</p>
+
+<p>É por isso que valor de formulário precisa de cuidado: todo campo de texto devolve string, mesmo que o cliente digite um número. <code>'3' + 1</code> dá <code>'31'</code>. Para somar de verdade, converta antes: <code>Number(valor) + 1</code>. O guia volta a esse ponto na aula de formulários.</p>
+
+<p>Existe um caso em que a conta não dá erro nem aviso, e o resultado na tela é esquisito: dividir por zero. Em JavaScript, <code>10 / 0</code> não explode: devolve <code>Infinity</code>, e é essa a palavra que aparece no parágrafo. O valor não é um número utilizável, mas também não é uma exceção. Se a sua tela mostrar "Infinity" ou "NaN" (de <em>not a number</em>), o problema está numa conta com valor faltando ou zerado, não na formatação.</p>
+
+<p>Para juntar texto com valor de forma mais legível, existe o <em>template literal</em>: um texto entre crases, com buracos marcados por <code>${ }</code>. Ele evita uma pilha de sinais de mais e deixa claro o que é texto e o que é valor. Só lembre de que a crase não é a aspa simples: são teclas diferentes.</p>
+
+<hr>
+
+<h2>4. Comparações e o verdadeiro/falso</h2>
+
+<p>Uma comparação produz um valor: verdadeiro (<code>true</code>) ou falso (<code>false</code>). Os operadores são <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code>, <code>===</code> (igual) e <code>!==</code> (diferente). Sozinha, uma comparação não serve para muita coisa na tela — o navegador mostraria "true". Ela brilha quando combinada com a expressão condicional.</p>
+
+<p>A expressão condicional tem três partes separadas por <code>?</code> e <code>:</code>: a condição, o valor se for verdadeira e o valor se for falsa. Lê-se "se isto, então aquilo; senão, aquilo outro".</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let saldo = $state(5);
+&lt;/script&gt;
+
+&lt;p&gt;{preco &gt; 1 ? 'caro' : 'barato'}&lt;/p&gt;
+&lt;p&gt;{saldo &gt;= 10 ? 'dá para comprar' : 'falta dinheiro'}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;barato&lt;/p&gt; &lt;p&gt;falta dinheiro&lt;/p&gt;</pre>
+
+<p>A primeira linha mostra "barato" porque 0.9 não é maior que 1. A segunda mostra "falta dinheiro" porque 5 é menor que 10. Se os valores mudarem, o texto muda — e ninguém precisa escrever dois parágrafos e esconder um.</p>
+
+<p>Use <code>===</code> (três sinais) e não <code>==</code> (dois). Os dois comparam, mas o de dois sinais converte tipos antes e produz surpresas: <code>'1' == 1</code> é verdadeiro, enquanto <code>'1' === 1</code> é falso, porque um é texto e o outro é número. O guia usa sempre três.</p>
+
+<div class="trysvelte" data-goal="out:barato">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra o número cru. Use uma expressão condicional para escrever "caro" quando o preço for maior que 1 e "barato" caso contrário — com 0.90, tem de aparecer "barato".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;{preco}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;{preco &gt; 1 ? 'caro' : 'barato'}&lt;/p&gt;</pre>
+</div>
+
+<p>Repare que a meta confere o texto inteiro da tela: só "barato". Se sobrar qualquer outra coisa — um número, um espaço com texto — a conferência falha. É uma forma de garantir que a expressão condicional realmente substituiu o valor em vez de acompanhá-lo.</p>
+
+<hr>
+
+<h2>5. Listas, objetos e o ponto</h2>
+
+<p>Uma lista em JavaScript é escrita entre colchetes; um objeto, entre chaves. Para acessar o que está dentro, usam-se colchetes com a posição (lista) ou o ponto com o nome (objeto). Nas chaves do HTML, tudo isso é expressão válida.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'bolo', 'broa']);
+  let pessoa = $state({ nome: 'Ana', idade: 34 });
+&lt;/script&gt;
+
+&lt;p&gt;{itens.length} itens&lt;/p&gt;
+&lt;p&gt;{itens[0]} e {itens.at(-1)}&lt;/p&gt;
+&lt;p&gt;{pessoa.nome} tem {pessoa.idade} anos&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;3 itens&lt;/p&gt; &lt;p&gt;pão e broa&lt;/p&gt; &lt;p&gt;Ana tem 34 anos&lt;/p&gt;</pre>
+
+<p><code>length</code> é o tamanho da lista; <code>itens[0]</code> é o primeiro item, contando do zero; <code>itens.at(-1)</code> é o último, contando de trás para frente. <code>pessoa.nome</code> pega a propriedade <code>nome</code> do objeto. Se você errar o nome de uma propriedade, o valor sai como <code>undefined</code> — que aparece como a palavra "undefined" na tela, e é o primeiro sinal de que o nome está errado.</p>
+
+<p>O ponto também serve para encadear: <code>pessoa.nome.toUpperCase()</code> pega o nome e o deixa em maiúsculas, na mesma expressão. A leitura é da esquerda para a direita: primeiro o objeto, depois a propriedade, depois o método. Se qualquer etapa devolver <code>undefined</code>, a seguinte quebra com uma mensagem de "cannot read property of undefined" — a mesma que você viu na aula do servidor.</p>
+
+<p>Uma pegadinha de iniciante: <code>{itens}</code>, sem <code>.length</code>, mostra a lista inteira colada por vírgulas: <code>pão,bolo,broa</code>. Isso acontece porque o navegador converte a lista em texto do jeito dele. Para mostrar item por item, existe o bloco <code>{#each}</code>, com aula própria.</p>
+
+<div class="trysvelte" data-goal="outre:^2 itens">
+<p class="try-task"><strong>Missão:</strong> a tela mostra a lista inteira colada ("pão,bolo itens"). Mostre apenas a <strong>quantidade</strong> de itens, para sair "2 itens".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'bolo']);
+&lt;/script&gt;
+
+&lt;p&gt;{itens} itens&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let itens = $state(['pão', 'bolo']);
+&lt;/script&gt;
+
+&lt;p&gt;{itens.length} itens&lt;/p&gt;</pre>
+</div>
+
+<p>O ponto é o mesmo da propriedade: <code>length</code> é uma informação que toda lista carrega. Você não precisa contar os itens um por um, nem escrever o número à mão — o que seria uma fonte garantida de erro quando a lista mudasse.</p>
+
+<hr>
+
+<h2>6. Métodos de texto</h2>
+
+<p>Texto também tem propriedades e métodos. Um método é uma função que pertence ao valor, chamada com ponto e parênteses. Os mais usados no começo são <code>toUpperCase</code>, <code>toLowerCase</code>, <code>slice</code>, <code>trim</code> e <code>charAt</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let nome = $state('ana');
+&lt;/script&gt;
+
+&lt;p&gt;{nome.toUpperCase()}&lt;/p&gt;
+&lt;p&gt;{nome.charAt(0).toUpperCase() + nome.slice(1)}&lt;/p&gt;
+&lt;p&gt;{nome.length} letras&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;ANA&lt;/p&gt; &lt;p&gt;Ana&lt;/p&gt; &lt;p&gt;3 letras&lt;/p&gt;</pre>
+
+<p>A segunda linha é a que parece mágica: pega o primeiro caractere, deixa em maiúscula, e junta com o resto do texto a partir da posição 1. O resultado é "Ana", com maiúscula só no começo. É uma expressão comprida, e é exatamente o tipo de coisa que vale guardar numa variável com nome claro em vez de repetir em cinco lugares.</p>
+
+<p>Métodos não mudam o texto original: devolvem um novo. <code>nome.toUpperCase()</code> mostra "ANA" na tela, mas <code>nome</code> continua "ana". Essa imutabilidade é uma proteção: você não precisa se preocupar com um trecho do código alterando o valor que outro trecho está usando.</p>
+
+<hr>
+
+<h2>7. Formatando dinheiro</h2>
+
+<p>Dinheiro tem duas casas e, no Brasil, vírgula. O <code>toFixed(2)</code> resolve as casas, mas usa ponto: <code>2.70</code>. Para o formato brasileiro, existe <code>toLocaleString</code>, que recebe o idioma e o estilo:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;{(preco * 3).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;R$ 2,70&lt;/p&gt;</pre>
+
+<p>O resultado já vem com o símbolo, a vírgula e o espaço que o padrão brasileiro pede. É mais comprido de escrever do que <code>toFixed</code>, e mais correto para uma placa na parede: o cliente da padaria lê "R$ 2,70", não "R$ 2.70".</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "console.log((0.9 * 3).toFixed(2))"
+2.70
+ana@notebook:~/loja$ node -e "console.log((0.9).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))"
+R$ 0,90</pre>
+
+<p>Os dois comandos rodam o mesmo JavaScript que roda no navegador — o Node é o mesmo motor, fora da página. Se você quiser testar uma expressão antes de colocar no componente, esse é o caminho mais rápido: <code>node -e "console.log(…)"</code>. Vale para conta, texto e formato.</p>
+
+<div class="trysvelte" data-goal="outre:Total: R\$ 2\.70">
+<p class="try-task"><strong>Missão:</strong> o total aparece como "2.7", sem a segunda casa. Formate o resultado da conta com duas casas decimais, mantendo o texto "Total: R$".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let quantidade = $state(3);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {preco * quantidade}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+  let quantidade = $state(3);
+&lt;/script&gt;
+
+&lt;p&gt;Total: R$ {(preco * quantidade).toFixed(2)}&lt;/p&gt;</pre>
+</div>
+
+<p>Os parênteses em volta da conta são obrigatórios: sem eles, o ponto do <code>toFixed</code> se aplicaria só a <code>quantidade</code>, e o resultado seria outro. Essa é a razão de o guia sempre mostrar a conta entre parênteses quando há um método depois.</p>
+
+<hr>
+
+<h2>8. O que não é expressão</h2>
+
+<p>Dentro das chaves não cabe declaração nem sequência de instruções. Três coisas que tentamos por reflexo e não funcionam:</p>
+
+<p><strong>Declarar variável.</strong> <code>{let x = 1}</code> não declara nada. O compilador não reclama, mas o buraco fica vazio — e a variável não existe para o resto do arquivo. Declaração é coisa do <code>&lt;script&gt;</code>.</p>
+
+<p><strong>Separar com ponto e vírgula.</strong> <code>{a; b}</code> quebra o arquivo com <code>Expected token }</code>: as chaves aceitam <em>uma</em> expressão, não duas instruções. Se você precisa de duas coisas, una com vírgula dentro de parênteses ou calcule antes no script.</p>
+
+<p><strong>Escrever comando de controle.</strong> <code>{if (x) …}</code> não existe como expressão. Para decidir o que mostrar, use a expressão condicional <code>?</code> <code>:</code> ou o bloco <code>{#if}</code>, que tem aula própria. Cada um tem seu lugar: a condicional serve para escolher <em>um valor</em>; o bloco, para escolher <em>um pedaço de HTML</em>.</p>
+
+<p>Outro valor que aparece na tela sem você pedir é <code>undefined</code>. Ele não é erro: é o resultado de acessar algo que não existe. <code>{pessoa.apelido}</code>, quando o objeto não tem <code>apelido</code>, mostra a palavra "undefined" no parágrafo. O conserto é no dado — ou o nome da propriedade está errado, ou o valor realmente não foi preenchido — e não no HTML.</p>
+
+<p>Existe ainda a atribuição, <code>{nome = 'Bia'}</code>. Ela é uma expressão — devolve o valor atribuído — e por isso o compilador aceita. Mas ela muda o estado durante o desenho, o que é uma péssima ideia: a tela pode entrar em laço. O guia não usa atribuição dentro de chaves; quando precisa mudar valor, usa evento.</p>
+
+<hr>
+
+<h2>9. Calcular no HTML ou antes?</h2>
+
+<p>Uma conta curta dentro das chaves é legível e direta. Uma conta comprida, repetida em três lugares, vira um problema: se a fórmula mudar, você muda em três lugares e esquece um. A regra prática é: use chaves para o que se lê em uma linha; guarde o resto em uma variável calculada.</p>
+
+<p>Para valores que dependem de estado e mudam com ele, a ferramenta é <code>$derived</code>, que tem aula própria mais adiante. Ela cria um valor calculado a partir de outros, atualizado sozinho. Antes de aprender a runa, você pode calcular dentro de uma função ou de uma variável comum — desde que aceite que ela não se atualiza sozinha.</p>
+
+<p>Um jeito de testar uma expressão sem mexer na tela é o console do navegador: abra as ferramentas de desenvolvedor, vá na aba Console e digite a conta. O resultado aparece na hora, e você pode experimentar antes de colocar nas chaves. É o mesmo JavaScript, no mesmo motor — só que sem o componente no meio.</p>
+
+<p>Também vale pensar no custo. Uma conta de multiplicação dentro do HTML é irrelevante. Uma função que percorre uma lista de mil itens, chamada em cada desenho, pode pesar. O compilador é esperto, mas não adivinha: se a conta é cara e o valor não muda, calcule uma vez no script e mostre o resultado.</p>
+
+<hr>
+
+<h2>10. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão. Repare que duas delas são idênticas: o mesmo texto para problemas diferentes. É por isso que a posição vale mais do que a frase.</p>
+
+<div class="cenario">
+<strong>Erro 1 — duas instruções onde cabe uma</strong>
+<p>O ponto e vírgula separa instruções, e as chaves aceitam uma expressão só.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let a = $state(1);
+  let b = $state(2);
+&lt;/script&gt;
+
+&lt;p&gt;{a; b}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 6, coluna 5): Expected token }</pre>
+<p>A coluna 5 é o ponto e vírgula. Se a intenção era mostrar os dois valores, escreva duas expressões: <code>{a} {b}</code>. Se era calcular algo com os dois, faça a conta: <code>{a + b}</code>.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — chaves vazias</strong>
+<p>Um buraco sem valor dentro. O compilador esperava uma expressão e encontrou o fechamento.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let x = $state(1);
+&lt;/script&gt;
+
+&lt;p&gt;{}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 4): Unexpected token</pre>
+<p>Apague as chaves ou coloque algo dentro. Chaves vazias costumam sobrar de um valor que você apagou e esqueceu de substituir.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — expressão incompleta</strong>
+<p>O operador <code>+</code> ficou esperando o segundo valor, e o compilador encontrou a chave.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let x = $state(1);
+&lt;/script&gt;
+
+&lt;p&gt;{1 +}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 5, coluna 7): Unexpected token</pre>
+<p>Falta o outro lado da conta: <code>{1 + x}</code>. A posição aponta a chave de fechamento, onde a expressão ficou pela metade.</p>
+</div>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>As expressões que você vai usar toda hora e o que cada operador faz.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Expressão</th><th>Resultado</th></tr>
+<tr><td><code>{preco * 2}</code></td><td>o dobro do preço</td></tr>
+<tr><td><code>{'R$ ' + preco}</code></td><td>texto colado com o valor</td></tr>
+<tr><td><code>{preco &gt; 1 ? 'caro' : 'barato'}</code></td><td>um dos dois textos, conforme a comparação</td></tr>
+<tr><td><code>{itens.length}</code></td><td>quantos itens a lista tem</td></tr>
+<tr><td><code>{pessoa.nome}</code></td><td>a propriedade <code>nome</code> do objeto</td></tr>
+<tr><td><code>{nome.toUpperCase()}</code></td><td>o texto em maiúsculas</td></tr>
+<tr><td><code>{(preco * 3).toFixed(2)}</code></td><td>texto com duas casas decimais</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Operador</th><th>Faz</th><th>Cuidado</th></tr>
+<tr><td><code>+</code></td><td>soma números ou cola textos</td><td>se um lado for texto, cola em vez de somar</td></tr>
+<tr><td><code>-</code> <code>*</code> <code>/</code></td><td>subtrai, multiplica, divide</td><td>convertem texto em número</td></tr>
+<tr><td><code>%</code></td><td>resto da divisão</td><td>útil para par/ímpar</td></tr>
+<tr><td><code>===</code></td><td>igualdade estrita</td><td>prefira a <code>==</code></td></tr>
+<tr><td><code>? :</code></td><td>escolhe entre dois valores</td><td>serve para valor, não para bloco de HTML</td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que significa <code>{preco * quantidade}</code> no HTML?</p>
+<label><input type="radio" name="q1"> que o texto será literalmente "preco * quantidade"</label>
+<label><input type="radio" name="q1"> que o compilador calcula a multiplicação e mostra o resultado</label>
+<label><input type="radio" name="q1"> que o navegador pede o valor ao usuário</label>
+<label><input type="radio" name="q1"> que a conta será feita só quando houver clique</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">2. O que <code>{'1' + 1}</code> produz?</p>
+<label><input type="radio" name="q1"> o número 2</label>
+<label><input type="radio" name="q1"> um erro de compilação</label>
+<label><input type="radio" name="q1"> o número 11</label>
+<label><input type="radio" name="q1"> o texto "11"</label></div>
+
+<div class="mc" data-answer="1"><p class="mc-q">3. Como mostrar duas casas decimais no preço?</p>
+<label><input type="radio" name="q1"> <code>{(preco).toFixed(2)}</code></label>
+<label><input type="radio" name="q1"> <code>{preco.toFixed}</code></label>
+<label><input type="radio" name="q1"> <code>{toFixed(2, preco)}</code></label>
+<label><input type="radio" name="q1"> <code>{preco, 2}</code></label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;p&gt;{itens.<input data-answer="length">} itens&lt;/p&gt;<br><br>// a propriedade que diz quantos itens a lista tem</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>As chaves aceitam <strong>expressões</strong>: código que produz um valor.</li>
+  <li>Contas usam <code>+ - * / %</code>, com a precedência da matemática.</li>
+  <li><code>+</code> cola texto quando um dos lados é texto; converta com <code>Number()</code> para somar.</li>
+  <li>Comparações produzem <code>true</code> ou <code>false</code>; use <code>===</code>, não <code>==</code>.</li>
+  <li>A expressão condicional <code>condição ? um : outro</code> escolhe entre dois valores.</li>
+  <li><code>.length</code>, <code>[0]</code>, <code>.at(-1)</code> e <code>.nome</code> acessam listas e objetos.</li>
+  <li>Texto tem métodos como <code>toUpperCase</code> e <code>slice</code>, que devolvem novo texto.</li>
+  <li><code>toFixed(2)</code> dá duas casas com ponto; <code>toLocaleString('pt-BR')</code> dá o formato brasileiro.</li>
+  <li>Declaração, sequência com ponto e vírgula e comando de controle não são expressões.</li>
+  <li>Conta curta nas chaves; conta repetida ou cara, numa variável calculada.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

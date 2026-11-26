@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escapando HTML — texto é texto, marcação é marcação | Guia Svelte</title>
+<meta name="description" content="Como o Svelte escapa o que vem de variáveis: entidades, atributos, o atalho {@html} e os riscos de injetar HTML, com as saídas reais do compilador.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Svelte · <span class="hl">Escapando HTML</span></h1>
+
+<p class="intro">A Ana colou na vitrine um cartaz que um cliente trouxe: o papel dizia "PÃO &amp; BOLO" e, embaixo, um desenho. Ela não leu o desenho como instrução — colou o papel inteiro. Mas se alguém entregasse um papel escrito "arranque a vitrine", ela não faria isso: papel é papel, instrução é instrução. O navegador tem o mesmo dilema com texto que vem de uma variável: é conteúdo para mostrar ou marcação para obedecer? O Svelte escolhe mostrar. Nesta aula você vê como isso funciona, como o `{@html}` muda a regra e por que essa mudança é perigosa.</p>
+
+<div class="note">
+<strong>Você vai aprender</strong>
+<ul>
+  <li>Por que o navegador trata texto e marcação de formas diferentes.</li>
+  <li>Como o Svelte escapa o valor de <code>{texto}</code> automaticamente.</li>
+  <li>Quais caracteres são escapados e com quais entidades.</li>
+  <li>Como funciona o escape dentro de um atributo.</li>
+  <li>O que <code>{@html texto}</code> faz e o que o compilador gera em cada caso.</li>
+  <li>Quando o atalho é legítimo e quando é falha de segurança.</li>
+  <li>Por que <code>javascript:</code> em um <code>href</code> é uma armadilha.</li>
+  <li>Por que não se escreve <code>&lt;/script&gt;</code> dentro de uma string do script.</li>
+  <li>Os erros reais desta aula, com a mensagem do compilador.</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. A ideia: a etiqueta e o vidro</h2>
+
+<p>Toda padaria tem dois tipos de papel: o que o cliente lê e o que a máquina lê. A etiqueta da balança, com código de barras, é lida pela máquina. O cartaz da parede é lido pelo cliente. Se você colar um cartaz dentro da balança, a balança não vai entender; se colar um código de barras na parede, o cliente não vai entender. O mesmo texto pode ser conteúdo ou instrução, dependendo de quem lê.</p>
+
+<p>No navegador, "etiqueta" é HTML: a marcação que o navegador interpreta para construir elementos. "Cartaz" é texto: aquilo que aparece na tela, sem interpretação. Quando você escreve <code>&lt;b&gt;pão&lt;/b&gt;</code> no arquivo, o navegador cria um elemento em negrito. Quando a mesma sequência vem de uma variável e vai para a tela como texto, o navegador mostra os próprios sinais: <code>&lt;b&gt;pão&lt;/b&gt;</code>.</p>
+
+<p>Quem decide qual dos dois acontece é o lugar de onde o valor veio. No Svelte, o padrão é "cartaz": valor de variável é sempre texto. Para tratar como HTML, é preciso pedir — e pedir tem consequências, porque um HTML vindo de fora pode conter mais do que negrito.</p>
+
+<hr>
+
+<h2>2. <code>{texto}</code> já escapa</h2>
+
+<p>O componente abaixo tem uma variável cujo valor contém tags. Veja as duas saídas: a primeira com chaves simples, a segunda com o atalho <code>{@html}</code>.</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let texto = '&lt;b&gt;pão&lt;/b&gt; quentinho &amp; fresco';
+&lt;/script&gt;
+
+&lt;p&gt;{texto}&lt;/p&gt;
+&lt;p&gt;{@html texto}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;&amp;lt;b&gt;pão&amp;lt;/b&gt; quentinho &amp;amp; fresco&lt;/p&gt; &lt;p&gt;&lt;b&gt;pão&lt;/b&gt; quentinho &amp; fresco&lt;/p&gt;</pre>
+
+<p>Dois parágrafos com resultados diferentes para o mesmo valor. No primeiro, <code>&amp;lt;</code> e <code>&amp;amp;</code> são <strong>entidades</strong>: formas de escrever <code>&lt;</code> e <code>&amp;</code> sem que o navegador os interprete como marcação. O navegador lê a entidade, mostra o sinal e não constrói elemento nenhum. No segundo, o HTML foi entregue cru e o navegador criou o negrito de verdade.</p>
+
+<p>Repare que o texto da tela do segundo parágrafo é "pão quentinho &amp; fresco", sem os sinais. Isso porque as tags viraram elementos. Já o primeiro mostra os sinais e as palavras: para quem lê a página, tudo é texto.</p>
+
+<hr>
+
+<h2>3. O que exatamente é escapado</h2>
+
+<p>O Svelte escapa os caracteres que poderiam abrir marcação ou confundir o parser: <code>&lt;</code> vira <code>&amp;lt;</code> e <code>&amp;</code> vira <code>&amp;amp;</code>. O <code>&gt;</code> costuma ficar como está, porque sozinho não abre nada. Veja:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let texto = '5 &lt; 6 e 7 &gt; 6';
+&lt;/script&gt;
+
+&lt;p&gt;{texto}&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p&gt;5 &amp;lt; 6 e 7 &gt; 6&lt;/p&gt;</pre>
+
+<p>Na tela, o cliente lê "5 &lt; 6 e 7 &gt; 6" corretamente. No HTML, o sinal de menor virou entidade e o de maior não. Não é inconsistência: é o mínimo necessário para o parser não se enganar.</p>
+
+<p>Dentro de um atributo, o escape inclui as aspas. Se o valor tem aspas duplas e o atributo é delimitado por elas, sem escape o atributo terminaria no meio:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let texto = 'A &amp; B "citação" &lt;tag&gt;';
+&lt;/script&gt;
+
+&lt;p title={texto}&gt;passe o mouse&lt;/p&gt;</pre>
+
+<pre class="out">&lt;p title="A &amp;amp; B &amp;quot;citação&amp;quot; &amp;lt;tag&gt;"&gt;passe o mouse&lt;/p&gt;</pre>
+
+<dl class="anatomy">
+  <dt>&amp;lt;</dt><dd>entidade do sinal de <strong>menor</strong> (<em>less than</em>). É o escape mais importante, porque é ele que abre tag.</dd>
+  <dt>&amp;amp;</dt><dd>entidade do <strong>e comercial</strong>. Sem escape, o navegador tentaria ler o que vem depois como começo de outra entidade.</dd>
+  <dt>&amp;quot;</dt><dd>entidade da <strong>aspa dupla</strong>. Aparece no escape de atributos, onde a aspa fecharia o valor antes da hora.</dd>
+  <dt>&amp;gt;</dt><dd>entidade do sinal de <strong>maior</strong>. O Svelte quase nunca precisa dela no texto, mas ela existe e você vai encontrá-la em HTML de terceiros.</dd>
+</dl>
+
+<p>Três entidades no mesmo atributo: <code>&amp;amp;</code>, <code>&amp;quot;</code> e <code>&amp;lt;</code>. Tudo isso é trabalho do compilador. Você escreve <code>title={texto}</code> e ele resolve o resto — inclusive o caso de o valor vir de um formulário.</p>
+
+<div class="trysvelte" data-goal="out:pão quentinho">
+<p class="try-task"><strong>Missão:</strong> o parágrafo mostra as tags como texto. Use o atalho <code>{@html}</code> para que o navegador interprete o negrito, e a tela mostre só "pão quentinho".</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let texto = '&lt;b&gt;pão&lt;/b&gt; quentinho';
+&lt;/script&gt;
+
+&lt;p&gt;{texto}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let texto = '&lt;b&gt;pão&lt;/b&gt; quentinho';
+&lt;/script&gt;
+
+&lt;p&gt;{@html texto}&lt;/p&gt;</pre>
+</div>
+
+<p>A meta confere o texto inteiro da tela: "pão quentinho", sem os sinais de menor e maior. Só o <code>{@html}</code> produz isso, porque no outro caso os sinais fazem parte do texto visível.</p>
+
+<hr>
+
+<h2>4. <code>{@html}</code>: o atalho e o preço</h2>
+
+<p>O atalho se chama <code>{@html}</code> e faz uma coisa só: em vez de inserir o valor como texto, insere como marcação. O compilador gera instruções diferentes para cada caso, e vale ver a diferença. Este é o JavaScript gerado para <code>{texto}</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "const {compile}=require('svelte/compiler');console.log(compile(require('fs').readFileSync('src/App.svelte','utf8'),{generate:'client',filename:'src/App.svelte'}).js.code)"
+import 'svelte/internal/init-operations';
+import 'svelte/internal/disclose-version';
+import * as $ from 'svelte/internal/client';
+
+var root = $.from_html(`<p></p>`);
+
+export default function App($$anchor) {
+	let texto = '<b>pão</b>';
+	var p = root();
+
+	p.textContent = '<b>pão</b>';
+	$.append($$anchor, p);
+}</pre>
+
+<p>O que importa é a linha <code>p.textContent = …</code>. A propriedade <code>textContent</code> do DOM existe exatamente para isso: recebe texto e não interpreta nada. O navegador cria um nó de texto com os sinais e mostra o que está escrito.</p>
+
+<p>Agora o mesmo componente com <code>{@html texto}</code>:</p>
+
+<pre class="term">ana@notebook:~/loja$ node -e "const {compile}=require('svelte/compiler');console.log(compile(require('fs').readFileSync('src/App.svelte','utf8'),{generate:'client',filename:'src/App.svelte'}).js.code)"
+import 'svelte/internal/init-operations';
+import 'svelte/internal/disclose-version';
+import * as $ from 'svelte/internal/client';
+
+var root = $.from_html(`<p></p>`);
+
+export default function App($$anchor) {
+	let texto = '<b>pão</b>';
+	var p = root();
+
+	$.html(p, () => texto, true);
+	$.reset(p);
+	$.append($$anchor, p);
+}</pre>
+
+<p>Duas linhas novas, e nenhuma delas é <code>textContent</code>. <code>$.html(p, () => texto, true)</code> manda o motor colocar o valor como HTML dentro do parágrafo. <code>$.reset(p)</code> ajusta as referências internas depois que o conteúdo muda. É uma operação mais cara e mais poderosa.</p>
+
+<p>O preço não é de desempenho: é de confiança. Quando você usa <code>{@html}</code>, assume que o valor é seguro. Se esse valor vier de um formulário, de um comentário de cliente, de um arquivo enviado ou de uma API de terceiros, você acabou de entregar ao visitante o controle sobre a marcação da sua página.</p>
+
+<hr>
+
+<h2>5. Quando o atalho é legítimo</h2>
+
+<p>Existe um caso em que <code>{@html}</code> é a ferramenta certa: quando o HTML foi produzido por você ou por uma biblioteca confiável, a partir de uma fonte controlada. O exemplo clássico é converter Markdown em HTML. O texto do arquivo é seu, o conversor é seu, e o resultado é marcação que você quer mostrar.</p>
+
+<p>Outro caso legítimo: conteúdo de um editor que você mesmo administra, com revisão. A Ana escreve a descrição do pão no painel da padaria, com negrito e listas. Aquele HTML é dela, revisado por ela. Mostrar como marcação faz sentido.</p>
+
+<p>O caso ilegítimo é qualquer coisa que o visitante digitou. Comentário, nome no cadastro, mensagem de contato, avaliação de produto: nada disso deve passar por <code>{@html}</code>. Se você quer permitir negrito em um comentário, o caminho é converter um subconjunto seguro — nunca entregar o texto cru.</p>
+
+<p>Vale um exemplo concreto de quanto custa errar. Um site de receitas mostra comentários de leitores com <code>{@html}</code>. Um leitor mal-intencionado escreve um comentário com uma imagem que tem um endereço falso e um manipulador de erro; quando outro leitor abre a página, o código roda no navegador dele, no domínio do site. O estrago pode ir de um alerta chato até o roubo de uma sessão. O conserto não é "escapar melhor": é parar de interpretar o que o visitante escreveu.</p>
+
+<p>Existe também o custo de manutenção: HTML solto dentro de uma string não é verificado pelo compilador. Uma tag sem fechar dentro de <code>{@html}</code> não gera erro de compilação; gera um DOM estranho na hora de rodar. Quanto menos HTML em string, melhor.</p>
+
+<div class="trysvelte" data-goal="outre:^R\$ 0\.90">
+<p class="try-task"><strong>Missão:</strong> monte o preço em negrito usando <code>{@html}</code> com uma string concatenada: "R$ " mais <code>&lt;b&gt;</code> com o preço formatado em duas casas, mais <code>&lt;/b&gt;</code>.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;R$ {preco}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let preco = $state(0.9);
+&lt;/script&gt;
+
+&lt;p&gt;{@html 'R$ &lt;b&gt;' + preco.toFixed(2) + '&lt;/b&gt;'}&lt;/p&gt;</pre>
+</div>
+
+<p>Note que a solução usa <code>toFixed(2)</code> para chegar em <code>0.90</code>: a meta confere o texto "R$ 0.90". Sem a formatação, sairia "R$ 0.9" e a conferência falharia. Duas ideias de aulas diferentes trabalhando juntas.</p>
+
+<hr>
+
+<h2>6. O caso do <code>&lt;/script&gt;</code> na string</h2>
+
+<p>Um detalhe que pega todo mundo: dentro do bloco <code>&lt;script&gt;</code>, a sequência <code>&lt;/script&gt;</code> encerra o bloco, mesmo que esteja dentro de uma string. O compilador não está sendo burro: o HTML é lido assim desde sempre, e o Svelte segue a mesma regra.</p>
+
+<p>Se você precisa escrever essa sequência em uma string, escape a barra: <code>&lt;\/script&gt;</code>. Para o JavaScript, a barra invertida antes de uma barra não muda nada — o valor continua igual. Para o parser do HTML, a sequência deixou de existir.</p>
+
+<p>O mesmo vale para comentários e para qualquer texto dentro do script. É uma daquelas regras que você aprende uma vez e reconhece pelo sintoma: a mensagem fala de "string sem fim", e o fim está lá, na sua frente.</p>
+
+<hr>
+
+<h2>7. O <code>href</code> que executa código</h2>
+
+<p>Existe uma marcação que parece inofensiva e é uma armadilha: o endereço que começa com <code>javascript:</code>. O navegador executa o que vem depois. O Svelte não bloqueia isso automaticamente:</p>
+
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let link = 'javascript:alert(1)';
+&lt;/script&gt;
+
+&lt;a href={link}&gt;cardápio&lt;/a&gt;</pre>
+
+<pre class="out">&lt;a href="javascript:alert(1)"&gt;cardápio&lt;/a&gt;</pre>
+
+<p>Se esse <code>link</code> vier de um campo que o visitante controla, ele pode colocar <code>javascript:</code> no lugar de <code>https:</code> e executar código quando alguém clicar. A defesa é validar o endereço antes de usar: aceitar só o que começa com <code>https://</code> ou com uma barra, e recusar o resto.</p>
+
+<p>Existe uma variante ainda mais discreta: o endereço que começa com <code>data:</code> e carrega um documento inteiro. Ele não executa script na maioria dos navegadores modernos, mas pode ser usado para exibir conteúdo enganoso em um iframe ou em uma nova aba. Na dúvida, trate qualquer esquema que não seja <code>http</code>, <code>https</code>, <code>mailto</code> ou <code>tel</code> como suspeito e recuse.</p>
+
+<p>A regra geral vale para todo atributo que aponta para um recurso: <code>href</code>, <code>src</code>, <code>action</code>. O escape de texto protege contra a interpretação de marcação; não protege contra um esquema de URL perigoso. São duas camadas diferentes, e as duas precisam de atenção.</p>
+
+<hr>
+
+<h2>8. Quando o texto tem sinal de menor</h2>
+
+<p>No HTML do componente, um <code>&lt;</code> fora de tag é tratado como começo de tag. Se você escrever o sinal direto no texto, o compilador tenta interpretar o que vem depois como nome de elemento e reclama. É o primeiro cenário abaixo.</p>
+
+<p>A solução é escrever a entidade: <code>&amp;lt;</code> no lugar de <code>&lt;</code>. Parece redundante, mas é a regra do HTML desde a invenção: alguns caracteres são reservados. O mesmo vale para <code>&amp;amp;</code> quando você quer mostrar um <code>&amp;</code> literal.</p>
+
+<p>Uma confusão frequente é escrever <code>&amp;lt;</code> dentro de uma variável. Não faça isso: o escape automático transformaria o <code>&amp;</code> em <code>&amp;amp;</code>, e o visitante leria a entidade escrita, letra por letra. Entidade é coisa do HTML, não do valor. Dentro da variável, o sinal entra cru.</p>
+
+<p>Quando o sinal vem de uma variável, o problema não existe: o escape é automático, como vimos no começo da aula. É mais uma razão para preferir valores a texto fixo — a regra é aplicada pelo compilador, não pela sua memória.</p>
+
+<hr>
+
+<h2>9. Um caminho seguro para texto de fora</h2>
+
+<p>Chame de "texto de fora" qualquer coisa que você não escreveu: comentário, nome, mensagem, descrição de produto vinda de um painel, resposta de API. Para esse tipo de texto, o caminho seguro tem três passos.</p>
+
+<p>O primeiro é mostrar com chaves simples. <code>{comentario}</code> escapa e pronto. Você não precisa limpar nada, não precisa converter nada: o compilador faz o trabalho. É a opção mais segura e a que dá menos manutenção.</p>
+
+<p>O segundo passo, quando o layout exige formatação, é converter de um formato seguro para HTML no seu código. Um exemplo comum: guardar o comentário em Markdown, converter com uma biblioteca e exibir o resultado com <code>{@html}</code>. O texto do visitante nunca é interpretado como HTML; o que ele escreveu é transformado por uma biblioteca que você escolheu, com regras que você conhece.</p>
+
+<p>O terceiro passo é validar o que não é texto: endereços e identificadores. Um link vindo de fora precisa ser checado antes de virar <code>href</code>. Uma imagem vinda de fora precisa vir de um domínio permitido. O escape não resolve isso, porque o problema não é marcação: é destino.</p>
+
+<p>E existe o passo zero, que é uma decisão de projeto: não aceitar HTML de visitante. Muitos sistemas famosos permitem negrito e itálico em comentários e bloqueiam todo o resto. É menos flexível e muito mais seguro. Quando alguém pedir "quero poder colocar imagem no comentário", a resposta saudável é "queremos, mas com um botão que insere a imagem por nós", não "pode colar HTML".</p>
+
+<h2>9. Quando dá errado</h2>
+
+<p>As três mensagens abaixo saíram do compilador desta versão. Todas são armadilhas de marcação que o iniciante encontra na primeira semana.</p>
+
+<div class="cenario">
+<strong>Erro 1 — sinal de menor no texto</strong>
+<p>O <code>&lt;</code> solto no parágrafo fez o compilador procurar uma tag. Ele chegou ao número e desistiu.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p&gt;5 &lt; 6&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 6): Expected a valid element or component name. Components must have a valid variable name or dot notation expression</pre>
+<p>A tradução é "esperava um nome de elemento válido". Use <code>5 &amp;lt; 6</code> para mostrar o sinal, ou coloque o texto em uma variável: <code>{'5 &lt; 6'}</code> também funciona, porque dentro de aspas o sinal é texto.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 2 — <code>&lt;/script&gt;</code> dentro de uma string</strong>
+<p>O parser do HTML fechou o bloco no meio da string. O compilador ficou com uma aspa aberta e um monte de código solto.</p>
+<pre class="file" data-file="src/App.svelte">&lt;script&gt;
+  let codigo = '&lt;script&gt;alert(1)&lt;/script&gt;';
+&lt;/script&gt;
+
+&lt;p&gt;Exemplo: {codigo}&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 2, coluna 15): Unterminated string constant</pre>
+<p>"String sem fim" — e o fim estava ali. Escape a barra: <code>'&lt;script&gt;alert(1)&lt;\/script&gt;'</code>. O valor continua igual e o parser não fecha mais o bloco antes da hora.</p>
+</div>
+
+<div class="cenario">
+<strong>Erro 3 — aspas dentro de aspas no atributo</strong>
+<p>O atributo abre com aspas duplas e o texto também tem aspas duplas. A segunda fecha o atributo, e o resto sobra.</p>
+<pre class="file" data-file="src/App.svelte">&lt;p title="A "citação""&gt;passe o mouse&lt;/p&gt;</pre>
+<pre class="out">Erro de compilação (linha 1, coluna 20): Expected token =</pre>
+<p>Use aspas simples no atributo: <code>title='A "citação"'</code>. Ou coloque o texto em uma variável e passe com chaves — nesse caso o compilador escapa as aspas sozinho, como vimos na seção 3.</p>
+</div>
+
+<div class="trysvelte" data-goal="outre:^Exemplo: .*alert\(1\)">
+<p class="try-task"><strong>Missão:</strong> a string contém <code>&lt;/script&gt;</code> e quebra o arquivo. Escape a barra com <code>\</code> para o valor continuar igual sem fechar o bloco.</p>
+<pre class="script" data-file="App.svelte">&lt;script&gt;
+  let codigo = '&lt;script&gt;alert(1)&lt;/script&gt;';
+&lt;/script&gt;
+
+&lt;p&gt;Exemplo: {codigo}&lt;/p&gt;</pre>
+<pre class="solucao" data-file="App.svelte">&lt;script&gt;
+  let codigo = '&lt;script&gt;alert(1)&lt;\/script&gt;';
+&lt;/script&gt;
+
+&lt;p&gt;Exemplo: {codigo}&lt;/p&gt;</pre>
+</div>
+
+<p>O texto que aparece na tela é a sequência inteira, porque o valor é usado com chaves simples: o escape de texto entra em ação de novo e o visitante vê os sinais, não um alerta.</p>
+
+<hr>
+
+<h2>11. Referência rápida</h2>
+
+<p>O que cada forma faz com o valor e quando usar cada uma.</p>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Forma</th><th>O que faz</th><th>Quando usar</th></tr>
+<tr><td><code>{texto}</code></td><td>escapa e mostra como texto</td><td>sempre, por padrão</td></tr>
+<tr><td><code>{@html texto}</code></td><td>interpreta como marcação</td><td>HTML produzido ou revisado por você</td></tr>
+<tr><td><code>title={texto}</code></td><td>escapa aspas e sinais no atributo</td><td>qualquer atributo com valor dinâmico</td></tr>
+<tr><td><code>&amp;lt;</code> no texto</td><td>mostra o sinal de menor</td><td>quando o sinal é fixo, escrito no arquivo</td></tr>
+</table>
+</div>
+
+<div class="table-wrap">
+<table class="ref">
+<tr><th>Entidade</th><th>Aparece como</th></tr>
+<tr><td><code>&amp;lt;</code></td><td><code>&lt;</code></td></tr>
+<tr><td><code>&amp;gt;</code></td><td><code>&gt;</code></td></tr>
+<tr><td><code>&amp;amp;</code></td><td><code>&amp;</code></td></tr>
+<tr><td><code>&amp;quot;</code></td><td><code>"</code></td></tr>
+</table>
+</div>
+
+<hr>
+
+<h2>Exercícios</h2>
+
+<div class="mc" data-answer="2"><p class="mc-q">1. O que <code>{texto}</code> faz quando o valor contém <code>&lt;b&gt;</code>?</p>
+<label><input type="radio" name="q1"> transforma em negrito de verdade</label>
+<label><input type="radio" name="q1"> escapa e mostra os sinais como texto</label>
+<label><input type="radio" name="q1"> apaga a tag e mantém só a palavra</label>
+<label><input type="radio" name="q1"> dá erro de compilação</label></div>
+
+<div class="mc" data-answer="4"><p class="mc-q">2. Quando <code>{@html texto}</code> é uma escolha defensável?</p>
+<label><input type="radio" name="q1"> sempre que o texto vem de um formulário</label>
+<label><input type="radio" name="q1"> quando você quer economizar digitação</label>
+<label><input type="radio" name="q1"> nunca, em nenhuma situação</label>
+<label><input type="radio" name="q1"> quando o HTML foi produzido por você ou por fonte confiável</label></div>
+
+<div class="mc" data-answer="3"><p class="mc-q">3. Por que <code>&lt;/script&gt;</code> dentro de uma string quebra o arquivo?</p>
+<label><input type="radio" name="q1"> porque o Svelte proíbe a palavra script</label>
+<label><input type="radio" name="q1"> porque a string fica muito comprida</label>
+<label><input type="radio" name="q1"> porque o parser do HTML encerra o bloco ali, mesmo dentro de aspas</label>
+<label><input type="radio" name="q1"> porque falta o ponto e vírgula</label></div>
+
+<div class="exercise"><h2>Complete o código</h2><div class="ex-code">&lt;p&gt;{<input data-answer="@html"> texto}&lt;/p&gt;<br><br>// o atalho que interpreta o valor como marcação em vez de texto</div></div>
+
+<hr>
+
+<h2>Resumo</h2>
+
+<ul>
+  <li>Valor de variável entra na tela como <strong>texto</strong>, não como marcação.</li>
+  <li><code>{texto}</code> escapa <code>&lt;</code> e <code>&amp;</code>, gerando <code>textContent</code> no código compilado.</li>
+  <li>Em atributos, o escape inclui as aspas.</li>
+  <li><code>{@html texto}</code> interpreta o valor como HTML e gera <code>$.html(…)</code>.</li>
+  <li>Use <code>{@html}</code> só com conteúdo confiável; nunca com entrada de visitante.</li>
+  <li><code>javascript:</code> em um <code>href</code> executa código: valide endereços.</li>
+  <li><code>&lt;/script&gt;</code> dentro de string fecha o bloco: escape a barra com <code>\</code>.</li>
+  <li>Um <code>&lt;</code> solto no texto é erro de compilação; use <code>&amp;lt;</code>.</li>
+</ul>
+
+<div class="pager"></div>
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
